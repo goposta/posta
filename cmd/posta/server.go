@@ -61,9 +61,7 @@ func runServer(cli *okapicli.CLI) {
 	if err := cfg.Initialize(app); err != nil {
 		logger.Fatal("Failed to initialize Posta", "error", err)
 	}
-
 	res := &serverResources{}
-
 	if err := cli.RunServer(&okapicli.RunOptions{
 		ShutdownTimeout: 30 * time.Second,
 		OnStart: func() {
@@ -105,7 +103,7 @@ func runServer(cli *okapicli.CLI) {
 			}
 		},
 		OnStarted: func() {
-			logger.Info("Posta Server started", "version", config.Version, "port", cli.GetInt("port"))
+			logger.Info("Posta Server started", "version", config.Version, "port", cfg.Port)
 		},
 		OnShutdown: func() {
 			shutdownServer(res)

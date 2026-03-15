@@ -30,26 +30,18 @@ import (
 	"github.com/jkaninda/okapi/okapicli"
 )
 
-type ServerConfig struct {
-	Port  int  `cli:"port"   short:"p" desc:"HTTP server port" env:"POSTA_PORT" default:"9000"`
-	Debug bool `cli:"debug"  short:"d" desc:"Enable debug mode" env:"POSTA_DEV_MODE" default:"false"`
-}
-
 func main() {
 	app := okapi.New()
 	cli := okapicli.New(app, "Posta")
 
-	serveCfg := &ServerConfig{}
 	cli.Command("server", "Start Posta server", func(cmd *okapicli.Command) error {
-		app.WithPort(serveCfg.Port)
-		if serveCfg.Debug {
-			app.WithDebug()
-		}
+		logger.Info("Starting Posta Server...")
 		runServer(cli)
 		return nil
-	}).FromStruct(serveCfg)
+	})
 
 	cli.Command("worker", "Start Posta worker", func(cmd *okapicli.Command) error {
+		logger.Info("Starting Posta Worker...")
 		if err := runWorker(); err != nil {
 			logger.Fatal("worker server error", "error", err)
 		}

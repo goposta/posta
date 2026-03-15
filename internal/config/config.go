@@ -43,6 +43,7 @@ type Config struct {
 	Redis           RedisConfig
 	JWTSecret       string
 	Env             string
+	Port            int
 	DevMode         bool
 	RateLimitHourly int
 	RateLimitDaily  int
@@ -106,6 +107,7 @@ func New() *Config {
 			Addr:     goutils.Env("POSTA_REDIS_ADDR", "localhost:6379"),
 			Password: goutils.Env("POSTA_REDIS_PASSWORD", ""),
 		},
+		Port:            goutils.EnvInt("POSTA_PORT", 9000),
 		Env:             goutils.Env("POSTA_ENV", "dev"),
 		JWTSecret:       goutils.Env("POSTA_JWT_SECRET", "change-me-in-production"),
 		DevMode:         goutils.EnvBool("POSTA_DEV_MODE", false),
@@ -142,6 +144,12 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	}
 	// Initialize global logger
 	l := c.initLogger()
+	// Dev mode
+	if c.DevMode {
+		app.WithDebug()
+	}
+	// Set Port
+	app.WithPort(c.Port)
 	app.WithLogger(l.Logger)
 	_ = goutils.SetEnv("ENV", c.Env)
 	corsOrigins := strings.Split(c.CORSOrigins, ",")
@@ -158,6 +166,9 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 		app.WithOpenAPIDocs(okapi.OpenAPI{
 			Title:   "Posta API",
 			Version: "v1",
+			License: okapi.License{
+				Name: "MIT",
+			},
 		})
 	}
 	app.WithErrorHandler(errorhandlers.CustomErrorHandler())
