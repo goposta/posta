@@ -1,7 +1,7 @@
 # Posta
 
 <p align="center">
-  <img src="logo.png" alt="Posta" width="120" />
+  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/logo.png" alt="Posta" width="150" />
 </p>
 
 [![CI](https://github.com/jkaninda/posta/actions/workflows/ci.yml/badge.svg)](https://github.com/jkaninda/posta/actions/workflows/ci.yml)
@@ -15,26 +15,6 @@
 **Posta** is a self-hosted email delivery platform that allows applications to send emails through HTTP APIs while Posta manages SMTP delivery, templates, storage, security, and analytics.
 
 It provides a developer-friendly and fully self-hostable alternative to services such as SendGrid, and Mailgun.
-
----
-
-# Why Posta
-
-Posta provides a complete email delivery platform that you can run in your own infrastructure.
-
-* HTTP API for sending emails
-* Template engine with versioning and localization
-* Background job processing with Redis and Asynq
-* Multiple SMTP servers and shared SMTP pools
-* Domain verification with SPF, DKIM, and DMARC checks
-* Contact management and bounce suppression
-* Webhooks and event streaming
-* Prometheus metrics and health probes
-* Admin dashboard and API documentation
-
-Posta is designed for developers who want full control over their email infrastructure without relying on third-party services.
-
----
 
 # Send Your First Email
 
@@ -285,41 +265,6 @@ Default admin credentials:
 Email: admin@example.com
 Password: admin1234
 ```
-
----
-
-# Configuration
-
-Configuration is provided through environment variables.
-
-| Variable                   | Default                 | Description                          |
-| -------------------------- | ----------------------- | ------------------------------------ |
-| POSTA_PORT                 | 9000                    | HTTP server port                     |
-| POSTA_DB_HOST              | localhost               | PostgreSQL host                      |
-| POSTA_DB_USER              | posta                   | PostgreSQL user                      |
-| POSTA_DB_PASSWORD          | posta                   | PostgreSQL password                  |
-| POSTA_DB_NAME              | posta                   | PostgreSQL database name             |
-| POSTA_DB_PORT              | 5432                    | PostgreSQL port                      |
-| POSTA_DB_SSL_MODE          | disable                 | PostgreSQL SSL mode                  |
-| POSTA_DB_URL               |                         | PostgreSQL connection string (overrides individual DB settings) |
-| POSTA_REDIS_ADDR           | localhost:6379          | Redis address                        |
-| POSTA_REDIS_PASSWORD       |                         | Redis password                       |
-| POSTA_JWT_SECRET           | change-me-in-production | JWT signing secret                   |
-| POSTA_DEV_MODE             | false                   | Store emails without sending         |
-| POSTA_RATE_LIMIT_HOURLY    | 100                     | Hourly email limit per user          |
-| POSTA_RATE_LIMIT_DAILY     | 1000                    | Daily email limit per user           |
-| POSTA_ADMIN_EMAIL          | admin@example.com       | Default admin email                  |
-| POSTA_ADMIN_PASSWORD       | admin1234               | Default admin password               |
-| POSTA_OPENAPI_DOCS         | true                    | Enable Swagger UI and ReDoc          |
-| POSTA_METRICS_ENABLED      | false                   | Enable Prometheus metrics            |
-| POSTA_WEB_DIR              | web/dist                | Vue build directory                  |
-| POSTA_WEB_URL              |                         | Public URL                           |
-| POSTA_CORS_ORIGINS         | *                       | Allowed CORS origins (comma-separated) |
-| POSTA_EMBEDDED_WORKER      | false                   | Run worker in server process         |
-| POSTA_WORKER_CONCURRENCY   | 10                      | Worker concurrency                   |
-| POSTA_WORKER_MAX_RETRIES   | 5                       | Email retry attempts                 |
-| POSTA_WEBHOOK_MAX_RETRIES  | 3                       | Webhook delivery retry attempts      |
-| POSTA_WEBHOOK_TIMEOUT_SECS | 10                      | Webhook request timeout in seconds   |
 
 ---
 # Dashboard
