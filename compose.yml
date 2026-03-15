@@ -42,7 +42,7 @@ services:
       POSTGRES_PASSWORD: posta
       POSTGRES_DB: posta
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U posta"]
       interval: 5s
@@ -60,5 +60,5 @@ services:
       retries: 5
 
 volumes:
-  postgres_data:
+  db_data:
   redis_data:
