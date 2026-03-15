@@ -1,5 +1,5 @@
 # UI build stage
-FROM node:25-alpine AS ui-builder
+FROM node:22-alpine AS ui-builder
 
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
