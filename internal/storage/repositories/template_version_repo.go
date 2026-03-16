@@ -51,7 +51,7 @@ func (r *TemplateVersionRepository) FindByID(id uint) (*models.TemplateVersion, 
 
 func (r *TemplateVersionRepository) FindByTemplateID(templateID uint) ([]models.TemplateVersion, error) {
 	var versions []models.TemplateVersion
-	if err := r.db.Preload("StyleSheet").
+	if err := r.db.Preload("StyleSheet").Preload("Localizations").
 		Where("template_id = ?", templateID).
 		Order("version DESC").
 		Find(&versions).Error; err != nil {

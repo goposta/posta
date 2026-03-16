@@ -34,5 +34,6 @@ type TemplateVersion struct {
 	SampleData   string    `json:"sample_data"`
 	CreatedAt    time.Time `json:"created_at"`
 
-	StyleSheet *StyleSheet `json:"stylesheet,omitempty" gorm:"foreignKey:StyleSheetID;constraint:OnDelete:SET NULL"`
+	StyleSheet    *StyleSheet            `json:"stylesheet,omitempty" gorm:"foreignKey:StyleSheetID;constraint:OnDelete:SET NULL"`
+	Localizations []TemplateLocalization `json:"localizations,omitempty" gorm:"foreignKey:VersionID"`
 }

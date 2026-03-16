@@ -112,6 +112,7 @@ func (h *TemplateVersionHandler) Create(c *okapi.Context, req *CreateVersionRequ
 		return c.AbortInternalServerError("failed to create version")
 	}
 
+	v, _ = h.versionRepo.FindByID(v.ID)
 	return created(c, v)
 }
 

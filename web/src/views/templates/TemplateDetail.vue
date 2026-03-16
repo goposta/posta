@@ -96,7 +96,7 @@ async function loadAll() {
     // Auto-select the active version or the first one
     if (versions.value.length > 0) {
       const active = versions.value.find(v => v.id === template.value?.active_version_id)
-      await selectVersion(active || versions.value[0])
+      selectVersion(active || versions.value[0])
     }
   } catch {
     notify.error('Failed to load template')
@@ -105,14 +105,16 @@ async function loadAll() {
   }
 }
 
-async function selectVersion(v: TemplateVersion) {
+function selectVersion(v: TemplateVersion) {
   selectedVersion.value = v
-  try {
-    const res = await templatesApi.listLocalizations(templateId, v.id)
-    localizations.value = res.data.data || []
-  } catch {
-    localizations.value = []
-  }
+  localizations.value = v.localizations || []
+}
+
+function syncLocalizationsToVersion() {
+  if (!selectedVersion.value) return
+  selectedVersion.value.localizations = [...localizations.value]
+  const idx = versions.value.findIndex(v => v.id === selectedVersion.value!.id)
+  if (idx >= 0) versions.value[idx].localizations = [...localizations.value]
 }
 
 async function createVersion() {
@@ -123,7 +125,7 @@ async function createVersion() {
       sample_data: template.value?.sample_data || '',
     })
     versions.value.unshift(res.data.data)
-    await selectVersion(res.data.data)
+    selectVersion(res.data.data)
     notify.success(`Version ${res.data.data.version} created`)
     newVersionStylesheetId.value = null
   } catch {
@@ -187,7 +189,7 @@ async function deleteVersion(v: TemplateVersion) {
     versions.value = versions.value.filter(x => x.id !== v.id)
     if (selectedVersion.value?.id === v.id) {
       selectedVersion.value = versions.value[0] || null
-      if (selectedVersion.value) await selectVersion(selectedVersion.value)
+      if (selectedVersion.value) selectVersion(selectedVersion.value)
       else localizations.value = []
     }
     notify.success('Version deleted')
@@ -231,6 +233,7 @@ async function saveLoc() {
       localizations.value.push(res.data.data)
       notify.success('Localization created')
     }
+    syncLocalizationsToVersion()
     showLocModal.value = false
   } catch {
     notify.error(editingLoc.value ? 'Failed to update localization' : 'Language already exists for this version')
@@ -250,6 +253,7 @@ async function deleteLoc(l: TemplateLocalization) {
   try {
     await templatesApi.deleteLocalization(l.id)
     localizations.value = localizations.value.filter(x => x.id !== l.id)
+    syncLocalizationsToVersion()
     notify.success('Localization deleted')
   } catch {
     notify.error('Failed to delete localization')
@@ -328,7 +332,9 @@ function openPreview(lang: string) {
   previewLang.value = lang
   preview.value = null
   previewError.value = ''
-  if (selectedVersion.value?.sample_data) {
+  if (template.value?.sample_data) {
+    previewData.value = template.value.sample_data
+  } else if (selectedVersion.value?.sample_data) {
     previewData.value = selectedVersion.value.sample_data
   }
   showPreview.value = true

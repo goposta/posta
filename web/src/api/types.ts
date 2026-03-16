@@ -166,6 +166,7 @@ export interface TemplateVersion {
   version: number
   stylesheet_id?: number | null
   stylesheet?: StyleSheet | null
+  localizations?: TemplateLocalization[] | null
   sample_data: string
   created_at: string
 }
