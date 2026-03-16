@@ -21,8 +21,17 @@ function closeUserMenu(e: MouseEvent) {
   }
 }
 
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('sidebarCollapsed', sidebarCollapsed.value.toString())
+}
+
 onMounted(() => {
   document.addEventListener('click', closeUserMenu)
+  const stored = localStorage.getItem('sidebarCollapsed')
+  if (stored !== null) {
+    sidebarCollapsed.value = stored === 'true'
+  }
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeUserMenu)
@@ -91,11 +100,12 @@ function logout() {
             <img src="/logo.png" alt="Posta" class="logo-img" />
             <span v-if="!sidebarCollapsed" class="logo-text">Posta</span>
           </div>
-          <button class="collapse-btn" @click="sidebarCollapsed = !sidebarCollapsed" :title="sidebarCollapsed ? 'Expand' : 'Collapse'">
+          <button class="collapse-btn" @click="toggleSidebar" :title="sidebarCollapsed ? 'Expand' : 'Collapse'">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path :d="sidebarCollapsed ? 'M6 3l5 5-5 5' : 'M10 3L5 8l5 5'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
-
+        </div>
+      <div class="sidebar-middle">
         <nav class="nav">
           <a
             v-for="item in navItems"
@@ -261,7 +271,8 @@ export default { methods: { getIcon } }
 .collapsed .sidebar { width: 64px; min-width: 64px; }
 .collapsed .main-content { margin-left: 64px; }
 
-.sidebar-top { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.sidebar-top { display: flex; overflow-x: auto; }
+.sidebar-middle { flex: 1; overflow-y: auto; overflow-x: hidden; margin-top: 10px; padding-top: 5px;}
 
 .sidebar-brand {
   display: flex;
@@ -300,9 +311,17 @@ export default { methods: { getIcon } }
   transition: all var(--transition);
   display: flex;
   align-items: center;
+  position: absolute;
+  top: 20px;
+  right: 8px;
 }
 .collapse-btn:hover { color: var(--sidebar-text-active); background: var(--sidebar-hover); }
-.collapsed .collapse-btn { display: none; }
+.collapsed .collapse-btn {
+  position: absolute;
+  top: 20px;
+  right: -5px;
+  z-index: 9999;
+}
 
 .nav { display: flex; flex-direction: column; padding: 0 8px; gap: 2px; }
 
