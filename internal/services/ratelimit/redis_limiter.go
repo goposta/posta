@@ -36,6 +36,8 @@ import (
 type SettingsProvider interface {
 	DefaultRateLimitHourly() int
 	DefaultRateLimitDaily() int
+	LoginRateLimitCount() int
+	LoginRateLimitWindowMinutes() int
 }
 
 type RedisLimiter struct {
@@ -99,17 +101,28 @@ func (l *RedisLimiter) Allow(ctx context.Context, userEmail string) error {
 }
 
 // AllowLogin checks if a login attempt from the given IP is within rate limits.
-// Allows 10 attempts per 15-minute window.
+// The max attempts and window duration are configurable via admin settings.
 func (l *RedisLimiter) AllowLogin(ctx context.Context, ip string) error {
-	key := fmt.Sprintf("ratelimit:login:%s:%s", ip, time.Now().Format("200601021504")[:11]) // 15-min window
+	maxAttempts := 10
+	windowMinutes := 15
+	if l.settings != nil {
+		maxAttempts = l.settings.LoginRateLimitCount()
+		windowMinutes = l.settings.LoginRateLimitWindowMinutes()
+	}
+
+	window := time.Duration(windowMinutes) * time.Minute
+	// Bucket key: truncate current minute to the window size
+	bucket := time.Now().Unix() / int64(windowMinutes*60)
+	key := fmt.Sprintf("ratelimit:login:%s:%d", ip, bucket)
+
 	count, err := l.client.Incr(ctx, key).Result()
 	if err != nil {
-		return nil // fail open
+		return nil
 	}
 	if count == 1 {
-		l.client.Expire(ctx, key, 15*time.Minute)
+		l.client.Expire(ctx, key, window)
 	}
-	if count > 10 {
+	if count > int64(maxAttempts) {
 		return fmt.Errorf("too many login attempts, try again later")
 	}
 	return nil

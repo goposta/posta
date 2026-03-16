@@ -46,6 +46,8 @@ func SeedDefaultSettings(repo *repositories.SettingRepository) {
 		{Key: "maintenance_mode", Value: "false", Type: "bool"},
 		{Key: "allowed_signup_domains", Value: "", Type: "string"},
 		{Key: "two_factor_required", Value: "false", Type: "bool"},
+		{Key: "login_rate_limit_count", Value: "10", Type: "int"},
+		{Key: "login_rate_limit_window_minutes", Value: "15", Type: "int"},
 		{Key: "audit_log_retention_days", Value: "90", Type: "int"},
 		{Key: "webhook_delivery_retention_days", Value: "30", Type: "int"},
 	}

@@ -138,3 +138,9 @@ func (p *Provider) AuditLogRetentionDays() int  { return p.GetInt("audit_log_ret
 func (p *Provider) WebhookDeliveryRetentionDays() int {
 	return p.GetInt("webhook_delivery_retention_days", 30)
 }
+func (p *Provider) LoginRateLimitCount() int {
+	return p.GetInt("login_rate_limit_count", 10)
+}
+func (p *Provider) LoginRateLimitWindowMinutes() int {
+	return p.GetInt("login_rate_limit_window_minutes", 15)
+}

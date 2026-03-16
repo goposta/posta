@@ -286,7 +286,7 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 		if req.Body.TwoFactorCode == "" {
 			return c.JSON(http.StatusUnauthorized, dto.Response[any]{
 				Success: false,
-				Data: map[string]any{
+				Data: okapi.M{
 					"requires_2fa": true,
 					"message":      "2FA code required",
 				},

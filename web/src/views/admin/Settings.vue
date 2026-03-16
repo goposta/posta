@@ -22,6 +22,8 @@ const settingMeta: Record<string, { label: string; description: string; category
   max_batch_size: { label: 'Max Batch Size', description: 'Maximum recipients in a single batch send.', category: 'Limits' },
   max_attachment_size_mb: { label: 'Max Attachment Size (MB)', description: 'Maximum attachment size in megabytes.', category: 'Limits' },
   global_bounce_threshold: { label: 'Bounce Threshold', description: 'Auto-suppress a contact after this many bounces.', category: 'Limits' },
+  login_rate_limit_count: { label: 'Login Rate Limit (attempts)', description: 'Max login attempts per IP within the login window.', category: 'Security' },
+  login_rate_limit_window_minutes: { label: 'Login Rate Limit Window (minutes)', description: 'Time window for the login rate limit.', category: 'Security' },
   smtp_timeout_seconds: { label: 'SMTP Timeout (seconds)', description: 'Global SMTP connection timeout.', category: 'Limits' },
   retention_days: { label: 'Email Log Retention (days)', description: 'How long to keep email logs before cleanup.', category: 'Retention' },
   audit_log_retention_days: { label: 'Audit Log Retention (days)', description: 'How long to keep audit/event logs.', category: 'Retention' },
