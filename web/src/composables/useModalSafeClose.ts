@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 export function useModalSafeClose(closeAction: () => void) {
     const isClickStartingOnOverlay = ref(false);
 
@@ -16,6 +16,17 @@ export function useModalSafeClose(closeAction: () => void) {
         isClickStartingOnOverlay.value = false;
     };
 
+    const handleKeyDown = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape') {
+            closeAction();
+        }
+    };
+    onMounted(() => {
+        document.addEventListener('keydown', handleKeyDown);
+    });
+    onUnmounted(() => {
+        document.removeEventListener('keydown', handleKeyDown);
+    });
     return {
         watchClickStart,
         confirmClickEnd
