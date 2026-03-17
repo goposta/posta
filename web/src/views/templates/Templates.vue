@@ -203,7 +203,7 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="tmpl in templates" :key="tmpl.id">
+              <tr v-for="tmpl in templates" :key="tmpl.id" class="cursor-pointer" @click="router.push({ name: 'template-detail', params: { id: tmpl.id } })">
                 <td>
                   <div>{{ tmpl.name }}</div>
                   <div v-if="tmpl.description" class="text-muted text-sm">{{ tmpl.description }}</div>
@@ -216,11 +216,11 @@ onMounted(() => {
                 <td>{{ formatDate(tmpl.created_at) }}</td>
                 <td>
                   <div class="flex gap-2">
-                    <button class="btn btn-primary btn-sm" @click="router.push({ name: 'template-detail', params: { id: tmpl.id } })">Versions</button>
-                    <button class="btn btn-secondary btn-sm" @click="router.push({ name: 'template-preview', params: { id: tmpl.id } })">Preview</button>
-                    <button class="btn btn-secondary btn-sm" @click="openEdit(tmpl)">Edit</button>
-                    <button class="btn btn-secondary btn-sm" @click="exportTemplate(tmpl)">Export</button>
-                    <button class="btn btn-danger btn-sm" @click="deleteTemplate(tmpl)">Delete</button>
+                    <button class="btn btn-primary btn-sm" @click.stop="router.push({ name: 'template-detail', params: { id: tmpl.id } })">Versions</button>
+                    <button class="btn btn-secondary btn-sm" @click.stop="router.push({ name: 'template-preview', params: { id: tmpl.id } })">Preview</button>
+                    <button class="btn btn-secondary btn-sm" @click.stop="openEdit(tmpl)">Edit</button>
+                    <button class="btn btn-secondary btn-sm" @click.stop="exportTemplate(tmpl)">Export</button>
+                    <button class="btn btn-danger btn-sm" @click.stop="deleteTemplate(tmpl)">Delete</button>
                   </div>
                 </td>
               </tr>
