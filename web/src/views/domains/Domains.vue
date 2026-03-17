@@ -4,6 +4,7 @@ import { domainsApi } from '../../api/domains'
 import type { Domain, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -113,7 +114,9 @@ function nextPage() {
     fetchDomains()
   }
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showAddModal.value = false;
+});
 onMounted(fetchDomains)
 </script>
 
@@ -235,8 +238,9 @@ onMounted(fetchDomains)
     </template>
 
     <!-- Add Domain Modal -->
-    <div v-if="showAddModal" class="modal-overlay" @click.self="showAddModal = false">
-      <div class="modal">
+    <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>Add Domain</h3>
         </div>

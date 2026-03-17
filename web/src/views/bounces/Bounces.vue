@@ -4,6 +4,7 @@ import { bouncesApi, suppressionsApi } from '../../api/bounces'
 import type { Bounce, Suppression, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -113,6 +114,9 @@ async function addSuppression() {
     notify.error('Failed to add suppression')
   }
 }
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showAddModal.value = false;
+});
 </script>
 
 <template>
@@ -234,8 +238,9 @@ async function addSuppression() {
     </template>
 
     <!-- Add Suppression Modal -->
-    <div v-if="showAddModal" class="modal-overlay" @click.self="showAddModal = false">
-      <div class="modal">
+    <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h2>Add Suppression</h2>
         </div>

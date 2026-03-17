@@ -5,6 +5,7 @@ import { settingsApi } from '../../api/settings'
 import type { ApiKey, ApiKeyCreateResponse, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -155,6 +156,9 @@ function canDelete(key: ApiKey): boolean {
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showCreateModal.value = false;
+});
 
 onMounted(() => {
   loadSettings()
@@ -259,8 +263,9 @@ onMounted(() => {
     </div>
 
     <!-- Create Key Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal">
+    <div v-if="showCreateModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>Create API Key</h3>
         </div>

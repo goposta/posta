@@ -4,6 +4,7 @@ import { stylesheetsApi } from '../../api/stylesheets'
 import type { StyleSheet, StyleSheetInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -98,7 +99,9 @@ async function deleteStylesheet(sheet: StyleSheet) {
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  closeModal()
+}); 
 onMounted(() => loadStylesheets())
 </script>
 
@@ -174,8 +177,9 @@ onMounted(() => loadStylesheets())
     </div>
 
     <!-- Create/Edit Stylesheet Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal" style="max-width: 640px;">
+    <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" style="max-width: 640px;" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>{{ editing ? 'Edit Stylesheet' : 'Create Stylesheet' }}</h3>
         </div>

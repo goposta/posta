@@ -9,6 +9,7 @@ import Pagination from '../../components/Pagination.vue'
 import { usePagination } from '../../composables/usePagination'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -97,7 +98,9 @@ async function addToList() {
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showAddToListModal.value = false;
+});
 </script>
 
 <template>
@@ -178,8 +181,9 @@ function formatDate(dateStr: string): string {
     </div>
 
     <!-- Add to Contact List Modal -->
-    <div v-if="showAddToListModal" class="modal-overlay" @click.self="showAddToListModal = false">
-      <div class="modal">
+    <div v-if="showAddToListModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h2>Add to Contact List</h2>
         </div>
