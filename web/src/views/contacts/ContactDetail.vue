@@ -7,6 +7,7 @@ import { contactListsApi } from '../../api/contactLists'
 import type { Contact, ContactListWithCount } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const route = useRoute()
 const router = useRouter()
@@ -86,6 +87,9 @@ function formatDate(date: string | null) {
   if (!date) return '-'
   return new Date(date).toLocaleString()
 }
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showAddToListModal.value = false;
+});
 </script>
 
 <template>
@@ -170,8 +174,9 @@ function formatDate(date: string | null) {
     </div>
 
     <!-- Add to Contact List Modal -->
-    <div v-if="showAddToListModal" class="modal-overlay" @click.self="showAddToListModal = false">
-      <div class="modal">
+    <div v-if="showAddToListModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h2>Add to Contact List</h2>
         </div>

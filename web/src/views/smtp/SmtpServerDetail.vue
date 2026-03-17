@@ -5,6 +5,7 @@ import { smtpApi } from '../../api/smtp'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import type { SmtpServer, SmtpServerInput } from '../../api/types'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const route = useRoute()
 const router = useRouter()
@@ -126,7 +127,9 @@ function formatDate(date: string | null) {
   if (!date) return '-'
   return new Date(date).toLocaleString()
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showModal.value = false;
+});
 onMounted(fetchServer)
 </script>
 
@@ -236,9 +239,9 @@ onMounted(fetchServer)
     </div>
 
     <!-- Edit Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+    <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal">
-        <div class="modal-header">
+        <div class="modal-header" @mousedown.stop @mouseup.stop>
           <h3>Edit SMTP Server</h3>
         </div>
         <form @submit.prevent="save">

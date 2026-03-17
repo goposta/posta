@@ -5,6 +5,7 @@ import { serversApi } from '../../api/servers'
 import type { SharedServer, SharedServerInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -126,6 +127,10 @@ function nextPage() {
   }
 }
 
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showModal.value = false;
+});
+
 onMounted(fetchServers)
 </script>
 
@@ -211,8 +216,8 @@ onMounted(fetchServers)
     </template>
 
     <!-- Create/Edit Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-      <div class="modal">
+    <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>{{ editing ? 'Edit Shared Server' : 'Add Shared Server' }}</h3>
         </div>

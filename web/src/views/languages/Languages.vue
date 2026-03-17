@@ -4,6 +4,7 @@ import { languagesApi } from '../../api/languages'
 import type { Language, LanguageInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -98,7 +99,9 @@ async function deleteLanguage(lang: Language) {
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  closeModal()
+}); 
 onMounted(() => loadLanguages())
 </script>
 
@@ -171,8 +174,9 @@ onMounted(() => loadLanguages())
     </div>
 
     <!-- Create/Edit Language Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal" style="max-width: 480px;">
+    <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" style="max-width: 480px;" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>{{ editing ? 'Edit Language' : 'Add Language' }}</h3>
         </div>

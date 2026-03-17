@@ -23,12 +23,12 @@ function closeUserMenu(e: MouseEvent) {
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
-  localStorage.setItem('sidebarCollapsed', sidebarCollapsed.value.toString())
+  localStorage.setItem('posta_sidebar_collapsed', sidebarCollapsed.value.toString())
 }
 
 onMounted(() => {
   document.addEventListener('click', closeUserMenu)
-  const stored = localStorage.getItem('sidebarCollapsed')
+  const stored = localStorage.getItem('posta_sidebar_collapsed')
   if (stored !== null) {
     sidebarCollapsed.value = stored === 'true'
   }

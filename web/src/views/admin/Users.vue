@@ -5,6 +5,7 @@ import { adminApi } from '../../api/admin'
 import type { User, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -136,6 +137,9 @@ async function deleteUser(user: User) {
     notify.error('Failed to delete user')
   }
 }
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  cancelEdit()
+});
 </script>
 
 <template>
@@ -250,8 +254,9 @@ async function deleteUser(user: User) {
     </template>
 
     <!-- Edit User Modal -->
-    <div v-if="editingUser" class="modal-overlay" @click.self="cancelEdit">
-      <div class="modal">
+    <div v-if="editingUser" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>Edit User</h3>
         </div>

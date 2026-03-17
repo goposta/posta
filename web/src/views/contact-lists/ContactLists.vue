@@ -5,6 +5,7 @@ import { contactListsApi } from '../../api/contactLists'
 import type { ContactListWithCount, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -92,7 +93,9 @@ function openMembers(list: ContactListWithCount) {
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showModal.value = false;
+});
 onMounted(() => loadLists())
 </script>
 
@@ -158,8 +161,8 @@ onMounted(() => loadLists())
     </div>
 
     <!-- Create/Edit Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-      <div class="modal">
+    <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>{{ editingId ? 'Edit Contact List' : 'Create Contact List' }}</h3>
         </div>

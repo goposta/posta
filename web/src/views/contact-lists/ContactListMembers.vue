@@ -5,6 +5,7 @@ import { contactListsApi } from '../../api/contactLists'
 import type { ContactListWithCount, ContactListMember, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const route = useRoute()
 const router = useRouter()
@@ -90,7 +91,9 @@ async function removeMember(member: ContactListMember) {
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showAddModal.value = false;
+});
 onMounted(async () => {
   await loadList()
   await loadMembers()
@@ -159,8 +162,9 @@ onMounted(async () => {
     </div>
 
     <!-- Add Member Modal -->
-    <div v-if="showAddModal" class="modal-overlay" @click.self="showAddModal = false">
-      <div class="modal">
+    <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" 
+      @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h2>Add Member</h2>
         </div>

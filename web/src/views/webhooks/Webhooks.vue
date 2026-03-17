@@ -6,6 +6,7 @@ import Pagination from '../../components/Pagination.vue'
 import { usePagination } from '../../composables/usePagination'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useModalSafeClose } from '../../composables/useModalSafeClose';
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -124,7 +125,9 @@ function formatDate(dateStr: string): string {
     day: 'numeric',
   })
 }
-
+const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
+  showModal.value = false;
+});
 </script>
 
 <template>
@@ -188,8 +191,8 @@ function formatDate(dateStr: string): string {
     </template>
 
     <!-- Create Webhook Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-      <div class="modal">
+    <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
+      <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>Add Webhook</h3>
         </div>
