@@ -379,7 +379,7 @@ Contributions are welcome! Please open an issue to discuss proposed changes befo
 
 ## License
 
-Copyright 2025 Jonas Kaninda
+Copyright 2026 Jonas Kaninda
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 
