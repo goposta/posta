@@ -379,8 +379,13 @@ Contributions are welcome! Please open an issue to discuss proposed changes befo
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Copyright 2025 Jonas Kaninda
 
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+
+```
+http://www.apache.org/licenses/LICENSE-2.0
+```
 ---
 
 <div align="center">
