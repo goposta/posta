@@ -22,47 +22,30 @@
  *  SOFTWARE.
  */
 
-package migration
+package models
 
-import (
-	"fmt"
+import "time"
 
-	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/models"
-	"gorm.io/gorm"
-)
+// Session tracks an active JWT session for a user.
+type Session struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"index;not null"`
+	JTI       string    `json:"jti" gorm:"uniqueIndex;not null;size:36"` // JWT ID (UUID)
+	IPAddress string    `json:"ip_address"`
+	UserAgent string    `json:"user_agent"`
+	Revoked   bool      `json:"revoked" gorm:"default:false;not null"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
 
-// Run executes all schema migrations and adds FK constraints.
-func Run(db *gorm.DB) error {
-	if err := db.AutoMigrate(
-		&models.User{},
-		&models.APIKey{},
-		&models.Email{},
-		&models.StyleSheet{},
-		&models.Template{},
-		&models.TemplateVersion{},
-		&models.TemplateLocalization{},
-		&models.Language{},
-		&models.SMTPServer{},
-		&models.Server{},
-		&models.Webhook{},
-		&models.Domain{},
-		&models.Bounce{},
-		&models.Suppression{},
-		&models.Contact{},
-		&models.ContactList{},
-		&models.ContactListMember{},
-		&models.Event{},
-		&models.Setting{},
-		&models.UserSetting{},
-		&models.WebhookDelivery{},
-		&models.Session{},
-	); err != nil {
-		return fmt.Errorf("failed to migrate database: %w", err)
-	}
-	// run constraints
-	runConstraints(db)
+	User User `json:"-" gorm:"foreignKey:UserID"`
+}
 
-	logger.Info("database migrated")
-	return nil
+// IsExpired returns true if the session has passed its expiry time.
+func (s *Session) IsExpired() bool {
+	return time.Now().After(s.ExpiresAt)
+}
+
+// IsActive returns true if the session is neither revoked nor expired.
+func (s *Session) IsActive() bool {
+	return !s.Revoked && !s.IsExpired()
 }

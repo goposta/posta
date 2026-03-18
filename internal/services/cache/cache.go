@@ -44,7 +44,9 @@ const (
 	prefixAdminMetrics   = "cache:admin:metrics"
 	prefixUserMetrics    = "cache:admin:user_metrics:"
 	prefixUserAnalytics  = "cache:analytics:user:"
-	prefixAdminAnalytics = "cache:analytics:admin"
+	prefixAdminAnalytics    = "cache:analytics:admin"
+	prefixDashAnalytics     = "cache:dash_analytics:user:"
+	prefixAdminDashAnalytics = "cache:dash_analytics:admin"
 )
 
 // Cache provides Redis-backed caching for dashboard stats and metrics.
@@ -101,6 +103,14 @@ func UserAnalyticsKey(userID int, from, to, status string) string {
 
 func AdminAnalyticsKey(from, to, status string) string {
 	return fmt.Sprintf("%s:%s:%s:%s", prefixAdminAnalytics, from, to, status)
+}
+
+func DashboardAnalyticsKey(userID int, from, to string) string {
+	return fmt.Sprintf("%s%d:%s:%s", prefixDashAnalytics, userID, from, to)
+}
+
+func AdminDashboardAnalyticsKey(from, to string) string {
+	return fmt.Sprintf("%s:%s:%s", prefixAdminDashAnalytics, from, to)
 }
 
 // InvalidateUser removes all cached data scoped to a specific user.

@@ -46,6 +46,7 @@ function formatDate(date: string | null) {
   <div>
     <div class="page-header">
       <h1>Email Logs</h1>
+      <button class="btn btn-secondary" @click="router.push('/emails/preview')">Preview Template</button>
     </div>
 
     <div v-if="loading" class="loading-page">

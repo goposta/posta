@@ -2,16 +2,28 @@
 import { ref, onMounted } from 'vue'
 import { settingsApi } from '../../api/settings'
 import { authApi } from '../../api/auth'
+import { userDataApi } from '../../api/userData'
 import { useAuthStore } from '../../stores/auth'
 import { useThemeStore, type ThemeMode } from '../../stores/theme'
 import { useNotificationStore } from '../../stores/notification'
+import { useConfirm } from '../../composables/useConfirm'
 import type { UserSettings } from '../../api/types'
 
 const auth = useAuthStore()
 const theme = useThemeStore()
 const notify = useNotificationStore()
+const { confirm } = useConfirm()
 const loading = ref(true)
 const saving = ref(false)
+
+// Data management
+const exporting = ref(false)
+const importing = ref(false)
+const deletingContacts = ref(false)
+const deletingEmails = ref(false)
+const gdprEmail = ref('')
+const gdprDays = ref(90)
+const importFileRef = ref<HTMLInputElement | null>(null)
 
 const form = ref<Partial<UserSettings>>({
   timezone: 'UTC',
@@ -90,6 +102,111 @@ async function save() {
     notify.error('Failed to save settings')
   } finally {
     saving.value = false
+  }
+}
+
+async function exportData() {
+  exporting.value = true
+  try {
+    const res = await userDataApi.exportAll()
+    const blob = new Blob([JSON.stringify(res.data.data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `posta-export-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    notify.success('Data exported successfully')
+  } catch {
+    notify.error('Failed to export data')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function triggerImport() {
+  importFileRef.value?.click()
+}
+
+async function handleImportFile(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  const confirmed = await confirm({
+    title: 'Import Data',
+    message: 'This will import data from the selected file. Duplicate items will be skipped. Continue?',
+    confirmText: 'Import',
+    variant: 'danger',
+  })
+  if (!confirmed) {
+    if (importFileRef.value) importFileRef.value.value = ''
+    return
+  }
+
+  importing.value = true
+  try {
+    const text = await file.text()
+    const data = JSON.parse(text)
+    const res = await userDataApi.importAll(data)
+    notify.success(res.data.data.message || 'Data imported successfully')
+  } catch (e: any) {
+    if (e instanceof SyntaxError) {
+      notify.error('Invalid JSON file')
+    } else {
+      notify.error(e.response?.data?.error?.message || 'Failed to import data')
+    }
+  } finally {
+    importing.value = false
+    if (importFileRef.value) importFileRef.value.value = ''
+  }
+}
+
+async function deleteContacts() {
+  const target = gdprEmail.value.trim()
+  const msg = target
+    ? `Delete contact "${target}" and remove from all lists and suppression?`
+    : 'Delete ALL contacts? This cannot be undone.'
+  const confirmed = await confirm({
+    title: 'Delete Contact Data',
+    message: msg,
+    confirmText: 'Delete',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+
+  deletingContacts.value = true
+  try {
+    const res = await userDataApi.deleteContacts(target || undefined)
+    notify.success(res.data.data.message)
+    gdprEmail.value = ''
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to delete contacts')
+  } finally {
+    deletingContacts.value = false
+  }
+}
+
+async function deleteEmailLogs() {
+  const days = gdprDays.value
+  const msg = days > 0
+    ? `Delete all email logs older than ${days} days and their associated bounces?`
+    : 'Delete ALL email logs and associated bounces? This cannot be undone.'
+  const confirmed = await confirm({
+    title: 'Delete Email Logs',
+    message: msg,
+    confirmText: 'Delete',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+
+  deletingEmails.value = true
+  try {
+    const res = await userDataApi.deleteEmailLogs(days)
+    notify.success(res.data.data.message)
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to delete email logs')
+  } finally {
+    deletingEmails.value = false
   }
 }
 
@@ -250,6 +367,66 @@ async function toggleDomainSecurity() {
         </div>
       </div>
 
+      <!-- Data Export/Import -->
+      <div class="card">
+        <div class="card-header"><h2>Data Export / Import</h2></div>
+        <div class="card-body">
+          <p class="section-description">
+            Export all your data (templates, stylesheets, languages, contacts, contact lists, webhooks, suppressions, and settings) as a JSON file.
+            You can import this file later to restore your data on this or another Posta instance.
+          </p>
+          <div class="flex gap-2">
+            <button class="btn btn-primary" :disabled="exporting" @click="exportData">
+              {{ exporting ? 'Exporting...' : 'Export All Data' }}
+            </button>
+            <button class="btn btn-secondary" :disabled="importing" @click="triggerImport">
+              {{ importing ? 'Importing...' : 'Import Data' }}
+            </button>
+            <input ref="importFileRef" type="file" accept=".json" style="display: none" @change="handleImportFile" />
+          </div>
+        </div>
+      </div>
+
+      <!-- GDPR Data Management -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Data Management (GDPR)</h2>
+        </div>
+        <div class="card-body">
+          <p class="section-description">
+            Manage personal data for GDPR compliance. Delete specific contacts or purge old email logs.
+          </p>
+
+          <div class="gdpr-section">
+            <h3 class="gdpr-title">Delete Contact Data</h3>
+            <p class="section-description">
+              Remove a specific contact by email (including suppression list and list memberships), or leave empty to delete all contacts.
+            </p>
+            <div class="flex gap-2 align-center">
+              <input v-model="gdprEmail" type="email" class="form-input" placeholder="email@example.com (or leave empty for all)" style="flex: 1" />
+              <button class="btn btn-danger" :disabled="deletingContacts" @click="deleteContacts">
+                {{ deletingContacts ? 'Deleting...' : 'Delete' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="gdpr-section" style="margin-top: 24px">
+            <h3 class="gdpr-title">Delete Email Logs</h3>
+            <p class="section-description">
+              Delete email logs and associated bounce records. Set days to 0 to delete all logs.
+            </p>
+            <div class="flex gap-2 align-center">
+              <label class="form-label" style="margin: 0; white-space: nowrap">Older than</label>
+              <input v-model.number="gdprDays" type="number" class="form-input" min="0" style="width: 100px" />
+              <label class="form-label" style="margin: 0">days</label>
+              <button class="btn btn-danger" :disabled="deletingEmails" @click="deleteEmailLogs">
+                {{ deletingEmails ? 'Deleting...' : 'Delete Logs' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Theme -->
       <div class="card">
         <div class="card-header"><h2>Theme</h2></div>
@@ -393,5 +570,16 @@ async function toggleDomainSecurity() {
 .theme-option-label {
   font-size: 13px;
   font-weight: 500;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.gdpr-section h3.gdpr-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
 }
 </style>

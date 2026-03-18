@@ -31,6 +31,7 @@ import (
 
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jkaninda/okapi"
 	"github.com/jkaninda/posta/internal/dto"
 	"github.com/jkaninda/posta/internal/models"
@@ -43,11 +44,12 @@ import (
 )
 
 type UserHandler struct {
-	repo      *repositories.UserRepository
-	jwtSecret []byte
-	seeder    *seeder.Seeder
-	bus       *eventbus.EventBus
-	settings  *settings.Provider
+	repo        *repositories.UserRepository
+	sessionRepo *repositories.SessionRepository
+	jwtSecret   []byte
+	seeder      *seeder.Seeder
+	bus         *eventbus.EventBus
+	settings    *settings.Provider
 }
 
 func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder *seeder.Seeder, bus *eventbus.EventBus) *UserHandler {
@@ -58,6 +60,12 @@ func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder 
 		bus:       bus,
 	}
 }
+
+func (h *UserHandler) SetSessionRepo(repo *repositories.SessionRepository) {
+	h.sessionRepo = repo
+}
+
+const jwtTokenTTL = 24 * time.Hour
 
 func (h *UserHandler) SetSettings(s *settings.Provider) {
 	h.settings = s
@@ -188,12 +196,7 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 	}
 
 	// Auto-login: generate JWT token
-	token, err := okapi.GenerateJwtToken(h.jwtSecret, map[string]any{
-		"sub":   user.ID,
-		"email": user.Email,
-		"role":  string(user.Role),
-		"aud":   "posta",
-	}, 24*time.Hour)
+	token, _, err := h.generateTokenWithSession(c, user)
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate token", err)
 	}
@@ -310,15 +313,11 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 			fmt.Sprintf("User %q logged in", user.Email), nil)
 	}
 
-	token, err := okapi.GenerateJwtToken(h.jwtSecret, map[string]any{
-		"sub":   user.ID,
-		"email": user.Email,
-		"role":  string(user.Role),
-		"aud":   "posta",
-	}, 24*time.Hour)
+	token, jti, err := h.generateTokenWithSession(c, user)
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate token", err)
 	}
+	_ = jti
 
 	return ok(c, AuthResponse{
 		Token: token,
@@ -426,4 +425,38 @@ func (h *UserHandler) Disable2FA(c *okapi.Context, req *Disable2FARequest) error
 	}
 
 	return ok(c, okapi.M{"message": "2FA disabled successfully"})
+}
+
+// generateTokenWithSession creates a JWT with a jti claim and records the session.
+func (h *UserHandler) generateTokenWithSession(c *okapi.Context, user *models.User) (string, string, error) {
+	jti := uuid.NewString()
+
+	token, err := okapi.GenerateJwtToken(h.jwtSecret, map[string]any{
+		"sub":   user.ID,
+		"email": user.Email,
+		"role":  string(user.Role),
+		"aud":   "posta",
+		"jti":   jti,
+	}, jwtTokenTTL)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Track session in database
+	if h.sessionRepo != nil {
+		ua := c.Header("User-Agent")
+		if len(ua) > 512 {
+			ua = ua[:512]
+		}
+		session := &models.Session{
+			UserID:    user.ID,
+			JTI:       jti,
+			IPAddress: c.RealIP(),
+			UserAgent: ua,
+			ExpiresAt: time.Now().Add(jwtTokenTTL),
+		}
+		_ = h.sessionRepo.Create(session)
+	}
+
+	return token, jti, nil
 }

@@ -46,6 +46,7 @@ import (
 	"github.com/jkaninda/posta/internal/services/eventbus"
 	"github.com/jkaninda/posta/internal/services/ratelimit"
 	"github.com/jkaninda/posta/internal/services/seeder"
+	sessionpkg "github.com/jkaninda/posta/internal/services/session"
 	"github.com/jkaninda/posta/internal/services/settings"
 	"github.com/jkaninda/posta/internal/services/webhook"
 	"github.com/jkaninda/posta/internal/services/workermon"
@@ -96,6 +97,8 @@ type routerHandlers struct {
 	analytics       *handlers.AnalyticsHandler
 	setting         *handlers.SettingHandler
 	userSetting     *handlers.UserSettingHandler
+	userData        *handlers.UserDataHandler
+	session         *handlers.SessionHandler
 	cron            *handlers.CronHandler
 }
 
@@ -120,6 +123,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	eventRepo := repositories.NewEventRepository(db)
 	settingRepo := repositories.NewSettingRepository(db)
 	userSettingRepo := repositories.NewUserSettingRepository(db)
+	sessionRepo := repositories.NewSessionRepository(db)
+
+	// Session store (Redis-backed blacklist)
+	sessionStore := sessionpkg.NewStore(redisClient)
 
 	// Services
 	bus := eventbus.New(eventRepo)
@@ -174,9 +181,9 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		cfg: cfg,
 		v1:  app.Group("/api/v1"),
 		mw: routerMiddleware{
-			jwtAuth:           middlewares.JWTAuth(cfg),
-			jwtAdminAuth:      middlewares.JWTAdminAuth(cfg),
-			jwtAdminQueryAuth: middlewares.JWTAdminQueryAuth(cfg),
+			jwtAuth:           middlewares.JWTAuth(cfg, sessionStore),
+			jwtAdminAuth:      middlewares.JWTAdminAuth(cfg, sessionStore),
+			jwtAdminQueryAuth: middlewares.JWTAdminQueryAuth(cfg, sessionStore),
 			loginLimiter:      middlewares.LoginRateLimitMiddleware(limiter),
 			apiKey:            middlewares.APIKeyAuthMiddleware(apiKeyService, userRepo, apiKeyRepo),
 		},
@@ -205,8 +212,13 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			analytics:       handlers.NewAnalyticsHandler(repositories.NewAnalyticsRepository(db), statsCache),
 			setting:         handlers.NewSettingHandler(settingRepo, auditLogger),
 			userSetting:     handlers.NewUserSettingHandler(userSettingRepo),
+			userData:        handlers.NewUserDataHandler(db, templateRepo, versionRepo, localizationRepo, stylesheetRepo, languageRepo, contactRepo, contactListRepo, webhookRepo, suppressionRepo, userSettingRepo),
+			session:         handlers.NewSessionHandler(sessionRepo, sessionStore),
 		},
 	}
+
+	// Session management
+	r.h.user.SetSessionRepo(sessionRepo)
 
 	// Email content privacy
 	r.h.email.SetSettings(settingsProvider)

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { analyticsApi } from '../../api/analytics'
-import type { DailyCount, StatusBreakdown } from '../../api/types'
+import type { DailyCount, StatusBreakdown, DashboardAnalyticsResponse } from '../../api/types'
 
 const loading = ref(true)
 const dailyCounts = ref<DailyCount[]>([])
 const statusBreakdown = ref<StatusBreakdown[]>([])
+const dashAnalytics = ref<DashboardAnalyticsResponse | null>(null)
 
 const fromDate = ref('')
 const toDate = ref('')
@@ -21,9 +22,13 @@ toDate.value = now.toISOString().slice(0, 10)
 async function loadAnalytics() {
   loading.value = true
   try {
-    const res = await analyticsApi.user(fromDate.value, toDate.value, statusFilter.value || undefined)
+    const [res, dashRes] = await Promise.all([
+      analyticsApi.user(fromDate.value, toDate.value, statusFilter.value || undefined),
+      analyticsApi.dashboardAnalytics(fromDate.value, toDate.value),
+    ])
     dailyCounts.value = res.data.data.daily_counts || []
     statusBreakdown.value = res.data.data.status_breakdown || []
+    dashAnalytics.value = dashRes.data.data
   } catch (e) {
     console.error('Failed to load analytics', e)
   } finally {
@@ -64,6 +69,50 @@ function breakdownPercent(count: number): string {
   if (totalBreakdown.value === 0) return '0'
   return ((count / totalBreakdown.value) * 100).toFixed(1)
 }
+
+// Delivery rate chart helpers
+const deliveryRateMax = computed(() => {
+  if (!dashAnalytics.value) return 1
+  return Math.max(...dashAnalytics.value.delivery_rate_trends.map(d => d.total), 1)
+})
+
+function deliveryBarHeight(value: number): string {
+  const pct = (value / deliveryRateMax.value) * 100
+  return `${Math.max(pct, value > 0 ? 2 : 0)}%`
+}
+
+// Bounce rate chart helpers
+const bounceMax = computed(() => {
+  if (!dashAnalytics.value) return 1
+  return Math.max(...dashAnalytics.value.bounce_rate_trends.map(d => d.total), 1)
+})
+
+function bounceBarHeight(value: number): string {
+  const pct = (value / bounceMax.value) * 100
+  return `${Math.max(pct, value > 0 ? 2 : 0)}%`
+}
+
+const totalBounces = computed(() => {
+  if (!dashAnalytics.value) return 0
+  return dashAnalytics.value.bounce_rate_trends.reduce((sum, d) => sum + d.total, 0)
+})
+
+// Latency formatting
+function formatLatency(seconds: number): string {
+  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  return `${(seconds / 60).toFixed(1)}m`
+}
+
+// Average delivery rate
+const avgDeliveryRate = computed(() => {
+  if (!dashAnalytics.value) return 0
+  const points = dashAnalytics.value.delivery_rate_trends.filter(d => d.total > 0)
+  if (points.length === 0) return 0
+  const totalSent = points.reduce((sum, d) => sum + d.sent, 0)
+  const totalAll = points.reduce((sum, d) => sum + d.total, 0)
+  return totalAll > 0 ? (totalSent / totalAll) * 100 : 0
+})
 </script>
 
 <template>
@@ -178,6 +227,119 @@ function breakdownPercent(count: number): string {
           </div>
         </div>
       </div>
+
+      <!-- Dashboard Analytics: Delivery Rate, Bounce Rate, Latency -->
+      <template v-if="dashAnalytics">
+        <!-- Delivery Rate Trends -->
+        <div class="card" style="margin-top: 24px">
+          <div class="card-header">
+            <h2>Delivery Rate Trends <span class="card-header-sub">{{ avgDeliveryRate.toFixed(1) }}% avg</span></h2>
+          </div>
+          <div class="card-body">
+            <div v-if="dashAnalytics.delivery_rate_trends.length === 0" class="empty-state">
+              <h3>No data</h3>
+              <p>No delivery data in the selected range.</p>
+            </div>
+            <div v-else>
+              <div class="trend-chart">
+                <div class="trend-chart-bars">
+                  <div
+                    v-for="day in dashAnalytics.delivery_rate_trends"
+                    :key="day.date"
+                    class="trend-bar-group"
+                    :title="`${formatDate(day.date)}: ${day.sent} sent, ${day.failed} failed (${day.delivery_rate.toFixed(1)}%)`"
+                  >
+                    <div class="trend-bar-stack">
+                      <div class="trend-bar trend-bar-failed" :style="{ height: deliveryBarHeight(day.failed) }"></div>
+                      <div class="trend-bar trend-bar-sent" :style="{ height: deliveryBarHeight(day.sent) }"></div>
+                    </div>
+                    <div class="trend-rate-label" :class="{ 'rate-warning': day.delivery_rate < 90 && day.total > 0, 'rate-danger': day.delivery_rate < 75 && day.total > 0 }">
+                      {{ day.total > 0 ? day.delivery_rate.toFixed(0) + '%' : '' }}
+                    </div>
+                    <div class="trend-bar-date">{{ formatDate(day.date) }}</div>
+                  </div>
+                </div>
+                <div class="trend-chart-legend">
+                  <span class="trend-legend-item"><span class="trend-legend-dot trend-legend-sent"></span> Sent</span>
+                  <span class="trend-legend-item"><span class="trend-legend-dot trend-legend-failed"></span> Failed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bounce Rate Graph -->
+        <div class="card" style="margin-top: 24px">
+          <div class="card-header">
+            <h2>Bounce Rate <span class="card-header-sub">{{ totalBounces }} total bounces</span></h2>
+          </div>
+          <div class="card-body">
+            <div v-if="totalBounces === 0" class="empty-state">
+              <h3>No bounces</h3>
+              <p>No bounces recorded in the selected range.</p>
+            </div>
+            <div v-else>
+              <div class="trend-chart">
+                <div class="trend-chart-bars">
+                  <div
+                    v-for="day in dashAnalytics.bounce_rate_trends"
+                    :key="day.date"
+                    class="trend-bar-group"
+                    :title="`${formatDate(day.date)}: ${day.hard} hard, ${day.soft} soft, ${day.complaint} complaint`"
+                  >
+                    <div class="trend-bar-stack">
+                      <div class="trend-bar bounce-bar-complaint" :style="{ height: bounceBarHeight(day.complaint) }"></div>
+                      <div class="trend-bar bounce-bar-soft" :style="{ height: bounceBarHeight(day.soft) }"></div>
+                      <div class="trend-bar bounce-bar-hard" :style="{ height: bounceBarHeight(day.hard) }"></div>
+                    </div>
+                    <div class="trend-bar-date">{{ formatDate(day.date) }}</div>
+                  </div>
+                </div>
+                <div class="trend-chart-legend">
+                  <span class="trend-legend-item"><span class="trend-legend-dot bounce-legend-hard"></span> Hard</span>
+                  <span class="trend-legend-item"><span class="trend-legend-dot bounce-legend-soft"></span> Soft</span>
+                  <span class="trend-legend-item"><span class="trend-legend-dot bounce-legend-complaint"></span> Complaint</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Latency Percentiles -->
+        <div class="card" style="margin-top: 24px">
+          <div class="card-header">
+            <h2>Delivery Latency</h2>
+          </div>
+          <div class="card-body">
+            <div v-if="dashAnalytics.latency_percentiles.p50 === 0 && dashAnalytics.latency_percentiles.avg === 0" class="empty-state">
+              <h3>No data</h3>
+              <p>No delivered emails in the selected range.</p>
+            </div>
+            <div v-else class="latency-grid">
+              <div class="latency-card">
+                <div class="latency-value">{{ formatLatency(dashAnalytics.latency_percentiles.avg) }}</div>
+                <div class="latency-label">Average</div>
+              </div>
+              <div class="latency-card">
+                <div class="latency-value">{{ formatLatency(dashAnalytics.latency_percentiles.p50) }}</div>
+                <div class="latency-label">p50 (Median)</div>
+              </div>
+              <div class="latency-card">
+                <div class="latency-value">{{ formatLatency(dashAnalytics.latency_percentiles.p75) }}</div>
+                <div class="latency-label">p75</div>
+              </div>
+              <div class="latency-card">
+                <div class="latency-value">{{ formatLatency(dashAnalytics.latency_percentiles.p90) }}</div>
+                <div class="latency-label">p90</div>
+              </div>
+              <div class="latency-card">
+                <div class="latency-value latency-value-tail">{{ formatLatency(dashAnalytics.latency_percentiles.p99) }}</div>
+                <div class="latency-label">p99</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
     </template>
   </div>
 </template>
@@ -305,5 +467,167 @@ function breakdownPercent(count: number): string {
 .breakdown-pct {
   font-weight: 400;
   color: var(--text-muted);
+}
+
+/* Card header subtitle */
+.card-header-sub {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Delivery rate & bounce trend charts */
+.trend-chart {
+  padding: 8px 0;
+}
+
+.trend-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 160px;
+  padding-bottom: 44px;
+  position: relative;
+  overflow-x: auto;
+}
+
+.trend-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-width: 24px;
+  max-width: 42px;
+  position: relative;
+}
+
+.trend-bar-stack {
+  flex: 1;
+  width: 100%;
+  max-width: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.trend-bar {
+  width: 100%;
+  min-width: 0;
+  transition: height 0.3s ease;
+}
+
+.trend-bar-sent {
+  background: var(--success-500, #22c55e);
+  border-radius: 3px 3px 0 0;
+}
+
+.trend-bar-failed {
+  background: var(--danger-400, #f87171);
+}
+
+.trend-bar-stack .trend-bar:first-child {
+  border-radius: 3px 3px 0 0;
+}
+
+.trend-rate-label {
+  font-size: 10px;
+  color: var(--success-600, #16a34a);
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.trend-rate-label.rate-warning {
+  color: var(--warning-600, #ca8a04);
+}
+
+.trend-rate-label.rate-danger {
+  color: var(--danger-600, #dc2626);
+}
+
+.trend-bar-date {
+  position: absolute;
+  bottom: -38px;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transform: rotate(-45deg);
+  transform-origin: top center;
+}
+
+.trend-chart-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.trend-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.trend-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.trend-legend-sent { background: var(--success-500, #22c55e); }
+.trend-legend-failed { background: var(--danger-400, #f87171); }
+
+/* Bounce type colors */
+.bounce-bar-hard { background: var(--danger-500, #ef4444); }
+.bounce-bar-soft { background: var(--warning-500, #f59e0b); }
+.bounce-bar-complaint { background: var(--purple-500, #a855f7); }
+.bounce-legend-hard { background: var(--danger-500, #ef4444); }
+.bounce-legend-soft { background: var(--warning-500, #f59e0b); }
+.bounce-legend-complaint { background: var(--purple-500, #a855f7); }
+
+/* Latency percentiles */
+.latency-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .latency-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .latency-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.latency-card {
+  text-align: center;
+  padding: 16px 8px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.latency-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.latency-value-tail {
+  color: var(--warning-600, #ca8a04);
+}
+
+.latency-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 </style>

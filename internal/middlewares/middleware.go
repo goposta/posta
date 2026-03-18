@@ -25,13 +25,16 @@
 package middlewares
 
 import (
+	"errors"
 	"net"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jkaninda/okapi"
 	"github.com/jkaninda/posta/internal/config"
 	"github.com/jkaninda/posta/internal/services/auth"
 	"github.com/jkaninda/posta/internal/services/ratelimit"
+	sessionpkg "github.com/jkaninda/posta/internal/services/session"
 	"github.com/jkaninda/posta/internal/storage/repositories"
 )
 
@@ -44,27 +47,56 @@ func baseJWTAuth(cfg *config.Config) okapi.JWTAuth {
 			"user_id": "sub",
 			"email":   "email",
 			"role":    "role",
+			"jti":     "jti",
 		},
 	}
 }
 
-// User
-func JWTAuth(cfg *config.Config) okapi.JWTAuth {
-	return baseJWTAuth(cfg)
+// sessionValidator returns a ValidateClaims function that checks the Redis blacklist.
+func sessionValidator(store *sessionpkg.Store) func(c *okapi.Context, claims jwt.Claims) error {
+	return func(c *okapi.Context, claims jwt.Claims) error {
+		mapClaims, ok := claims.(jwt.MapClaims)
+		if !ok {
+			return nil // no claims to check
+		}
+		jti, _ := mapClaims["jti"].(string)
+		if jti == "" {
+			return nil // legacy token without jti, allow through
+		}
+		if store.IsRevoked(c.Request().Context(), jti) {
+			return errors.New("session has been revoked")
+		}
+		return nil
+	}
 }
 
-// Admin
-func JWTAdminAuth(cfg *config.Config) okapi.JWTAuth {
+// JWTAuth creates user JWT auth middleware. If sessionStore is non-nil, revoked sessions are rejected.
+func JWTAuth(cfg *config.Config, sessionStore ...*sessionpkg.Store) okapi.JWTAuth {
 	auth := baseJWTAuth(cfg)
-	auth.ClaimsExpression = "Equals(`role`,`admin`)"
+	if len(sessionStore) > 0 && sessionStore[0] != nil {
+		auth.ValidateClaims = sessionValidator(sessionStore[0])
+	}
 	return auth
 }
 
-// Admin via Query for SSE
-func JWTAdminQueryAuth(cfg *config.Config) okapi.JWTAuth {
+// JWTAdminAuth creates admin JWT auth middleware.
+func JWTAdminAuth(cfg *config.Config, sessionStore ...*sessionpkg.Store) okapi.JWTAuth {
+	auth := baseJWTAuth(cfg)
+	auth.ClaimsExpression = "Equals(`role`,`admin`)"
+	if len(sessionStore) > 0 && sessionStore[0] != nil {
+		auth.ValidateClaims = sessionValidator(sessionStore[0])
+	}
+	return auth
+}
+
+// JWTAdminQueryAuth creates admin JWT auth via query param (for SSE).
+func JWTAdminQueryAuth(cfg *config.Config, sessionStore ...*sessionpkg.Store) okapi.JWTAuth {
 	auth := baseJWTAuth(cfg)
 	auth.ClaimsExpression = "Equals(`role`,`admin`)"
 	auth.TokenLookup = "query:token"
+	if len(sessionStore) > 0 && sessionStore[0] != nil {
+		auth.ValidateClaims = sessionValidator(sessionStore[0])
+	}
 	return auth
 }
 

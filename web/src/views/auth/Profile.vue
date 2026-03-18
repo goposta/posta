@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { authApi } from '../../api/auth'
+import { sessionsApi, type Session } from '../../api/sessions'
 import { useAuthStore } from '../../stores/auth'
 import { useNotificationStore } from '../../stores/notification'
+import { useConfirm } from '../../composables/useConfirm'
 const auth = useAuthStore()
 const notify = useNotificationStore()
+const { confirm } = useConfirm()
 
 // Profile
 const name = ref('')
@@ -149,6 +152,87 @@ function cancel2FASetup() {
   tfaSecret.value = ''
   tfaURL.value = ''
 }
+
+// Sessions
+const sessions = ref<Session[]>([])
+const sessionsLoading = ref(false)
+const revokingSession = ref<number | null>(null)
+const revokingOthers = ref(false)
+
+async function loadSessions() {
+  sessionsLoading.value = true
+  try {
+    const res = await sessionsApi.list()
+    sessions.value = res.data.data || []
+  } catch {
+    // silently fail — sessions card still shows
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+async function revokeSession(s: Session) {
+  const confirmed = await confirm({
+    title: 'Revoke Session',
+    message: `Force logout the session from ${s.ip_address}?`,
+    confirmText: 'Revoke',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+
+  revokingSession.value = s.id
+  try {
+    await sessionsApi.revoke(s.id)
+    sessions.value = sessions.value.filter(x => x.id !== s.id)
+    notify.success('Session revoked')
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to revoke session')
+  } finally {
+    revokingSession.value = null
+  }
+}
+
+async function revokeOtherSessions() {
+  const confirmed = await confirm({
+    title: 'Revoke All Other Sessions',
+    message: 'This will force logout all other devices and browsers. Continue?',
+    confirmText: 'Revoke All Others',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+
+  revokingOthers.value = true
+  try {
+    const res = await sessionsApi.revokeOthers()
+    notify.success(res.data.data.message)
+    await loadSessions()
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to revoke sessions')
+  } finally {
+    revokingOthers.value = false
+  }
+}
+
+function parseUserAgent(ua: string): string {
+  if (!ua) return 'Unknown'
+  // Extract browser name
+  if (ua.includes('Firefox')) return 'Firefox'
+  if (ua.includes('Edg/')) return 'Edge'
+  if (ua.includes('Chrome')) return 'Chrome'
+  if (ua.includes('Safari')) return 'Safari'
+  if (ua.includes('curl')) return 'curl'
+  return ua.slice(0, 30) + (ua.length > 30 ? '...' : '')
+}
+
+function formatSessionDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// Load sessions on mount
+onMounted(() => { loadSessions() })
 </script>
 
 <template>
@@ -265,6 +349,56 @@ function cancel2FASetup() {
         </div>
       </div>
 
+      <!-- Active Sessions -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Active Sessions</h2>
+          <button
+            v-if="sessions.length > 1"
+            class="btn btn-danger btn-sm"
+            :disabled="revokingOthers"
+            @click="revokeOtherSessions"
+          >
+            {{ revokingOthers ? 'Revoking...' : 'Revoke All Others' }}
+          </button>
+        </div>
+        <div class="card-body">
+          <p class="tfa-description">
+            These are the devices and browsers currently logged in to your account.
+          </p>
+
+          <div v-if="sessionsLoading" style="text-align: center; padding: 20px 0">
+            <div class="spinner"></div>
+          </div>
+
+          <div v-else-if="sessions.length === 0" class="text-muted" style="text-align: center; padding: 16px 0">
+            No active sessions found.
+          </div>
+
+          <div v-else class="session-list">
+            <div v-for="s in sessions" :key="s.id" class="session-item" :class="{ 'session-current': s.current }">
+              <div class="session-info">
+                <div class="session-browser">
+                  {{ parseUserAgent(s.user_agent) }}
+                  <span v-if="s.current" class="badge badge-success" style="margin-left: 6px">Current</span>
+                </div>
+                <div class="session-meta">
+                  {{ s.ip_address }} &middot; Created {{ formatSessionDate(s.created_at) }} &middot; Expires {{ formatSessionDate(s.expires_at) }}
+                </div>
+              </div>
+              <button
+                v-if="!s.current"
+                class="btn btn-danger btn-sm"
+                :disabled="revokingSession === s.id"
+                @click="revokeSession(s)"
+              >
+                {{ revokingSession === s.id ? 'Revoking...' : 'Revoke' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Change Password -->
       <div class="card">
         <div class="card-header"><h2>Change Password</h2></div>
@@ -355,5 +489,43 @@ function cancel2FASetup() {
   letter-spacing: 8px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   max-width: 220px;
+}
+
+.session-list {
+  display: grid;
+  gap: 8px;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+}
+
+.session-current {
+  border-color: var(--primary-300);
+  background: var(--primary-50, rgba(147, 51, 234, 0.04));
+}
+
+.session-info {
+  min-width: 0;
+}
+
+.session-browser {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+}
+
+.session-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 </style>

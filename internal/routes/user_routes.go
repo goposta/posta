@@ -101,6 +101,48 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[any]{},
 		},
 
+		// ==================== Sessions ====================
+		{
+			Method:      http.MethodGet,
+			Path:        "/sessions",
+			Handler:     r.h.session.List,
+			Group:       userGroup,
+			Summary:     "List active sessions",
+			Description: "Returns all active (non-revoked, non-expired) sessions for the current user",
+			Response:    &dto.Response[[]handlers.SessionResponse]{},
+		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/sessions/{id:int}",
+			Handler:     okapi.H(r.h.session.Revoke),
+			Group:       userGroup,
+			Summary:     "Revoke session",
+			Description: "Force logout a specific session by ID",
+			Response:    &dto.Response[any]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Session ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/sessions/revoke-others",
+			Handler:     r.h.session.RevokeOthers,
+			Group:       userGroup,
+			Summary:     "Revoke all other sessions",
+			Description: "Force logout all sessions except the current one",
+			Response:    &dto.Response[any]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/sessions/logout",
+			Handler:     r.h.session.Logout,
+			Group:       userGroup,
+			Summary:     "Logout current session",
+			Description: "Revoke the current session's JWT token",
+			Response:    &dto.Response[any]{},
+		},
+
 		// ==================== Dashboard & Analytics ====================
 		{
 			Method:      http.MethodGet,
@@ -120,6 +162,16 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Description: "Returns daily email counts and status breakdown for the authenticated user",
 			Request:     &handlers.AnalyticsRequest{},
 			Response:    &dto.Response[handlers.AnalyticsResponse]{},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/analytics/dashboard",
+			Handler:     okapi.H(r.h.analytics.UserDashboardAnalytics),
+			Group:       userGroup,
+			Summary:     "Dashboard analytics",
+			Description: "Returns delivery rate trends, bounce rate graphs, and latency percentiles",
+			Request:     &handlers.DashboardAnalyticsRequest{},
+			Response:    &dto.Response[handlers.DashboardAnalyticsResponse]{},
 		},
 
 		// ==================== Email Logs ====================
@@ -170,6 +222,21 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 				okapi.DocPathParam("id", "string", "Email UUID"),
 				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+
+		// ==================== Email Preview ====================
+		{
+			Method:      http.MethodPost,
+			Path:        "/emails/preview",
+			Handler:     okapi.H(r.h.email.Preview),
+			Group:       userGroup,
+			Summary:     "Preview email from template",
+			Description: "Render a template with variables and return the HTML, text, and subject without sending.",
+			Request:     &handlers.PreviewEmailRequest{},
+			Response:    &dto.Response[handlers.PreviewEmailResponse]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 
@@ -939,6 +1006,49 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 				okapi.DocPathParam("id", "integer", "Contact list ID"),
 				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
 			},
+		},
+
+		// ==================== User Data Export/Import ====================
+		{
+			Method:      http.MethodGet,
+			Path:        "/data/export",
+			Handler:     r.h.userData.Export,
+			Group:       userGroup,
+			Summary:     "Export all user data",
+			Description: "Export all user data including templates, stylesheets, languages, contacts, contact lists, webhooks, suppressions, and settings as JSON",
+			Response:    &dto.Response[handlers.UserDataExport]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/data/import",
+			Handler:     okapi.H(r.h.userData.Import),
+			Group:       userGroup,
+			Summary:     "Import user data",
+			Description: "Import user data from a previously exported JSON payload. Duplicates are skipped.",
+			Request:     &handlers.ImportUserDataRequest{},
+			Response:    &dto.Response[any]{},
+		},
+
+		// ==================== GDPR Data Management ====================
+		{
+			Method:      http.MethodPost,
+			Path:        "/gdpr/delete-contacts",
+			Handler:     okapi.H(r.h.userData.DeleteContacts),
+			Group:       userGroup,
+			Summary:     "Delete contact data (GDPR)",
+			Description: "Delete a specific contact by email or all contacts. Also removes the contact from suppression lists and contact list memberships.",
+			Request:     &handlers.GDPRDeleteContactsRequest{},
+			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/gdpr/delete-email-logs",
+			Handler:     okapi.H(r.h.userData.DeleteEmailLogs),
+			Group:       userGroup,
+			Summary:     "Delete email logs (GDPR)",
+			Description: "Delete email logs and associated bounces. Specify older_than_days to only delete old logs, or 0 to delete all.",
+			Request:     &handlers.GDPRDeleteEmailLogsRequest{},
+			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
 		},
 
 		// ==================== User Settings ====================

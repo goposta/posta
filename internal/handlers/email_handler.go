@@ -86,6 +86,35 @@ func (h *EmailHandler) redactContent() bool {
 	return true
 }
 
+type PreviewEmailRequest struct {
+	Body struct {
+		Template     string         `json:"template" required:"true" doc:"Template name"`
+		Language     string         `json:"language" doc:"Language code for localization"`
+		TemplateData map[string]any `json:"template_data" doc:"Variables to inject into the template"`
+	} `json:"body"`
+}
+
+type PreviewEmailResponse struct {
+	Subject string `json:"subject"`
+	HTML    string `json:"html"`
+	Text    string `json:"text"`
+}
+
+func (h *EmailHandler) Preview(c *okapi.Context, req *PreviewEmailRequest) error {
+	userID := c.GetInt("user_id")
+
+	rendered, err := h.service.RenderTemplate(uint(userID), req.Body.Template, req.Body.Language, req.Body.TemplateData)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+
+	return ok(c, PreviewEmailResponse{
+		Subject: rendered.Subject,
+		HTML:    rendered.HTML,
+		Text:    rendered.Text,
+	})
+}
+
 const redactedPlaceholder = "[redacted]"
 
 func redactEmail(em *models.Email) {

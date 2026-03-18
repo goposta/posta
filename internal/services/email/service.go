@@ -775,6 +775,16 @@ func (s *Service) RetryEmail(emailUUID string, userID uint) (*SendResponse, erro
 	})
 }
 
+// RenderTemplate resolves a template by name and renders it with the given data,
+// returning the rendered subject, HTML, and text without sending.
+func (s *Service) RenderTemplate(userID uint, templateName, language string, data map[string]any) (*RenderedTemplate, error) {
+	tmpl, err := s.templateRepo.FindByName(userID, templateName)
+	if err != nil {
+		return nil, fmt.Errorf("template not found: %s", templateName)
+	}
+	return s.resolveAndRender(tmpl, language, data)
+}
+
 // resolveAndRender resolves the template content using versioned localizations
 // and renders it with the given data.
 func (s *Service) resolveAndRender(tmpl *models.Template, language string, data map[string]any) (*RenderedTemplate, error) {

@@ -163,6 +163,19 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			},
 		},
 		{
+			Method:      http.MethodPost,
+			Path:        "/emails/preview",
+			Handler:     okapi.H(r.h.email.Preview),
+			Group:       apiAuth,
+			Summary:     "Preview email from template",
+			Description: "Render a template with variables and return the HTML, text, and subject without sending.",
+			Request:     &handlers.PreviewEmailRequest{},
+			Response:    &dto.Response[handlers.PreviewEmailResponse]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
 			Method:      http.MethodGet,
 			Path:        "/emails/{id}/status",
 			Handler:     okapi.H(r.h.email.GetStatus),

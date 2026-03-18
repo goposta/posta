@@ -1,5 +1,5 @@
 import api from './client'
-import type { ApiResponse, AnalyticsResponse } from './types'
+import type { ApiResponse, AnalyticsResponse, DashboardAnalyticsResponse } from './types'
 
 export const analyticsApi = {
   user(from?: string, to?: string, status?: string) {
@@ -15,5 +15,17 @@ export const analyticsApi = {
     if (to) params.to = to
     if (status) params.status = status
     return api.get<ApiResponse<AnalyticsResponse>>('/admin/analytics', { params })
+  },
+  dashboardAnalytics(from?: string, to?: string) {
+    const params: Record<string, string> = {}
+    if (from) params.from = from
+    if (to) params.to = to
+    return api.get<ApiResponse<DashboardAnalyticsResponse>>('/users/me/analytics/dashboard', { params })
+  },
+  adminDashboardAnalytics(from?: string, to?: string) {
+    const params: Record<string, string> = {}
+    if (from) params.from = from
+    if (to) params.to = to
+    return api.get<ApiResponse<DashboardAnalyticsResponse>>('/admin/analytics/dashboard', { params })
   },
 }

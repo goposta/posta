@@ -52,6 +52,17 @@ type AnalyticsResponse struct {
 	StatusBreakdown []repositories.StatusBreakdown `json:"status_breakdown"`
 }
 
+type DashboardAnalyticsRequest struct {
+	From string `query:"from"`
+	To   string `query:"to"`
+}
+
+type DashboardAnalyticsResponse struct {
+	DeliveryRateTrends []repositories.DeliveryRatePoint  `json:"delivery_rate_trends"`
+	BounceRateTrends   []repositories.BounceRatePoint    `json:"bounce_rate_trends"`
+	LatencyPercentiles *repositories.LatencyPercentiles   `json:"latency_percentiles"`
+}
+
 func (h *AnalyticsHandler) UserAnalytics(c *okapi.Context, req *AnalyticsRequest) error {
 	userID := c.GetInt("user_id")
 	ctx := c.Request().Context()
@@ -112,6 +123,75 @@ func (h *AnalyticsHandler) AdminAnalytics(c *okapi.Context, req *AnalyticsReques
 
 	h.cache.Set(ctx, cacheKey, resp, cache.AnalyticsTTL)
 
+	return ok(c, resp)
+}
+
+func (h *AnalyticsHandler) UserDashboardAnalytics(c *okapi.Context, req *DashboardAnalyticsRequest) error {
+	userID := c.GetInt("user_id")
+	ctx := c.Request().Context()
+
+	cacheKey := cache.DashboardAnalyticsKey(userID, req.From, req.To)
+	var resp DashboardAnalyticsResponse
+	if h.cache.Get(ctx, cacheKey, &resp) {
+		return ok(c, resp)
+	}
+
+	from, to := parseTimeRange(req.From, req.To)
+
+	delivery, err := h.repo.DeliveryRateTrends(uint(userID), from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch delivery rate trends")
+	}
+	bounces, err := h.repo.BounceRateTrends(uint(userID), from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch bounce rate trends")
+	}
+	latency, err := h.repo.LatencyPercentilesForUser(uint(userID), from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch latency percentiles")
+	}
+
+	resp = DashboardAnalyticsResponse{
+		DeliveryRateTrends: delivery,
+		BounceRateTrends:   bounces,
+		LatencyPercentiles: latency,
+	}
+
+	h.cache.Set(ctx, cacheKey, resp, cache.AnalyticsTTL)
+	return ok(c, resp)
+}
+
+func (h *AnalyticsHandler) AdminDashboardAnalytics(c *okapi.Context, req *DashboardAnalyticsRequest) error {
+	ctx := c.Request().Context()
+
+	cacheKey := cache.AdminDashboardAnalyticsKey(req.From, req.To)
+	var resp DashboardAnalyticsResponse
+	if h.cache.Get(ctx, cacheKey, &resp) {
+		return ok(c, resp)
+	}
+
+	from, to := parseTimeRange(req.From, req.To)
+
+	delivery, err := h.repo.AdminDeliveryRateTrends(from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch delivery rate trends")
+	}
+	bounces, err := h.repo.AdminBounceRateTrends(from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch bounce rate trends")
+	}
+	latency, err := h.repo.AdminLatencyPercentiles(from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch latency percentiles")
+	}
+
+	resp = DashboardAnalyticsResponse{
+		DeliveryRateTrends: delivery,
+		BounceRateTrends:   bounces,
+		LatencyPercentiles: latency,
+	}
+
+	h.cache.Set(ctx, cacheKey, resp, cache.AnalyticsTTL)
 	return ok(c, resp)
 }
 

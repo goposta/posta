@@ -4,6 +4,15 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [vue()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          codemirror: ['codemirror', '@codemirror/lang-html', '@codemirror/lang-json', '@codemirror/theme-one-dark', '@codemirror/view', '@codemirror/state'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

@@ -3,23 +3,26 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { adminApi } from '../../api/admin'
 import { analyticsApi } from '../../api/analytics'
 import { useAuthStore } from '../../stores/auth'
-import type { AdminMetrics, WorkerStatus, AnalyticsResponse } from '../../api/types'
+import type { AdminMetrics, WorkerStatus, AnalyticsResponse, DashboardAnalyticsResponse } from '../../api/types'
 
 const auth = useAuthStore()
 const loading = ref(true)
 const metrics = ref<AdminMetrics | null>(null)
 const workerStatus = ref<WorkerStatus | null>(null)
 const analytics = ref<AnalyticsResponse | null>(null)
+const dashAnalytics = ref<DashboardAnalyticsResponse | null>(null)
 let workerSSE: EventSource | null = null
 
 onMounted(async () => {
   try {
-    const [metricsRes, analyticsRes] = await Promise.all([
+    const [metricsRes, analyticsRes, dashRes] = await Promise.all([
       adminApi.getMetrics(),
       analyticsApi.admin(),
+      analyticsApi.adminDashboardAnalytics(),
     ])
     metrics.value = metricsRes.data.data
     analytics.value = analyticsRes.data.data
+    dashAnalytics.value = dashRes.data.data
   } catch (e) {
     console.error('Failed to load metrics', e)
   } finally {
@@ -108,6 +111,47 @@ function statusColor(status: string): string {
 }
 
 const totalBreakdown = computed(() => analytics.value?.status_breakdown?.reduce((s, b) => s + b.count, 0) || 0)
+
+// Dashboard analytics helpers
+const deliveryRateMax = computed(() => {
+  if (!dashAnalytics.value) return 1
+  return Math.max(...dashAnalytics.value.delivery_rate_trends.map(d => d.total), 1)
+})
+
+function deliveryBarHeight(value: number): string {
+  const pct = (value / deliveryRateMax.value) * 100
+  return `${Math.max(pct, value > 0 ? 2 : 0)}%`
+}
+
+const bounceMax = computed(() => {
+  if (!dashAnalytics.value) return 1
+  return Math.max(...dashAnalytics.value.bounce_rate_trends.map(d => d.total), 1)
+})
+
+function bounceBarHeight(value: number): string {
+  const pct = (value / bounceMax.value) * 100
+  return `${Math.max(pct, value > 0 ? 2 : 0)}%`
+}
+
+const totalBounces = computed(() => {
+  if (!dashAnalytics.value) return 0
+  return dashAnalytics.value.bounce_rate_trends.reduce((sum, d) => sum + d.total, 0)
+})
+
+function formatLatency(seconds: number): string {
+  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  return `${(seconds / 60).toFixed(1)}m`
+}
+
+const avgDeliveryRate = computed(() => {
+  if (!dashAnalytics.value) return 0
+  const points = dashAnalytics.value.delivery_rate_trends.filter(d => d.total > 0)
+  if (points.length === 0) return 0
+  const totalSent = points.reduce((sum, d) => sum + d.sent, 0)
+  const totalAll = points.reduce((sum, d) => sum + d.total, 0)
+  return totalAll > 0 ? (totalSent / totalAll) * 100 : 0
+})
 </script>
 
 <template>
@@ -389,6 +433,95 @@ const totalBreakdown = computed(() => analytics.value?.status_breakdown?.reduce(
         </div>
       </template>
 
+      <!-- Dashboard Analytics: Delivery Rate, Bounce Rate, Latency -->
+      <template v-if="dashAnalytics">
+        <div class="metrics-section-label">Delivery Rate Trends <span class="metrics-section-sub">{{ avgDeliveryRate.toFixed(1) }}% avg</span></div>
+        <div class="card" style="margin-bottom: 28px;">
+          <div class="card-body">
+            <div v-if="dashAnalytics.delivery_rate_trends.length === 0" style="text-align: center; color: var(--text-muted); padding: 24px;">No data</div>
+            <div v-else>
+              <div class="da-chart">
+                <div
+                  v-for="day in dashAnalytics.delivery_rate_trends"
+                  :key="day.date"
+                  class="da-bar-group"
+                  :title="`${formatShortDate(day.date)}: ${day.sent} sent, ${day.failed} failed (${day.delivery_rate.toFixed(1)}%)`"
+                >
+                  <div class="da-bar-stack">
+                    <div class="da-bar da-bar-failed" :style="{ height: deliveryBarHeight(day.failed) }"></div>
+                    <div class="da-bar da-bar-sent" :style="{ height: deliveryBarHeight(day.sent) }"></div>
+                  </div>
+                  <div class="da-rate-label" :class="{ 'da-rate-warning': day.delivery_rate < 90 && day.total > 0, 'da-rate-danger': day.delivery_rate < 75 && day.total > 0 }">
+                    {{ day.total > 0 ? day.delivery_rate.toFixed(0) + '%' : '' }}
+                  </div>
+                  <div class="da-bar-date">{{ formatShortDate(day.date) }}</div>
+                </div>
+              </div>
+              <div class="da-legend">
+                <span class="legend-item"><span class="legend-dot delivery-sent"></span> Sent</span>
+                <span class="legend-item"><span class="legend-dot delivery-failed"></span> Failed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics-section-label">Bounce Rate <span class="metrics-section-sub">{{ totalBounces }} total</span></div>
+        <div class="card" style="margin-bottom: 28px;">
+          <div class="card-body">
+            <div v-if="totalBounces === 0" style="text-align: center; color: var(--text-muted); padding: 24px;">No bounces</div>
+            <div v-else>
+              <div class="da-chart">
+                <div
+                  v-for="day in dashAnalytics.bounce_rate_trends"
+                  :key="day.date"
+                  class="da-bar-group"
+                  :title="`${formatShortDate(day.date)}: ${day.hard} hard, ${day.soft} soft, ${day.complaint} complaint`"
+                >
+                  <div class="da-bar-stack">
+                    <div class="da-bar da-bounce-complaint" :style="{ height: bounceBarHeight(day.complaint) }"></div>
+                    <div class="da-bar da-bounce-soft" :style="{ height: bounceBarHeight(day.soft) }"></div>
+                    <div class="da-bar da-bounce-hard" :style="{ height: bounceBarHeight(day.hard) }"></div>
+                  </div>
+                  <div class="da-bar-date">{{ formatShortDate(day.date) }}</div>
+                </div>
+              </div>
+              <div class="da-legend">
+                <span class="legend-item"><span class="legend-dot da-bounce-hard"></span> Hard</span>
+                <span class="legend-item"><span class="legend-dot da-bounce-soft"></span> Soft</span>
+                <span class="legend-item"><span class="legend-dot da-bounce-complaint"></span> Complaint</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics-section-label">Delivery Latency</div>
+        <div v-if="dashAnalytics.latency_percentiles.p50 === 0 && dashAnalytics.latency_percentiles.avg === 0" class="card" style="margin-bottom: 28px;">
+          <div class="card-body" style="text-align: center; color: var(--text-muted); padding: 24px;">No latency data</div>
+        </div>
+        <div v-else class="stats-grid" style="margin-bottom: 28px;">
+          <div class="stat-card">
+            <div class="stat-header"><div class="stat-label">Average</div></div>
+            <div class="stat-value">{{ formatLatency(dashAnalytics.latency_percentiles.avg) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header"><div class="stat-label">p50 (Median)</div></div>
+            <div class="stat-value">{{ formatLatency(dashAnalytics.latency_percentiles.p50) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header"><div class="stat-label">p75</div></div>
+            <div class="stat-value">{{ formatLatency(dashAnalytics.latency_percentiles.p75) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header"><div class="stat-label">p90</div></div>
+            <div class="stat-value">{{ formatLatency(dashAnalytics.latency_percentiles.p90) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header"><div class="stat-label">p99</div></div>
+            <div class="stat-value" style="color: var(--warning-600, #ca8a04)">{{ formatLatency(dashAnalytics.latency_percentiles.p99) }}</div>
+          </div>
+        </div>
+      </template>
+
       <!-- API Keys & Reputation -->
       <div class="metrics-section-label">API Keys & Reputation</div>
       <div class="stats-grid">
@@ -586,4 +719,84 @@ const totalBreakdown = computed(() => analytics.value?.status_breakdown?.reduce(
   font-size: 13px;
   font-weight: 600;
 }
+
+.metrics-section-sub {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Dashboard analytics charts */
+.da-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 160px;
+  padding-bottom: 44px;
+  position: relative;
+  overflow-x: auto;
+}
+
+.da-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-width: 24px;
+  max-width: 42px;
+  position: relative;
+}
+
+.da-bar-stack {
+  flex: 1;
+  width: 100%;
+  max-width: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.da-bar {
+  width: 100%;
+  min-width: 0;
+  transition: height 0.3s ease;
+}
+
+.da-bar-sent { background: var(--success-500, #22c55e); border-radius: 3px 3px 0 0; }
+.da-bar-failed { background: var(--danger-400, #f87171); }
+.da-bar-stack .da-bar:first-child { border-radius: 3px 3px 0 0; }
+
+.da-rate-label {
+  font-size: 10px;
+  color: var(--success-600, #16a34a);
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.da-rate-warning { color: var(--warning-600, #ca8a04); }
+.da-rate-danger { color: var(--danger-600, #dc2626); }
+
+.da-bar-date {
+  position: absolute;
+  bottom: -38px;
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transform: rotate(-45deg);
+  transform-origin: top center;
+}
+
+.da-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.da-bounce-hard { background: var(--danger-500, #ef4444); }
+.da-bounce-soft { background: var(--warning-500, #f59e0b); }
+.da-bounce-complaint { background: var(--purple-500, #a855f7); }
 </style>

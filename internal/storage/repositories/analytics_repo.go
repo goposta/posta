@@ -107,3 +107,196 @@ func (r *AnalyticsRepository) AdminStatusBreakdown(from, to time.Time) ([]Status
 		Find(&results).Error
 	return results, err
 }
+
+type deliveryRow struct {
+	Date   string
+	Status string
+	Count  int64
+}
+
+type bounceRow struct {
+	Date  string
+	Type  string
+	Count int64
+}
+
+// DeliveryRatePoint represents a single day's delivery rate.
+type DeliveryRatePoint struct {
+	Date         string  `json:"date"`
+	Sent         int64   `json:"sent"`
+	Failed       int64   `json:"failed"`
+	Total        int64   `json:"total"`
+	DeliveryRate float64 `json:"delivery_rate"`
+}
+
+// BounceRatePoint represents a single day's bounce counts by type.
+type BounceRatePoint struct {
+	Date      string `json:"date"`
+	Hard      int64  `json:"hard"`
+	Soft      int64  `json:"soft"`
+	Complaint int64  `json:"complaint"`
+	Total     int64  `json:"total"`
+}
+
+// LatencyPercentiles represents email delivery latency percentiles.
+type LatencyPercentiles struct {
+	P50 float64 `json:"p50"`
+	P75 float64 `json:"p75"`
+	P90 float64 `json:"p90"`
+	P99 float64 `json:"p99"`
+	Avg float64 `json:"avg"`
+}
+
+// DeliveryRateTrends returns daily delivery rate for a user within a date range.
+func (r *AnalyticsRepository) DeliveryRateTrends(userID uint, from, to time.Time) ([]DeliveryRatePoint, error) {
+	var rows []deliveryRow
+	err := r.db.Table("emails").
+		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
+		Where("user_id = ? AND created_at >= ? AND created_at <= ? AND status IN ?", userID, from, to, []string{"sent", "failed"}).
+		Group("date, status").Order("date ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return buildDeliveryRatePoints(rows, from, to), nil
+}
+
+// AdminDeliveryRateTrends returns daily delivery rate across all users.
+func (r *AnalyticsRepository) AdminDeliveryRateTrends(from, to time.Time) ([]DeliveryRatePoint, error) {
+	var rows []deliveryRow
+	err := r.db.Table("emails").
+		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
+		Where("created_at >= ? AND created_at <= ? AND status IN ?", from, to, []string{"sent", "failed"}).
+		Group("date, status").Order("date ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return buildDeliveryRatePoints(rows, from, to), nil
+}
+
+func buildDeliveryRatePoints(rows []deliveryRow, from, to time.Time) []DeliveryRatePoint {
+	m := make(map[string]*DeliveryRatePoint)
+	start := from.Truncate(24 * time.Hour)
+	end := to.Truncate(24 * time.Hour)
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		key := d.Format("2006-01-02")
+		m[key] = &DeliveryRatePoint{Date: key}
+	}
+	for _, r := range rows {
+		p, ok := m[r.Date]
+		if !ok {
+			p = &DeliveryRatePoint{Date: r.Date}
+			m[r.Date] = p
+		}
+		if r.Status == "sent" {
+			p.Sent = r.Count
+		} else if r.Status == "failed" {
+			p.Failed = r.Count
+		}
+	}
+	result := make([]DeliveryRatePoint, 0, len(m))
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		key := d.Format("2006-01-02")
+		p := m[key]
+		p.Total = p.Sent + p.Failed
+		if p.Total > 0 {
+			p.DeliveryRate = float64(p.Sent) / float64(p.Total) * 100
+		}
+		result = append(result, *p)
+	}
+	return result
+}
+
+// BounceRateTrends returns daily bounce counts by type for a user.
+func (r *AnalyticsRepository) BounceRateTrends(userID uint, from, to time.Time) ([]BounceRatePoint, error) {
+	var rows []bounceRow
+	err := r.db.Table("bounces").
+		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, type, COUNT(*) as count").
+		Where("user_id = ? AND created_at >= ? AND created_at <= ?", userID, from, to).
+		Group("date, type").Order("date ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return buildBounceRatePoints(rows, from, to), nil
+}
+
+// AdminBounceRateTrends returns daily bounce counts by type across all users.
+func (r *AnalyticsRepository) AdminBounceRateTrends(from, to time.Time) ([]BounceRatePoint, error) {
+	var rows []bounceRow
+	err := r.db.Table("bounces").
+		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, type, COUNT(*) as count").
+		Where("created_at >= ? AND created_at <= ?", from, to).
+		Group("date, type").Order("date ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return buildBounceRatePoints(rows, from, to), nil
+}
+
+func buildBounceRatePoints(rows []bounceRow, from, to time.Time) []BounceRatePoint {
+	m := make(map[string]*BounceRatePoint)
+	start := from.Truncate(24 * time.Hour)
+	end := to.Truncate(24 * time.Hour)
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		key := d.Format("2006-01-02")
+		m[key] = &BounceRatePoint{Date: key}
+	}
+	for _, r := range rows {
+		p, ok := m[r.Date]
+		if !ok {
+			p = &BounceRatePoint{Date: r.Date}
+			m[r.Date] = p
+		}
+		switch r.Type {
+		case "hard":
+			p.Hard = r.Count
+		case "soft":
+			p.Soft = r.Count
+		case "complaint":
+			p.Complaint = r.Count
+		}
+	}
+	result := make([]BounceRatePoint, 0, len(m))
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		key := d.Format("2006-01-02")
+		p := m[key]
+		p.Total = p.Hard + p.Soft + p.Complaint
+		result = append(result, *p)
+	}
+	return result
+}
+
+// LatencyPercentilesForUser returns delivery latency percentiles for a user.
+func (r *AnalyticsRepository) LatencyPercentilesForUser(userID uint, from, to time.Time) (*LatencyPercentiles, error) {
+	var result LatencyPercentiles
+	err := r.db.Table("emails").
+		Select(`
+			COALESCE(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p50,
+			COALESCE(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p75,
+			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p90,
+			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p99,
+			COALESCE(AVG(EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as avg
+		`).
+		Where("user_id = ? AND status = 'sent' AND sent_at IS NOT NULL AND created_at >= ? AND created_at <= ?", userID, from, to).
+		Scan(&result).Error
+	return &result, err
+}
+
+// AdminLatencyPercentiles returns delivery latency percentiles across all users.
+func (r *AnalyticsRepository) AdminLatencyPercentiles(from, to time.Time) (*LatencyPercentiles, error) {
+	var result LatencyPercentiles
+	err := r.db.Table("emails").
+		Select(`
+			COALESCE(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p50,
+			COALESCE(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p75,
+			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p90,
+			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p99,
+			COALESCE(AVG(EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as avg
+		`).
+		Where("status = 'sent' AND sent_at IS NOT NULL AND created_at >= ? AND created_at <= ?", from, to).
+		Scan(&result).Error
+	return &result, err
+}

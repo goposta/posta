@@ -464,6 +464,36 @@ export interface AnalyticsResponse {
   status_breakdown: StatusBreakdown[]
 }
 
+export interface DeliveryRatePoint {
+  date: string
+  sent: number
+  failed: number
+  total: number
+  delivery_rate: number
+}
+
+export interface BounceRatePoint {
+  date: string
+  hard: number
+  soft: number
+  complaint: number
+  total: number
+}
+
+export interface LatencyPercentiles {
+  p50: number
+  p75: number
+  p90: number
+  p99: number
+  avg: number
+}
+
+export interface DashboardAnalyticsResponse {
+  delivery_rate_trends: DeliveryRatePoint[]
+  bounce_rate_trends: BounceRatePoint[]
+  latency_percentiles: LatencyPercentiles
+}
+
 // Contact Lists
 export interface ContactList {
   id: number
@@ -544,4 +574,75 @@ export interface UserProfile {
   two_factor_enabled: boolean
   require_verified_domain: boolean
   created_at: string
+}
+
+// User Data Export/Import
+export interface UserDataExport {
+  posta_version?: string
+  exported_at?: string
+  templates: TemplateExport[]
+  stylesheets: ExportStyleSheet[]
+  languages: ExportLanguage[]
+  contacts: ExportContact[]
+  contact_lists: ExportContactList[]
+  suppressions: ExportSuppression[]
+  webhooks: ExportWebhook[]
+  settings?: ExportUserSettings
+}
+
+export interface ExportStyleSheet {
+  name: string
+  css: string
+}
+
+export interface ExportLanguage {
+  code: string
+  name: string
+}
+
+export interface ExportContact {
+  email: string
+  name: string
+  sent_count: number
+  fail_count: number
+}
+
+export interface ExportContactList {
+  name: string
+  description: string
+  members: ExportContactMember[]
+}
+
+export interface ExportContactMember {
+  email: string
+  name: string
+  data?: string
+}
+
+export interface ExportSuppression {
+  email: string
+  reason: string
+}
+
+export interface ExportWebhook {
+  url: string
+  events: string[]
+  filters?: string[]
+}
+
+export interface ExportUserSettings {
+  timezone: string
+  default_sender_name: string
+  default_sender_email: string
+  email_notifications: boolean
+  notification_email: string
+  webhook_retry_count: number
+  api_key_expiry_days: number
+  bounce_auto_suppress: boolean
+  daily_report: boolean
+}
+
+export interface GDPRDeleteResult {
+  deleted: number
+  message: string
 }

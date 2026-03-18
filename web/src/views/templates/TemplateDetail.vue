@@ -584,8 +584,14 @@ onMounted(loadAll);
                     >
                       Preview
                     </button>
+                    <button
+                      class="btn btn-secondary btn-sm"
+                      @click="router.push(`/templates/${templateId}/versions/${selectedVersion?.id}/localizations/${l.id}/edit`)"
+                    >
+                      Editor
+                    </button>
                     <button class="btn btn-secondary btn-sm" @click="openEditLoc(l)">
-                      Edit
+                      Quick Edit
                     </button>
                     <button class="btn btn-danger btn-sm" @click="deleteLoc(l)">
                       Delete

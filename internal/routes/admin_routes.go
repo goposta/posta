@@ -185,6 +185,16 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.AnalyticsRequest{},
 			Response:    &dto.Response[handlers.AnalyticsResponse]{},
 		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/analytics/dashboard",
+			Handler:     okapi.H(r.h.analytics.AdminDashboardAnalytics),
+			Group:       adminGroup,
+			Summary:     "Platform dashboard analytics",
+			Description: "Returns platform-wide delivery rate trends, bounce rate graphs, and latency percentiles",
+			Request:     &handlers.DashboardAnalyticsRequest{},
+			Response:    &dto.Response[handlers.DashboardAnalyticsResponse]{},
+		},
 
 		// ==================== Platform Settings ====================
 		{
