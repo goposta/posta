@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { emailsApi } from '../../api/emails'
 import { useNotificationStore } from '../../stores/notification'
@@ -12,6 +12,9 @@ const loading = ref(true)
 const retrying = ref(false)
 const email = ref<Email | null>(null)
 const activeTab = ref<'html' | 'text'>('html')
+const contentRedacted = computed(() =>
+  email.value?.html_body === '[redacted]' && email.value?.text_body === '[redacted]'
+)
 
 onMounted(async () => {
   try {
@@ -156,23 +159,32 @@ function parseHeaders(json: string): Record<string, string> | null {
       </div>
 
       <div class="card">
-        <div class="card-header">
-          <div class="tabs" style="margin-bottom: 0;">
-            <button class="tab" :class="{ active: activeTab === 'html' }" @click="activeTab = 'html'">HTML Preview</button>
-            <button class="tab" :class="{ active: activeTab === 'text' }" @click="activeTab = 'text'">Text Content</button>
+        <template v-if="contentRedacted">
+          <div class="card-body" style="text-align: center; padding: 48px 24px;">
+            <span class="mdi mdi-eye-off" style="font-size: 48px; color: var(--text-muted); display: block; margin-bottom: 12px;"></span>
+            <h3 style="margin: 0 0 8px; color: var(--text-secondary);">Content Hidden</h3>
+            <p style="color: var(--text-muted); margin: 0;">Email body content is not available, email content disabled for privacy.</p>
           </div>
-        </div>
-        <div class="card-body">
-          <iframe
-            v-if="activeTab === 'html'"
-            :srcdoc="email.html_body"
-            style="width: 100%; min-height: 400px; border: 1px solid var(--border-primary); border-radius: var(--radius)"
-          ></iframe>
-          <pre
-            v-else
-            style="white-space: pre-wrap; word-wrap: break-word; font-size: 14px; color: var(--text-secondary); line-height: 1.6"
-          >{{ email.text_body }}</pre>
-        </div>
+        </template>
+        <template v-else>
+          <div class="card-header">
+            <div class="tabs" style="margin-bottom: 0;">
+              <button class="tab" :class="{ active: activeTab === 'html' }" @click="activeTab = 'html'">HTML Preview</button>
+              <button class="tab" :class="{ active: activeTab === 'text' }" @click="activeTab = 'text'">Text Content</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <iframe
+              v-if="activeTab === 'html'"
+              :srcdoc="email.html_body"
+              style="width: 100%; min-height: 400px; border: 1px solid var(--border-primary); border-radius: var(--radius)"
+            ></iframe>
+            <pre
+              v-else
+              style="white-space: pre-wrap; word-wrap: break-word; font-size: 14px; color: var(--text-secondary); line-height: 1.6"
+            >{{ email.text_body }}</pre>
+          </div>
+        </template>
       </div>
     </template>
 

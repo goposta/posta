@@ -35,6 +35,7 @@ import (
 	"github.com/jkaninda/posta/internal/services/cache"
 	"github.com/jkaninda/posta/internal/services/eventbus"
 	"github.com/jkaninda/posta/internal/services/seeder"
+	"github.com/jkaninda/posta/internal/services/settings"
 	"github.com/jkaninda/posta/internal/storage/repositories"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -51,6 +52,7 @@ type AdminHandler struct {
 	bus            *eventbus.EventBus
 	seeder         *seeder.Seeder
 	embeddedWorker bool
+	emailSettings *settings.Provider
 }
 type AdminCreateUserRequest struct {
 	Body struct {
@@ -119,6 +121,10 @@ type UserDetailMetrics struct {
 
 func NewAdminHandler(db *gorm.DB, c *cache.Cache, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, emailRepo *repositories.EmailRepository, whDeliveryRepo *repositories.WebhookDeliveryRepository, inspector *asynq.Inspector, bus *eventbus.EventBus, seeder *seeder.Seeder, embeddedWorker bool) *AdminHandler {
 	return &AdminHandler{db: db, cache: c, userRepo: userRepo, keyRepo: keyRepo, emailRepo: emailRepo, whDeliveryRepo: whDeliveryRepo, inspector: inspector, bus: bus, seeder: seeder, embeddedWorker: embeddedWorker}
+}
+
+func (h *AdminHandler) SetEmailSettings(s *settings.Provider) {
+	h.emailSettings = s
 }
 
 // CreateUser allows admins to create a new user.
@@ -231,6 +237,10 @@ func (h *AdminHandler) ListAllEmails(c *okapi.Context, req *ListRequest) error {
 	emails, total, err := h.emailRepo.FindAll(size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list emails")
+	}
+
+	if h.emailSettings == nil || !h.emailSettings.EmailContentVisibility() {
+		redactEmails(emails)
 	}
 
 	return paginated(c, emails, total, page, size)

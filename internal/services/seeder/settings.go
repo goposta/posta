@@ -50,6 +50,7 @@ func SeedDefaultSettings(repo *repositories.SettingRepository) {
 		{Key: "login_rate_limit_window_minutes", Value: "15", Type: "int"},
 		{Key: "audit_log_retention_days", Value: "90", Type: "int"},
 		{Key: "webhook_delivery_retention_days", Value: "30", Type: "int"},
+		{Key: "email_content_visibility", Value: "false", Type: "bool"},
 	}
 
 	for i := range defaults {

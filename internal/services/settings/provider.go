@@ -144,3 +144,6 @@ func (p *Provider) LoginRateLimitCount() int {
 func (p *Provider) LoginRateLimitWindowMinutes() int {
 	return p.GetInt("login_rate_limit_window_minutes", 15)
 }
+func (p *Provider) EmailContentVisibility() bool {
+	return p.GetBool("email_content_visibility", false)
+}

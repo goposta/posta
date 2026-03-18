@@ -28,9 +28,10 @@ const settingMeta: Record<string, { label: string; description: string; category
   retention_days: { label: 'Email Log Retention (days)', description: 'How long to keep email logs before cleanup.', category: 'Retention' },
   audit_log_retention_days: { label: 'Audit Log Retention (days)', description: 'How long to keep audit/event logs.', category: 'Retention' },
   webhook_delivery_retention_days: { label: 'Webhook Delivery Retention (days)', description: 'How long to keep webhook delivery logs.', category: 'Retention' },
+  email_content_visibility: { label: 'Email Content Visibility', description: 'When enabled, email body content (HTML/Text) is visible in the dashboard. When disabled, content is redacted for privacy.', category: 'Privacy' },
 }
 
-const categories = ['General', 'Security', 'Limits', 'Retention']
+const categories = ['General', 'Security', 'Privacy', 'Limits', 'Retention']
 
 function settingsByCategory(category: string) {
   return settings.value.filter(s => {

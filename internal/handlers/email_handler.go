@@ -33,6 +33,7 @@ import (
 	"github.com/jkaninda/posta/internal/services/cache"
 	"github.com/jkaninda/posta/internal/services/email"
 	"github.com/jkaninda/posta/internal/services/eventbus"
+	"github.com/jkaninda/posta/internal/services/settings"
 	"github.com/jkaninda/posta/internal/storage/repositories"
 )
 
@@ -41,6 +42,7 @@ type EmailHandler struct {
 	emailRepo *repositories.EmailRepository
 	bus       *eventbus.EventBus
 	cache     *cache.Cache
+	settings  *settings.Provider
 }
 type SendEmailRequest struct {
 	Body email.SendRequest `json:"body"`
@@ -68,6 +70,29 @@ func NewEmailHandler(service *email.Service, emailRepo *repositories.EmailReposi
 		emailRepo: emailRepo,
 		bus:       bus,
 		cache:     c,
+	}
+}
+
+func (h *EmailHandler) SetSettings(s *settings.Provider) { h.settings = s }
+
+// redactContent returns true if email body content should be hidden.
+func (h *EmailHandler) redactContent() bool {
+	if h.settings != nil && h.settings.EmailContentVisibility() {
+		return false
+	}
+	return true
+}
+
+const redactedPlaceholder = "[redacted]"
+
+func redactEmail(em *models.Email) {
+	em.HTMLBody = redactedPlaceholder
+	em.TextBody = redactedPlaceholder
+}
+
+func redactEmails(emails []models.Email) {
+	for i := range emails {
+		redactEmail(&emails[i])
 	}
 }
 
@@ -176,6 +201,10 @@ func (h *EmailHandler) List(c *okapi.Context, req *ListRequest) error {
 		return c.AbortInternalServerError("failed to list emails")
 	}
 
+	if h.redactContent() {
+		redactEmails(emails)
+	}
+
 	return paginated(c, emails, total, page, size)
 }
 
@@ -188,6 +217,10 @@ func (h *EmailHandler) Get(c *okapi.Context, req *GetEmailRequest) error {
 	userID := c.GetInt("user_id")
 	if em.UserID != uint(userID) {
 		return c.AbortNotFound("email not found")
+	}
+
+	if h.redactContent() {
+		redactEmail(em)
 	}
 
 	return ok(c, em)

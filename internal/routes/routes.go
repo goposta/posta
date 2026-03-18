@@ -208,6 +208,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		},
 	}
 
+	// Email content privacy
+	r.h.email.SetSettings(settingsProvider)
+	r.h.admin.SetEmailSettings(settingsProvider)
+
 	if cronManager != nil {
 		r.h.cron = handlers.NewCronHandler(cronManager)
 	}
