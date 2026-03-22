@@ -12,9 +12,15 @@
 ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/posta?style=flat-square)
 ![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/posta?style=flat-square)
 
+
 **Posta** is a self-hosted email delivery platform that allows applications to send emails through HTTP APIs while Posta manages SMTP delivery, templates, storage, security, and analytics.
 
 It provides a developer-friendly and fully self-hostable alternative to services such as SendGrid, and Mailgun.
+
+[![Website](https://img.shields.io/badge/Website-goposta.dev-blue?style=flat-square)](https://www.goposta.dev/)
+[![Try it](https://img.shields.io/badge/Try%20it-app.goposta.dev-green?style=flat-square)](https://app.goposta.dev/)
+
+> **Get started instantly** — [Create a free account](https://app.goposta.dev/) and start sending emails in minutes.
 
 # Send Your First Email
 
@@ -343,28 +349,16 @@ Posta includes a web dashboard for managing templates, SMTP servers, domains, co
   <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/analytics.png" alt="Email Analytics" width="900"/>
 </p>
 
-### Email Logs
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/email-logs.png" alt="Email Logs" width="900"/>
-</p>
-
-### Email Detail
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/email-detail.png" alt="Email Detail" width="900"/>
-</p>
-
 ### Template Detail
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/template-detail.png" alt="Template Detail" width="900"/>
 </p>
 
-### Template Preview
+### Template Editor
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/template-preview.png" alt="Template Preview" width="900"/>
+  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/template-editor.png" alt="Template Editor" width="900"/>
 </p>
 
 ### Admin Platform Metrics
@@ -373,16 +367,10 @@ Posta includes a web dashboard for managing templates, SMTP servers, domains, co
   <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/admin-platform-metrics.png" alt="Admin Platform Metrics" width="900"/>
 </p>
 
-### Admin Metrics (Light)
+### Admin Platform Metrics (Dark)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/admin-metrics-light.png" alt="Admin Metrics Light" width="900"/>
-</p>
-
-### Admin Metrics (Dark)
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/admin-metrics-dark.png" alt="Admin Metrics Dark" width="900"/>
+  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/admin-platform-metrics-dark.png" alt="Admin Platform Metrics Dark" width="900"/>
 </p>
 
 ---
