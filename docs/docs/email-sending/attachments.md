@@ -91,22 +91,4 @@ resp, err := client.SendEmail(&posta.SendEmailRequest{
 ```
 
 </TabItem>
-<TabItem value="rust" label="Rust">
-
-```rust
-let resp = client.send_email(&SendEmailRequest {
-    from: "sender@example.com".into(),
-    to: vec!["recipient@example.com".into()],
-    subject: "Your Report".into(),
-    html: Some("<p>Report attached.</p>".into()),
-    attachments: Some(vec![Attachment {
-        filename: "report.pdf".into(),
-        content: base64_encoded_content,
-        content_type: "application/pdf".into(),
-    }]),
-    ..Default::default()
-}).await?;
-```
-
-</TabItem>
 </Tabs>

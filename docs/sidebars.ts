@@ -115,7 +115,6 @@ const sidebars: SidebarsConfig = {
         'sdks/go',
         'sdks/php',
         'sdks/java',
-        'sdks/rust',
       ],
     },
     {

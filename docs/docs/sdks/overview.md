@@ -6,7 +6,7 @@ description: Official Posta SDKs
 
 # Official SDKs
 
-Posta provides official client libraries for four languages. All SDKs offer the same core functionality:
+Posta provides official client libraries for three languages. All SDKs offer the same core functionality:
 
 | Method | Description |
 |--------|-------------|
@@ -22,7 +22,6 @@ Posta provides official client libraries for four languages. All SDKs offer the 
 | [Go](/docs/sdks/go) | `github.com/goposta/posta-go` | Go 1.25+ |
 | [PHP](/docs/sdks/php) | `goposta/posta-php` | PHP 8.1+ |
 | [Java](/docs/sdks/java) | `com.github.goposta:posta-java` | Java 11+ |
-| [Rust](/docs/sdks/rust) | `posta` | Rust 2021 edition |
 
 ## Error Handling
 
