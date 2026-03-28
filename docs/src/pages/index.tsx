@@ -68,7 +68,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Official SDKs',
-    description: 'Client libraries for Go, PHP, Java, and Rust with typed errors and full API coverage.',
+    description: 'Client libraries for Go, PHP, and Java with typed errors and full API coverage.',
     link: '/docs/sdks/overview',
   },
 ];

@@ -145,21 +145,6 @@ SendResponse response = client.sendEmail(new SendEmailRequest()
 ```
 
 </TabItem>
-<TabItem value="rust" label="Rust">
-
-```rust
-let client = posta::Client::new("http://localhost:9000", "your-api-key");
-
-let resp = client.send_email(&SendEmailRequest {
-    from: "sender@yourdomain.com".into(),
-    to: vec!["recipient@example.com".into()],
-    subject: "Hello from Posta!".into(),
-    html: Some("<h1>Welcome!</h1>".into()),
-    ..Default::default()
-}).await?;
-```
-
-</TabItem>
 </Tabs>
 
 ## Next Steps

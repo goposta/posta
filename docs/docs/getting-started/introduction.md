@@ -11,7 +11,7 @@ description: What is Posta and why use it
 ## Why Posta?
 
 - **Self-hosted** — Your data stays on your servers. No vendor lock-in.
-- **Developer-first** — Clean REST API with official SDKs for Go, PHP, Java, and Rust.
+- **Developer-first** — Clean REST API with official SDKs for Go, PHP, and Java.
 - **Full-featured** — Templates with versioning and localization, SMTP management, domain verification, webhooks, analytics, and more.
 - **Open source** — Licensed under Apache 2.0. Contribute, fork, or customize as needed.
 
