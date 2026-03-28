@@ -21,7 +21,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 )
 
 // VerificationResult holds the outcome of DNS record checks.

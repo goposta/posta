@@ -32,6 +32,7 @@ type WebhookDelivery struct {
 	ID             uint                  `json:"id" gorm:"primaryKey"`
 	WebhookID      uint                  `json:"webhook_id" gorm:"index;not null"`
 	UserID         uint                  `json:"user_id" gorm:"index;not null"`
+	WorkspaceID    *uint                 `json:"workspace_id,omitempty" gorm:"index"`
 	Event          string                `json:"event" gorm:"not null"`
 	Status         WebhookDeliveryStatus `json:"status" gorm:"type:varchar(16);not null;index"`
 	HTTPStatusCode int                   `json:"http_status_code"`

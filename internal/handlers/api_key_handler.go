@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/services/audit"
-	"github.com/jkaninda/posta/internal/services/auth"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/services/auth"
+	"github.com/goposta/posta/internal/storage/repositories"
+	"gorm.io/gorm"
 )
 
 type APIKeyHandler struct {
@@ -31,6 +32,8 @@ type APIKeyHandler struct {
 	repo            *repositories.APIKeyRepository
 	userSettingRepo *repositories.UserSettingRepository
 	audit           *audit.Logger
+	quota           QuotaChecker
+	db              *gorm.DB
 }
 type CreateAPIKeyRequest struct {
 	Body struct {
@@ -55,8 +58,23 @@ func NewAPIKeyHandler(service *auth.APIKeyService, repo *repositories.APIKeyRepo
 	}
 }
 
+// SetQuota sets the quota checker for plan-based resource limits.
+func (h *APIKeyHandler) SetQuota(q QuotaChecker, db *gorm.DB) {
+	h.quota = q
+	h.db = db
+}
+
 func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
+
+	if h.quota != nil {
+		if err := h.quota.CheckQuota(h.db, scope.WorkspaceID, "api_keys"); err != nil {
+			return c.AbortForbidden(err.Error())
+		}
+	}
 
 	// Determine expiration: use provided value, fall back to user setting default
 	var expiresAt *time.Time
@@ -69,19 +87,19 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 		// days == 0 means never expires (expiresAt stays nil)
 	} else {
 		// Use default from user settings
-		setting, err := h.userSettingRepo.FindByUserID(uint(userID))
+		setting, err := h.userSettingRepo.FindByUserID(scope.UserID)
 		if err == nil && setting.APIKeyExpiryDays > 0 {
 			t := time.Now().AddDate(0, 0, setting.APIKeyExpiryDays)
 			expiresAt = &t
 		}
 	}
 
-	rawKey, key, err := h.service.GenerateKey(uint(userID), req.Body.Name, req.Body.AllowedIPs, expiresAt)
+	rawKey, key, err := h.service.GenerateKey(scope.UserID, scope.WorkspaceID, req.Body.Name, req.Body.AllowedIPs, expiresAt)
 	if err != nil {
 		return c.AbortInternalServerError("failed to create API key", err)
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "apikey.created", "API key created: "+req.Body.Name, nil)
+	h.audit.Log(scope.UserID, c.GetString("email"), c.RealIP(), "apikey.created", "API key created: "+req.Body.Name, nil)
 
 	return created(c, okapi.M{
 		"key":        rawKey,
@@ -94,10 +112,9 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 }
 
 func (h *APIKeyHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	keys, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	keys, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list API keys")
 	}
@@ -106,13 +123,11 @@ func (h *APIKeyHandler) List(c *okapi.Context, req *ListRequest) error {
 }
 
 func (h *APIKeyHandler) Revoke(c *okapi.Context, req *RevokeAPIKeyRequest) error {
-	userID := c.GetInt("user_id")
-
-	key, err := h.repo.FindByID(uint(req.ID))
-	if err != nil {
-		return c.AbortNotFound("API key not found")
+	if err := requireEdit(c); err != nil {
+		return err
 	}
-	if key.UserID != uint(userID) {
+	key, err := h.repo.FindByID(uint(req.ID))
+	if err != nil || !ownsResource(c, key.UserID, key.WorkspaceID) {
 		return c.AbortNotFound("API key not found")
 	}
 
@@ -120,19 +135,17 @@ func (h *APIKeyHandler) Revoke(c *okapi.Context, req *RevokeAPIKeyRequest) error
 		return c.AbortInternalServerError("failed to revoke API key")
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "apikey.revoked", "API key revoked: "+key.Name, nil)
+	h.audit.Log(key.UserID, c.GetString("email"), c.RealIP(), "apikey.revoked", "API key revoked: "+key.Name, nil)
 
 	return ok(c, okapi.M{"message": "API key revoked"})
 }
 
 func (h *APIKeyHandler) Delete(c *okapi.Context, req *DeleteAPIKeyRequest) error {
-	userID := c.GetInt("user_id")
-
-	key, err := h.repo.FindByID(uint(req.ID))
-	if err != nil {
-		return c.AbortNotFound("API key not found")
+	if err := requireEdit(c); err != nil {
+		return err
 	}
-	if key.UserID != uint(userID) {
+	key, err := h.repo.FindByID(uint(req.ID))
+	if err != nil || !ownsResource(c, key.UserID, key.WorkspaceID) {
 		return c.AbortNotFound("API key not found")
 	}
 
@@ -145,7 +158,7 @@ func (h *APIKeyHandler) Delete(c *okapi.Context, req *DeleteAPIKeyRequest) error
 		return c.AbortInternalServerError("failed to delete API key")
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "apikey.deleted", "API key deleted: "+key.Name, nil)
+	h.audit.Log(key.UserID, c.GetString("email"), c.RealIP(), "apikey.deleted", "API key deleted: "+key.Name, nil)
 
 	return ok(c, okapi.M{"message": "API key deleted"})
 }

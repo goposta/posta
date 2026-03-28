@@ -9,6 +9,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           codemirror: ['codemirror', '@codemirror/lang-html', '@codemirror/lang-json', '@codemirror/theme-one-dark', '@codemirror/view', '@codemirror/state'],
+          grapesjs: ['grapesjs', 'grapesjs-preset-newsletter'],
         },
       },
     },

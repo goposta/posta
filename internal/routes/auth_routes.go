@@ -21,9 +21,9 @@ import (
 	"net/http"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/dto"
-	"github.com/jkaninda/posta/internal/handlers"
-	"github.com/jkaninda/posta/internal/services/email"
+	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/services/email"
 )
 
 // healthRoutes returns route definitions for health check endpoints.
@@ -178,6 +178,20 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.EmailStatusResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Email UUID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/emails/{id}/retry",
+			Handler:     okapi.H(r.h.email.Retry),
+			Group:       apiAuth,
+			Summary:     "Retry failed email",
+			Description: "Re-enqueue a failed email for another delivery attempt. Subject to the SMTP server's max retry limit.",
+			Response:    &dto.Response[email.SendResponse]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "string", "Email UUID"),
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},

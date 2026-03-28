@@ -21,7 +21,7 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -48,17 +48,17 @@ func (r *SuppressionRepository) Create(suppression *models.Suppression) error {
 	return r.db.Create(suppression).Error
 }
 
-func (r *SuppressionRepository) Delete(userID uint, email string) error {
-	return r.db.Where("user_id = ? AND email = ?", userID, normalizeEmail(email)).Delete(&models.Suppression{}).Error
+func (r *SuppressionRepository) Delete(scope ResourceScope, email string) error {
+	return ApplyScope(r.db, scope).Where("email = ?", normalizeEmail(email)).Delete(&models.Suppression{}).Error
 }
 
 func (r *SuppressionRepository) FindByUserID(userID uint, limit, offset int) ([]models.Suppression, int64, error) {
 	var suppressions []models.Suppression
 	var total int64
 
-	r.db.Model(&models.Suppression{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.Suppression{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&suppressions).Error; err != nil {
@@ -67,15 +67,45 @@ func (r *SuppressionRepository) FindByUserID(userID uint, limit, offset int) ([]
 	return suppressions, total, nil
 }
 
-func (r *SuppressionRepository) IsSuppressed(userID uint, email string) (bool, error) {
+func (r *SuppressionRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Suppression, int64, error) {
+	var suppressions []models.Suppression
+	var total int64
+
+	r.db.Model(&models.Suppression{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&suppressions).Error; err != nil {
+		return nil, 0, err
+	}
+	return suppressions, total, nil
+}
+
+func (r *SuppressionRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.Suppression, int64, error) {
+	var items []models.Suppression
+	var total int64
+
+	ApplyScope(r.db.Model(&models.Suppression{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
+func (r *SuppressionRepository) IsSuppressed(scope ResourceScope, email string) (bool, error) {
 	var count int64
-	err := r.db.Model(&models.Suppression{}).
-		Where("user_id = ? AND email = ?", userID, normalizeEmail(email)).
+	err := ApplyScope(r.db.Model(&models.Suppression{}), scope).
+		Where("email = ?", normalizeEmail(email)).
 		Count(&count).Error
 	return count > 0, err
 }
 
-func (r *SuppressionRepository) FilterSuppressed(userID uint, emails []string) ([]string, error) {
+func (r *SuppressionRepository) FilterSuppressed(scope ResourceScope, emails []string) ([]string, error) {
 	if len(emails) == 0 {
 		return emails, nil
 	}
@@ -86,8 +116,8 @@ func (r *SuppressionRepository) FilterSuppressed(userID uint, emails []string) (
 	}
 
 	var suppressed []string
-	if err := r.db.Model(&models.Suppression{}).
-		Where("user_id = ? AND email IN ?", userID, lowered).
+	if err := ApplyScope(r.db.Model(&models.Suppression{}), scope).
+		Where("email IN ?", lowered).
 		Pluck("email", &suppressed).Error; err != nil {
 		return nil, err
 	}

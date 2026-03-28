@@ -19,8 +19,8 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type ContactHandler struct {
@@ -44,10 +44,10 @@ type ListContactsRequest struct {
 }
 
 func (h *ContactHandler) List(c *okapi.Context, req *ListContactsRequest) error {
-	userID := c.GetInt("user_id")
+	scope := getScope(c)
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	contacts, total, err := h.repo.FindByUserID(uint(userID), req.Search, size, offset)
+	contacts, total, err := h.repo.FindByScope(scope, req.Search, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list contacts")
 	}
@@ -60,7 +60,7 @@ func (h *ContactHandler) List(c *okapi.Context, req *ListContactsRequest) error 
 
 	suppressedSet := make(map[string]bool)
 	if len(emails) > 0 {
-		unsuppressed, err := h.suppressionRepo.FilterSuppressed(uint(userID), emails)
+		unsuppressed, err := h.suppressionRepo.FilterSuppressed(scope, emails)
 		if err == nil {
 			unsuppressedSet := make(map[string]bool, len(unsuppressed))
 			for _, e := range unsuppressed {
@@ -86,16 +86,15 @@ func (h *ContactHandler) List(c *okapi.Context, req *ListContactsRequest) error 
 }
 
 func (h *ContactHandler) Get(c *okapi.Context, req *GetByIDRequest) error {
-	userID := c.GetInt("user_id")
-
 	contact, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || contact.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, contact.UserID, contact.WorkspaceID) {
 		return c.AbortNotFound("contact not found")
 	}
 
-	// Check suppression status
+	// Check suppression status using the contact's own scope
+	contactScope := repositories.ResourceScope{UserID: contact.UserID, WorkspaceID: contact.WorkspaceID}
 	suppressed := false
-	unsuppressed, err := h.suppressionRepo.FilterSuppressed(uint(userID), []string{contact.Email})
+	unsuppressed, err := h.suppressionRepo.FilterSuppressed(contactScope, []string{contact.Email})
 	if err == nil {
 		suppressed = len(unsuppressed) == 0
 	}

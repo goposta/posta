@@ -18,7 +18,7 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -54,9 +54,9 @@ func (r *SMTPRepository) FindByUserID(userID uint, limit, offset int) ([]models.
 	var servers []models.SMTPServer
 	var total int64
 
-	r.db.Model(&models.SMTPServer{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.SMTPServer{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&servers).Error; err != nil {
@@ -77,7 +77,46 @@ func (r *SMTPRepository) FindAllWithRetries() ([]models.SMTPServer, error) {
 // FindFirstByUserID returns the first enabled SMTP server for a user.
 func (r *SMTPRepository) FindFirstByUserID(userID uint) (*models.SMTPServer, error) {
 	var server models.SMTPServer
-	if err := r.db.Where("user_id = ? AND status = ?", userID, models.SMTPStatusEnabled).First(&server).Error; err != nil {
+	if err := r.db.Where("user_id = ? AND status = ? AND workspace_id IS NULL", userID, models.SMTPStatusEnabled).First(&server).Error; err != nil {
+		return nil, err
+	}
+	return &server, nil
+}
+
+func (r *SMTPRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.SMTPServer, int64, error) {
+	var servers []models.SMTPServer
+	var total int64
+
+	r.db.Model(&models.SMTPServer{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&servers).Error; err != nil {
+		return nil, 0, err
+	}
+	return servers, total, nil
+}
+
+func (r *SMTPRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.SMTPServer, int64, error) {
+	var items []models.SMTPServer
+	var total int64
+
+	ApplyScope(r.db.Model(&models.SMTPServer{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
+// FindFirstByWorkspaceID returns the first enabled SMTP server for a workspace.
+func (r *SMTPRepository) FindFirstByWorkspaceID(workspaceID uint) (*models.SMTPServer, error) {
+	var server models.SMTPServer
+	if err := r.db.Where("workspace_id = ? AND status = ?", workspaceID, models.SMTPStatusEnabled).First(&server).Error; err != nil {
 		return nil, err
 	}
 	return &server, nil

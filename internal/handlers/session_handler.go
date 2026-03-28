@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/services/session"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/services/session"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type SessionHandler struct {

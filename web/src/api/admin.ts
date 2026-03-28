@@ -1,5 +1,5 @@
 import api from './client'
-import type { ApiResponse, PaginatedResponse, User, ApiKey, Email, Event, AdminMetrics, UserDetailMetrics, CronJob } from './types'
+import type { ApiResponse, PaginatedResponse, User, ApiKey, Email, Event, AdminMetrics, UserDetailMetrics, CronJob, AdminWorkspace } from './types'
 
 export const adminApi = {
   listUsers(page = 0, size = 20) {
@@ -19,6 +19,9 @@ export const adminApi = {
   },
   disable2FA(id: number) {
     return api.delete(`/admin/users/${id}/2fa`)
+  },
+  getUserWorkspaces(id: number) {
+    return api.get<ApiResponse<AdminWorkspace[]>>(`/admin/users/${id}/workspaces`)
   },
   listApiKeys(page = 0, size = 20) {
     return api.get<PaginatedResponse<ApiKey>>('/admin/api-keys', { params: { page, size } })

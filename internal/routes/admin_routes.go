@@ -21,10 +21,10 @@ import (
 	"net/http"
 
 	"github.com/jkaninda/okapi"
-	cronpkg "github.com/jkaninda/posta/internal/cron"
-	"github.com/jkaninda/posta/internal/dto"
-	"github.com/jkaninda/posta/internal/handlers"
-	"github.com/jkaninda/posta/internal/models"
+	cronpkg "github.com/goposta/posta/internal/cron"
+	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/models"
 )
 
 // adminRoutes returns route definitions for admin endpoints.
@@ -105,6 +105,19 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Summary:     "Disable 2FA for user",
 			Description: "Disable two-factor authentication for a user (admin only)",
 			Response:    &dto.Response[okapi.M]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "User ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/users/{id:int}/workspaces",
+			Handler:     okapi.H(r.h.admin.UserWorkspaces),
+			Group:       adminGroup,
+			Summary:     "List user workspaces",
+			Description: "Returns all workspaces a user belongs to with plan info",
+			Response:    &dto.Response[[]handlers.AdminWorkspace]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "User ID"),
 				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
@@ -206,6 +219,111 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Summary:  "Update platform settings",
 			Request:  &handlers.UpdateSettingsRequest{},
 			Response: &dto.Response[[]models.Setting]{},
+		},
+
+		// ==================== Plans ====================
+		{
+			Method:      http.MethodPost,
+			Path:        "/plans",
+			Handler:     okapi.H(r.h.plan.Create),
+			Group:       adminGroup,
+			Summary:     "Create plan",
+			Description: "Create a new usage plan/package",
+			Request:     &handlers.CreatePlanRequest{},
+			Options: []okapi.RouteOption{
+				okapi.DocResponse(201, &dto.Response[models.Plan]{}),
+				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/plans",
+			Handler:  okapi.H(r.h.plan.List),
+			Group:    adminGroup,
+			Summary:  "List plans",
+			Request:  &handlers.ListRequest{},
+			Response: &dto.PageableResponse[models.Plan]{},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/plans/{id:int}",
+			Handler:  okapi.H(r.h.plan.Get),
+			Group:    adminGroup,
+			Summary:  "Get plan",
+			Response: &dto.Response[models.Plan]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Plan ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPut,
+			Path:        "/plans/{id:int}",
+			Handler:     okapi.H(r.h.plan.Update),
+			Group:       adminGroup,
+			Summary:     "Update plan",
+			Description: "Update a plan's configuration and limits",
+			Request:     &handlers.UpdatePlanRequest{},
+			Response:    &dto.Response[models.Plan]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Plan ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/plans/{id:int}",
+			Handler:     okapi.H(r.h.plan.Delete),
+			Group:       adminGroup,
+			Summary:     "Delete plan",
+			Description: "Delete a plan. Use ?force=true to delete a plan assigned to workspaces.",
+			Request:     &handlers.DeletePlanRequest{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Plan ID"),
+				okapi.DocResponse(204, nil),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPatch,
+			Path:        "/plans/{id:int}/default",
+			Handler:     okapi.H(r.h.plan.SetDefault),
+			Group:       adminGroup,
+			Summary:     "Set plan as default",
+			Description: "Set this plan as the default plan, unsetting any previous default",
+			Response:    &dto.Response[models.Plan]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Plan ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/workspaces/{id:int}/plan",
+			Handler:     okapi.H(r.h.plan.AssignToWorkspace),
+			Group:       adminGroup,
+			Summary:     "Assign plan to workspace",
+			Description: "Assign a usage plan to a workspace",
+			Request:     &handlers.AssignWorkspacePlanRequest{},
+			Response:    &dto.Response[dto.MessageData]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Workspace ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/workspaces/{id:int}/plan",
+			Handler:     okapi.H(r.h.plan.GetWorkspacePlan),
+			Group:       adminGroup,
+			Summary:     "Get workspace plan",
+			Description: "Get the effective plan for a workspace",
+			Response:    &dto.Response[models.Plan]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Workspace ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
 		},
 
 		// ==================== Shared SMTP Servers ====================

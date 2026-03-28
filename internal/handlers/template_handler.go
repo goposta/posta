@@ -19,13 +19,15 @@ package handlers
 
 import (
 	"fmt"
+	"io"
+	"strings"
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/config"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/config"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type TemplateHandler struct {
@@ -33,6 +35,7 @@ type TemplateHandler struct {
 	stylesheetRepo   *repositories.StyleSheetRepository
 	versionRepo      *repositories.TemplateVersionRepository
 	localizationRepo *repositories.TemplateLocalizationRepository
+	languageRepo     *repositories.LanguageRepository
 	emailService     *email.Service
 }
 type CreateTemplateRequest struct {
@@ -74,20 +77,29 @@ type SendTestRequest struct {
 	Body email.SendTestRequest `json:"body"`
 }
 
-func NewTemplateHandler(repo *repositories.TemplateRepository, ssRepo *repositories.StyleSheetRepository, versionRepo *repositories.TemplateVersionRepository, localizationRepo *repositories.TemplateLocalizationRepository, emailService *email.Service) *TemplateHandler {
-	return &TemplateHandler{repo: repo, stylesheetRepo: ssRepo, versionRepo: versionRepo, localizationRepo: localizationRepo, emailService: emailService}
+func NewTemplateHandler(repo *repositories.TemplateRepository, ssRepo *repositories.StyleSheetRepository, versionRepo *repositories.TemplateVersionRepository, localizationRepo *repositories.TemplateLocalizationRepository, languageRepo *repositories.LanguageRepository, emailService *email.Service) *TemplateHandler {
+	return &TemplateHandler{repo: repo, stylesheetRepo: ssRepo, versionRepo: versionRepo, localizationRepo: localizationRepo, languageRepo: languageRepo, emailService: emailService}
 }
 
 func (h *TemplateHandler) Create(c *okapi.Context, req *CreateTemplateRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 
 	defaultLang := req.Body.DefaultLanguage
 	if defaultLang == "" {
-		defaultLang = "en"
+		// Use the scope's default language if one is configured
+		if defLang, err := h.languageRepo.FindDefault(scope); err == nil {
+			defaultLang = defLang.Code
+		} else {
+			defaultLang = "en"
+		}
 	}
 
 	tmpl := &models.Template{
-		UserID:          uint(userID),
+		UserID:          scope.UserID,
+		WorkspaceID:     scope.WorkspaceID,
 		Name:            req.Body.Name,
 		DefaultLanguage: defaultLang,
 		Description:     req.Body.Description,
@@ -117,10 +129,11 @@ func (h *TemplateHandler) Create(c *okapi.Context, req *CreateTemplateRequest) e
 }
 
 func (h *TemplateHandler) Update(c *okapi.Context, req *UpdateTemplateRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	tmpl, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -148,10 +161,9 @@ func (h *TemplateHandler) Update(c *okapi.Context, req *UpdateTemplateRequest) e
 }
 
 func (h *TemplateHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	templates, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	templates, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list templates")
 	}
@@ -160,10 +172,11 @@ func (h *TemplateHandler) List(c *okapi.Context, req *ListRequest) error {
 }
 
 func (h *TemplateHandler) Delete(c *okapi.Context, req *DeleteTemplateRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	tmpl, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -210,15 +223,18 @@ func (h *TemplateHandler) Preview(c *okapi.Context, req *PreviewTemplateRequest)
 }
 
 func (h *TemplateHandler) SendTest(c *okapi.Context, req *SendTestRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	userEmail := c.GetString("email")
+	scope := getScope(c)
 
 	tmpl, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
-	resp, err := h.emailService.SendTestByTemplateID(c.Request().Context(), uint(userID), userEmail, tmpl.ID, &req.Body)
+	resp, err := h.emailService.SendTestByTemplateID(c.Request().Context(), scope.UserID, scope.WorkspaceID, userEmail, tmpl.ID, &req.Body)
 	if err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
@@ -226,7 +242,6 @@ func (h *TemplateHandler) SendTest(c *okapi.Context, req *SendTestRequest) error
 	return ok(c, resp)
 }
 
-// --- Export / Import ---
 
 type ExportTemplateRequest struct {
 	ID int `param:"id"`
@@ -261,10 +276,8 @@ type ImportTemplateRequest struct {
 }
 
 func (h *TemplateHandler) Export(c *okapi.Context, req *ExportTemplateRequest) error {
-	userID := c.GetInt("user_id")
-
 	tmpl, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -313,7 +326,10 @@ func (h *TemplateHandler) Export(c *okapi.Context, req *ExportTemplateRequest) e
 }
 
 func (h *TemplateHandler) Import(c *okapi.Context, req *ImportTemplateRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 	data := req.Body
 
 	if data.Name == "" {
@@ -322,11 +338,16 @@ func (h *TemplateHandler) Import(c *okapi.Context, req *ImportTemplateRequest) e
 
 	defaultLang := data.DefaultLanguage
 	if defaultLang == "" {
-		defaultLang = "en"
+		if defLang, err := h.languageRepo.FindDefault(scope); err == nil {
+			defaultLang = defLang.Code
+		} else {
+			defaultLang = "en"
+		}
 	}
 
 	tmpl := &models.Template{
-		UserID:          uint(userID),
+		UserID:          scope.UserID,
+		WorkspaceID:     scope.WorkspaceID,
 		Name:            data.Name,
 		DefaultLanguage: defaultLang,
 		Description:     data.Description,
@@ -390,6 +411,122 @@ func (h *TemplateHandler) Import(c *okapi.Context, req *ImportTemplateRequest) e
 		if err := h.repo.Update(tmpl); err != nil {
 			return c.AbortInternalServerError("failed to activate version")
 		}
+	}
+
+	return created(c, tmpl)
+}
+
+// ImportHTML creates a template from an uploaded .html file.
+// It extracts <style> CSS into a separate StyleSheet and uses the HTML body
+// as the template localization content.
+func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
+
+	file, header, err := c.Request().FormFile("file")
+	if err != nil {
+		return c.AbortBadRequest("file is required")
+	}
+	defer file.Close()
+
+	// Validate file extension
+	filename := header.Filename
+	lower := strings.ToLower(filename)
+	if !strings.HasSuffix(lower, ".html") && !strings.HasSuffix(lower, ".htm") {
+		return c.AbortBadRequest("only .html files are accepted")
+	}
+
+	// Limit file size to 2MB
+	if header.Size > 2*1024*1024 {
+		return c.AbortBadRequest("file size must not exceed 2MB")
+	}
+
+	// Read file contents
+	buf := new(strings.Builder)
+	if _, err := io.Copy(buf, file); err != nil {
+		return c.AbortBadRequest("failed to read file")
+	}
+	htmlContent := buf.String()
+	if strings.TrimSpace(htmlContent) == "" {
+		return c.AbortBadRequest("file is empty")
+	}
+
+	// Derive template name from filename
+	name := strings.TrimSuffix(lower, ".html")
+	name = strings.TrimSuffix(name, ".htm")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return c.AbortBadRequest("could not derive template name from filename")
+	}
+
+	// Extract CSS and HTML body
+	css, body := extractStyleAndBody(htmlContent)
+
+	// Try to extract a subject from <title>
+	subject := extractTitle(htmlContent)
+	if subject == "" {
+		subject = name
+	}
+
+	// Resolve default language from scope
+	defaultLang := "en"
+	if defLang, err := h.languageRepo.FindDefault(scope); err == nil {
+		defaultLang = defLang.Code
+	}
+
+	// Create template
+	tmpl := &models.Template{
+		UserID:          scope.UserID,
+		WorkspaceID:     scope.WorkspaceID,
+		Name:            name,
+		DefaultLanguage: defaultLang,
+		Description:     fmt.Sprintf("Imported from %s", filename),
+	}
+	if err := h.repo.Create(tmpl); err != nil {
+		return c.AbortConflict("template with this name already exists")
+	}
+
+	// Create stylesheet from extracted CSS (if any)
+	var stylesheetID *uint
+	if css != "" {
+		ss := &models.StyleSheet{
+			UserID:      scope.UserID,
+			WorkspaceID: scope.WorkspaceID,
+			Name:        name + "-styles",
+			CSS:         css,
+		}
+		if err := h.stylesheetRepo.Create(ss); err == nil {
+			stylesheetID = &ss.ID
+		}
+	}
+
+	// Create version v1
+	v := &models.TemplateVersion{
+		TemplateID:   tmpl.ID,
+		Version:      1,
+		StyleSheetID: stylesheetID,
+	}
+	if err := h.versionRepo.Create(v); err != nil {
+		return c.AbortInternalServerError("failed to create template version")
+	}
+
+	// Set active version
+	tmpl.ActiveVersionID = &v.ID
+	if err := h.repo.Update(tmpl); err != nil {
+		return c.AbortInternalServerError("failed to activate version")
+	}
+
+	// Create default localization
+	loc := &models.TemplateLocalization{
+		VersionID:       v.ID,
+		Language:        defaultLang,
+		SubjectTemplate: subject,
+		HTMLTemplate:    body,
+	}
+	if err := h.localizationRepo.Create(loc); err != nil {
+		return c.AbortInternalServerError("failed to create localization")
 	}
 
 	return created(c, tmpl)

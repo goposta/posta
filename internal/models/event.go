@@ -29,10 +29,11 @@ const (
 )
 
 type Event struct {
-	ID        uint          `json:"id" gorm:"primaryKey"`
-	Category  EventCategory `json:"category" gorm:"index;not null"`
-	Type      string        `json:"type" gorm:"index;not null"`
-	ActorID   *uint         `json:"actor_id" gorm:"index"`
+	ID          uint          `json:"id" gorm:"primaryKey"`
+	Category    EventCategory `json:"category" gorm:"index;not null"`
+	Type        string        `json:"type" gorm:"index;not null"`
+	WorkspaceID *uint         `json:"workspace_id,omitempty" gorm:"index"`
+	ActorID     *uint         `json:"actor_id" gorm:"index"`
 	ActorName string        `json:"actor_name"`
 	ClientIP  string        `json:"client_ip,omitempty" gorm:"size:45"`
 	Message   string        `json:"message" gorm:"not null"`

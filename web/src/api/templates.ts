@@ -73,4 +73,11 @@ export const templatesApi = {
   importTemplate(data: TemplateExport) {
     return api.post<ApiResponse<Template>>('/users/me/templates/import', data)
   },
+  importHTML(file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<ApiResponse<Template>>('/users/me/templates/import-html', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }

@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/cache"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/cache"
+	"github.com/goposta/posta/internal/storage/repositories"
 	"gorm.io/gorm"
 )
 
@@ -49,7 +49,6 @@ type DashboardStats struct {
 	TotalBounces      int64         `json:"total_bounces"`
 	TotalSuppressions int64         `json:"total_suppressions"`
 	TotalWebhooks     int64         `json:"total_webhooks"`
-	TotalContactLists int64         `json:"total_contact_lists"`
 	DailyVolume       []DailyVolume `json:"daily_volume"`
 
 	// Webhook delivery stats
@@ -67,38 +66,45 @@ func NewDashboardHandler(db *gorm.DB, c *cache.Cache, whDeliveryRepo *repositori
 }
 
 func (h *DashboardHandler) Stats(c *okapi.Context) error {
-	userID := c.GetInt("user_id")
+	scope := getScope(c)
 	ctx := c.Request().Context()
 
 	// Try cache first
-	cacheKey := cache.DashboardKey(userID)
+	scopeKey := int(scope.UserID)
+	if scope.WorkspaceID != nil {
+		scopeKey = int(*scope.WorkspaceID) + 1000000
+	}
+	cacheKey := cache.DashboardKey(scopeKey)
 	var stats DashboardStats
 	if h.cache.Get(ctx, cacheKey, &stats) {
 		return ok(c, stats)
 	}
 
+	applyScope := func(model interface{}) *gorm.DB {
+		return repositories.ApplyScope(h.db.Model(model), scope)
+	}
+
 	// Email counts by status
-	h.db.Model(&models.Email{}).Where("user_id = ?", userID).Count(&stats.TotalEmails)
-	h.db.Model(&models.Email{}).Where("user_id = ? AND status = ?", userID, models.EmailStatusQueued).Count(&stats.QueuedEmails)
-	h.db.Model(&models.Email{}).Where("user_id = ? AND status = ?", userID, models.EmailStatusProcessing).Count(&stats.ProcessingEmails)
-	h.db.Model(&models.Email{}).Where("user_id = ? AND status = ?", userID, models.EmailStatusSent).Count(&stats.SentEmails)
-	h.db.Model(&models.Email{}).Where("user_id = ? AND status = ?", userID, models.EmailStatusFailed).Count(&stats.FailedEmails)
-	h.db.Model(&models.Email{}).Where("user_id = ? AND status = ?", userID, models.EmailStatusSuppressed).Count(&stats.SuppressedEmails)
+	applyScope(&models.Email{}).Count(&stats.TotalEmails)
+	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusQueued).Count(&stats.QueuedEmails)
+	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusProcessing).Count(&stats.ProcessingEmails)
+	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusSent).Count(&stats.SentEmails)
+	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusFailed).Count(&stats.FailedEmails)
+	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusSuppressed).Count(&stats.SuppressedEmails)
 
 	// Infrastructure counts
-	h.db.Model(&models.Domain{}).Where("user_id = ?", userID).Count(&stats.TotalDomains)
-	h.db.Model(&models.SMTPServer{}).Where("user_id = ?", userID).Count(&stats.TotalSmtpServers)
+	applyScope(&models.Domain{}).Count(&stats.TotalDomains)
+	applyScope(&models.SMTPServer{}).Count(&stats.TotalSmtpServers)
 
 	// API keys
-	h.db.Model(&models.APIKey{}).Where("user_id = ?", userID).Count(&stats.TotalAPIKeys)
-	h.db.Model(&models.APIKey{}).Where("user_id = ? AND revoked = false AND (expires_at IS NULL OR expires_at > ?)", userID, time.Now()).Count(&stats.ActiveAPIKeys)
+	applyScope(&models.APIKey{}).Count(&stats.TotalAPIKeys)
+	applyScope(&models.APIKey{}).Where("revoked = false AND (expires_at IS NULL OR expires_at > ?)", time.Now()).Count(&stats.ActiveAPIKeys)
 
 	// Contacts & deliverability
-	h.db.Model(&models.Contact{}).Where("user_id = ?", userID).Count(&stats.TotalContacts)
-	h.db.Model(&models.Bounce{}).Where("user_id = ?", userID).Count(&stats.TotalBounces)
-	h.db.Model(&models.Suppression{}).Where("user_id = ?", userID).Count(&stats.TotalSuppressions)
-	h.db.Model(&models.Webhook{}).Where("user_id = ?", userID).Count(&stats.TotalWebhooks)
-	h.db.Model(&models.ContactList{}).Where("user_id = ?", userID).Count(&stats.TotalContactLists)
+	applyScope(&models.Contact{}).Count(&stats.TotalContacts)
+	applyScope(&models.Bounce{}).Count(&stats.TotalBounces)
+	applyScope(&models.Suppression{}).Count(&stats.TotalSuppressions)
+	applyScope(&models.Webhook{}).Count(&stats.TotalWebhooks)
 
 	// Failure rate
 	if stats.TotalEmails > 0 {
@@ -106,7 +112,7 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 	}
 
 	// Webhook delivery stats
-	if whStats, err := h.whDeliveryRepo.StatsByUserID(uint(userID)); err == nil {
+	if whStats, err := h.whDeliveryRepo.StatsByScope(scope); err == nil {
 		stats.WebhookDeliveries = whStats
 	}
 
@@ -118,9 +124,9 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 		Count  int64
 	}
 	var rows []dailyRow
-	h.db.Model(&models.Email{}).
+	applyScope(&models.Email{}).
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
-		Where("user_id = ? AND created_at >= ? AND status IN ?", userID, since, []string{string(models.EmailStatusSent), string(models.EmailStatusFailed)}).
+		Where("created_at >= ? AND status IN ?", since, []string{string(models.EmailStatusSent), string(models.EmailStatusFailed)}).
 		Group("date, status").
 		Order("date").
 		Find(&rows)

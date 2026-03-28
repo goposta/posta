@@ -24,7 +24,9 @@ import (
 )
 
 const (
-	TypeEmailSend = "email:send"
+	TypeEmailSend     = "email:send"
+	TypeCampaignStart = "campaign:start"
+	TypeCampaignBatch = "campaign:batch"
 
 	QueueTransactional = "transactional"
 	QueueBulk          = "bulk"
@@ -42,4 +44,24 @@ func NewEmailSendTask(emailID uint, opts ...asynq.Option) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeEmailSend, payload, opts...), nil
+}
+
+type CampaignPayload struct {
+	CampaignID uint `json:"campaign_id"`
+}
+
+func NewCampaignStartTask(campaignID uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(CampaignPayload{CampaignID: campaignID})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeCampaignStart, payload, opts...), nil
+}
+
+func NewCampaignBatchTask(campaignID uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(CampaignPayload{CampaignID: campaignID})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeCampaignBatch, payload, opts...), nil
 }

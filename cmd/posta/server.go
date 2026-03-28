@@ -24,19 +24,21 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi/okapicli"
-	"github.com/jkaninda/posta/internal/config"
-	cronpkg "github.com/jkaninda/posta/internal/cron"
-	"github.com/jkaninda/posta/internal/cron/jobs"
-	"github.com/jkaninda/posta/internal/metrics"
-	"github.com/jkaninda/posta/internal/routes"
-	"github.com/jkaninda/posta/internal/services/retry"
-	"github.com/jkaninda/posta/internal/services/seeder"
-	"github.com/jkaninda/posta/internal/services/settings"
-	"github.com/jkaninda/posta/internal/services/webhook"
-	"github.com/jkaninda/posta/internal/storage"
-	"github.com/jkaninda/posta/internal/storage/migration"
-	"github.com/jkaninda/posta/internal/storage/repositories"
-	"github.com/jkaninda/posta/internal/worker"
+	"github.com/goposta/posta/internal/config"
+	cronpkg "github.com/goposta/posta/internal/cron"
+	"github.com/goposta/posta/internal/cron/jobs"
+	"github.com/goposta/posta/internal/metrics"
+	"github.com/goposta/posta/internal/routes"
+	"github.com/goposta/posta/internal/services/retry"
+	"github.com/goposta/posta/internal/services/seeder"
+	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/services/webhook"
+	"github.com/goposta/posta/internal/storage"
+	"github.com/goposta/posta/internal/storage/blob"
+	"github.com/goposta/posta/internal/storage/migration"
+	"github.com/goposta/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/worker"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -44,6 +46,7 @@ import (
 type serverResources struct {
 	producer    *worker.Producer
 	cronManager *cronpkg.Manager
+	blobStore   blob.Store
 	db          *gorm.DB
 	redis       *redis.Client
 }
@@ -72,16 +75,36 @@ func runServer(cli *okapicli.CLI) {
 
 			seedDefaults(res.db, cfg.AdminEmail)
 
+			// Initialize blob storage (S3 or filesystem) for attachments
+			if cfg.BlobProvider != "" {
+				bs, err := blob.New(blob.Config{
+					Provider:         cfg.BlobProvider,
+					S3Endpoint:       cfg.BlobS3Endpoint,
+					S3Region:         cfg.BlobS3Region,
+					S3Bucket:         cfg.BlobS3Bucket,
+					S3AccessKeyID:    cfg.BlobS3AccessKey,
+					S3SecretAccessKey: cfg.BlobS3SecretKey,
+					S3UseSSL:         cfg.BlobS3UseSSL,
+					S3ForcePathStyle: cfg.BlobS3PathStyle,
+					FSBasePath:       cfg.BlobFSPath,
+				})
+				if err != nil {
+					logger.Fatal("failed to initialize blob storage", "error", err)
+				}
+				res.blobStore = bs
+				logger.Info("blob storage initialized", "provider", cfg.BlobProvider)
+			}
+
 			if cfg.EmbeddedWorker && !cfg.DevMode {
 				res.producer = worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
-				startEmbeddedWorker(res.db, cfg)
+				startEmbeddedWorker(res.db, cfg, res.blobStore)
 			}
 
 			if !cfg.DevMode {
 				res.cronManager = initCronManager(res.db, cfg)
 			}
 
-			routes.InitRoutes(app, res.db, res.redis, cfg, res.producer, res.cronManager, context.Background())
+			routes.InitRoutes(app, res.db, res.redis, cfg, res.producer, res.cronManager, res.blobStore, context.Background())
 
 			if res.cronManager != nil {
 				res.cronManager.Start(context.Background())
@@ -137,7 +160,7 @@ func newWebhookDispatcher(db *gorm.DB, cfg *config.Config) *webhook.Dispatcher {
 }
 
 // startEmbeddedWorker starts an in-process asynq worker for email delivery.
-func startEmbeddedWorker(db *gorm.DB, cfg *config.Config) {
+func startEmbeddedWorker(db *gorm.DB, cfg *config.Config, blobStore blob.Store) {
 	dispatcher := newWebhookDispatcher(db, cfg)
 
 	handler := worker.NewEmailSendHandler(
@@ -148,6 +171,9 @@ func startEmbeddedWorker(db *gorm.DB, cfg *config.Config) {
 		repositories.NewContactRepository(db),
 		dispatcher,
 	)
+	if blobStore != nil {
+		handler.SetBlobStore(blobStore)
+	}
 	handler.OnSent(metrics.IncrementEmailSent)
 	handler.OnFailed(metrics.IncrementEmailFailed)
 
@@ -168,8 +194,29 @@ func startEmbeddedWorker(db *gorm.DB, cfg *config.Config) {
 		},
 	)
 
+	// Campaign processor
+	campaignProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+	trackingRepo := repositories.NewTrackingRepository(db)
+	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
+	campaignDispatcher := newWebhookDispatcher(db, cfg)
+	campaignProcessor := worker.NewCampaignProcessor(
+		repositories.NewCampaignRepository(db),
+		repositories.NewCampaignMessageRepository(db),
+		repositories.NewSubscriberListRepository(db),
+		repositories.NewSubscriberRepository(db),
+		repositories.NewEmailRepository(db),
+		repositories.NewTemplateRepository(db),
+		repositories.NewTemplateVersionRepository(db),
+		repositories.NewTemplateLocalizationRepository(db),
+		trackingService,
+		campaignProducer,
+		campaignDispatcher,
+	)
+
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(worker.TypeEmailSend, handler.ProcessTask)
+	mux.HandleFunc(worker.TypeCampaignStart, campaignProcessor.HandleCampaignStart)
+	mux.HandleFunc(worker.TypeCampaignBatch, campaignProcessor.HandleCampaignBatch)
 
 	go func() {
 		if err := srv.Run(mux); err != nil {
@@ -193,9 +240,11 @@ func initCronManager(db *gorm.DB, cfg *config.Config) *cronpkg.Manager {
 		repositories.NewEmailRepository(db),
 		repositories.NewEventRepository(db),
 		repositories.NewWebhookDeliveryRepository(db),
+		repositories.NewTrackingRepository(db),
 		settingsProvider,
 	))
 	manager.Register(jobs.NewDailyReportJob(repositories.NewUserSettingRepository(db)))
+	manager.Register(jobs.NewAccountCleanupJob(repositories.NewUserRepository(db)))
 	return manager
 }
 
@@ -248,5 +297,6 @@ func webhookConfig(cfg *config.Config) webhook.Config {
 	return webhook.Config{
 		MaxRetries: cfg.WebhookMaxRetries,
 		Timeout:    time.Duration(cfg.WebhookTimeoutSecs) * time.Second,
+		ProxyURL:   cfg.WebhookProxyURL,
 	}
 }

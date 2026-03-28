@@ -32,6 +32,8 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     localStorage.removeItem('posta_token')
     localStorage.removeItem('posta_user')
+    // Clear workspace state
+    localStorage.removeItem('posta_workspace_id')
   }
 
   async function fetchUser() {

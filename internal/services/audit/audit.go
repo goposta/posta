@@ -18,8 +18,8 @@
 package audit
 
 import (
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/eventbus"
 )
 
 // Logger records audit trail events via the existing event bus.

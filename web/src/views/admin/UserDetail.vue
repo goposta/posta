@@ -2,8 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi } from '../../api/admin'
+import { plansApi } from '../../api/plans'
 import { useNotificationStore } from '../../stores/notification'
-import type { UserDetailMetrics } from '../../api/types'
+import type { UserDetailMetrics, AdminWorkspace, Plan } from '../../api/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,14 +12,23 @@ const notification = useNotificationStore()
 const loading = ref(true)
 const metrics = ref<UserDetailMetrics | null>(null)
 const disabling2FA = ref(false)
+const workspaces = ref<AdminWorkspace[]>([])
+const plans = ref<Plan[]>([])
+const changingPlan = ref<number | null>(null)
 
 onMounted(async () => {
   try {
     const id = Number(route.params.id)
-    const res = await adminApi.getUserMetrics(id)
-    metrics.value = res.data.data
+    const [metricsRes, workspacesRes, plansRes] = await Promise.all([
+      adminApi.getUserMetrics(id),
+      adminApi.getUserWorkspaces(id),
+      plansApi.list(0, 100),
+    ])
+    metrics.value = metricsRes.data.data
+    workspaces.value = workspacesRes.data.data
+    plans.value = plansRes.data.data
   } catch (e) {
-    console.error('Failed to load user metrics', e)
+    console.error('Failed to load user details', e)
   } finally {
     loading.value = false
   }
@@ -35,6 +45,23 @@ async function handleDisable2FA() {
     notification.error('Failed to disable 2FA.')
   } finally {
     disabling2FA.value = false
+  }
+}
+
+async function handleChangePlan(workspace: AdminWorkspace, planId: number | null) {
+  changingPlan.value = workspace.id
+  try {
+    if (planId) {
+      await plansApi.assignToWorkspace(workspace.id, planId)
+      const plan = plans.value.find(p => p.id === planId)
+      workspace.plan_id = planId
+      workspace.plan_name = plan?.name || ''
+      notification.success(`Plan updated for workspace "${workspace.name}".`)
+    }
+  } catch {
+    notification.error('Failed to update workspace plan.')
+  } finally {
+    changingPlan.value = null
   }
 }
 
@@ -168,6 +195,48 @@ function formatDate(date: string) {
         <div class="stat-card">
           <div class="stat-label">SMTP Servers</div>
           <div class="stat-value">{{ metrics.total_smtp_servers }}</div>
+        </div>
+      </div>
+
+      <!-- Workspaces Section -->
+      <div class="card" style="margin-top: 24px;">
+        <div class="card-header">
+          <h2>Workspaces</h2>
+        </div>
+        <div class="card-body">
+          <div v-if="workspaces.length === 0" class="empty-state" style="padding: 24px 0;">
+            <p>This user has no workspaces.</p>
+          </div>
+          <table v-else class="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Plan</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="ws in workspaces" :key="ws.id">
+                <td>{{ ws.name }}</td>
+                <td><code>{{ ws.slug }}</code></td>
+                <td>
+                  <select
+                    class="form-select form-select-sm"
+                    :value="ws.plan_id || ''"
+                    :disabled="changingPlan === ws.id"
+                    @change="handleChangePlan(ws, Number($event.target.value) || null)"
+                  >
+                    <option value="">No plan (use default)</option>
+                    <option v-for="plan in plans" :key="plan.id" :value="plan.id">
+                      {{ plan.name }}{{ !plan.is_active ? ' (inactive)' : '' }}{{ plan.is_default ? ' (default)' : '' }}
+                    </option>
+                  </select>
+                </td>
+                <td>{{ formatDate(ws.created_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </template>

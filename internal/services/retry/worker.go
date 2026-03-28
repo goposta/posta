@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/services/webhook"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/services/webhook"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // Worker periodically retries failed emails that haven't exceeded their
@@ -114,7 +114,12 @@ func (w *Worker) processRetries() {
 	}
 
 	for _, server := range smtpServers {
-		emails, err := w.emailRepo.FindFailedForRetry(server.UserID, server.MaxRetries)
+		var emails []models.Email
+		if server.WorkspaceID != nil {
+			emails, err = w.emailRepo.FindFailedForRetryByWorkspace(*server.WorkspaceID, server.MaxRetries)
+		} else {
+			emails, err = w.emailRepo.FindFailedForRetry(server.UserID, server.MaxRetries)
+		}
 		if err != nil {
 			logger.Error("retry worker: failed to load failed emails", "user_id", server.UserID, "error", err)
 			continue

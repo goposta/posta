@@ -24,16 +24,17 @@ import (
 )
 
 type APIKey struct {
-	ID         uint           `json:"id" gorm:"primaryKey"`
-	UserID     uint           `json:"user_id" gorm:"index;not null"`
-	Name       string         `json:"name" gorm:"not null"`
-	KeyHash    string         `json:"-" gorm:"not null"`
-	KeyPrefix  string         `json:"key_prefix" gorm:"not null"`
-	CreatedAt  time.Time      `json:"created_at"`
-	ExpiresAt  *time.Time     `json:"expires_at"`
-	LastUsedAt *time.Time     `json:"last_used_at"`
-	Revoked    bool           `json:"revoked" gorm:"default:false"`
-	AllowedIPs pq.StringArray `json:"allowed_ips" gorm:"type:text[]"`
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	UserID      uint           `json:"user_id" gorm:"index;not null"`
+	WorkspaceID *uint          `json:"workspace_id,omitempty" gorm:"index"`
+	Name        string         `json:"name" gorm:"not null"`
+	KeyHash     string         `json:"-" gorm:"not null"`
+	KeyPrefix   string         `json:"key_prefix" gorm:"not null"`
+	CreatedAt   time.Time      `json:"created_at"`
+	ExpiresAt   *time.Time     `json:"expires_at"`
+	LastUsedAt  *time.Time     `json:"last_used_at"`
+	Revoked     bool           `json:"revoked" gorm:"default:false"`
+	AllowedIPs  pq.StringArray `json:"allowed_ips" gorm:"type:text[]"`
 
 	User User `json:"-" gorm:"foreignKey:UserID"`
 }

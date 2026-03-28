@@ -25,8 +25,8 @@ import (
 	goutils "github.com/jkaninda/go-utils"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type Seeder struct {
@@ -95,7 +95,7 @@ func (s *Seeder) SeedUserDefaults(userID uint, userName string) {
 			},
 			{
 				"title": "GitHub Repository",
-				"url":   "https://github.com/jkaninda/posta",
+				"url":   "https://github.com/goposta/posta",
 			},
 		},
 	}

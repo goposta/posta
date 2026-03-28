@@ -28,6 +28,12 @@ export const authApi = {
   disable2FA(code: string) {
     return api.post<ApiResponse<{ message: string }>>('/users/me/2fa/disable', { code })
   },
+  requestAccountDeletion() {
+    return api.post<ApiResponse<{ message: string; scheduled_deletion_at: string }>>('/users/me/delete')
+  },
+  cancelAccountDeletion() {
+    return api.post<ApiResponse<{ message: string }>>('/users/me/cancel-deletion')
+  },
   register(name: string, email: string, password: string) {
     return api.post<ApiResponse<AuthResponse>>('/auth/register', { name, email, password })
   },

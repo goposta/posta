@@ -20,10 +20,12 @@ package main
 import (
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/config"
-	"github.com/jkaninda/posta/internal/metrics"
-	"github.com/jkaninda/posta/internal/storage/repositories"
-	"github.com/jkaninda/posta/internal/worker"
+	"github.com/goposta/posta/internal/config"
+	"github.com/goposta/posta/internal/metrics"
+	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/storage/blob"
+	"github.com/goposta/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/worker"
 )
 
 func runWorker() error {
@@ -38,6 +40,27 @@ func runWorker() error {
 		}
 	}()
 
+	// Initialize blob storage for attachment retrieval
+	var blobStore blob.Store
+	if cfg.BlobProvider != "" {
+		bs, err := blob.New(blob.Config{
+			Provider:          cfg.BlobProvider,
+			S3Endpoint:        cfg.BlobS3Endpoint,
+			S3Region:          cfg.BlobS3Region,
+			S3Bucket:          cfg.BlobS3Bucket,
+			S3AccessKeyID:     cfg.BlobS3AccessKey,
+			S3SecretAccessKey: cfg.BlobS3SecretKey,
+			S3UseSSL:          cfg.BlobS3UseSSL,
+			S3ForcePathStyle:  cfg.BlobS3PathStyle,
+			FSBasePath:        cfg.BlobFSPath,
+		})
+		if err != nil {
+			logger.Fatal("failed to initialize blob storage", "error", err)
+		}
+		blobStore = bs
+		logger.Info("blob storage initialized", "provider", cfg.BlobProvider)
+	}
+
 	dispatcher := newWebhookDispatcher(db, cfg)
 
 	handler := worker.NewEmailSendHandler(
@@ -48,6 +71,9 @@ func runWorker() error {
 		repositories.NewContactRepository(db),
 		dispatcher,
 	)
+	if blobStore != nil {
+		handler.SetBlobStore(blobStore)
+	}
 	handler.OnSent(metrics.IncrementEmailSent)
 	handler.OnFailed(metrics.IncrementEmailFailed)
 
@@ -68,8 +94,29 @@ func runWorker() error {
 		},
 	)
 
+	// Campaign processor
+	campaignProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+	trackingRepo := repositories.NewTrackingRepository(db)
+	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
+	campaignDispatcher := newWebhookDispatcher(db, cfg)
+	campaignProcessor := worker.NewCampaignProcessor(
+		repositories.NewCampaignRepository(db),
+		repositories.NewCampaignMessageRepository(db),
+		repositories.NewSubscriberListRepository(db),
+		repositories.NewSubscriberRepository(db),
+		repositories.NewEmailRepository(db),
+		repositories.NewTemplateRepository(db),
+		repositories.NewTemplateVersionRepository(db),
+		repositories.NewTemplateLocalizationRepository(db),
+		trackingService,
+		campaignProducer,
+		campaignDispatcher,
+	)
+
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(worker.TypeEmailSend, handler.ProcessTask)
+	mux.HandleFunc(worker.TypeCampaignStart, campaignProcessor.HandleCampaignStart)
+	mux.HandleFunc(worker.TypeCampaignBatch, campaignProcessor.HandleCampaignBatch)
 
 	logger.Info("Posta worker started",
 		"version", config.Version,

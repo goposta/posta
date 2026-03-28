@@ -19,9 +19,9 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/audit"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // SettingHandler handles admin management of platform settings.
@@ -34,7 +34,6 @@ func NewSettingHandler(repo *repositories.SettingRepository, audit *audit.Logger
 	return &SettingHandler{repo: repo, audit: audit}
 }
 
-// --- Request types ---
 
 type UpdateSettingsRequest struct {
 	Body struct {
@@ -47,8 +46,6 @@ type SettingInput struct {
 	Value string `json:"value"`
 	Type  string `json:"type"`
 }
-
-// --- Handlers ---
 
 func (h *SettingHandler) GetSettings(c *okapi.Context) error {
 	settings, err := h.repo.FindAll()

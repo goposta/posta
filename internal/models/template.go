@@ -21,8 +21,9 @@ import "time"
 
 type Template struct {
 	ID              uint       `json:"id" gorm:"primaryKey"`
-	UserID          uint       `json:"user_id" gorm:"uniqueIndex:idx_user_template;not null"`
-	Name            string     `json:"name" gorm:"uniqueIndex:idx_user_template;not null"`
+	UserID          uint       `json:"user_id" gorm:"index;not null"`
+	WorkspaceID     *uint      `json:"workspace_id,omitempty" gorm:"index"`
+	Name            string     `json:"name" gorm:"not null"`
 	DefaultLanguage string     `json:"default_language" gorm:"default:en;not null"`
 	ActiveVersionID *uint      `json:"active_version_id,omitempty" gorm:"uniqueIndex"`
 	Description     string     `json:"description"`

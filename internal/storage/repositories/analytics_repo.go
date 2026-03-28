@@ -46,7 +46,7 @@ func (r *AnalyticsRepository) DailyCounts(userID uint, from, to time.Time, statu
 	var results []DailyCount
 	query := r.db.Table("emails").
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, COUNT(*) as count").
-		Where("user_id = ? AND created_at >= ? AND created_at <= ?", userID, from, to)
+		Where("user_id = ? AND workspace_id IS NULL AND created_at >= ? AND created_at <= ?", userID, from, to)
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -59,7 +59,7 @@ func (r *AnalyticsRepository) StatusBreakdown(userID uint, from, to time.Time) (
 	var results []StatusBreakdown
 	err := r.db.Table("emails").
 		Select("status, COUNT(*) as count").
-		Where("user_id = ? AND created_at >= ? AND created_at <= ?", userID, from, to).
+		Where("user_id = ? AND workspace_id IS NULL AND created_at >= ? AND created_at <= ?", userID, from, to).
 		Group("status").
 		Find(&results).Error
 	return results, err
@@ -145,7 +145,7 @@ func (r *AnalyticsRepository) DeliveryRateTrends(userID uint, from, to time.Time
 	var rows []deliveryRow
 	err := r.db.Table("emails").
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
-		Where("user_id = ? AND created_at >= ? AND created_at <= ? AND status IN ?", userID, from, to, []string{"sent", "failed"}).
+		Where("user_id = ? AND workspace_id IS NULL AND created_at >= ? AND created_at <= ? AND status IN ?", userID, from, to, []string{"sent", "failed"}).
 		Group("date, status").Order("date ASC").
 		Find(&rows).Error
 	if err != nil {
@@ -207,7 +207,7 @@ func (r *AnalyticsRepository) BounceRateTrends(userID uint, from, to time.Time) 
 	var rows []bounceRow
 	err := r.db.Table("bounces").
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, type, COUNT(*) as count").
-		Where("user_id = ? AND created_at >= ? AND created_at <= ?", userID, from, to).
+		Where("user_id = ? AND workspace_id IS NULL AND created_at >= ? AND created_at <= ?", userID, from, to).
 		Group("date, type").Order("date ASC").
 		Find(&rows).Error
 	if err != nil {
@@ -274,7 +274,7 @@ func (r *AnalyticsRepository) LatencyPercentilesForUser(userID uint, from, to ti
 			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p99,
 			COALESCE(AVG(EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as avg
 		`).
-		Where("user_id = ? AND status = 'sent' AND sent_at IS NOT NULL AND created_at >= ? AND created_at <= ?", userID, from, to).
+		Where("user_id = ? AND workspace_id IS NULL AND status = 'sent' AND sent_at IS NOT NULL AND created_at >= ? AND created_at <= ?", userID, from, to).
 		Scan(&result).Error
 	return &result, err
 }
@@ -291,6 +291,70 @@ func (r *AnalyticsRepository) AdminLatencyPercentiles(from, to time.Time) (*Late
 			COALESCE(AVG(EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as avg
 		`).
 		Where("status = 'sent' AND sent_at IS NOT NULL AND created_at >= ? AND created_at <= ?", from, to).
+		Scan(&result).Error
+	return &result, err
+}
+
+
+func (r *AnalyticsRepository) WorkspaceDailyCounts(workspaceID uint, from, to time.Time, status string) ([]DailyCount, error) {
+	var results []DailyCount
+	query := r.db.Table("emails").
+		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, COUNT(*) as count").
+		Where("workspace_id = ? AND created_at >= ? AND created_at <= ?", workspaceID, from, to)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	err := query.Group("date").Order("date ASC").Find(&results).Error
+	return results, err
+}
+
+func (r *AnalyticsRepository) WorkspaceStatusBreakdown(workspaceID uint, from, to time.Time) ([]StatusBreakdown, error) {
+	var results []StatusBreakdown
+	err := r.db.Table("emails").
+		Select("status, COUNT(*) as count").
+		Where("workspace_id = ? AND created_at >= ? AND created_at <= ?", workspaceID, from, to).
+		Group("status").
+		Find(&results).Error
+	return results, err
+}
+
+func (r *AnalyticsRepository) WorkspaceDeliveryRateTrends(workspaceID uint, from, to time.Time) ([]DeliveryRatePoint, error) {
+	var rows []deliveryRow
+	err := r.db.Table("emails").
+		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
+		Where("workspace_id = ? AND created_at >= ? AND created_at <= ? AND status IN ?", workspaceID, from, to, []string{"sent", "failed"}).
+		Group("date, status").Order("date ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return buildDeliveryRatePoints(rows, from, to), nil
+}
+
+func (r *AnalyticsRepository) WorkspaceBounceRateTrends(workspaceID uint, from, to time.Time) ([]BounceRatePoint, error) {
+	var rows []bounceRow
+	err := r.db.Table("bounces").
+		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, type, COUNT(*) as count").
+		Where("workspace_id = ? AND created_at >= ? AND created_at <= ?", workspaceID, from, to).
+		Group("date, type").Order("date ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return buildBounceRatePoints(rows, from, to), nil
+}
+
+func (r *AnalyticsRepository) WorkspaceLatencyPercentiles(workspaceID uint, from, to time.Time) (*LatencyPercentiles, error) {
+	var result LatencyPercentiles
+	err := r.db.Table("emails").
+		Select(`
+			COALESCE(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p50,
+			COALESCE(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p75,
+			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p90,
+			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as p99,
+			COALESCE(AVG(EXTRACT(EPOCH FROM (sent_at - created_at))), 0) as avg
+		`).
+		Where("workspace_id = ? AND status = 'sent' AND sent_at IS NOT NULL AND created_at >= ? AND created_at <= ?", workspaceID, from, to).
 		Scan(&result).Error
 	return &result, err
 }

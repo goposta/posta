@@ -5,7 +5,7 @@ BUILD_DIR := bin
 UI_DIR := web
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS := -X github.com/jkaninda/posta/internal/config.Version=$(VERSION) -X github.com/jkaninda/posta/internal/config.CommitID=$(COMMIT)
+LDFLAGS := -X github.com/goposta/posta/internal/config.Version=$(VERSION) -X github.com/goposta/posta/internal/config.CommitID=$(COMMIT)
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/posta
 

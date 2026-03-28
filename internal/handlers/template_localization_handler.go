@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type TemplateLocalizationHandler struct {
@@ -44,6 +44,7 @@ type CreateLocalizationRequest struct {
 		SubjectTemplate string `json:"subject_template" required:"true"`
 		HTMLTemplate    string `json:"html_template"`
 		TextTemplate    string `json:"text_template"`
+		BuilderJSON     string `json:"builder_json,omitempty"`
 	} `json:"body"`
 }
 type UpdateLocalizationRequest struct {
@@ -52,6 +53,7 @@ type UpdateLocalizationRequest struct {
 		SubjectTemplate *string `json:"subject_template"`
 		HTMLTemplate    *string `json:"html_template"`
 		TextTemplate    *string `json:"text_template"`
+		BuilderJSON     *string `json:"builder_json,omitempty"`
 	} `json:"body"`
 }
 type DeleteLocalizationRequest struct {
@@ -81,10 +83,8 @@ func NewTemplateLocalizationHandler(
 }
 
 func (h *TemplateLocalizationHandler) List(c *okapi.Context, req *ListLocalizationsRequest) error {
-	userID := c.GetInt("user_id")
-
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -102,10 +102,11 @@ func (h *TemplateLocalizationHandler) List(c *okapi.Context, req *ListLocalizati
 }
 
 func (h *TemplateLocalizationHandler) Create(c *okapi.Context, req *CreateLocalizationRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -120,6 +121,7 @@ func (h *TemplateLocalizationHandler) Create(c *okapi.Context, req *CreateLocali
 		SubjectTemplate: req.Body.SubjectTemplate,
 		HTMLTemplate:    req.Body.HTMLTemplate,
 		TextTemplate:    req.Body.TextTemplate,
+		BuilderJSON:     req.Body.BuilderJSON,
 	}
 
 	if err := h.localizationRepo.Create(l); err != nil {
@@ -130,6 +132,9 @@ func (h *TemplateLocalizationHandler) Create(c *okapi.Context, req *CreateLocali
 }
 
 func (h *TemplateLocalizationHandler) Update(c *okapi.Context, req *UpdateLocalizationRequest) error {
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	l, err := h.localizationRepo.FindByID(uint(req.ID))
 	if err != nil {
 		return c.AbortNotFound("localization not found")
@@ -141,11 +146,7 @@ func (h *TemplateLocalizationHandler) Update(c *okapi.Context, req *UpdateLocali
 		return c.AbortNotFound("version not found")
 	}
 	tmpl, err := h.templateRepo.FindByID(v.TemplateID)
-	if err != nil {
-		return c.AbortNotFound("template not found")
-	}
-	userID := c.GetInt("user_id")
-	if tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("localization not found")
 	}
 
@@ -157,6 +158,9 @@ func (h *TemplateLocalizationHandler) Update(c *okapi.Context, req *UpdateLocali
 	}
 	if req.Body.TextTemplate != nil {
 		l.TextTemplate = *req.Body.TextTemplate
+	}
+	if req.Body.BuilderJSON != nil {
+		l.BuilderJSON = *req.Body.BuilderJSON
 	}
 
 	now := time.Now()
@@ -170,6 +174,9 @@ func (h *TemplateLocalizationHandler) Update(c *okapi.Context, req *UpdateLocali
 }
 
 func (h *TemplateLocalizationHandler) Delete(c *okapi.Context, req *DeleteLocalizationRequest) error {
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	l, err := h.localizationRepo.FindByID(uint(req.ID))
 	if err != nil {
 		return c.AbortNotFound("localization not found")
@@ -180,11 +187,7 @@ func (h *TemplateLocalizationHandler) Delete(c *okapi.Context, req *DeleteLocali
 		return c.AbortNotFound("version not found")
 	}
 	tmpl, err := h.templateRepo.FindByID(v.TemplateID)
-	if err != nil {
-		return c.AbortNotFound("template not found")
-	}
-	userID := c.GetInt("user_id")
-	if tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("localization not found")
 	}
 
@@ -196,10 +199,8 @@ func (h *TemplateLocalizationHandler) Delete(c *okapi.Context, req *DeleteLocali
 }
 
 func (h *TemplateLocalizationHandler) Preview(c *okapi.Context, req *PreviewLocalizationRequest) error {
-	userID := c.GetInt("user_id")
-
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 

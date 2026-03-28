@@ -19,8 +19,8 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type SuppressionHandler struct {
@@ -43,12 +43,16 @@ func NewSuppressionHandler(repo *repositories.SuppressionRepository) *Suppressio
 }
 
 func (h *SuppressionHandler) Create(c *okapi.Context, req *CreateSuppressionRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 
 	suppression := &models.Suppression{
-		UserID: uint(userID),
-		Email:  req.Body.Email,
-		Reason: req.Body.Reason,
+		UserID:      scope.UserID,
+		WorkspaceID: scope.WorkspaceID,
+		Email:       req.Body.Email,
+		Reason:      req.Body.Reason,
 	}
 
 	if err := h.repo.Create(suppression); err != nil {
@@ -59,10 +63,9 @@ func (h *SuppressionHandler) Create(c *okapi.Context, req *CreateSuppressionRequ
 }
 
 func (h *SuppressionHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	suppressions, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	suppressions, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list suppressions")
 	}
@@ -71,9 +74,12 @@ func (h *SuppressionHandler) List(c *okapi.Context, req *ListRequest) error {
 }
 
 func (h *SuppressionHandler) Delete(c *okapi.Context, req *DeleteSuppressionRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 
-	if err := h.repo.Delete(uint(userID), req.Body.Email); err != nil {
+	if err := h.repo.Delete(scope, req.Body.Email); err != nil {
 		return c.AbortInternalServerError("failed to remove from suppression list")
 	}
 

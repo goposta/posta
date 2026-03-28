@@ -22,13 +22,16 @@ import (
 	"encoding/hex"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/domain"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/domain"
+	"github.com/goposta/posta/internal/storage/repositories"
+	"gorm.io/gorm"
 )
 
 type DomainHandler struct {
-	repo *repositories.DomainRepository
+	repo  *repositories.DomainRepository
+	quota QuotaChecker
+	db    *gorm.DB
 }
 type CreateDomainRequest struct {
 	Body struct {
@@ -53,8 +56,23 @@ func NewDomainHandler(repo *repositories.DomainRepository) *DomainHandler {
 	return &DomainHandler{repo: repo}
 }
 
+// SetQuota sets the quota checker for plan-based resource limits.
+func (h *DomainHandler) SetQuota(q QuotaChecker, db *gorm.DB) {
+	h.quota = q
+	h.db = db
+}
+
 func (h *DomainHandler) Create(c *okapi.Context, req *CreateDomainRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
+
+	if h.quota != nil {
+		if err := h.quota.CheckQuota(h.db, scope.WorkspaceID, "domains"); err != nil {
+			return c.AbortForbidden(err.Error())
+		}
+	}
 
 	token, err := generateVerificationToken()
 	if err != nil {
@@ -62,7 +80,8 @@ func (h *DomainHandler) Create(c *okapi.Context, req *CreateDomainRequest) error
 	}
 
 	d := &models.Domain{
-		UserID:            uint(userID),
+		UserID:            scope.UserID,
+		WorkspaceID:       scope.WorkspaceID,
 		Domain:            req.Body.Domain,
 		VerificationToken: token,
 	}
@@ -78,10 +97,9 @@ func (h *DomainHandler) Create(c *okapi.Context, req *CreateDomainRequest) error
 }
 
 func (h *DomainHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	domains, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	domains, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list domains")
 	}
@@ -90,10 +108,8 @@ func (h *DomainHandler) List(c *okapi.Context, req *ListRequest) error {
 }
 
 func (h *DomainHandler) Get(c *okapi.Context, req *GetDomainRequest) error {
-	userID := c.GetInt("user_id")
-
 	d, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || d.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, d.UserID, d.WorkspaceID) {
 		return c.AbortNotFound("domain not found")
 	}
 
@@ -104,10 +120,11 @@ func (h *DomainHandler) Get(c *okapi.Context, req *GetDomainRequest) error {
 }
 
 func (h *DomainHandler) Delete(c *okapi.Context, req *DeleteDomainRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	d, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || d.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, d.UserID, d.WorkspaceID) {
 		return c.AbortNotFound("domain not found")
 	}
 
@@ -119,10 +136,11 @@ func (h *DomainHandler) Delete(c *okapi.Context, req *DeleteDomainRequest) error
 }
 
 func (h *DomainHandler) Verify(c *okapi.Context, req *VerifyDomainRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	d, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || d.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, d.UserID, d.WorkspaceID) {
 		return c.AbortNotFound("domain not found")
 	}
 

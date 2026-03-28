@@ -28,8 +28,9 @@ const (
 )
 
 type Bounce struct {
-	ID        uint       `json:"id" gorm:"primaryKey"`
-	UserID    uint       `json:"user_id" gorm:"index;not null"`
+	ID          uint       `json:"id" gorm:"primaryKey"`
+	UserID      uint       `json:"user_id" gorm:"index;not null"`
+	WorkspaceID *uint      `json:"workspace_id,omitempty" gorm:"index"`
 	EmailID   uint       `json:"email_id" gorm:"index;not null"`
 	Recipient string     `json:"recipient" gorm:"not null"`
 	Type      BounceType `json:"type" gorm:"not null"`

@@ -21,18 +21,18 @@ import (
 	"net/http"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/dto"
-	"github.com/jkaninda/posta/internal/handlers"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/email"
+	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/email"
 )
 
 // userRoutes returns route definitions for all authenticated user endpoints.
 func (r *Router) userRoutes() []okapi.RouteDefinition {
-	userGroup := r.v1.Group("/users/me", r.mw.jwtAuth.Middleware).WithTags([]string{"User"})
+	userGroup := r.v1.Group("/users/me", r.mw.jwtAuth.Middleware, r.mw.optionalWorkspace).WithTags([]string{"User"})
 	userGroup.WithBearerAuth()
 
-	return []okapi.RouteDefinition{
+	routes := []okapi.RouteDefinition{
 		// ==================== Profile ====================
 		{
 			Method:   http.MethodGet,
@@ -91,6 +91,26 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Summary:     "Disable 2FA",
 			Description: "Disable 2FA after verifying a TOTP code",
 			Request:     &handlers.Disable2FARequest{},
+			Response:    &dto.Response[any]{},
+		},
+
+		// ==================== Account Deletion ====================
+		{
+			Method:      http.MethodPost,
+			Path:        "/delete",
+			Handler:     r.h.user.RequestAccountDeletion,
+			Group:       userGroup,
+			Summary:     "Request account deletion",
+			Description: "Schedule account for deletion in 7 days. The account is deactivated immediately.",
+			Response:    &dto.Response[any]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/cancel-deletion",
+			Handler:     r.h.user.CancelAccountDeletion,
+			Group:       userGroup,
+			Summary:     "Cancel account deletion",
+			Description: "Cancel a previously scheduled account deletion and reactivate the account.",
 			Response:    &dto.Response[any]{},
 		},
 
@@ -376,6 +396,20 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Summary:     "Import template",
 			Description: "Import a template from a previously exported JSON payload",
 			Request:     &handlers.ImportTemplateRequest{},
+			Options: []okapi.RouteOption{
+				okapi.DocResponse(201, &dto.Response[models.Template]{}),
+				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+			},
+		},
+
+		{
+			Method:      http.MethodPost,
+			Path:        "/templates/import-html",
+			Handler:     r.h.template.ImportHTML,
+			Group:       userGroup,
+			Tags:        []string{"Templates"},
+			Summary:     "Import HTML template",
+			Description: "Upload an .html file to create a template. CSS from <style> blocks is extracted into a separate stylesheet.",
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Template]{}),
 				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
@@ -907,100 +941,6 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[models.Contact]{},
 		},
 
-		// ==================== Contact Lists ====================
-		{
-			Method:  http.MethodPost,
-			Path:    "/contact-lists",
-			Handler: okapi.H(r.h.contactList.Create),
-			Group:   userGroup,
-			Tags:    []string{"Contact Lists"},
-			Summary: "Create contact list",
-			Request: &handlers.CreateContactListRequest{},
-			Options: []okapi.RouteOption{
-				okapi.DocResponse(201, &dto.Response[models.ContactList]{}),
-			},
-		},
-		{
-			Method:   http.MethodGet,
-			Path:     "/contact-lists",
-			Handler:  okapi.H(r.h.contactList.List),
-			Group:    userGroup,
-			Tags:     []string{"Contact Lists"},
-			Summary:  "List contact lists",
-			Request:  &handlers.ListRequest{},
-			Response: &dto.PageableResponse[handlers.ContactListWithCount]{},
-		},
-		{
-			Method:   http.MethodPut,
-			Path:     "/contact-lists/{id:int}",
-			Handler:  okapi.H(r.h.contactList.Update),
-			Group:    userGroup,
-			Tags:     []string{"Contact Lists"},
-			Summary:  "Update contact list",
-			Request:  &handlers.UpdateContactListRequest{},
-			Response: &dto.Response[models.ContactList]{},
-			Options: []okapi.RouteOption{
-				okapi.DocPathParam("id", "integer", "Contact list ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-			},
-		},
-		{
-			Method:  http.MethodDelete,
-			Path:    "/contact-lists/{id:int}",
-			Handler: okapi.H(r.h.contactList.Delete),
-			Group:   userGroup,
-			Tags:    []string{"Contact Lists"},
-			Summary: "Delete contact list",
-			Options: []okapi.RouteOption{
-				okapi.DocPathParam("id", "integer", "Contact list ID"),
-				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-			},
-		},
-		{
-			Method:  http.MethodPost,
-			Path:    "/contact-lists/{id:int}/members",
-			Handler: okapi.H(r.h.contactList.AddMember),
-			Group:   userGroup,
-			Tags:    []string{"Contact Lists"},
-			Summary: "Add member to list",
-			Request: &handlers.AddMemberRequest{},
-			Options: []okapi.RouteOption{
-				okapi.DocPathParam("id", "integer", "Contact list ID"),
-				okapi.DocResponse(201, &dto.Response[models.ContactListMember]{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
-			},
-		},
-		{
-			Method:  http.MethodDelete,
-			Path:    "/contact-lists/{id:int}/members",
-			Handler: okapi.H(r.h.contactList.RemoveMember),
-			Group:   userGroup,
-			Tags:    []string{"Contact Lists"},
-			Summary: "Remove member from list",
-			Request: &handlers.RemoveMemberRequest{},
-			Options: []okapi.RouteOption{
-				okapi.DocPathParam("id", "integer", "Contact list ID"),
-				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-			},
-		},
-		{
-			Method:   http.MethodGet,
-			Path:     "/contact-lists/{id:int}/members",
-			Handler:  okapi.H(r.h.contactList.ListMembers),
-			Group:    userGroup,
-			Tags:     []string{"Contact Lists"},
-			Summary:  "List members in contact list",
-			Request:  &handlers.ListMembersRequest{},
-			Response: &dto.PageableResponse[models.ContactListMember]{},
-			Options: []okapi.RouteOption{
-				okapi.DocPathParam("id", "integer", "Contact list ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-			},
-		},
-
 		// ==================== User Data Export/Import ====================
 		{
 			Method:      http.MethodGet,
@@ -1062,5 +1002,293 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Request:  &handlers.UpdateUserSettingsRequest{},
 			Response: &dto.Response[models.UserSetting]{},
 		},
+
+		// ==================== Subscribers ====================
+		{
+			Method:  http.MethodPost,
+			Path:    "/subscribers",
+			Handler: okapi.H(r.h.subscriber.Create),
+			Group:   userGroup,
+			Tags:    []string{"Subscribers"},
+			Summary: "Create subscriber",
+			Request: &handlers.CreateSubscriberRequest{},
+			Options: []okapi.RouteOption{okapi.DocResponse(201, &dto.Response[models.Subscriber]{})},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/subscribers",
+			Handler:  okapi.H(r.h.subscriber.List),
+			Group:    userGroup,
+			Tags:     []string{"Subscribers"},
+			Summary:  "List subscribers",
+			Request:  &handlers.ListSubscribersRequest{},
+			Response: &dto.PageableResponse[models.Subscriber]{},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/subscribers/{id:int}",
+			Handler:  okapi.H(r.h.subscriber.Get),
+			Group:    userGroup,
+			Tags:     []string{"Subscribers"},
+			Summary:  "Get subscriber",
+			Response: &dto.Response[models.Subscriber]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Subscriber ID")},
+		},
+		{
+			Method:   http.MethodPut,
+			Path:     "/subscribers/{id:int}",
+			Handler:  okapi.H(r.h.subscriber.Update),
+			Group:    userGroup,
+			Tags:     []string{"Subscribers"},
+			Summary:  "Update subscriber",
+			Request:  &handlers.UpdateSubscriberRequest{},
+			Response: &dto.Response[models.Subscriber]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Subscriber ID")},
+		},
+		{
+			Method:  http.MethodDelete,
+			Path:    "/subscribers/{id:int}",
+			Handler: okapi.H(r.h.subscriber.Delete),
+			Group:   userGroup,
+			Tags:    []string{"Subscribers"},
+			Summary: "Delete subscriber",
+			Options: []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Subscriber ID"), okapi.DocResponse(204, nil)},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/subscribers/import/json",
+			Handler:  okapi.H(r.h.subscriber.BulkImportJSON),
+			Group:    userGroup,
+			Tags:     []string{"Subscribers"},
+			Summary:  "Bulk import subscribers (JSON)",
+			Request:  &handlers.BulkImportSubscribersRequest{},
+			Response: &dto.Response[handlers.BulkImportResult]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/subscribers/import/csv",
+			Handler:     r.h.subscriber.BulkImportCSV,
+			Group:       userGroup,
+			Tags:        []string{"Subscribers"},
+			Summary:     "Bulk import subscribers (CSV)",
+			Description: "Upload a CSV file with optional column_mapping JSON field",
+			Response:    &dto.Response[handlers.BulkImportResult]{},
+		},
+
+		// ==================== Subscriber Lists ====================
+		{
+			Method:  http.MethodPost,
+			Path:    "/subscriber-lists",
+			Handler: okapi.H(r.h.subscriberList.Create),
+			Group:   userGroup,
+			Tags:    []string{"Subscriber Lists"},
+			Summary: "Create subscriber list",
+			Request: &handlers.CreateSubscriberListRequest{},
+			Options: []okapi.RouteOption{okapi.DocResponse(201, &dto.Response[models.SubscriberList]{})},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/subscriber-lists",
+			Handler:  okapi.H(r.h.subscriberList.List),
+			Group:    userGroup,
+			Tags:     []string{"Subscriber Lists"},
+			Summary:  "List subscriber lists",
+			Request:  &handlers.ListRequest{},
+			Response: &dto.PageableResponse[handlers.SubscriberListWithCount]{},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/subscriber-lists/{id:int}",
+			Handler:  okapi.H(r.h.subscriberList.Get),
+			Group:    userGroup,
+			Tags:     []string{"Subscriber Lists"},
+			Summary:  "Get subscriber list",
+			Response: &dto.Response[handlers.SubscriberListWithCount]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:   http.MethodPut,
+			Path:     "/subscriber-lists/{id:int}",
+			Handler:  okapi.H(r.h.subscriberList.Update),
+			Group:    userGroup,
+			Tags:     []string{"Subscriber Lists"},
+			Summary:  "Update subscriber list",
+			Request:  &handlers.UpdateSubscriberListRequest{},
+			Response: &dto.Response[models.SubscriberList]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:  http.MethodDelete,
+			Path:    "/subscriber-lists/{id:int}",
+			Handler: okapi.H(r.h.subscriberList.Delete),
+			Group:   userGroup,
+			Tags:    []string{"Subscriber Lists"},
+			Summary: "Delete subscriber list",
+			Options: []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID"), okapi.DocResponse(204, nil)},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/subscriber-lists/{id:int}/members",
+			Handler:  okapi.H(r.h.subscriberList.AddMember),
+			Group:    userGroup,
+			Tags:     []string{"Subscriber Lists"},
+			Summary:  "Add subscriber to list",
+			Request:  &handlers.AddSubscriberToListRequest{},
+			Response: &dto.Response[okapi.M]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:   http.MethodDelete,
+			Path:     "/subscriber-lists/{id:int}/members",
+			Handler:  okapi.H(r.h.subscriberList.RemoveMember),
+			Group:    userGroup,
+			Tags:     []string{"Subscriber Lists"},
+			Summary:  "Remove subscriber from list",
+			Request:  &handlers.RemoveSubscriberFromListRequest{},
+			Response: &dto.Response[okapi.M]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/subscriber-lists/{id:int}/members",
+			Handler:  okapi.H(r.h.subscriberList.ListMembers),
+			Group:    userGroup,
+			Tags:     []string{"Subscriber Lists"},
+			Summary:  "List members of subscriber list",
+			Request:  &handlers.ListSubscriberListMembersRequest{},
+			Response: &dto.PageableResponse[models.Subscriber]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/subscriber-lists/preview-segment",
+			Handler:     okapi.H(r.h.subscriberList.PreviewSegment),
+			Group:       userGroup,
+			Tags:        []string{"Subscriber Lists"},
+			Summary:     "Preview segment count",
+			Description: "Evaluate filter rules and return the number of matching subscribers",
+			Request:     &handlers.PreviewSegmentRequest{},
+			Response:    &dto.Response[okapi.M]{},
+		},
+
+		// ==================== Campaigns ====================
+		{
+			Method:  http.MethodPost,
+			Path:    "/campaigns",
+			Handler: okapi.H(r.h.campaign.Create),
+			Group:   userGroup,
+			Tags:    []string{"Campaigns"},
+			Summary: "Create campaign",
+			Request: &handlers.CreateCampaignRequest{},
+			Options: []okapi.RouteOption{okapi.DocResponse(201, &dto.Response[models.Campaign]{})},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/campaigns",
+			Handler:  okapi.H(r.h.campaign.List),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "List campaigns",
+			Request:  &handlers.ListCampaignsRequest{},
+			Response: &dto.PageableResponse[handlers.CampaignWithStats]{},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/campaigns/{id:int}",
+			Handler:  okapi.H(r.h.campaign.Get),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "Get campaign",
+			Response: &dto.Response[handlers.CampaignWithStats]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
+		{
+			Method:   http.MethodPut,
+			Path:     "/campaigns/{id:int}",
+			Handler:  okapi.H(r.h.campaign.Update),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "Update campaign",
+			Request:  &handlers.UpdateCampaignRequest{},
+			Response: &dto.Response[models.Campaign]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
+		{
+			Method:  http.MethodDelete,
+			Path:    "/campaigns/{id:int}",
+			Handler: okapi.H(r.h.campaign.Delete),
+			Group:   userGroup,
+			Tags:    []string{"Campaigns"},
+			Summary: "Delete campaign",
+			Options: []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID"), okapi.DocResponse(204, nil)},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/campaigns/{id:int}/send",
+			Handler:  okapi.H(r.h.campaign.Send),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "Send campaign",
+			Response: &dto.Response[models.Campaign]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/campaigns/{id:int}/pause",
+			Handler:  okapi.H(r.h.campaign.Pause),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "Pause campaign",
+			Response: &dto.Response[models.Campaign]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/campaigns/{id:int}/resume",
+			Handler:  okapi.H(r.h.campaign.Resume),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "Resume campaign",
+			Response: &dto.Response[models.Campaign]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/campaigns/{id:int}/cancel",
+			Handler:  okapi.H(r.h.campaign.Cancel),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "Cancel campaign",
+			Response: &dto.Response[models.Campaign]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/campaigns/{id:int}/duplicate",
+			Handler:  okapi.H(r.h.campaign.Duplicate),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "Duplicate campaign",
+			Response: &dto.Response[models.Campaign]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/campaigns/{id:int}/messages",
+			Handler:  okapi.H(r.h.campaign.ListMessages),
+			Group:    userGroup,
+			Tags:     []string{"Campaigns"},
+			Summary:  "List campaign messages",
+			Request:  &handlers.ListCampaignMessagesRequest{},
+			Response: &dto.PageableResponse[models.CampaignMessage]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Campaign ID")},
+		},
 	}
+
+	// Append optional workspace header documentation to all user routes
+	for i := range routes {
+		routes[i].Options = append(routes[i].Options, workspaceHeaderOptional)
+	}
+
+	return routes
 }

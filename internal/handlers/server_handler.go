@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/dto"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/audit"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // ServerHandler handles admin management of shared SMTP servers.
@@ -40,7 +40,6 @@ func NewServerHandler(repo *repositories.ServerRepository, audit *audit.Logger) 
 	return &ServerHandler{repo: repo, sender: email.NewSMTPSender(), audit: audit}
 }
 
-// --- Request types ---
 
 type CreateServerRequest struct {
 	Body struct {
@@ -79,8 +78,6 @@ type DeleteServerRequest struct {
 type ServerIDRequest struct {
 	ID int `param:"id"`
 }
-
-// --- Handlers ---
 
 func (h *ServerHandler) Create(c *okapi.Context, req *CreateServerRequest) error {
 	userID := uint(c.GetInt("user_id"))

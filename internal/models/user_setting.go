@@ -32,6 +32,7 @@ type UserSetting struct {
 	DefaultTemplateID  *uint     `json:"default_template_id"`
 	APIKeyExpiryDays   int       `json:"api_key_expiry_days" gorm:"default:90"`
 	BounceAutoSuppress bool      `json:"bounce_auto_suppress" gorm:"default:true"`
+	DefaultLanguage    string    `json:"default_language" gorm:"size:10;default:'en'"`
 	DailyReport        bool      `json:"daily_report" gorm:"default:false"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`

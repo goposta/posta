@@ -23,10 +23,11 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/audit"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/storage/repositories"
+	"gorm.io/gorm"
 )
 
 type SMTPHandler struct {
@@ -34,6 +35,8 @@ type SMTPHandler struct {
 	domainRepo *repositories.DomainRepository
 	sender     *email.SMTPSender
 	audit      *audit.Logger
+	quota      QuotaChecker
+	db         *gorm.DB
 }
 type CreateSMTPRequest struct {
 	Body struct {
@@ -73,14 +76,14 @@ func NewSMTPHandler(repo *repositories.SMTPRepository, domainRepo *repositories.
 	return &SMTPHandler{repo: repo, domainRepo: domainRepo, sender: email.NewSMTPSender(), audit: audit}
 }
 
-// validateAllowedEmails checks that each allowed email's domain belongs to the user's domains.
-// If the user has no domains configured, all emails are allowed.
-func (h *SMTPHandler) validateAllowedEmails(userID uint, emails []string) error {
+// validateAllowedEmails checks that each allowed email's domain belongs to the user's/workspace's domains.
+// If no domains are configured, all emails are allowed.
+func (h *SMTPHandler) validateAllowedEmails(scope repositories.ResourceScope, emails []string) error {
 	if len(emails) == 0 {
 		return nil
 	}
 
-	domains, _, err := h.domainRepo.FindByUserID(userID, 1000, 0)
+	domains, _, err := h.domainRepo.FindByScope(scope, 1000, 0)
 	if err != nil {
 		return fmt.Errorf("failed to load domains")
 	}
@@ -108,10 +111,25 @@ func (h *SMTPHandler) validateAllowedEmails(userID uint, emails []string) error 
 	return nil
 }
 
-func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
-	userID := c.GetInt("user_id")
+// SetQuota sets the quota checker for plan-based resource limits.
+func (h *SMTPHandler) SetQuota(q QuotaChecker, db *gorm.DB) {
+	h.quota = q
+	h.db = db
+}
 
-	if err := h.validateAllowedEmails(uint(userID), req.Body.AllowedEmails); err != nil {
+func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
+
+	if h.quota != nil {
+		if err := h.quota.CheckQuota(h.db, scope.WorkspaceID, "smtp_servers"); err != nil {
+			return c.AbortForbidden(err.Error())
+		}
+	}
+
+	if err := h.validateAllowedEmails(scope, req.Body.AllowedEmails); err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
 
@@ -121,7 +139,8 @@ func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
 	}
 
 	server := &models.SMTPServer{
-		UserID:        uint(userID),
+		UserID:        scope.UserID,
+		WorkspaceID:   scope.WorkspaceID,
 		Host:          req.Body.Host,
 		Port:          req.Body.Port,
 		Username:      req.Body.Username,
@@ -146,16 +165,14 @@ func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
 		return c.AbortInternalServerError("failed to create SMTP server", err)
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "smtp.created", "SMTP server created: "+req.Body.Host, nil)
+	h.audit.Log(scope.UserID, c.GetString("email"), c.RealIP(), "smtp.created", "SMTP server created: "+req.Body.Host, nil)
 
 	return created(c, server)
 }
 
 func (h *SMTPHandler) Get(c *okapi.Context, req *GetSMTPRequest) error {
-	userID := c.GetInt("user_id")
-
 	server, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || server.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, server.UserID, server.WorkspaceID) {
 		return c.AbortNotFound("SMTP server not found")
 	}
 
@@ -163,10 +180,11 @@ func (h *SMTPHandler) Get(c *okapi.Context, req *GetSMTPRequest) error {
 }
 
 func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	server, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || server.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, server.UserID, server.WorkspaceID) {
 		return c.AbortNotFound("SMTP server not found")
 	}
 
@@ -197,7 +215,7 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 		server.MaxRetries = *req.Body.MaxRetries
 	}
 	if req.Body.AllowedEmails != nil {
-		if err := h.validateAllowedEmails(uint(userID), req.Body.AllowedEmails); err != nil {
+		if err := h.validateAllowedEmails(repositories.ResourceScope{UserID: server.UserID, WorkspaceID: server.WorkspaceID}, req.Body.AllowedEmails); err != nil {
 			return c.AbortBadRequest(err.Error())
 		}
 		server.AllowedEmails = req.Body.AllowedEmails
@@ -238,16 +256,15 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 		return c.AbortInternalServerError("failed to update SMTP server")
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "smtp.updated", "SMTP server updated: "+server.Host, nil)
+	h.audit.Log(server.UserID, c.GetString("email"), c.RealIP(), "smtp.updated", "SMTP server updated: "+server.Host, nil)
 
 	return ok(c, server)
 }
 
 func (h *SMTPHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	servers, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	servers, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list SMTP servers")
 	}
@@ -256,10 +273,11 @@ func (h *SMTPHandler) List(c *okapi.Context, req *ListRequest) error {
 }
 
 func (h *SMTPHandler) Delete(c *okapi.Context, req *DeleteSMTPRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	server, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || server.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, server.UserID, server.WorkspaceID) {
 		return c.AbortNotFound("SMTP server not found")
 	}
 
@@ -267,16 +285,17 @@ func (h *SMTPHandler) Delete(c *okapi.Context, req *DeleteSMTPRequest) error {
 		return c.AbortInternalServerError("failed to delete SMTP server")
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "smtp.deleted", "SMTP server deleted: "+server.Host, nil)
+	h.audit.Log(server.UserID, c.GetString("email"), c.RealIP(), "smtp.deleted", "SMTP server deleted: "+server.Host, nil)
 
 	return noContent(c)
 }
 
 func (h *SMTPHandler) Test(c *okapi.Context, req *TestSMTPRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	server, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || server.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, server.UserID, server.WorkspaceID) {
 		return c.AbortNotFound("SMTP server not found")
 	}
 

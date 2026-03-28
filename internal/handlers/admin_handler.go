@@ -24,12 +24,12 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/cache"
-	"github.com/jkaninda/posta/internal/services/eventbus"
-	"github.com/jkaninda/posta/internal/services/seeder"
-	"github.com/jkaninda/posta/internal/services/settings"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/cache"
+	"github.com/goposta/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/services/seeder"
+	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/storage/repositories"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -41,6 +41,8 @@ type AdminHandler struct {
 	keyRepo        *repositories.APIKeyRepository
 	emailRepo      *repositories.EmailRepository
 	whDeliveryRepo *repositories.WebhookDeliveryRepository
+	workspaceRepo  *repositories.WorkspaceRepository
+	planRepo       *repositories.PlanRepository
 	inspector      *asynq.Inspector
 	bus            *eventbus.EventBus
 	seeder         *seeder.Seeder
@@ -114,6 +116,12 @@ type UserDetailMetrics struct {
 
 func NewAdminHandler(db *gorm.DB, c *cache.Cache, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, emailRepo *repositories.EmailRepository, whDeliveryRepo *repositories.WebhookDeliveryRepository, inspector *asynq.Inspector, bus *eventbus.EventBus, seeder *seeder.Seeder, embeddedWorker bool) *AdminHandler {
 	return &AdminHandler{db: db, cache: c, userRepo: userRepo, keyRepo: keyRepo, emailRepo: emailRepo, whDeliveryRepo: whDeliveryRepo, inspector: inspector, bus: bus, seeder: seeder, embeddedWorker: embeddedWorker}
+}
+
+// SetWorkspaceRepo sets the workspace and plan repositories for workspace management.
+func (h *AdminHandler) SetWorkspaceRepo(wsRepo *repositories.WorkspaceRepository, planRepo *repositories.PlanRepository) {
+	h.workspaceRepo = wsRepo
+	h.planRepo = planRepo
 }
 
 func (h *AdminHandler) SetEmailSettings(s *settings.Provider) {
@@ -210,7 +218,7 @@ func (h *AdminHandler) DeleteUser(c *okapi.Context, req *AdminDeleteUserRequest)
 		return c.AbortNotFound("user not found")
 	}
 
-	if err := h.userRepo.Delete(uint(req.ID)); err != nil {
+	if err := h.userRepo.DeleteAllUserData(uint(req.ID)); err != nil {
 		return c.AbortInternalServerError("failed to delete user")
 	}
 
@@ -364,6 +372,66 @@ func (h *AdminHandler) UserMetrics(c *okapi.Context, req *AdminGetUserRequest) e
 	h.cache.Set(ctx, cacheKey, m, cache.UserMetricsTTL)
 
 	return ok(c, m)
+}
+
+// AdminWorkspace is a workspace with its plan name for admin views.
+type AdminWorkspace struct {
+	ID        uint       `json:"id"`
+	Name      string     `json:"name"`
+	Slug      string     `json:"slug"`
+	OwnerID   uint       `json:"owner_id"`
+	PlanID    *uint      `json:"plan_id"`
+	PlanName  string     `json:"plan_name"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// UserWorkspaces returns workspaces for a specific user (admin only).
+func (h *AdminHandler) UserWorkspaces(c *okapi.Context, req *AdminGetUserRequest) error {
+	_, err := h.userRepo.FindByID(uint(req.ID))
+	if err != nil {
+		return c.AbortNotFound("user not found")
+	}
+
+	workspaces, err := h.workspaceRepo.FindByUserID(uint(req.ID))
+	if err != nil {
+		return c.AbortInternalServerError("failed to list workspaces")
+	}
+
+	// Collect plan IDs and fetch plan names
+	planIDs := make(map[uint]bool)
+	for _, ws := range workspaces {
+		if ws.PlanID != nil {
+			planIDs[*ws.PlanID] = true
+		}
+	}
+
+	planNames := make(map[uint]string)
+	if h.planRepo != nil {
+		for id := range planIDs {
+			if plan, err := h.planRepo.FindByID(id); err == nil {
+				planNames[plan.ID] = plan.Name
+			}
+		}
+	}
+
+	result := make([]AdminWorkspace, len(workspaces))
+	for i, ws := range workspaces {
+		result[i] = AdminWorkspace{
+			ID:        ws.ID,
+			Name:      ws.Name,
+			Slug:      ws.Slug,
+			OwnerID:   ws.OwnerID,
+			PlanID:    ws.PlanID,
+			CreatedAt: ws.CreatedAt,
+			UpdatedAt: ws.UpdatedAt,
+		}
+		if ws.PlanID != nil {
+			result[i].PlanName = planNames[*ws.PlanID]
+		}
+	}
+
+	return ok(c, result)
 }
 
 // Disable2FA allows admins to disable 2FA for a user.

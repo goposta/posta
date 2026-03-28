@@ -19,18 +19,21 @@ package worker
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/mail"
 	"strings"
 	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/services/webhook"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/services/webhook"
+	"github.com/goposta/posta/internal/storage/blob"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // EmailSendHandler processes email:send tasks from the Asynq queue.
@@ -42,6 +45,7 @@ type EmailSendHandler struct {
 	contactRepo *repositories.ContactRepository
 	sender      *email.SMTPSender
 	dispatcher  *webhook.Dispatcher
+	blobStore   blob.Store
 	onSent      func()
 	onFailed    func()
 }
@@ -65,6 +69,9 @@ func NewEmailSendHandler(
 	}
 }
 
+// SetBlobStore sets the blob storage backend for fetching attachment content.
+func (h *EmailSendHandler) SetBlobStore(bs blob.Store) { h.blobStore = bs }
+
 // OnSent sets a callback invoked after each successful email send.
 func (h *EmailSendHandler) OnSent(fn func()) { h.onSent = fn }
 
@@ -72,7 +79,7 @@ func (h *EmailSendHandler) OnSent(fn func()) { h.onSent = fn }
 func (h *EmailSendHandler) OnFailed(fn func()) { h.onFailed = fn }
 
 // ProcessTask handles an email:send task.
-func (h *EmailSendHandler) ProcessTask(_ context.Context, t *asynq.Task) error {
+func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	var payload EmailSendPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
@@ -93,13 +100,18 @@ func (h *EmailSendHandler) ProcessTask(_ context.Context, t *asynq.Task) error {
 		senderAddr = parsed.Address
 	}
 
-	// --- Server selection ---
-	// 1. Try the user's own per-account SMTP server first.
+	// Server selection:
+	// 1. Try the workspace or user's own per-account SMTP server first.
 	// 2. Fall back to a shared server whose allowed_domains covers the sender domain.
 	var smtpServer *models.SMTPServer
 	var sharedServerID uint // non-zero when a shared server is used
 
-	userServer, err := h.smtpRepo.FindFirstByUserID(em.UserID)
+	var userServer *models.SMTPServer
+	if em.WorkspaceID != nil {
+		userServer, err = h.smtpRepo.FindFirstByWorkspaceID(*em.WorkspaceID)
+	} else {
+		userServer, err = h.smtpRepo.FindFirstByUserID(em.UserID)
+	}
 	if err == nil {
 		// Validate the sender against the per-user allowed emails list
 		if len(userServer.AllowedEmails) > 0 {
@@ -151,10 +163,28 @@ func (h *EmailSendHandler) ProcessTask(_ context.Context, t *asynq.Task) error {
 		em.TextBody = email.HTMLToText(em.HTMLBody)
 	}
 
-	// Parse attachments from stored JSON
+	// Parse attachments from stored JSON and fetch content from blob storage if needed
 	var attachments []models.Attachment
 	if em.AttachmentsJSON != "" {
 		_ = json.Unmarshal([]byte(em.AttachmentsJSON), &attachments)
+		if h.blobStore != nil {
+			for i, att := range attachments {
+				if att.StorageKey != "" && att.Content == "" {
+					rc, err := h.blobStore.Get(ctx, att.StorageKey)
+					if err != nil {
+						h.markFailed(em, fmt.Sprintf("failed to fetch attachment %q from storage: %v", att.Filename, err), 0)
+						return nil
+					}
+					data, err := io.ReadAll(rc)
+					rc.Close()
+					if err != nil {
+						h.markFailed(em, fmt.Sprintf("failed to read attachment %q: %v", att.Filename, err), 0)
+						return nil
+					}
+					attachments[i].Content = base64.StdEncoding.EncodeToString(data)
+				}
+			}
+		}
 	}
 
 	// Parse custom headers from stored JSON

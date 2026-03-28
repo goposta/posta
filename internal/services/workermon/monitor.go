@@ -25,8 +25,8 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/eventbus"
 )
 
 // Monitor periodically checks asynq worker connections and publishes

@@ -183,6 +183,7 @@ export interface TemplateLocalization {
   subject_template: string
   html_template: string
   text_template: string
+  builder_json?: string
   created_at: string
   updated_at?: string
 }
@@ -192,6 +193,7 @@ export interface TemplateLocalizationInput {
   subject_template: string
   html_template: string
   text_template: string
+  builder_json?: string
 }
 
 export interface Language {
@@ -199,12 +201,14 @@ export interface Language {
   user_id: number
   code: string
   name: string
+  is_default: boolean
   created_at: string
 }
 
 export interface LanguageInput {
   code: string
   name: string
+  is_default?: boolean
 }
 
 export interface StyleSheet {
@@ -566,14 +570,9 @@ export interface Setup2FAResponse {
 }
 
 // User Profile (extended)
-export interface UserProfile {
-  id: number
-  name: string
-  email: string
-  role: 'admin' | 'user'
-  two_factor_enabled: boolean
+export interface UserProfile extends User {
   require_verified_domain: boolean
-  created_at: string
+  scheduled_deletion_at: string | null
 }
 
 // User Data Export/Import
@@ -645,4 +644,308 @@ export interface ExportUserSettings {
 export interface GDPRDeleteResult {
   deleted: number
   message: string
+}
+
+// Workspace Data Export/Import
+export interface WorkspaceDataExport {
+  posta_version?: string
+  exported_at?: string
+  workspace_settings: ExportWorkspaceSettings
+  templates: TemplateExport[]
+  stylesheets: ExportStyleSheet[]
+  languages: ExportLanguage[]
+  contacts: ExportContact[]
+  contact_lists: ExportContactList[]
+  suppressions: ExportSuppression[]
+  webhooks: ExportWebhook[]
+  smtp_servers: ExportSMTPServer[]
+  domains: ExportDomain[]
+  subscribers: ExportSubscriber[]
+  subscriber_lists: ExportSubscriberList[]
+}
+
+export interface ExportWorkspaceSettings {
+  name: string
+  description: string
+  default_language: string
+}
+
+export interface ExportSMTPServer {
+  host: string
+  port: number
+  username: string
+  encryption: string
+  max_retries: number
+  allowed_emails?: string[]
+}
+
+export interface ExportDomain {
+  domain: string
+}
+
+export interface ExportSubscriber {
+  email: string
+  name: string
+  status: string
+  custom_fields?: Record<string, unknown>
+  timezone?: string
+  language?: string
+}
+
+export interface ExportSubscriberList {
+  name: string
+  description: string
+  type: string
+  filter_rules?: { field: string; operator: string; value: unknown }[]
+}
+
+// Workspaces
+export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer'
+
+export interface Workspace {
+  id: number
+  name: string
+  slug: string
+  description: string
+  owner_id: number
+  role: WorkspaceRole
+  created_at: string
+}
+
+export interface WorkspaceInput {
+  name: string
+  slug?: string
+  description?: string
+}
+
+export interface WorkspaceMember {
+  id: number
+  user_id: number
+  name: string
+  email: string
+  role: WorkspaceRole
+  created_at: string
+}
+
+export interface WorkspaceInvitation {
+  id: number
+  workspace_id: number
+  workspace?: string
+  email: string
+  role: WorkspaceRole
+  status: 'pending' | 'accepted' | 'declined'
+  expires_at: string
+  created_at: string
+}
+
+export interface InviteMemberInput {
+  email: string
+  role: WorkspaceRole
+}
+
+export interface TransferResult {
+  resource: string
+  count: number
+}
+
+export interface TransferResponse {
+  message: string
+  results: TransferResult[]
+  total: number
+}
+
+// OAuth
+export interface OAuthProviderInfo {
+  slug: string
+  name: string
+  type: 'google' | 'oidc'
+}
+
+export interface OAuthLinkedAccount {
+  id: number
+  provider_id: number
+  provider_name: string
+  provider_type: string
+  email: string
+  created_at: string
+}
+
+export interface OAuthProviderAdmin {
+  id: number
+  name: string
+  slug: string
+  type: string
+  issuer: string
+  scopes: string
+  enabled: boolean
+  auto_register: boolean
+  allowed_domains: string
+  created_at: string
+}
+
+export interface OAuthProviderInput {
+  name: string
+  slug: string
+  type: string
+  client_id: string
+  client_secret: string
+  issuer?: string
+  auth_url?: string
+  token_url?: string
+  userinfo_url?: string
+  scopes?: string
+  auto_register?: boolean
+  allowed_domains?: string
+}
+
+export interface WorkspaceSSOConfig {
+  provider_id: number
+  provider_name: string
+  enforce_sso: boolean
+  auto_provision: boolean
+  allowed_domains: string
+}
+
+// Subscribers
+export type SubscriberStatus = 'subscribed' | 'unsubscribed' | 'bounced' | 'complained'
+
+export interface Subscriber {
+  id: number
+  email: string
+  name: string
+  status: SubscriberStatus
+  custom_fields: Record<string, any>
+  subscribed_at: string | null
+  unsubscribed_at: string | null
+  created_at: string
+  updated_at: string | null
+}
+
+export type SubscriberListType = 'static' | 'dynamic'
+
+export interface FilterRule {
+  field: string
+  operator: 'eq' | 'neq' | 'contains' | 'starts_with' | 'ends_with' | 'gt' | 'lt' | 'in'
+  value: any
+}
+
+export interface SubscriberListItem {
+  id: number
+  name: string
+  description: string
+  type: SubscriberListType
+  filter_rules?: FilterRule[]
+  member_count: number
+  created_at: string
+  updated_at: string | null
+}
+
+export interface BulkImportResult {
+  created: number
+  skipped: number
+  total: number
+}
+
+// Campaigns
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'paused' | 'cancelled'
+
+export interface CampaignStats {
+  total: number
+  pending: number
+  queued: number
+  sent: number
+  failed: number
+  skipped: number
+}
+
+export interface Campaign {
+  id: number
+  name: string
+  subject: string
+  from_email: string
+  from_name: string
+  template_id: number
+  template_version_id?: number
+  language: string
+  template_data?: Record<string, any>
+  status: CampaignStatus
+  list_id: number
+  send_rate: number
+  scheduled_at?: string
+  started_at?: string
+  completed_at?: string
+  created_at: string
+  updated_at?: string
+  stats?: CampaignStats
+}
+
+export type CampaignMessageStatus = 'pending' | 'queued' | 'sent' | 'failed' | 'skipped'
+
+export interface CampaignMessage {
+  id: number
+  campaign_id: number
+  subscriber_id: number
+  email_id?: number
+  status: CampaignMessageStatus
+  error_message?: string
+  sent_at?: string
+  created_at: string
+  subscriber?: Subscriber
+}
+
+// Plans
+export interface Plan {
+  id: number
+  name: string
+  description: string
+  is_default: boolean
+  is_active: boolean
+  daily_rate_limit: number
+  hourly_rate_limit: number
+  max_attachment_size_mb: number
+  max_batch_size: number
+  max_api_keys: number
+  max_domains: number
+  max_smtp_servers: number
+  max_workspaces: number
+  email_log_retention_days: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminWorkspace {
+  id: number
+  name: string
+  slug: string
+  owner_id: number
+  plan_id: number | null
+  plan_name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PlanInput {
+  name: string
+  description: string
+  is_default?: boolean
+  daily_rate_limit: number
+  hourly_rate_limit: number
+  max_attachment_size_mb: number
+  max_batch_size: number
+  max_api_keys: number
+  max_domains: number
+  max_smtp_servers: number
+  max_workspaces: number
+  email_log_retention_days: number
+}
+
+export interface CampaignAnalyticsData {
+  analytics: {
+    total_messages: number; sent_messages: number; failed_messages: number
+    opened_messages: number; clicked_messages: number; bounced_messages: number; unsubscribed: number
+    delivery_rate: number; open_rate: number; click_rate: number; bounce_rate: number; unsubscribe_rate: number
+  }
+  links: Array<{ id: number; original_url: string; hash: string; click_count: number }>
+  open_series: Array<{ time: string; count: number }>
+  click_series: Array<{ time: string; count: number }>
 }

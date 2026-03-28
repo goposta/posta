@@ -19,20 +19,24 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/jkaninda/logger"
+	"golang.org/x/net/proxy"
 
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 const (
@@ -45,6 +49,10 @@ const (
 type Config struct {
 	MaxRetries int
 	Timeout    time.Duration
+	// ProxyURL routes all outbound webhook requests through a proxy,
+	// hiding the server's IP address from webhook endpoints.
+	// Supports http://, https://, and socks5:// schemes.
+	ProxyURL string
 }
 
 type Dispatcher struct {
@@ -74,6 +82,56 @@ func (d *Dispatcher) SetConfig(cfg Config) {
 	}
 	if cfg.Timeout > 0 {
 		d.client.Timeout = cfg.Timeout
+	}
+	if cfg.ProxyURL != "" {
+		transport, err := proxyTransport(cfg.ProxyURL)
+		if err != nil {
+			logger.Error("invalid webhook proxy URL, requests will be sent directly", "error", err)
+			return
+		}
+		d.client.Transport = transport
+		logger.Info("webhook proxy configured", "proxy", cfg.ProxyURL)
+	}
+}
+
+// proxyTransport builds an *http.Transport that routes requests through the
+// given proxy URL. Supported schemes: http, https, socks5.
+func proxyTransport(rawURL string) (*http.Transport, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse proxy URL: %w", err)
+	}
+
+	switch parsed.Scheme {
+	case "http", "https":
+		return &http.Transport{
+			Proxy: http.ProxyURL(parsed),
+		}, nil
+
+	case "socks5":
+		auth := &proxy.Auth{}
+		if parsed.User != nil {
+			auth.User = parsed.User.Username()
+			auth.Password, _ = parsed.User.Password()
+		} else {
+			auth = nil
+		}
+		dialer, err := proxy.SOCKS5("tcp", parsed.Host, auth, proxy.Direct)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SOCKS5 dialer: %w", err)
+		}
+		contextDialer, ok := dialer.(proxy.ContextDialer)
+		if !ok {
+			return nil, fmt.Errorf("SOCKS5 dialer does not support DialContext")
+		}
+		return &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return contextDialer.DialContext(ctx, network, addr)
+			},
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported proxy scheme %q (use http, https, or socks5)", parsed.Scheme)
 	}
 }
 
@@ -174,7 +232,7 @@ func (d *Dispatcher) deliverWithRetry(userID uint, wh models.Webhook, body []byt
 		lastStatus = statusCode
 
 		if err == nil && statusCode < 400 {
-			d.recordDelivery(userID, wh.ID, event, models.WebhookDeliverySuccess, statusCode, "", attempt)
+			d.recordDelivery(userID, wh.ID, wh.WorkspaceID, event, models.WebhookDeliverySuccess, statusCode, "", attempt)
 			if d.onDeliverySuccess != nil {
 				d.onDeliverySuccess()
 			}
@@ -199,7 +257,7 @@ func (d *Dispatcher) deliverWithRetry(userID uint, wh models.Webhook, body []byt
 	}
 
 	// All retries exhausted
-	d.recordDelivery(userID, wh.ID, event, models.WebhookDeliveryFailed, lastStatus, lastErr, d.maxRetries)
+	d.recordDelivery(userID, wh.ID, wh.WorkspaceID, event, models.WebhookDeliveryFailed, lastStatus, lastErr, d.maxRetries)
 	if d.onDeliveryFailed != nil {
 		d.onDeliveryFailed()
 	}
@@ -236,13 +294,14 @@ func (d *Dispatcher) doRequest(url string, secret string, body []byte) (int, err
 }
 
 // recordDelivery persists a webhook delivery record if the delivery repo is configured.
-func (d *Dispatcher) recordDelivery(userID, webhookID uint, event string, status models.WebhookDeliveryStatus, httpStatus int, errMsg string, attempt int) {
+func (d *Dispatcher) recordDelivery(userID, webhookID uint, workspaceID *uint, event string, status models.WebhookDeliveryStatus, httpStatus int, errMsg string, attempt int) {
 	if d.deliveryRepo == nil {
 		return
 	}
 	delivery := &models.WebhookDelivery{
 		WebhookID:      webhookID,
 		UserID:         userID,
+		WorkspaceID:    workspaceID,
 		Event:          event,
 		Status:         status,
 		HTTPStatusCode: httpStatus,

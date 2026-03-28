@@ -3,13 +3,16 @@ import { ref, onMounted } from 'vue'
 import { settingsApi } from '../../api/settings'
 import { authApi } from '../../api/auth'
 import { userDataApi } from '../../api/userData'
+import { workspaceApi } from '../../api/workspaces'
 import { useAuthStore } from '../../stores/auth'
+import { useWorkspaceStore } from '../../stores/workspace'
 import { useThemeStore, type ThemeMode } from '../../stores/theme'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import type { UserSettings } from '../../api/types'
 
 const auth = useAuthStore()
+const wsStore = useWorkspaceStore()
 const theme = useThemeStore()
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -108,12 +111,18 @@ async function save() {
 async function exportData() {
   exporting.value = true
   try {
-    const res = await userDataApi.exportAll()
+    const isWorkspace = wsStore.isWorkspaceContext
+    const res = isWorkspace
+      ? await workspaceApi.exportData()
+      : await userDataApi.exportAll()
     const blob = new Blob([JSON.stringify(res.data.data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `posta-export-${new Date().toISOString().slice(0, 10)}.json`
+    const prefix = isWorkspace
+      ? `posta-workspace-export-${wsStore.currentWorkspace?.slug || 'ws'}`
+      : 'posta-export'
+    a.download = `${prefix}-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
     notify.success('Data exported successfully')
@@ -132,9 +141,14 @@ async function handleImportFile(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
 
+  const isWorkspace = wsStore.isWorkspaceContext
+  const importMessage = isWorkspace
+    ? 'This will import data into the current workspace. Duplicate items will be skipped. SMTP servers will be imported as disabled. Domains will require re-verification. Continue?'
+    : 'This will import data from the selected file. Duplicate items will be skipped. Continue?'
+
   const confirmed = await confirm({
-    title: 'Import Data',
-    message: 'This will import data from the selected file. Duplicate items will be skipped. Continue?',
+    title: isWorkspace ? 'Import Workspace Data' : 'Import Data',
+    message: importMessage,
     confirmText: 'Import',
     variant: 'danger',
   })
@@ -147,7 +161,9 @@ async function handleImportFile(event: Event) {
   try {
     const text = await file.text()
     const data = JSON.parse(text)
-    const res = await userDataApi.importAll(data)
+    const res = isWorkspace
+      ? await workspaceApi.importData(data)
+      : await userDataApi.importAll(data)
     notify.success(res.data.data.message || 'Data imported successfully')
   } catch (e: any) {
     if (e instanceof SyntaxError) {
@@ -369,15 +385,26 @@ async function toggleDomainSecurity() {
 
       <!-- Data Export/Import -->
       <div class="card">
-        <div class="card-header"><h2>Data Export / Import</h2></div>
+        <div class="card-header">
+          <h2>Data Export / Import</h2>
+          <span v-if="wsStore.isWorkspaceContext" class="badge badge-primary">{{ wsStore.contextLabel }}</span>
+        </div>
         <div class="card-body">
-          <p class="section-description">
+          <p v-if="wsStore.isWorkspaceContext" class="section-description">
+            Export all workspace data (settings, templates, stylesheets, languages, contacts, contact lists, webhooks, SMTP servers, domains, subscribers, subscriber lists, and suppressions) as a JSON file.
+            You can import this file to restore data on this or another workspace.
+          </p>
+          <p v-else class="section-description">
             Export all your data (templates, stylesheets, languages, contacts, contact lists, webhooks, suppressions, and settings) as a JSON file.
             You can import this file later to restore your data on this or another Posta instance.
           </p>
+          <p v-if="wsStore.isWorkspaceContext" class="section-hint">
+            Note: SMTP server passwords are not included in exports. Imported SMTP servers will be disabled until passwords are reconfigured.
+            Imported domains will require re-verification.
+          </p>
           <div class="flex gap-2">
             <button class="btn btn-primary" :disabled="exporting" @click="exportData">
-              {{ exporting ? 'Exporting...' : 'Export All Data' }}
+              {{ exporting ? 'Exporting...' : wsStore.isWorkspaceContext ? 'Export Workspace Data' : 'Export All Data' }}
             </button>
             <button class="btn btn-secondary" :disabled="importing" @click="triggerImport">
               {{ importing ? 'Importing...' : 'Import Data' }}
@@ -581,5 +608,11 @@ async function toggleDomainSecurity() {
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 4px;
+}
+
+.section-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
 }
 </style>

@@ -257,6 +257,10 @@ onBeforeUnmount(() => {
 function goBack() {
   router.push(`/templates/${templateId}/versions`)
 }
+
+function switchToVisualBuilder() {
+  router.push(`/templates/${templateId}/versions/${versionId}/localizations/${localizationId}/builder`)
+}
 </script>
 
 <template>
@@ -277,6 +281,9 @@ function goBack() {
         </div>
       </div>
       <div class="editor-header-right">
+        <button class="btn btn-secondary btn-sm" @click="switchToVisualBuilder">
+          <span class="mdi mdi-palette-outline"></span> Visual Builder
+        </button>
         <button
           class="btn btn-secondary btn-sm"
           @click="showPreviewPanel = !showPreviewPanel"

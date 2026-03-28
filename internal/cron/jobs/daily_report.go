@@ -23,8 +23,8 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/cron"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/cron"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 const TypeDailyReport = "cron:daily-report"

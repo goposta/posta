@@ -20,7 +20,7 @@ package dto
 // Response is the standard API response envelope with a generic data field.
 type Response[T any] struct {
 	Success bool `json:"success"`
-	Data    T    `json:"data,omitempty"`
+	Data    T    `json:"data"`
 }
 
 // PageableResponse is the paginated API response envelope.

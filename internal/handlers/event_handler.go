@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/eventbus"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type EventHandler struct {

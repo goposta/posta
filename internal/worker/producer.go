@@ -84,6 +84,30 @@ func (p *Producer) EnqueueEmailSendAt(emailID uint, queue string, sendAt time.Ti
 	return nil
 }
 
+// EnqueueCampaignStart enqueues a campaign start task (fan-out to subscribers).
+func (p *Producer) EnqueueCampaignStart(campaignID uint) error {
+	task, err := NewCampaignStartTask(campaignID, asynq.Queue(QueueBulk), asynq.MaxRetry(3))
+	if err != nil {
+		return fmt.Errorf("failed to create campaign start task: %w", err)
+	}
+	_, err = p.client.Enqueue(task)
+	return err
+}
+
+// EnqueueCampaignBatch enqueues a campaign batch processing task.
+func (p *Producer) EnqueueCampaignBatch(campaignID uint, delay time.Duration) error {
+	opts := []asynq.Option{asynq.Queue(QueueBulk), asynq.MaxRetry(3)}
+	if delay > 0 {
+		opts = append(opts, asynq.ProcessIn(delay))
+	}
+	task, err := NewCampaignBatchTask(campaignID, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create campaign batch task: %w", err)
+	}
+	_, err = p.client.Enqueue(task)
+	return err
+}
+
 // Close closes the underlying Asynq client.
 func (p *Producer) Close() error {
 	return p.client.Close()

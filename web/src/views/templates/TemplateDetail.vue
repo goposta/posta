@@ -23,6 +23,13 @@ const notify = useNotificationStore();
 const { confirm } = useConfirm();
 
 const templateId = Number(route.params.id);
+const idCopied = ref(false);
+
+function copyTemplateId() {
+  navigator.clipboard.writeText(String(templateId));
+  idCopied.value = true;
+  setTimeout(() => (idCopied.value = false), 2000);
+}
 
 const template = ref<Template | null>(null);
 const versions = ref<TemplateVersion[]>([]);
@@ -415,6 +422,17 @@ onMounted(loadAll);
         <div class="card-body">
           <table>
             <tbody>
+              <tr>
+                <td class="info-label">Template ID</td>
+                <td>
+                  <code class="template-id">{{ template.id }}</code>
+                  <button class="btn-copy" @click="copyTemplateId" :title="idCopied ? 'Copied!' : 'Copy ID'">
+                    <span v-if="idCopied">&#10003;</span>
+                    <span v-else>&#128203;</span>
+                  </button>
+                  <span v-if="idCopied" class="copied-label">Copied!</span>
+                </td>
+              </tr>
               <tr>
                 <td class="info-label">Name</td>
                 <td>{{ template.name }}</td>
@@ -839,6 +857,40 @@ onMounted(loadAll);
   font-weight: 600;
   width: 140px;
   color: var(--text-secondary);
+}
+
+.template-id {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 13px;
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-primary);
+  user-select: all;
+}
+
+.btn-copy {
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-left: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  vertical-align: middle;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-copy:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.copied-label {
+  font-size: 12px;
+  color: var(--success-600, #16a34a);
+  margin-left: 6px;
 }
 
 .row-selected {

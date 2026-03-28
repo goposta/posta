@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type StyleSheetHandler struct {
@@ -50,11 +50,15 @@ func NewStyleSheetHandler(repo *repositories.StyleSheetRepository) *StyleSheetHa
 }
 
 func (h *StyleSheetHandler) Create(c *okapi.Context, req *CreateStyleSheetRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 
 	ss := &models.StyleSheet{
-		UserID: uint(userID),
-		Name:   req.Body.Name,
+		UserID:      scope.UserID,
+		WorkspaceID: scope.WorkspaceID,
+		Name:        req.Body.Name,
 		CSS:    req.Body.CSS,
 	}
 
@@ -66,10 +70,11 @@ func (h *StyleSheetHandler) Create(c *okapi.Context, req *CreateStyleSheetReques
 }
 
 func (h *StyleSheetHandler) Update(c *okapi.Context, req *UpdateStyleSheetRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	ss, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || ss.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, ss.UserID, ss.WorkspaceID) {
 		return c.AbortNotFound("stylesheet not found")
 	}
 
@@ -91,10 +96,11 @@ func (h *StyleSheetHandler) Update(c *okapi.Context, req *UpdateStyleSheetReques
 }
 
 func (h *StyleSheetHandler) Delete(c *okapi.Context, req *DeleteStyleSheetRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	ss, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || ss.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, ss.UserID, ss.WorkspaceID) {
 		return c.AbortNotFound("stylesheet not found")
 	}
 
@@ -106,10 +112,9 @@ func (h *StyleSheetHandler) Delete(c *okapi.Context, req *DeleteStyleSheetReques
 }
 
 func (h *StyleSheetHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	sheets, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	sheets, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list stylesheets")
 	}

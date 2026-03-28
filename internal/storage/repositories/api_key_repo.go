@@ -20,7 +20,7 @@ package repositories
 import (
 	"time"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -48,15 +48,45 @@ func (r *APIKeyRepository) FindByUserID(userID uint, limit, offset int) ([]model
 	var keys []models.APIKey
 	var total int64
 
-	r.db.Model(&models.APIKey{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.APIKey{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&keys).Error; err != nil {
 		return nil, 0, err
 	}
 	return keys, total, nil
+}
+
+func (r *APIKeyRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.APIKey, int64, error) {
+	var keys []models.APIKey
+	var total int64
+
+	r.db.Model(&models.APIKey{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&keys).Error; err != nil {
+		return nil, 0, err
+	}
+	return keys, total, nil
+}
+
+func (r *APIKeyRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.APIKey, int64, error) {
+	var items []models.APIKey
+	var total int64
+
+	ApplyScope(r.db.Model(&models.APIKey{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *APIKeyRepository) FindByID(id uint) (*models.APIKey, error) {

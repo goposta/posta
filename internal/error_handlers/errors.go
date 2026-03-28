@@ -19,7 +19,7 @@ package errorhandlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/dto"
+	"github.com/goposta/posta/internal/dto"
 )
 
 // CustomErrorHandler returns an okapi.ErrorHandler that formats errors

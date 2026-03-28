@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // EventBus provides an in-memory pub/sub for events with database persistence.

@@ -21,7 +21,7 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-s -w -X 'github.com/jkaninda/posta/internal/config.Version=${VERSION}' -X 'github.com/jkaninda/posta/internal/config.CommitID=${COMMIT}' -X 'github.com/jkaninda/posta/internal/config.BuildDate=${BUILD_DATE}'" \
+    -ldflags "-s -w -X 'github.com/goposta/posta/internal/config.Version=${VERSION}' -X 'github.com/goposta/posta/internal/config.CommitID=${COMMIT}' -X 'github.com/goposta/posta/internal/config.BuildDate=${BUILD_DATE}'" \
     -o /bin/posta ./cmd/posta
 
 # Runtime stage
@@ -35,7 +35,7 @@ LABEL org.opencontainers.image.title="posta" \
       org.opencontainers.image.licenses="Apache" \
       org.opencontainers.image.authors="Jonas Kaninda" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.source="https://github.com/jkaninda/posta" \
+      org.opencontainers.image.source="https://github.com/goposta/posta" \
       org.opencontainers.image.revision="${COMMIT}"
 
 RUN apk add --no-cache ca-certificates tzdata \

@@ -26,13 +26,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/dto"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/eventbus"
-	"github.com/jkaninda/posta/internal/services/seeder"
-	"github.com/jkaninda/posta/internal/services/settings"
-	"github.com/jkaninda/posta/internal/services/twofactor"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/services/seeder"
+	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/services/twofactor"
+	"github.com/goposta/posta/internal/storage/repositories"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -67,7 +67,7 @@ func (h *UserHandler) SetSettings(s *settings.Provider) {
 type LoginRequest struct {
 	Body struct {
 		Email         string `json:"email" required:"true" format:"email"`
-		Password      string `json:"password" required:"true"`
+		Password      string `json:"password" required:"true" minLength:"4"`
 		TwoFactorCode string `json:"two_factor_code"`
 	} `json:"body"`
 }
@@ -89,6 +89,7 @@ type UserProfile struct {
 	Role                  models.UserRole `json:"role"`
 	TwoFactorEnabled      bool            `json:"two_factor_enabled"`
 	RequireVerifiedDomain bool            `json:"require_verified_domain"`
+	ScheduledDeletionAt   *time.Time      `json:"scheduled_deletion_at"`
 	CreatedAt             time.Time       `json:"created_at"`
 }
 
@@ -234,6 +235,7 @@ func (h *UserHandler) UpdateProfile(c *okapi.Context, req *UpdateProfileRequest)
 		Role:                  user.Role,
 		TwoFactorEnabled:      user.TwoFactorEnabled,
 		RequireVerifiedDomain: user.RequireVerifiedDomain,
+		ScheduledDeletionAt:   user.ScheduledDeletionAt,
 		CreatedAt:             user.CreatedAt,
 	})
 }
@@ -338,6 +340,7 @@ func (h *UserHandler) Me(c *okapi.Context) error {
 		Role:                  user.Role,
 		TwoFactorEnabled:      user.TwoFactorEnabled,
 		RequireVerifiedDomain: user.RequireVerifiedDomain,
+		ScheduledDeletionAt:   user.ScheduledDeletionAt,
 		CreatedAt:             user.CreatedAt,
 	})
 }
@@ -452,4 +455,68 @@ func (h *UserHandler) generateTokenWithSession(c *okapi.Context, user *models.Us
 	}
 
 	return token, jti, nil
+}
+
+// RequestAccountDeletion schedules the current user's account for deletion in 7 days.
+func (h *UserHandler) RequestAccountDeletion(c *okapi.Context) error {
+	userID := c.GetInt("user_id")
+	user, err := h.repo.FindByID(uint(userID))
+	if err != nil {
+		return c.AbortNotFound("user not found")
+	}
+
+	if user.Role == models.UserRoleAdmin {
+		return c.AbortBadRequest("admin accounts cannot be self-deleted")
+	}
+
+	if user.ScheduledDeletionAt != nil {
+		return c.AbortBadRequest("account deletion is already scheduled")
+	}
+
+	deletionDate := time.Now().Add(7 * 24 * time.Hour)
+	user.ScheduledDeletionAt = &deletionDate
+	user.Active = false
+
+	if err := h.repo.Update(user); err != nil {
+		return c.AbortInternalServerError("failed to schedule account deletion")
+	}
+
+	if h.bus != nil {
+		uid := user.ID
+		h.bus.PublishSimple(models.EventCategoryUser, "user.deletion_requested", &uid, user.Email, c.RealIP(),
+			fmt.Sprintf("Account deletion scheduled for %s", deletionDate.Format("2006-01-02")), nil)
+	}
+
+	return ok(c, map[string]any{
+		"message":              "Account scheduled for deletion",
+		"scheduled_deletion_at": deletionDate,
+	})
+}
+
+// CancelAccountDeletion cancels a previously scheduled account deletion.
+func (h *UserHandler) CancelAccountDeletion(c *okapi.Context) error {
+	userID := c.GetInt("user_id")
+	user, err := h.repo.FindByID(uint(userID))
+	if err != nil {
+		return c.AbortNotFound("user not found")
+	}
+
+	if user.ScheduledDeletionAt == nil {
+		return c.AbortBadRequest("no deletion is scheduled")
+	}
+
+	user.ScheduledDeletionAt = nil
+	user.Active = true
+
+	if err := h.repo.Update(user); err != nil {
+		return c.AbortInternalServerError("failed to cancel account deletion")
+	}
+
+	if h.bus != nil {
+		uid := user.ID
+		h.bus.PublishSimple(models.EventCategoryUser, "user.deletion_cancelled", &uid, user.Email, c.RealIP(),
+			"Account deletion cancelled", nil)
+	}
+
+	return ok(c, map[string]any{"message": "Account deletion cancelled"})
 }

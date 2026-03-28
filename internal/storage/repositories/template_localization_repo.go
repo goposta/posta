@@ -18,7 +18,7 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 

@@ -18,7 +18,9 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"time"
+
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -70,4 +72,76 @@ func (r *UserRepository) Update(user *models.User) error {
 
 func (r *UserRepository) Delete(id uint) error {
 	return r.db.Delete(&models.User{}, id).Error
+}
+
+// DeleteAllUserData removes all data owned by a user
+func (r *UserRepository) DeleteAllUserData(userID uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		tables := []string{
+			"sessions",
+			"webhook_deliveries",
+			"bounces",
+			"suppressions",
+			"tracking_events",
+			"tracked_links",
+			"campaign_messages",
+			"campaigns",
+			"subscriber_list_members",
+			"subscriber_lists",
+			"subscribers",
+			"template_localizations",
+			"template_versions",
+			"templates",
+			"style_sheets",
+			"languages",
+			"contacts",
+			"emails",
+			"api_keys",
+			"webhooks",
+			"domains",
+			"smtp_servers",
+			"events",
+			"user_settings",
+			"oauth_accounts",
+		}
+		for _, table := range tables {
+			if err := tx.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID).Error; err != nil {
+				return err
+			}
+		}
+
+		// Remove workspace memberships (but not workspaces they don't own)
+		if err := tx.Exec("DELETE FROM workspace_members WHERE user_id = ?", userID).Error; err != nil {
+			return err
+		}
+
+		// Delete workspaces owned by this user (and their members/invitations)
+		var ownedWSIDs []uint
+		if err := tx.Raw("SELECT id FROM workspaces WHERE owner_id = ?", userID).Scan(&ownedWSIDs).Error; err != nil {
+			return err
+		}
+		if len(ownedWSIDs) > 0 {
+			if err := tx.Exec("DELETE FROM workspace_invitations WHERE workspace_id IN ?", ownedWSIDs).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec("DELETE FROM workspace_members WHERE workspace_id IN ?", ownedWSIDs).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec("DELETE FROM workspaces WHERE owner_id = ?", userID).Error; err != nil {
+				return err
+			}
+		}
+
+		return tx.Delete(&models.User{}, userID).Error
+	})
+}
+
+// FindScheduledForDeletion returns users whose scheduled_deletion_at is in the past.
+func (r *UserRepository) FindScheduledForDeletion() ([]models.User, error) {
+	var users []models.User
+	if err := r.db.Where("scheduled_deletion_at IS NOT NULL AND scheduled_deletion_at <= ?", time.Now()).
+		Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
 }

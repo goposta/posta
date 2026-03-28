@@ -3,15 +3,18 @@ import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
+import { useWorkspaceStore } from '../stores/workspace'
 import { infoApi, type AppInfo } from '../api/info'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const theme = useThemeStore()
+const wsStore = useWorkspaceStore()
 const sidebarCollapsed = ref(false)
 const appInfo = ref<AppInfo | null>(null)
 const userMenuOpen = ref(false)
+const wsSwitcherOpen = ref(false)
 const themeModes = ['light', 'dark', 'system'] as const
 
 function closeUserMenu(e: MouseEvent) {
@@ -44,6 +47,8 @@ onMounted(async () => {
   } catch {
     // Version display is non-critical
   }
+
+  wsStore.fetchWorkspaces()
 })
 
 const user = computed(() => auth.user)
@@ -55,34 +60,47 @@ const navItems = [
   { name: 'Templates', path: '/templates', icon: 'file-text' },
   { name: 'Languages', path: '/languages', icon: 'type' },
   { name: 'Stylesheets', path: '/stylesheets', icon: 'edit-3' },
-{ name: 'SMTP Servers', path: '/smtp-servers', icon: 'server' },
-  { name: 'Domains', path: '/domains', icon: 'globe' },
+ 
   { name: 'Webhooks', path: '/webhooks', icon: 'link' },
   { name: 'Deliveries', path: '/webhook-deliveries', icon: 'activity' },
   { name: 'Contacts', path: '/contacts', icon: 'users' },
-  { name: 'Lists', path: '/contact-lists', icon: 'list' },
+  { name: 'Subscribers', path: '/subscribers', icon: 'users' },
+  { name: 'Lists', path: '/subscriber-lists', icon: 'list' },
+  { name: 'Campaigns', path: '/campaigns', icon: 'send' },
   { name: 'Bounces', path: '/bounces', icon: 'alert-triangle' },
   { name: 'API Keys', path: '/api-keys', icon: 'key' },
   { name: 'Audit Log', path: '/audit-log', icon: 'activity' },
+  { name: 'Workspaces', path: '/workspaces', icon: 'briefcase' },
+  { name: 'Domains', path: '/domains', icon: 'globe' },
+  { name: 'SMTP Servers', path: '/smtp-servers', icon: 'server' },
   { name: 'Settings', path: '/settings', icon: 'settings' },
+  
 ]
 
 const adminItems = [
   { name: 'Users', path: '/admin/users', icon: 'users' },
+  { name: 'Plans', path: '/admin/plans', icon: 'layers' },
   { name: 'Shared Servers', path: '/admin/servers', icon: 'server' },
   { name: 'Jobs', path: '/admin/jobs', icon: 'clock' },
   { name: 'Metrics', path: '/admin/metrics', icon: 'bar-chart' },
   { name: 'Events', path: '/admin/events', icon: 'activity' },
+  { name: 'OAuth', path: '/admin/oauth', icon: 'key' },
   { name: 'Settings', path: '/admin/settings', icon: 'settings' },
 ]
 
 function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
-  return route.path.startsWith(path)
+  return route.path === path || route.path.startsWith(path + '/')
 }
 
 function navigate(path: string) {
   router.push(path)
+}
+
+function switchContext(wsId: number | null) {
+  wsStore.setWorkspace(wsId)
+  wsSwitcherOpen.value = false
+  router.push('/')
 }
 
 function logout() {
@@ -104,8 +122,38 @@ function logout() {
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path :d="sidebarCollapsed ? 'M6 3l5 5-5 5' : 'M10 3L5 8l5 5'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
+        <!-- Workspace Switcher -->
+        <div v-if="wsStore.workspaces.length > 0" class="ws-switcher" :class="{ collapsed: sidebarCollapsed }">
+          <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
+            <div class="ws-switcher-current">
+              <div class="ws-avatar">{{ wsStore.currentWorkspace?.name?.charAt(0)?.toUpperCase() || 'P' }}</div>
+              <span v-if="!sidebarCollapsed" class="ws-switcher-name">{{ wsStore.contextLabel }}</span>
+            </div>
+            <svg v-if="!sidebarCollapsed" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div v-if="wsSwitcherOpen" class="ws-switcher-dropdown">
+            <div
+              class="ws-switcher-option"
+              :class="{ active: wsStore.isPersonal }"
+              @click="switchContext(null)"
+            >
+              <div class="ws-avatar-sm">P</div>
+              <span>Personal</span>
+            </div>
+            <div
+              v-for="ws in wsStore.workspaces"
+              :key="ws.id"
+              class="ws-switcher-option"
+              :class="{ active: wsStore.currentWorkspaceId === ws.id }"
+              @click="switchContext(ws.id)"
+            >
+              <div class="ws-avatar-sm">{{ ws.name.charAt(0).toUpperCase() }}</div>
+              <span>{{ ws.name }}</span>
+              <span class="ws-role-badge">{{ ws.role }}</span>
+            </div>
+          </div>
         </div>
-      <div class="sidebar-middle">
+
         <nav class="nav">
           <a
             v-for="item in navItems"
@@ -214,7 +262,7 @@ function logout() {
           </span>
         </div>
         <div class="footer-right">
-          <a href="https://github.com/jkaninda/posta" target="_blank" rel="noopener noreferrer" class="footer-link">
+          <a href="https://github.com/goposta/posta" target="_blank" rel="noopener noreferrer" class="footer-link">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1C4.13 1 1 4.13 1 8a7 7 0 004.79 6.65c.35.06.48-.15.48-.34 0-.17-.01-.71-.01-1.29-1.76.33-2.2-.43-2.34-.82-.08-.2-.42-.82-.71-.99-.24-.13-.59-.46-.01-.47.55-.01.94.51 1.07.71.63 1.05 1.63.76 2.03.57.06-.45.24-.76.44-.93-1.55-.17-3.18-.78-3.18-3.46 0-.76.27-1.39.71-1.88-.07-.17-.31-.89.07-1.85 0 0 .58-.19 1.9.71a6.5 6.5 0 013.46 0c1.32-.9 1.9-.71 1.9-.71.38.96.14 1.68.07 1.85.44.49.71 1.11.71 1.88 0 2.69-1.64 3.29-3.19 3.46.25.22.47.64.47 1.29 0 .93-.01 1.68-.01 1.91 0 .19.13.41.48.34A7 7 0 0015 8c0-3.87-3.13-7-7-7z" fill="currentColor"/></svg>
             GitHub
           </a>
@@ -243,7 +291,10 @@ function getIcon(name: string): string {
     'book-open': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M1.5 2.25h5.25a3 3 0 013 3v10.5a2.25 2.25 0 00-2.25-2.25H1.5V2.25zM16.5 2.25h-5.25a3 3 0 00-3 3v10.5a2.25 2.25 0 012.25-2.25h6V2.25z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'list': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M6.75 4.5h9M6.75 9h9M6.75 13.5h9M2.25 4.5h.007M2.25 9h.007M2.25 13.5h.007" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'edit-3': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M12 2.25l3.75 3.75L6 15.75H2.25V12L12 2.25z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'send': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M16.5 1.5L8.25 9.75M16.5 1.5l-5.25 15-3-6.75L1.5 6.75l15-5.25z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'briefcase': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="6" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M12 6V4.5A1.5 1.5 0 0010.5 3h-3A1.5 1.5 0 006 4.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'settings': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="2.25" stroke="currentColor" stroke-width="1.5"/><path d="M14.7 11.1a1.2 1.2 0 00.24 1.32l.04.04a1.46 1.46 0 11-2.06 2.06l-.04-.04a1.2 1.2 0 00-1.32-.24 1.2 1.2 0 00-.73 1.1v.12a1.46 1.46 0 01-2.91 0v-.06a1.2 1.2 0 00-.79-1.1 1.2 1.2 0 00-1.32.24l-.04.04a1.46 1.46 0 11-2.06-2.06l.04-.04a1.2 1.2 0 00.24-1.32 1.2 1.2 0 00-1.1-.73h-.12a1.46 1.46 0 010-2.91h.06a1.2 1.2 0 001.1-.79 1.2 1.2 0 00-.24-1.32l-.04-.04a1.46 1.46 0 112.06-2.06l.04.04a1.2 1.2 0 001.32.24h.06a1.2 1.2 0 00.73-1.1v-.12a1.46 1.46 0 012.91 0v.06a1.2 1.2 0 00.73 1.1 1.2 1.2 0 001.32-.24l.04-.04a1.46 1.46 0 112.06 2.06l-.04.04a1.2 1.2 0 00-.24 1.32v.06a1.2 1.2 0 001.1.73h.12a1.46 1.46 0 010 2.91h-.06a1.2 1.2 0 00-1.1.73z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'layers': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1.5L1.5 6 9 10.5 16.5 6 9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 12L9 16.5 16.5 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 9L9 13.5 16.5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   }
   return icons[name] || ''
 }
@@ -271,8 +322,7 @@ export default { methods: { getIcon } }
 .collapsed .sidebar { width: 64px; min-width: 64px; }
 .collapsed .main-content { margin-left: 64px; }
 
-.sidebar-top { display: flex; overflow-x: auto; }
-.sidebar-middle { flex: 1; overflow-y: auto; overflow-x: hidden; margin-top: 10px; padding-top: 5px;}
+.sidebar-top { flex: 1; overflow-y: auto; overflow-x: hidden; }
 
 .sidebar-brand {
   display: flex;
@@ -299,6 +349,112 @@ export default { methods: { getIcon } }
   font-weight: 800;
   color: var(--sidebar-text-active);
   letter-spacing: -0.5px;
+}
+
+/* Workspace Switcher */
+.ws-switcher {
+  padding: 0 8px 8px;
+  position: relative;
+}
+
+.ws-switcher-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--radius, 8px);
+  cursor: pointer;
+  transition: all var(--transition, 150ms ease);
+  color: var(--sidebar-text);
+  border: 1px solid var(--sidebar-border);
+}
+.ws-switcher-toggle:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+
+.ws-switcher-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.ws-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--primary-600, #9333ea);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ws-avatar-sm {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--primary-600, #9333ea);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ws-switcher-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-switcher.collapsed .ws-switcher-toggle {
+  justify-content: center;
+  padding: 8px;
+  border: none;
+}
+
+.ws-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 8px;
+  right: 8px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: var(--radius, 8px);
+  box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.08));
+  padding: 4px;
+  z-index: 200;
+  min-width: 200px;
+}
+
+.ws-switcher-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #4b5563);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all var(--transition, 150ms ease);
+}
+.ws-switcher-option:hover { background: var(--bg-secondary, #f9fafb); color: var(--text-primary, #111827); }
+.ws-switcher-option.active { background: var(--primary-50, #faf5ff); color: var(--primary-700, #7e22ce); }
+
+.ws-role-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted, #9ca3af);
+  letter-spacing: 0.05em;
 }
 
 .collapse-btn {

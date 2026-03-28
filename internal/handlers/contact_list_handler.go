@@ -19,8 +19,8 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type ContactListHandler struct {
@@ -73,9 +73,13 @@ type ContactListWithCount struct {
 }
 
 func (h *ContactListHandler) Create(c *okapi.Context, req *CreateContactListRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 	list := &models.ContactList{
-		UserID:      uint(userID),
+		UserID:      scope.UserID,
+		WorkspaceID: scope.WorkspaceID,
 		Name:        req.Body.Name,
 		Description: req.Body.Description,
 	}
@@ -86,9 +90,8 @@ func (h *ContactListHandler) Create(c *okapi.Context, req *CreateContactListRequ
 }
 
 func (h *ContactListHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
-	lists, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	lists, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list contact lists")
 	}
@@ -106,9 +109,11 @@ func (h *ContactListHandler) List(c *okapi.Context, req *ListRequest) error {
 }
 
 func (h *ContactListHandler) Update(c *okapi.Context, req *UpdateContactListRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	list, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || list.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, list.UserID, list.WorkspaceID) {
 		return c.AbortNotFound("contact list not found")
 	}
 	list.Name = req.Body.Name
@@ -120,9 +125,11 @@ func (h *ContactListHandler) Update(c *okapi.Context, req *UpdateContactListRequ
 }
 
 func (h *ContactListHandler) Delete(c *okapi.Context, req *GetByIDRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	list, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || list.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, list.UserID, list.WorkspaceID) {
 		return c.AbortNotFound("contact list not found")
 	}
 	if err := h.repo.Delete(list.ID); err != nil {
@@ -132,9 +139,11 @@ func (h *ContactListHandler) Delete(c *okapi.Context, req *GetByIDRequest) error
 }
 
 func (h *ContactListHandler) AddMember(c *okapi.Context, req *AddMemberRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	list, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || list.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, list.UserID, list.WorkspaceID) {
 		return c.AbortNotFound("contact list not found")
 	}
 	member := &models.ContactListMember{
@@ -149,9 +158,11 @@ func (h *ContactListHandler) AddMember(c *okapi.Context, req *AddMemberRequest) 
 }
 
 func (h *ContactListHandler) RemoveMember(c *okapi.Context, req *RemoveMemberRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	list, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || list.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, list.UserID, list.WorkspaceID) {
 		return c.AbortNotFound("contact list not found")
 	}
 	if err := h.repo.RemoveMember(list.ID, req.Body.Email); err != nil {
@@ -161,9 +172,8 @@ func (h *ContactListHandler) RemoveMember(c *okapi.Context, req *RemoveMemberReq
 }
 
 func (h *ContactListHandler) ListMembers(c *okapi.Context, req *ListMembersRequest) error {
-	userID := c.GetInt("user_id")
 	list, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || list.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, list.UserID, list.WorkspaceID) {
 		return c.AbortNotFound("contact list not found")
 	}
 	page, size, offset := normalizePageParams(req.Page, req.Size)

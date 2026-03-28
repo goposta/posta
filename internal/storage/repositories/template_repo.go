@@ -18,7 +18,7 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -52,7 +52,7 @@ func (r *TemplateRepository) FindByID(id uint) (*models.Template, error) {
 
 func (r *TemplateRepository) FindByName(userID uint, name string) (*models.Template, error) {
 	var tmpl models.Template
-	if err := r.db.Where("user_id = ? AND name = ?", userID, name).First(&tmpl).Error; err != nil {
+	if err := r.db.Where("user_id = ? AND name = ? AND workspace_id IS NULL", userID, name).First(&tmpl).Error; err != nil {
 		return nil, err
 	}
 	return &tmpl, nil
@@ -62,13 +62,51 @@ func (r *TemplateRepository) FindByUserID(userID uint, limit, offset int) ([]mod
 	var templates []models.Template
 	var total int64
 
-	r.db.Model(&models.Template{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.Template{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&templates).Error; err != nil {
 		return nil, 0, err
 	}
 	return templates, total, nil
+}
+
+func (r *TemplateRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Template, int64, error) {
+	var templates []models.Template
+	var total int64
+
+	r.db.Model(&models.Template{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&templates).Error; err != nil {
+		return nil, 0, err
+	}
+	return templates, total, nil
+}
+
+func (r *TemplateRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.Template, int64, error) {
+	var items []models.Template
+	var total int64
+
+	ApplyScope(r.db.Model(&models.Template{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
+func (r *TemplateRepository) FindByWorkspaceName(workspaceID uint, name string) (*models.Template, error) {
+	var tmpl models.Template
+	if err := r.db.Where("workspace_id = ? AND name = ?", workspaceID, name).First(&tmpl).Error; err != nil {
+		return nil, err
+	}
+	return &tmpl, nil
 }

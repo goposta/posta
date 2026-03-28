@@ -20,7 +20,7 @@ package repositories
 import (
 	"time"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -72,6 +72,38 @@ func (r *EventRepository) FindByCategory(category models.EventCategory, limit, o
 	r.db.Model(&models.Event{}).Where("category = ?", category).Count(&total)
 
 	if err := r.db.Where("category = ?", category).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
+	return events, total, nil
+}
+
+// FindByWorkspaceID returns paginated events for a workspace.
+func (r *EventRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Event, int64, error) {
+	var events []models.Event
+	var total int64
+
+	r.db.Model(&models.Event{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
+	return events, total, nil
+}
+
+// FindByWorkspaceAndCategory returns paginated events for a workspace filtered by category.
+func (r *EventRepository) FindByWorkspaceAndCategory(workspaceID uint, category models.EventCategory, limit, offset int) ([]models.Event, int64, error) {
+	var events []models.Event
+	var total int64
+
+	r.db.Model(&models.Event{}).Where("workspace_id = ? AND category = ?", workspaceID, category).Count(&total)
+
+	if err := r.db.Where("workspace_id = ? AND category = ?", workspaceID, category).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&events).Error; err != nil {

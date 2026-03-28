@@ -26,6 +26,7 @@ type TemplateLocalization struct {
 	SubjectTemplate string     `json:"subject_template" gorm:"not null"`
 	HTMLTemplate    string     `json:"html_template"`
 	TextTemplate    string     `json:"text_template"`
+	BuilderJSON     string     `json:"builder_json,omitempty" gorm:"type:text"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       *time.Time `json:"updated_at,omitempty"`
 

@@ -22,9 +22,9 @@ import (
 	"encoding/hex"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/audit"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type WebhookHandler struct {
@@ -47,7 +47,10 @@ func NewWebhookHandler(repo *repositories.WebhookRepository, audit *audit.Logger
 }
 
 func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 
 	// Validate event names
 	validEvents := map[string]bool{"email.sent": true, "email.failed": true}
@@ -65,7 +68,8 @@ func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) err
 	secret := hex.EncodeToString(secretBytes)
 
 	wh := &models.Webhook{
-		UserID:  uint(userID),
+		UserID:      scope.UserID,
+		WorkspaceID: scope.WorkspaceID,
 		URL:     req.Body.URL,
 		Events:  req.Body.Events,
 		Filters: req.Body.Filters,
@@ -76,16 +80,15 @@ func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) err
 		return c.AbortInternalServerError("failed to create webhook", err)
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "webhook.created", "Webhook created: "+req.Body.URL, nil)
+	h.audit.Log(scope.UserID, c.GetString("email"), c.RealIP(), "webhook.created", "Webhook created: "+req.Body.URL, nil)
 
 	return created(c, wh)
 }
 
 func (h *WebhookHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	webhooks, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	webhooks, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list webhooks")
 	}
@@ -94,10 +97,11 @@ func (h *WebhookHandler) List(c *okapi.Context, req *ListRequest) error {
 }
 
 func (h *WebhookHandler) Delete(c *okapi.Context, req *DeleteWebhookRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	wh, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || wh.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, wh.UserID, wh.WorkspaceID) {
 		return c.AbortNotFound("webhook not found")
 	}
 
@@ -105,7 +109,7 @@ func (h *WebhookHandler) Delete(c *okapi.Context, req *DeleteWebhookRequest) err
 		return c.AbortInternalServerError("failed to delete webhook")
 	}
 
-	h.audit.Log(uint(userID), c.GetString("email"), c.RealIP(), "webhook.deleted", "Webhook deleted: "+wh.URL, nil)
+	h.audit.Log(wh.UserID, c.GetString("email"), c.RealIP(), "webhook.deleted", "Webhook deleted: "+wh.URL, nil)
 
 	return noContent(c)
 }

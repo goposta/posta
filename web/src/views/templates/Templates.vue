@@ -159,13 +159,20 @@ async function handleImportFile(event: Event) {
 
   importing.value = true;
   try {
-    const text = await file.text();
-    const data: TemplateExport = JSON.parse(text);
-    await templatesApi.importTemplate(data);
-    notify.success("Template imported");
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".html") || name.endsWith(".htm")) {
+      await templatesApi.importHTML(file);
+      notify.success("HTML template imported");
+    } else {
+      const text = await file.text();
+      const data: TemplateExport = JSON.parse(text);
+      await templatesApi.importTemplate(data);
+      notify.success("Template imported");
+    }
     await loadTemplates(pageable.value.current_page);
-  } catch {
-    notify.error("Failed to import template. Please check the file format.");
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || "Failed to import template. Please check the file format.";
+    notify.error(msg);
   } finally {
     importing.value = false;
     input.value = "";
@@ -197,7 +204,7 @@ onMounted(() => {
         <input
           ref="importInput"
           type="file"
-          accept=".json"
+          accept=".json,.html,.htm"
           style="display: none"
           @change="handleImportFile"
         />

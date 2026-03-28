@@ -27,24 +27,28 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/config"
-	cronpkg "github.com/jkaninda/posta/internal/cron"
-	"github.com/jkaninda/posta/internal/handlers"
-	"github.com/jkaninda/posta/internal/metrics"
-	"github.com/jkaninda/posta/internal/middlewares"
-	"github.com/jkaninda/posta/internal/services/audit"
-	"github.com/jkaninda/posta/internal/services/auth"
-	"github.com/jkaninda/posta/internal/services/cache"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/services/eventbus"
-	"github.com/jkaninda/posta/internal/services/ratelimit"
-	"github.com/jkaninda/posta/internal/services/seeder"
-	sessionpkg "github.com/jkaninda/posta/internal/services/session"
-	"github.com/jkaninda/posta/internal/services/settings"
-	"github.com/jkaninda/posta/internal/services/webhook"
-	"github.com/jkaninda/posta/internal/services/workermon"
-	"github.com/jkaninda/posta/internal/storage/repositories"
-	"github.com/jkaninda/posta/internal/worker"
+	"github.com/goposta/posta/internal/config"
+	cronpkg "github.com/goposta/posta/internal/cron"
+	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/metrics"
+	"github.com/goposta/posta/internal/middlewares"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/services/auth"
+	"github.com/goposta/posta/internal/services/cache"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/services/eventbus"
+	planpkg "github.com/goposta/posta/internal/services/plan"
+	"github.com/goposta/posta/internal/services/ratelimit"
+	"github.com/goposta/posta/internal/storage/blob"
+	"github.com/goposta/posta/internal/services/seeder"
+	sessionpkg "github.com/goposta/posta/internal/services/session"
+	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/services/webhook"
+	"github.com/goposta/posta/internal/services/workermon"
+	"github.com/goposta/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/worker"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -63,6 +67,8 @@ type routerMiddleware struct {
 	jwtAdminQueryAuth okapi.JWTAuth
 	loginLimiter      okapi.Middleware
 	apiKey            okapi.Middleware
+	workspace         okapi.Middleware
+	optionalWorkspace okapi.Middleware
 }
 
 type routerHandlers struct {
@@ -83,8 +89,8 @@ type routerHandlers struct {
 	bounce          *handlers.BounceHandler
 	suppression     *handlers.SuppressionHandler
 	contact         *handlers.ContactHandler
-	contactList     *handlers.ContactListHandler
 	admin           *handlers.AdminHandler
+	workspace       *handlers.WorkspaceHandler
 	server          *handlers.ServerHandler
 	event           *handlers.EventHandler
 	analytics       *handlers.AnalyticsHandler
@@ -93,9 +99,18 @@ type routerHandlers struct {
 	userData        *handlers.UserDataHandler
 	session         *handlers.SessionHandler
 	cron            *handlers.CronHandler
+	oauth           *handlers.OAuthHandler
+	oauthAdmin      *handlers.OAuthAdminHandler
+	subscriber      *handlers.SubscriberHandler
+	subscriberList  *handlers.SubscriberListHandler
+	campaign        *handlers.CampaignHandler
+	tracking        *handlers.TrackingHandler
+	bounceWebhook   *handlers.BounceWebhookHandler
+	workspaceData   *handlers.WorkspaceDataHandler
+	plan            *handlers.PlanHandler
 }
 
-func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, producer *worker.Producer, cronManager *cronpkg.Manager, ctx context.Context) {
+func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context) {
 	// Repositories
 	userRepo := repositories.NewUserRepository(db)
 	apiKeyRepo := repositories.NewAPIKeyRepository(db)
@@ -117,6 +132,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	settingRepo := repositories.NewSettingRepository(db)
 	userSettingRepo := repositories.NewUserSettingRepository(db)
 	sessionRepo := repositories.NewSessionRepository(db)
+	workspaceRepo := repositories.NewWorkspaceRepository(db)
 
 	// Session store (Redis-backed blacklist)
 	sessionStore := sessionpkg.NewStore(redisClient)
@@ -126,6 +142,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	auditLogger := audit.NewLogger(bus)
 	apiKeyService := auth.NewAPIKeyService(apiKeyRepo)
 	settingsProvider := settings.NewProvider(settingRepo)
+	planRepo := repositories.NewPlanRepository(db)
+	planService := planpkg.NewService(planRepo, settingsProvider)
 	limiter := ratelimit.NewRedisLimiter(redisClient, cfg.RateLimitHourly, cfg.RateLimitDaily)
 	limiter.SetSettings(settingsProvider)
 	webhookDeliveryRepo := repositories.NewWebhookDeliveryRepository(db)
@@ -140,11 +158,15 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	dispatcher.OnDeliveryDone(metrics.ObserveWebhookDeliveryDuration)
 	emailService := email.NewService(emailRepo, smtpRepo, templateRepo, suppressionRepo, limiter, dispatcher, cfg.DevMode)
 	emailService.SetSettings(settingsProvider)
+	emailService.SetPlanLimits(&emailPlanAdapter{planService})
 	emailService.SetVersionRepos(versionRepo, localizationRepo)
 	emailService.SetContactRepo(contactRepo)
 	emailService.SetDomainVerification(domainRepo, userRepo)
 	if producer != nil {
 		emailService.SetEnqueuer(producer)
+	}
+	if blobStore != nil {
+		emailService.SetBlobStore(blobStore)
 	}
 	emailService.OnSent(metrics.IncrementEmailSent)
 	emailService.OnFailed(metrics.IncrementEmailFailed)
@@ -177,15 +199,17 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			jwtAuth:           middlewares.JWTAuth(cfg, sessionStore),
 			jwtAdminAuth:      middlewares.JWTAdminAuth(cfg, sessionStore),
 			jwtAdminQueryAuth: middlewares.JWTAdminQueryAuth(cfg, sessionStore),
-			loginLimiter:      middlewares.LoginRateLimitMiddleware(limiter),
+			loginLimiter:      loginLimiterMiddleware(cfg, limiter),
 			apiKey:            middlewares.APIKeyAuthMiddleware(apiKeyService, userRepo, apiKeyRepo),
+			workspace:         middlewares.RequireWorkspaceMiddleware(workspaceRepo),
+			optionalWorkspace: middlewares.OptionalWorkspaceMiddleware(workspaceRepo),
 		},
 		h: routerHandlers{
 			health:          handlers.NewHealthHandler(db, redisClient),
 			user:            userHandler,
 			email:           handlers.NewEmailHandler(emailService, emailRepo, bus, statsCache),
 			apiKey:          handlers.NewAPIKeyHandler(apiKeyService, apiKeyRepo, userSettingRepo, auditLogger),
-			template:        handlers.NewTemplateHandler(templateRepo, stylesheetRepo, versionRepo, localizationRepo, emailService),
+			template:        handlers.NewTemplateHandler(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo, emailService),
 			version:         handlers.NewTemplateVersionHandler(templateRepo, versionRepo),
 			localization:    handlers.NewTemplateLocalizationHandler(templateRepo, versionRepo, localizationRepo, stylesheetRepo),
 			language:        handlers.NewLanguageHandler(languageRepo),
@@ -198,20 +222,28 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			bounce:          handlers.NewBounceHandler(bounceRepo, suppressionRepo, emailRepo),
 			suppression:     handlers.NewSuppressionHandler(suppressionRepo),
 			contact:         handlers.NewContactHandler(contactRepo, suppressionRepo),
-			contactList:     handlers.NewContactListHandler(contactListRepo),
 			admin:           handlers.NewAdminHandler(db, statsCache, userRepo, apiKeyRepo, emailRepo, webhookDeliveryRepo, inspector, bus, userSeeder, cfg.EmbeddedWorker),
+			workspace:       handlers.NewWorkspaceHandler(workspaceRepo, userRepo, db),
 			server:          handlers.NewServerHandler(serverRepo, auditLogger),
 			event:           handlers.NewEventHandler(eventRepo, bus),
 			analytics:       handlers.NewAnalyticsHandler(repositories.NewAnalyticsRepository(db), statsCache),
 			setting:         handlers.NewSettingHandler(settingRepo, auditLogger),
 			userSetting:     handlers.NewUserSettingHandler(userSettingRepo),
-			userData:        handlers.NewUserDataHandler(db, templateRepo, versionRepo, localizationRepo, stylesheetRepo, languageRepo, contactRepo, contactListRepo, webhookRepo, suppressionRepo, userSettingRepo),
+			userData:        handlers.NewUserDataHandler(db, templateRepo, versionRepo, localizationRepo, stylesheetRepo, languageRepo, contactRepo, webhookRepo, suppressionRepo, userSettingRepo),
 			session:         handlers.NewSessionHandler(sessionRepo, sessionStore),
 		},
 	}
 
 	// Session management
 	r.h.user.SetSessionRepo(sessionRepo)
+
+	// Plans
+	r.h.plan = handlers.NewPlanHandler(planRepo, workspaceRepo, planService, auditLogger)
+	r.h.admin.SetWorkspaceRepo(workspaceRepo, planRepo)
+	r.h.workspace.SetPlanService(planService)
+	r.h.apiKey.SetQuota(planService, db)
+	r.h.domain.SetQuota(planService, db)
+	r.h.smtp.SetQuota(planService, db)
 
 	// Email content privacy
 	r.h.email.SetSettings(settingsProvider)
@@ -221,7 +253,103 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.cron = handlers.NewCronHandler(cronManager)
 	}
 
+	// OAuth
+	oauthProviderRepo := repositories.NewOAuthProviderRepository(db)
+	oauthAccountRepo := repositories.NewOAuthAccountRepository(db)
+	ssoRepo := repositories.NewWorkspaceSSORepository(db)
+	oauthService := auth.NewOAuthService(oauthProviderRepo, oauthAccountRepo, userRepo)
+
+	callbackBase := cfg.OAuthCallbackBaseURL
+	if callbackBase == "" {
+		callbackBase = cfg.AppWebURL
+	}
+
+	r.h.oauth = handlers.NewOAuthHandler(
+		oauthService, oauthProviderRepo, oauthAccountRepo,
+		userRepo, sessionRepo, cfg.JWTSecret,
+		userSeeder, bus, redisClient, callbackBase, cfg.AppWebURL,
+	)
+	r.h.oauthAdmin = handlers.NewOAuthAdminHandler(oauthProviderRepo, ssoRepo)
+
+	// Subscribers
+	subscriberRepo := repositories.NewSubscriberRepository(db)
+	subscriberListRepo := repositories.NewSubscriberListRepository(db)
+	r.h.subscriber = handlers.NewSubscriberHandler(subscriberRepo)
+	r.h.subscriberList = handlers.NewSubscriberListHandler(subscriberListRepo, subscriberRepo)
+
+	// Campaigns
+	campaignRepo := repositories.NewCampaignRepository(db)
+	campaignMessageRepo := repositories.NewCampaignMessageRepository(db)
+	r.h.campaign = handlers.NewCampaignHandler(
+		campaignRepo, campaignMessageRepo,
+		subscriberListRepo, subscriberRepo, templateRepo, producer,
+	)
+
+	// Tracking
+	trackingRepo := repositories.NewTrackingRepository(db)
+	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
+	r.h.tracking = handlers.NewTrackingHandler(trackingRepo, campaignMessageRepo, campaignRepo, subscriberRepo, trackingService)
+
+	// Bounce webhook
+	r.h.bounceWebhook = handlers.NewBounceWebhookHandler(subscriberRepo, emailRepo, campaignMessageRepo)
+
+	// Workspace data export/import
+	r.h.workspaceData = handlers.NewWorkspaceDataHandler(
+		db, workspaceRepo, templateRepo, versionRepo, localizationRepo,
+		stylesheetRepo, languageRepo, contactRepo, contactListRepo,
+		webhookRepo, suppressionRepo, smtpRepo, domainRepo,
+		subscriberRepo, subscriberListRepo,
+	)
+
+	// Auto-seed Google provider if configured
+	if cfg.GoogleOAuthClientID != "" {
+		if _, err := oauthProviderRepo.FindBySlug("google"); err != nil {
+			_ = oauthProviderRepo.Create(&models.OAuthProvider{
+				Name:         "Google",
+				Slug:         "google",
+				Type:         models.OAuthProviderGoogle,
+				ClientID:     cfg.GoogleOAuthClientID,
+				ClientSecret: cfg.GoogleOAuthClientSecret,
+				Scopes:       "openid email profile",
+				Enabled:      true,
+				AutoRegister: true,
+			})
+		}
+	}
+
 	r.registerRoutes()
+}
+
+// emailPlanAdapter adapts planpkg.Service to the email.PlanLimitsProvider interface.
+type emailPlanAdapter struct {
+	svc *planpkg.Service
+}
+
+func (a *emailPlanAdapter) EffectiveLimits(workspaceID *uint) *email.PlanLimits {
+	l := a.svc.EffectiveLimits(workspaceID)
+	return &email.PlanLimits{
+		HourlyRateLimit:     l.HourlyRateLimit,
+		DailyRateLimit:      l.DailyRateLimit,
+		MaxAttachmentSizeMB: l.MaxAttachmentSizeMB,
+		MaxBatchSize:        l.MaxBatchSize,
+	}
+}
+
+// workspaceHeaderRequired is a reusable route option documenting the required workspace header.
+var workspaceHeaderRequired = okapi.DocHeader("X-Posta-Workspace-Id", "integer", "Workspace ID (required for workspace-scoped endpoints)", true)
+
+// workspaceHeaderOptional is a reusable route option documenting the optional workspace header.
+var workspaceHeaderOptional = okapi.DocHeader("X-Posta-Workspace-Id", "integer", "Workspace ID (optional, omit for personal mode)", false)
+
+// loginLimiterMiddleware returns the login rate limit middleware when enabled,
+// or a pass-through middleware when disabled.
+func loginLimiterMiddleware(cfg *config.Config, limiter *ratelimit.RedisLimiter) okapi.Middleware {
+	if !cfg.AuthRateLimitEnabled {
+		return func(c *okapi.Context) error {
+			return c.Next()
+		}
+	}
+	return middlewares.LoginRateLimitMiddleware(limiter)
 }
 
 func (r *Router) registerRoutes() {
@@ -240,6 +368,11 @@ func (r *Router) registerRoutes() {
 	r.app.Register(r.authRoutes()...)
 	r.app.Register(r.apiAuthRoutes()...)
 	r.app.Register(r.userRoutes()...)
+	r.app.Register(r.workspaceRoutes()...)
+	r.app.Register(r.oauthRoutes()...)
+	r.app.Register(r.trackingRoutes()...)
+	r.app.Register(r.trackingAnalyticsRoutes()...)
+	r.app.Register(r.bounceWebhookRoutes()...)
 	r.app.Register(r.adminRoutes()...)
 	r.app.Register(r.adminSSERoutes()...)
 

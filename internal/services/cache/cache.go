@@ -27,11 +27,10 @@ import (
 )
 
 const (
-	// Default TTLs for cached data.
-	DashboardStatsTTL = 60 * time.Second
-	AdminMetricsTTL   = 60 * time.Second
-	UserMetricsTTL    = 60 * time.Second
-	AnalyticsTTL      = 120 * time.Second
+	DashboardStatsTTL = 30 * time.Second
+	AdminMetricsTTL   = 30 * time.Second
+	UserMetricsTTL    = 30 * time.Second
+	AnalyticsTTL      = 60 * time.Second
 
 	prefixDashboard          = "cache:dashboard:"
 	prefixAdminMetrics       = "cache:admin:metrics"
@@ -52,8 +51,6 @@ func New(client *redis.Client) *Cache {
 	return &Cache{client: client}
 }
 
-// Get retrieves a cached value and unmarshals it into dest.
-// Returns false if the key does not exist or on error.
 func (c *Cache) Get(ctx context.Context, key string, dest any) bool {
 	data, err := c.client.Get(ctx, key).Bytes()
 	if err != nil {
@@ -75,8 +72,6 @@ func (c *Cache) Set(ctx context.Context, key string, value any, ttl time.Duratio
 func (c *Cache) Delete(ctx context.Context, key string) {
 	c.client.Del(ctx, key)
 }
-
-// --- Key builders ---
 
 func DashboardKey(userID int) string {
 	return fmt.Sprintf("%s%d", prefixDashboard, userID)
@@ -110,7 +105,10 @@ func AdminDashboardAnalyticsKey(from, to string) string {
 func (c *Cache) InvalidateUser(ctx context.Context, userID int) {
 	c.Delete(ctx, DashboardKey(userID))
 	c.Delete(ctx, UserMetricsKey(userID))
-	// Invalidate admin-level caches too, since user data affects them.
+	// Per-user analytics (date-range queries include user ID in key)
+	c.InvalidateByPattern(ctx, fmt.Sprintf("%s%d:*", prefixUserAnalytics, userID))
+	c.InvalidateByPattern(ctx, fmt.Sprintf("%s%d:*", prefixDashAnalytics, userID))
+	// Admin-level caches are affected since user data rolls up into them.
 	c.Delete(ctx, AdminMetricsKey())
 }
 
@@ -127,9 +125,10 @@ func (c *Cache) InvalidateByPattern(ctx context.Context, pattern string) {
 	}
 }
 
-// InvalidateAnalytics removes all cached analytics data.
+// InvalidateAnalytics removes all cached analytics data (both user and admin).
 func (c *Cache) InvalidateAnalytics(ctx context.Context) {
 	c.InvalidateByPattern(ctx, "cache:analytics:*")
+	c.InvalidateByPattern(ctx, "cache:dash_analytics:*")
 }
 
 // InvalidateAll removes all cache keys (dashboard + metrics + analytics).

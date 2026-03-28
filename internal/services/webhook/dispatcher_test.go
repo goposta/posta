@@ -28,10 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 )
 
-// --- signPayload tests ---
 
 func TestSignPayload(t *testing.T) {
 	secret := "test-secret"
@@ -67,7 +66,6 @@ func TestSignPayloadDifferentBodies(t *testing.T) {
 	}
 }
 
-// --- matchesFilters tests ---
 
 func TestMatchesFilters_EmptyFilters(t *testing.T) {
 	if !matchesFilters(nil, "user@example.com") {
@@ -127,7 +125,6 @@ func TestMatchesFilters_MultipleFilters(t *testing.T) {
 	}
 }
 
-// --- Dispatcher delivery tests ---
 
 func TestDispatcher_SignatureHeader(t *testing.T) {
 	var receivedSig string

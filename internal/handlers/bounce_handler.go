@@ -19,9 +19,9 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/metrics"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/metrics"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type BounceHandler struct {
@@ -43,7 +43,10 @@ func NewBounceHandler(bounceRepo *repositories.BounceRepository, suppressionRepo
 }
 
 func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
 
 	validTypes := map[string]bool{"hard": true, "soft": true, "complaint": true}
 	if !validTypes[req.Body.Type] {
@@ -56,7 +59,8 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 	}
 
 	bounce := &models.Bounce{
-		UserID:    uint(userID),
+		UserID:      scope.UserID,
+		WorkspaceID: scope.WorkspaceID,
 		EmailID:   em.ID,
 		Recipient: req.Body.Recipient,
 		Type:      models.BounceType(req.Body.Type),
@@ -72,9 +76,10 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 	// Auto-suppress on hard bounce or complaint
 	if req.Body.Type == "hard" || req.Body.Type == "complaint" {
 		suppression := &models.Suppression{
-			UserID: uint(userID),
-			Email:  req.Body.Recipient,
-			Reason: "auto-suppressed: " + req.Body.Type + " bounce",
+			UserID:      scope.UserID,
+			WorkspaceID: scope.WorkspaceID,
+			Email:       req.Body.Recipient,
+			Reason:      "auto-suppressed: " + req.Body.Type + " bounce",
 		}
 		// Ignore error if already suppressed
 		if err := h.suppressionRepo.Create(suppression); err == nil {
@@ -86,10 +91,9 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 }
 
 func (h *BounceHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	bounces, total, err := h.bounceRepo.FindByUserID(uint(userID), size, offset)
+	bounces, total, err := h.bounceRepo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list bounces")
 	}

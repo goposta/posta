@@ -20,7 +20,7 @@ package repositories
 import (
 	"time"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -60,9 +60,9 @@ func (r *EmailRepository) FindByUserID(userID uint, limit, offset int) ([]models
 	var emails []models.Email
 	var total int64
 
-	r.db.Model(&models.Email{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.Email{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&emails).Error; err != nil {
@@ -71,10 +71,51 @@ func (r *EmailRepository) FindByUserID(userID uint, limit, offset int) ([]models
 	return emails, total, nil
 }
 
+func (r *EmailRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Email, int64, error) {
+	var emails []models.Email
+	var total int64
+
+	r.db.Model(&models.Email{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&emails).Error; err != nil {
+		return nil, 0, err
+	}
+	return emails, total, nil
+}
+
+func (r *EmailRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.Email, int64, error) {
+	var items []models.Email
+	var total int64
+
+	ApplyScope(r.db.Model(&models.Email{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
 // FindFailedForRetry returns failed emails with retry_count < maxRetries for a given user.
 func (r *EmailRepository) FindFailedForRetry(userID uint, maxRetries int) ([]models.Email, error) {
 	var emails []models.Email
 	if err := r.db.Where("user_id = ? AND status = ? AND retry_count < ?", userID, models.EmailStatusFailed, maxRetries).
+		Order("created_at ASC").
+		Find(&emails).Error; err != nil {
+		return nil, err
+	}
+	return emails, nil
+}
+
+// FindFailedForRetryByWorkspace returns failed emails for a workspace that haven't exceeded max retries.
+func (r *EmailRepository) FindFailedForRetryByWorkspace(workspaceID uint, maxRetries int) ([]models.Email, error) {
+	var emails []models.Email
+	if err := r.db.Where("workspace_id = ? AND status = ? AND retry_count < ?", workspaceID, models.EmailStatusFailed, maxRetries).
 		Order("created_at ASC").
 		Find(&emails).Error; err != nil {
 		return nil, err

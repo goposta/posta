@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { authApi } from '../../api/auth'
 import { sessionsApi, type Session } from '../../api/sessions'
 import { useAuthStore } from '../../stores/auth'
@@ -8,20 +9,24 @@ import { useConfirm } from '../../composables/useConfirm'
 const auth = useAuthStore()
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
+const router = useRouter()
 
 // Profile
 const name = ref('')
 const email = ref('')
 const profileLoading = ref(false)
 const twoFactorEnabled = ref(false)
+const scheduledDeletionAt = ref<string | null>(null)
+const deletionLoading = ref(false)
 
 onMounted(async () => {
   name.value = auth.user?.name || ''
   email.value = auth.user?.email || ''
-  // Fetch fresh profile to get 2FA status
+  // Fetch fresh profile to get 2FA status and deletion status
   try {
     const res = await authApi.me()
     twoFactorEnabled.value = res.data.data.two_factor_enabled
+    scheduledDeletionAt.value = res.data.data.scheduled_deletion_at
   } catch { /* ignore */ }
 })
 
@@ -231,6 +236,57 @@ function formatSessionDate(dateStr: string): string {
   })
 }
 
+// Account Deletion
+async function requestAccountDeletion() {
+  const confirmed = await confirm({
+    title: 'Delete Account',
+    message: 'Are you sure you want to delete your account? Your account will be deactivated immediately and permanently deleted after 7 days. You can cancel this during the 7-day period.',
+    confirmText: 'Delete My Account',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+
+  deletionLoading.value = true
+  try {
+    const res = await authApi.requestAccountDeletion()
+    scheduledDeletionAt.value = res.data.data.scheduled_deletion_at
+    notify.success('Account scheduled for deletion in 7 days')
+  } catch (e: any) {
+    const message = e?.response?.data?.error?.message || 'Failed to schedule account deletion'
+    notify.error(message)
+  } finally {
+    deletionLoading.value = false
+  }
+}
+
+async function cancelAccountDeletion() {
+  const confirmed = await confirm({
+    title: 'Cancel Account Deletion',
+    message: 'Are you sure you want to cancel the scheduled deletion and reactivate your account?',
+    confirmText: 'Keep My Account',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+
+  deletionLoading.value = true
+  try {
+    await authApi.cancelAccountDeletion()
+    scheduledDeletionAt.value = null
+    notify.success('Account deletion cancelled')
+  } catch (e: any) {
+    const message = e?.response?.data?.error?.message || 'Failed to cancel account deletion'
+    notify.error(message)
+  } finally {
+    deletionLoading.value = false
+  }
+}
+
+function formatDeletionDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'long', day: 'numeric',
+  })
+}
+
 // Load sessions on mount
 onMounted(() => { loadSessions() })
 </script>
@@ -422,6 +478,33 @@ onMounted(() => { loadSessions() })
           </form>
         </div>
       </div>
+
+      <!-- Danger Zone -->
+      <div class="card danger-card" v-if="auth.user?.role !== 'admin'">
+        <div class="card-header"><h2>Danger Zone</h2></div>
+        <div class="card-body">
+          <!-- Deletion already scheduled -->
+          <template v-if="scheduledDeletionAt">
+            <div class="deletion-notice">
+              <p class="deletion-warning">Your account is scheduled for permanent deletion on <strong>{{ formatDeletionDate(scheduledDeletionAt) }}</strong>.</p>
+              <p class="tfa-description">Your account has been deactivated. All your data will be permanently removed after this date. You can cancel the deletion to reactivate your account.</p>
+              <button class="btn btn-primary" :disabled="deletionLoading" @click="cancelAccountDeletion">
+                {{ deletionLoading ? 'Cancelling...' : 'Cancel Deletion' }}
+              </button>
+            </div>
+          </template>
+
+          <!-- No deletion scheduled -->
+          <template v-else>
+            <p class="tfa-description">
+              Permanently delete your account and all associated data. Your account will be deactivated immediately and permanently deleted after 7 days. This gives you time to change your mind.
+            </p>
+            <button class="btn btn-danger" :disabled="deletionLoading" @click="requestAccountDeletion">
+              {{ deletionLoading ? 'Processing...' : 'Delete My Account' }}
+            </button>
+          </template>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -527,5 +610,24 @@ onMounted(() => { loadSessions() })
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+.danger-card {
+  border-color: var(--danger-200, #fecaca);
+}
+
+.danger-card .card-header h2 {
+  color: var(--danger-600, #dc2626);
+}
+
+.deletion-notice {
+  display: grid;
+  gap: 12px;
+}
+
+.deletion-warning {
+  font-size: 14px;
+  color: var(--danger-600, #dc2626);
+  margin: 0;
 }
 </style>

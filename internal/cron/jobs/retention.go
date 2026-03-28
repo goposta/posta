@@ -23,8 +23,8 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/services/settings"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // RetentionCleanupJob purges old email logs, audit events, and webhook
@@ -33,6 +33,7 @@ type RetentionCleanupJob struct {
 	emailRepo      *repositories.EmailRepository
 	eventRepo      *repositories.EventRepository
 	whDeliveryRepo *repositories.WebhookDeliveryRepository
+	trackingRepo   *repositories.TrackingRepository
 	settings       *settings.Provider
 }
 
@@ -40,12 +41,14 @@ func NewRetentionCleanupJob(
 	emailRepo *repositories.EmailRepository,
 	eventRepo *repositories.EventRepository,
 	whDeliveryRepo *repositories.WebhookDeliveryRepository,
+	trackingRepo *repositories.TrackingRepository,
 	sp *settings.Provider,
 ) *RetentionCleanupJob {
 	return &RetentionCleanupJob{
 		emailRepo:      emailRepo,
 		eventRepo:      eventRepo,
 		whDeliveryRepo: whDeliveryRepo,
+		trackingRepo:   trackingRepo,
 		settings:       sp,
 	}
 }
@@ -87,6 +90,18 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 			logger.Error("retention cleanup: failed to delete old webhook deliveries", "error", err)
 		} else if deleted > 0 {
 			logger.Info("retention cleanup: deleted old webhook deliveries", "count", deleted, "older_than_days", whRetention)
+		}
+	}
+
+	// Clean up old tracking events
+	trackingRetention := j.settings.TrackingEventRetentionDays()
+	if trackingRetention > 0 {
+		before := time.Now().AddDate(0, 0, -trackingRetention)
+		deleted, err := j.trackingRepo.DeleteOlderThan(before)
+		if err != nil {
+			logger.Error("retention cleanup: failed to delete old tracking events", "error", err)
+		} else if deleted > 0 {
+			logger.Info("retention cleanup: deleted old tracking events", "count", deleted, "older_than_days", trackingRetention)
 		}
 	}
 

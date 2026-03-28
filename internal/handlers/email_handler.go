@@ -22,12 +22,12 @@ import (
 	"strings"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/cache"
-	"github.com/jkaninda/posta/internal/services/email"
-	"github.com/jkaninda/posta/internal/services/eventbus"
-	"github.com/jkaninda/posta/internal/services/settings"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/cache"
+	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type EmailHandler struct {
@@ -81,7 +81,8 @@ func (h *EmailHandler) redactContent() bool {
 
 type PreviewEmailRequest struct {
 	Body struct {
-		Template     string         `json:"template" required:"true" doc:"Template name"`
+		TemplateID   *uint          `json:"template_id,omitempty" doc:"Template ID (preferred)"`
+		Template     string         `json:"template" doc:"Template name (fallback when template_id is not provided)"`
 		Language     string         `json:"language" doc:"Language code for localization"`
 		TemplateData map[string]any `json:"template_data" doc:"Variables to inject into the template"`
 	} `json:"body"`
@@ -94,9 +95,9 @@ type PreviewEmailResponse struct {
 }
 
 func (h *EmailHandler) Preview(c *okapi.Context, req *PreviewEmailRequest) error {
-	userID := c.GetInt("user_id")
+	scope := getScope(c)
 
-	rendered, err := h.service.RenderTemplate(uint(userID), req.Body.Template, req.Body.Language, req.Body.TemplateData)
+	rendered, err := h.service.RenderTemplate(scope.UserID, scope.WorkspaceID, req.Body.TemplateID, req.Body.Template, req.Body.Language, req.Body.TemplateData)
 	if err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
@@ -122,15 +123,19 @@ func redactEmails(emails []models.Email) {
 }
 
 func (h *EmailHandler) Send(c *okapi.Context, req *SendEmailRequest) error {
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	userID := c.GetInt("user_id")
 	userEmail := c.GetString("user_email")
+	scope := getScope(c)
 
 	if req.DryRun {
-		return h.handleDryRun(c, userID, userEmail, req)
+		return h.handleDryRun(c, userID, scope.WorkspaceID, userEmail, req)
 	}
 
 	apiKeyID := c.GetInt("api_key_id")
-	resp, err := h.service.Send(c.Request().Context(), uint(userID), uint(apiKeyID), userEmail, &req.Body)
+	resp, err := h.service.Send(c.Request().Context(), uint(userID), uint(apiKeyID), scope.WorkspaceID, userEmail, &req.Body)
 	if err != nil {
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
@@ -154,8 +159,8 @@ func (h *EmailHandler) Send(c *okapi.Context, req *SendEmailRequest) error {
 	return ok(c, resp)
 }
 
-func (h *EmailHandler) handleDryRun(c *okapi.Context, userID int, userEmail string, req *SendEmailRequest) error {
-	resp, err := h.service.ValidateSend(c.Request().Context(), uint(userID), userEmail, &req.Body)
+func (h *EmailHandler) handleDryRun(c *okapi.Context, userID int, workspaceID *uint, userEmail string, req *SendEmailRequest) error {
+	resp, err := h.service.ValidateSend(c.Request().Context(), uint(userID), workspaceID, userEmail, &req.Body)
 	if err != nil {
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
@@ -169,11 +174,15 @@ func (h *EmailHandler) handleDryRun(c *okapi.Context, userID int, userEmail stri
 }
 
 func (h *EmailHandler) SendWithTemplate(c *okapi.Context, req *SendTemplateEmailRequest) error {
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	userID := c.GetInt("user_id")
 	userEmail := c.GetString("user_email")
+	scope := getScope(c)
 
 	if req.DryRun {
-		resp, err := h.service.ValidateSendWithTemplate(c.Request().Context(), uint(userID), userEmail, &req.Body)
+		resp, err := h.service.ValidateSendWithTemplate(c.Request().Context(), uint(userID), scope.WorkspaceID, userEmail, &req.Body)
 		if err != nil {
 			if isRateLimitError(err) {
 				return c.AbortTooManyRequests(err.Error())
@@ -187,7 +196,7 @@ func (h *EmailHandler) SendWithTemplate(c *okapi.Context, req *SendTemplateEmail
 	}
 
 	apiKeyID := c.GetInt("api_key_id")
-	resp, err := h.service.SendWithTemplate(c.Request().Context(), uint(userID), uint(apiKeyID), userEmail, &req.Body)
+	resp, err := h.service.SendWithTemplate(c.Request().Context(), uint(userID), uint(apiKeyID), scope.WorkspaceID, userEmail, &req.Body)
 	if err != nil {
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
@@ -211,11 +220,15 @@ func (h *EmailHandler) SendWithTemplate(c *okapi.Context, req *SendTemplateEmail
 }
 
 func (h *EmailHandler) SendBatch(c *okapi.Context, req *SendBatchEmailRequest) error {
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	userID := c.GetInt("user_id")
 	userEmail := c.GetString("user_email")
+	scope := getScope(c)
 
 	if req.DryRun {
-		resp, err := h.service.ValidateSendBatch(c.Request().Context(), uint(userID), userEmail, &req.Body)
+		resp, err := h.service.ValidateSendBatch(c.Request().Context(), uint(userID), scope.WorkspaceID, userEmail, &req.Body)
 		if err != nil {
 			if isRateLimitError(err) {
 				return c.AbortTooManyRequests(err.Error())
@@ -226,7 +239,7 @@ func (h *EmailHandler) SendBatch(c *okapi.Context, req *SendBatchEmailRequest) e
 	}
 
 	apiKeyID := c.GetInt("api_key_id")
-	resp, err := h.service.SendBatch(c.Request().Context(), uint(userID), uint(apiKeyID), userEmail, &req.Body)
+	resp, err := h.service.SendBatch(c.Request().Context(), uint(userID), uint(apiKeyID), scope.WorkspaceID, userEmail, &req.Body)
 	if err != nil {
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
@@ -261,10 +274,9 @@ func normalizePageParams(page, size int) (int, int, int) {
 }
 
 func (h *EmailHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	emails, total, err := h.emailRepo.FindByUserID(uint(userID), size, offset)
+	emails, total, err := h.emailRepo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list emails")
 	}
@@ -278,12 +290,7 @@ func (h *EmailHandler) List(c *okapi.Context, req *ListRequest) error {
 
 func (h *EmailHandler) Get(c *okapi.Context, req *GetEmailRequest) error {
 	em, err := h.emailRepo.FindByUUID(req.ID)
-	if err != nil {
-		return c.AbortNotFound("email not found")
-	}
-
-	userID := c.GetInt("user_id")
-	if em.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, em.UserID, em.WorkspaceID) {
 		return c.AbortNotFound("email not found")
 	}
 
@@ -307,12 +314,7 @@ type EmailStatusResponse struct {
 // GetStatus returns only the delivery status of an email (owner only).
 func (h *EmailHandler) GetStatus(c *okapi.Context, req *GetEmailRequest) error {
 	em, err := h.emailRepo.FindByUUID(req.ID)
-	if err != nil {
-		return c.AbortNotFound("email not found")
-	}
-
-	userID := c.GetInt("user_id")
-	if em.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, em.UserID, em.WorkspaceID) {
 		return c.AbortNotFound("email not found")
 	}
 
@@ -334,7 +336,8 @@ func (h *EmailHandler) GetStatus(c *okapi.Context, req *GetEmailRequest) error {
 // Retry re-enqueues a failed email for another delivery attempt.
 func (h *EmailHandler) Retry(c *okapi.Context, req *GetEmailRequest) error {
 	userID := c.GetInt("user_id")
-	resp, err := h.service.RetryEmail(req.ID, uint(userID))
+	scope := getScope(c)
+	resp, err := h.service.RetryEmail(req.ID, uint(userID), scope.WorkspaceID)
 	if err != nil {
 		if err.Error() == "email not found" {
 			return c.AbortNotFound(err.Error())

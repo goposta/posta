@@ -24,11 +24,11 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/config"
-	"github.com/jkaninda/posta/internal/services/auth"
-	"github.com/jkaninda/posta/internal/services/ratelimit"
-	sessionpkg "github.com/jkaninda/posta/internal/services/session"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/config"
+	"github.com/goposta/posta/internal/services/auth"
+	"github.com/goposta/posta/internal/services/ratelimit"
+	sessionpkg "github.com/goposta/posta/internal/services/session"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 func baseJWTAuth(cfg *config.Config) okapi.JWTAuth {
@@ -158,6 +158,9 @@ func APIKeyAuthMiddleware(keyService *auth.APIKeyService, userRepo *repositories
 		c.Set("user_id", int(apiKey.UserID))
 		c.Set("api_key_id", int(apiKey.ID))
 		c.Set("user_email", user.Email)
+		if apiKey.WorkspaceID != nil {
+			c.Set("workspace_id", int(*apiKey.WorkspaceID))
+		}
 
 		go func() { _ = keyRepo.UpdateLastUsed(apiKey.ID) }()
 

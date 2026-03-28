@@ -21,8 +21,17 @@ import (
 	"net/http"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/dto"
+	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
+	"gorm.io/gorm"
 )
+
+// QuotaChecker verifies that creating a resource would not exceed plan limits.
+type QuotaChecker interface {
+	CheckQuota(db *gorm.DB, workspaceID *uint, resource string) error
+	CheckWorkspaceQuota(db *gorm.DB, userID uint) error
+}
 
 func ok[T any](c *okapi.Context, data T) error {
 	return c.JSON(http.StatusOK, dto.Response[T]{
@@ -44,7 +53,52 @@ func noContent(c *okapi.Context) error {
 	})
 }
 
+// getScope extracts the ResourceScope from the request context.
+// If workspace_id is set (via middleware), targets that workspace; otherwise personal.
+func getScope(c *okapi.Context) repositories.ResourceScope {
+	userID := uint(c.GetInt("user_id"))
+	scope := repositories.ResourceScope{UserID: userID}
+	wsID := c.GetInt("workspace_id")
+	if wsID > 0 {
+		wid := uint(wsID)
+		scope.WorkspaceID = &wid
+	}
+	return scope
+}
+
+// ownsResource checks whether a resource belongs to the current scope.
+func ownsResource(c *okapi.Context, resourceUserID uint, resourceWorkspaceID *uint) bool {
+	return repositories.OwnsResource(getScope(c), resourceUserID, resourceWorkspaceID)
+}
+
+// workspaceRole returns the workspace role from context, or empty string if personal mode.
+func workspaceRole(c *okapi.Context) models.WorkspaceRole {
+	return models.WorkspaceRole(c.GetString("workspace_role"))
+}
+
+// canEditInWorkspace returns true if the user can create/modify resources.
+// In personal mode, always allowed. In workspace mode, requires Editor+ role.
+func canEditInWorkspace(c *okapi.Context) bool {
+	role := workspaceRole(c)
+	if role == "" {
+		return true // personal mode
+	}
+	return role.CanEdit()
+}
+
+// requireEdit checks workspace edit permission and aborts with 403 if denied.
+// Returns true if the request should be aborted (caller should return).
+func requireEdit(c *okapi.Context) error {
+	if !canEditInWorkspace(c) {
+		return c.AbortForbidden("insufficient workspace permissions: editor role or higher required")
+	}
+	return nil
+}
+
 func paginated[T any](c *okapi.Context, items []T, total int64, page, size int) error {
+	if items == nil {
+		items = []T{}
+	}
 	totalPages := 0
 	if size > 0 {
 		totalPages = int((total + int64(size) - 1) / int64(size))

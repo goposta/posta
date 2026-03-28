@@ -21,7 +21,7 @@ import (
 	"net/mail"
 	"time"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -100,13 +100,53 @@ func (r *ContactRepository) FindByUserID(userID uint, search string, limit, offs
 	var contacts []models.Contact
 	var total int64
 
-	q := r.db.Model(&models.Contact{}).Where("user_id = ?", userID)
+	q := r.db.Model(&models.Contact{}).Where("user_id = ? AND workspace_id IS NULL", userID)
 	if search != "" {
 		q = q.Where("email ILIKE ? OR name ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 	q.Count(&total)
 
 	if err := q.Order("last_sent_at DESC NULLS LAST").
+		Limit(limit).Offset(offset).
+		Find(&contacts).Error; err != nil {
+		return nil, 0, err
+	}
+	return contacts, total, nil
+}
+
+func (r *ContactRepository) FindByWorkspaceID(workspaceID uint, search string, limit, offset int) ([]models.Contact, int64, error) {
+	var contacts []models.Contact
+	var total int64
+
+	q := r.db.Model(&models.Contact{}).Where("workspace_id = ?", workspaceID)
+	if search != "" {
+		q = q.Where("email ILIKE ? OR name ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	q.Count(&total)
+
+	if err := q.Order("last_sent_at DESC NULLS LAST").
+		Limit(limit).Offset(offset).
+		Find(&contacts).Error; err != nil {
+		return nil, 0, err
+	}
+	return contacts, total, nil
+}
+
+func (r *ContactRepository) FindByScope(scope ResourceScope, search string, limit, offset int) ([]models.Contact, int64, error) {
+	var contacts []models.Contact
+	var total int64
+
+	q := ApplyScope(r.db.Model(&models.Contact{}), scope)
+	if search != "" {
+		q = q.Where("email ILIKE ? OR name ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	q.Count(&total)
+
+	qFind := ApplyScope(r.db, scope)
+	if search != "" {
+		qFind = qFind.Where("email ILIKE ? OR name ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	if err := qFind.Order("last_sent_at DESC NULLS LAST").
 		Limit(limit).Offset(offset).
 		Find(&contacts).Error; err != nil {
 		return nil, 0, err

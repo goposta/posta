@@ -39,6 +39,7 @@ type Email struct {
 	ID                  uint           `json:"id" gorm:"primaryKey"`
 	UUID                string         `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
 	UserID              uint           `json:"user_id" gorm:"index;not null"`
+	WorkspaceID         *uint          `json:"workspace_id,omitempty" gorm:"index"`
 	APIKeyID            *uint          `json:"api_key_id" gorm:"index"`
 	Sender              string         `json:"sender" gorm:"not null"`
 	Recipients          pq.StringArray `json:"recipients" gorm:"type:text[];not null"`
@@ -65,6 +66,10 @@ type Email struct {
 // Attachment represents a file attachment in an email.
 type Attachment struct {
 	Filename    string `json:"filename"`
-	Content     string `json:"content"`
+	Content     string `json:"content,omitempty"`
 	ContentType string `json:"content_type"`
+	// StorageKey is set when the attachment content is stored in blob storage
+	// (S3 or filesystem). When present, Content may be empty and the actual
+	// bytes should be fetched from the blob store using this key.
+	StorageKey string `json:"storage_key,omitempty"`
 }

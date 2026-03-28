@@ -22,6 +22,7 @@ import "time"
 type ContactList struct {
 	ID          uint       `json:"id" gorm:"primaryKey"`
 	UserID      uint       `json:"user_id" gorm:"index;not null"`
+	WorkspaceID *uint      `json:"workspace_id,omitempty" gorm:"index"`
 	Name        string     `json:"name" gorm:"not null"`
 	Description string     `json:"description"`
 	CreatedAt   time.Time  `json:"created_at"`

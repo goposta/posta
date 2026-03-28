@@ -19,7 +19,7 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type WebhookDeliveryHandler struct {
@@ -31,10 +31,9 @@ func NewWebhookDeliveryHandler(repo *repositories.WebhookDeliveryRepository) *We
 }
 
 func (h *WebhookDeliveryHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	deliveries, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	deliveries, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list webhook deliveries")
 	}

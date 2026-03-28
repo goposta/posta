@@ -24,29 +24,31 @@ import (
 	goutils "github.com/jkaninda/go-utils"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
-	errorhandlers "github.com/jkaninda/posta/internal/error_handlers"
-	"github.com/jkaninda/posta/internal/storage"
+	errorhandlers "github.com/goposta/posta/internal/error_handlers"
+	"github.com/goposta/posta/internal/storage"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 type Config struct {
-	Database        DatabaseConfig
-	Redis           RedisConfig
-	JWTSecret       string
-	Env             string
-	Port            int
-	DevMode         bool
-	RateLimitHourly int
-	RateLimitDaily  int
-	AdminEmail      string
-	AdminPassword   string
-	OpenAPIDocs     bool
-	MetricsEnabled  bool
-	WebDir          string
-	AppWebURL       string
-	CORSOrigins     string
+	Database             DatabaseConfig
+	Redis                RedisConfig
+	JWTSecret            string
+	Env                  string
+	Port                 int
+	DevMode              bool
+	RateLimitHourly      int
+	RateLimitDaily       int
+	AuthRateLimitEnabled bool
+	AdminEmail           string
+	AdminPassword        string
+	OpenAPIDocs          bool
+	MetricsEnabled       bool
+	WebDir               string
+	AppWebURL            string
+	ApiBaseURL           string
+	CORSOrigins          string
 
 	// Worker settings
 	EmbeddedWorker    bool
@@ -56,6 +58,23 @@ type Config struct {
 	// Webhook settings
 	WebhookMaxRetries  int
 	WebhookTimeoutSecs int
+	WebhookProxyURL    string
+
+	// OAuth settings
+	GoogleOAuthClientID     string
+	GoogleOAuthClientSecret string
+	OAuthCallbackBaseURL    string
+
+	// Blob storage settings (S3-compatible or filesystem)
+	BlobProvider       string
+	BlobS3Endpoint     string
+	BlobS3Region       string
+	BlobS3Bucket       string
+	BlobS3AccessKey    string
+	BlobS3SecretKey    string
+	BlobS3UseSSL       bool
+	BlobS3PathStyle    bool
+	BlobFSPath         string
 }
 type DatabaseConfig struct {
 	DB       *gorm.DB
@@ -100,18 +119,20 @@ func New() *Config {
 			Addr:     goutils.Env("POSTA_REDIS_ADDR", "localhost:6379"),
 			Password: goutils.Env("POSTA_REDIS_PASSWORD", ""),
 		},
-		Port:            goutils.EnvInt("POSTA_PORT", 9000),
-		Env:             goutils.Env("POSTA_ENV", "dev"),
-		JWTSecret:       goutils.Env("POSTA_JWT_SECRET", "change-me-in-production"),
-		DevMode:         goutils.EnvBool("POSTA_DEV_MODE", false),
-		RateLimitHourly: goutils.EnvInt("POSTA_RATE_LIMIT_HOURLY", 100),
-		RateLimitDaily:  goutils.EnvInt("POSTA_RATE_LIMIT_DAILY", 1000),
-		AdminEmail:      goutils.Env("POSTA_ADMIN_EMAIL", "admin@example.com"),
-		AdminPassword:   goutils.Env("POSTA_ADMIN_PASSWORD", "admin1234"),
-		OpenAPIDocs:     goutils.EnvBool("POSTA_OPENAPI_DOCS", true),
-		MetricsEnabled:  goutils.EnvBool("POSTA_METRICS_ENABLED", false),
-		WebDir:          goutils.Env("POSTA_WEB_DIR", "web/dist"),
-		AppWebURL:       goutils.Env("POSTA_WEB_URL", ""),
+		Port:                 goutils.EnvInt("POSTA_PORT", 9000),
+		Env:                  goutils.Env("POSTA_ENV", "dev"),
+		JWTSecret:            goutils.Env("POSTA_JWT_SECRET", "change-me-in-production"),
+		DevMode:              goutils.EnvBool("POSTA_DEV_MODE", false),
+		RateLimitHourly:      goutils.EnvInt("POSTA_RATE_LIMIT_HOURLY", 100),
+		RateLimitDaily:       goutils.EnvInt("POSTA_RATE_LIMIT_DAILY", 1000),
+		AuthRateLimitEnabled: goutils.EnvBool("POSTA_AUTH_RATE_LIMIT_ENABLED", true),
+		AdminEmail:           goutils.Env("POSTA_ADMIN_EMAIL", "admin@example.com"),
+		AdminPassword:        goutils.Env("POSTA_ADMIN_PASSWORD", "admin1234"),
+		OpenAPIDocs:          goutils.EnvBool("POSTA_OPENAPI_DOCS", true),
+		MetricsEnabled:       goutils.EnvBool("POSTA_METRICS_ENABLED", false),
+		WebDir:               goutils.Env("POSTA_WEB_DIR", "web/dist"),
+		AppWebURL:            goutils.Env("POSTA_WEB_URL", ""),
+		ApiBaseURL:           goutils.Env("POSTA_API_URL", ""),
 
 		CORSOrigins: goutils.Env("POSTA_CORS_ORIGINS", "*"),
 
@@ -121,6 +142,21 @@ func New() *Config {
 
 		WebhookMaxRetries:  goutils.EnvInt("POSTA_WEBHOOK_MAX_RETRIES", 3),
 		WebhookTimeoutSecs: goutils.EnvInt("POSTA_WEBHOOK_TIMEOUT_SECS", 10),
+		WebhookProxyURL:    goutils.Env("POSTA_WEBHOOK_PROXY_URL", ""),
+
+		GoogleOAuthClientID:     goutils.Env("POSTA_GOOGLE_OAUTH_CLIENT_ID", ""),
+		GoogleOAuthClientSecret: goutils.Env("POSTA_GOOGLE_OAUTH_CLIENT_SECRET", ""),
+		OAuthCallbackBaseURL:    goutils.Env("POSTA_OAUTH_CALLBACK_URL", ""),
+
+		BlobProvider:   goutils.Env("POSTA_BLOB_PROVIDER", ""),
+		BlobS3Endpoint: goutils.Env("POSTA_BLOB_S3_ENDPOINT", ""),
+		BlobS3Region:   goutils.Env("POSTA_BLOB_S3_REGION", "us-east-1"),
+		BlobS3Bucket:   goutils.Env("POSTA_BLOB_S3_BUCKET", ""),
+		BlobS3AccessKey: goutils.Env("POSTA_BLOB_S3_ACCESS_KEY", ""),
+		BlobS3SecretKey: goutils.Env("POSTA_BLOB_S3_SECRET_KEY", ""),
+		BlobS3UseSSL:   goutils.EnvBool("POSTA_BLOB_S3_USE_SSL", true),
+		BlobS3PathStyle: goutils.EnvBool("POSTA_BLOB_S3_PATH_STYLE", false),
+		BlobFSPath:     goutils.Env("POSTA_BLOB_FS_PATH", "data/attachments"),
 	}
 }
 func (c *Config) validate() error {
@@ -149,6 +185,13 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	for i := range corsOrigins {
 		corsOrigins[i] = strings.TrimSpace(corsOrigins[i])
 	}
+	apiServers := okapi.Servers{}
+	if c.AppWebURL != "" {
+		apiServers = append(apiServers, okapi.Server{URL: c.AppWebURL})
+	}
+	if c.ApiBaseURL != "" {
+		apiServers = append(apiServers, okapi.Server{URL: c.ApiBaseURL})
+	}
 	app.WithCORS(okapi.Cors{
 		AllowedOrigins:   corsOrigins,
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Request-ID"},
@@ -160,8 +203,10 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 			Title:   "Posta API",
 			Version: "v1",
 			License: okapi.License{
-				Name: "MIT",
+				Name: "Apache",
+				URL:  "http://www.apache.org/licenses/LICENSE-2.0",
 			},
+			Servers: apiServers,
 		})
 	}
 	app.WithErrorHandler(errorhandlers.CustomErrorHandler())

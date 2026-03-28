@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type TemplateVersionHandler struct {
@@ -66,10 +66,8 @@ func NewTemplateVersionHandler(
 }
 
 func (h *TemplateVersionHandler) List(c *okapi.Context, req *ListVersionsRequest) error {
-	userID := c.GetInt("user_id")
-
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -82,10 +80,11 @@ func (h *TemplateVersionHandler) List(c *okapi.Context, req *ListVersionsRequest
 }
 
 func (h *TemplateVersionHandler) Create(c *okapi.Context, req *CreateVersionRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -110,10 +109,11 @@ func (h *TemplateVersionHandler) Create(c *okapi.Context, req *CreateVersionRequ
 }
 
 func (h *TemplateVersionHandler) Update(c *okapi.Context, req *UpdateVersionRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -134,10 +134,11 @@ func (h *TemplateVersionHandler) Update(c *okapi.Context, req *UpdateVersionRequ
 }
 
 func (h *TemplateVersionHandler) Activate(c *okapi.Context, req *ActivateVersionRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 
@@ -159,10 +160,11 @@ func (h *TemplateVersionHandler) Activate(c *okapi.Context, req *ActivateVersion
 }
 
 func (h *TemplateVersionHandler) Delete(c *okapi.Context, req *DeleteVersionRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	tmpl, err := h.templateRepo.FindByID(uint(req.TemplateID))
-	if err != nil || tmpl.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
 		return c.AbortNotFound("template not found")
 	}
 

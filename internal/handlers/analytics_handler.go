@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/services/cache"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/services/cache"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type AnalyticsHandler struct {
@@ -57,11 +57,15 @@ type DashboardAnalyticsResponse struct {
 }
 
 func (h *AnalyticsHandler) UserAnalytics(c *okapi.Context, req *AnalyticsRequest) error {
-	userID := c.GetInt("user_id")
+	scope := getScope(c)
 	ctx := c.Request().Context()
 
 	// Try cache first
-	cacheKey := cache.UserAnalyticsKey(userID, req.From, req.To, req.Status)
+	scopeKey := int(scope.UserID)
+	if scope.WorkspaceID != nil {
+		scopeKey = int(*scope.WorkspaceID) + 1000000
+	}
+	cacheKey := cache.UserAnalyticsKey(scopeKey, req.From, req.To, req.Status)
 	var resp AnalyticsResponse
 	if h.cache.Get(ctx, cacheKey, &resp) {
 		return ok(c, resp)
@@ -69,11 +73,23 @@ func (h *AnalyticsHandler) UserAnalytics(c *okapi.Context, req *AnalyticsRequest
 
 	from, to := parseTimeRange(req.From, req.To)
 
-	daily, err := h.repo.DailyCounts(uint(userID), from, to, req.Status)
-	if err != nil {
-		return c.AbortInternalServerError("failed to fetch analytics")
+	var daily []repositories.DailyCount
+	var breakdown []repositories.StatusBreakdown
+	var err error
+
+	if scope.WorkspaceID != nil {
+		daily, err = h.repo.WorkspaceDailyCounts(*scope.WorkspaceID, from, to, req.Status)
+		if err != nil {
+			return c.AbortInternalServerError("failed to fetch analytics")
+		}
+		breakdown, err = h.repo.WorkspaceStatusBreakdown(*scope.WorkspaceID, from, to)
+	} else {
+		daily, err = h.repo.DailyCounts(scope.UserID, from, to, req.Status)
+		if err != nil {
+			return c.AbortInternalServerError("failed to fetch analytics")
+		}
+		breakdown, err = h.repo.StatusBreakdown(scope.UserID, from, to)
 	}
-	breakdown, err := h.repo.StatusBreakdown(uint(userID), from, to)
 	if err != nil {
 		return c.AbortInternalServerError("failed to fetch analytics")
 	}
@@ -120,10 +136,14 @@ func (h *AnalyticsHandler) AdminAnalytics(c *okapi.Context, req *AnalyticsReques
 }
 
 func (h *AnalyticsHandler) UserDashboardAnalytics(c *okapi.Context, req *DashboardAnalyticsRequest) error {
-	userID := c.GetInt("user_id")
+	scope := getScope(c)
 	ctx := c.Request().Context()
 
-	cacheKey := cache.DashboardAnalyticsKey(userID, req.From, req.To)
+	scopeKey := int(scope.UserID)
+	if scope.WorkspaceID != nil {
+		scopeKey = int(*scope.WorkspaceID) + 1000000
+	}
+	cacheKey := cache.DashboardAnalyticsKey(scopeKey, req.From, req.To)
 	var resp DashboardAnalyticsResponse
 	if h.cache.Get(ctx, cacheKey, &resp) {
 		return ok(c, resp)
@@ -131,22 +151,39 @@ func (h *AnalyticsHandler) UserDashboardAnalytics(c *okapi.Context, req *Dashboa
 
 	from, to := parseTimeRange(req.From, req.To)
 
-	delivery, err := h.repo.DeliveryRateTrends(uint(userID), from, to)
-	if err != nil {
-		return c.AbortInternalServerError("failed to fetch delivery rate trends")
+	var delivery []repositories.DeliveryRatePoint
+	var bouncePoints []repositories.BounceRatePoint
+	var latency *repositories.LatencyPercentiles
+	var err error
+
+	if scope.WorkspaceID != nil {
+		delivery, err = h.repo.WorkspaceDeliveryRateTrends(*scope.WorkspaceID, from, to)
+		if err != nil {
+			return c.AbortInternalServerError("failed to fetch delivery rate trends")
+		}
+		bouncePoints, err = h.repo.WorkspaceBounceRateTrends(*scope.WorkspaceID, from, to)
+		if err != nil {
+			return c.AbortInternalServerError("failed to fetch bounce rate trends")
+		}
+		latency, err = h.repo.WorkspaceLatencyPercentiles(*scope.WorkspaceID, from, to)
+	} else {
+		delivery, err = h.repo.DeliveryRateTrends(scope.UserID, from, to)
+		if err != nil {
+			return c.AbortInternalServerError("failed to fetch delivery rate trends")
+		}
+		bouncePoints, err = h.repo.BounceRateTrends(scope.UserID, from, to)
+		if err != nil {
+			return c.AbortInternalServerError("failed to fetch bounce rate trends")
+		}
+		latency, err = h.repo.LatencyPercentilesForUser(scope.UserID, from, to)
 	}
-	bounces, err := h.repo.BounceRateTrends(uint(userID), from, to)
-	if err != nil {
-		return c.AbortInternalServerError("failed to fetch bounce rate trends")
-	}
-	latency, err := h.repo.LatencyPercentilesForUser(uint(userID), from, to)
 	if err != nil {
 		return c.AbortInternalServerError("failed to fetch latency percentiles")
 	}
 
 	resp = DashboardAnalyticsResponse{
 		DeliveryRateTrends: delivery,
-		BounceRateTrends:   bounces,
+		BounceRateTrends:   bouncePoints,
 		LatencyPercentiles: latency,
 	}
 

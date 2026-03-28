@@ -25,7 +25,7 @@ import (
 	"net/smtp"
 	"strings"
 
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 )
 
 type SMTPSender struct{}

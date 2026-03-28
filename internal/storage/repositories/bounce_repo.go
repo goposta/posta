@@ -18,7 +18,7 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -38,15 +38,45 @@ func (r *BounceRepository) FindByUserID(userID uint, limit, offset int) ([]model
 	var bounces []models.Bounce
 	var total int64
 
-	r.db.Model(&models.Bounce{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.Bounce{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&bounces).Error; err != nil {
 		return nil, 0, err
 	}
 	return bounces, total, nil
+}
+
+func (r *BounceRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Bounce, int64, error) {
+	var bounces []models.Bounce
+	var total int64
+
+	r.db.Model(&models.Bounce{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&bounces).Error; err != nil {
+		return nil, 0, err
+	}
+	return bounces, total, nil
+}
+
+func (r *BounceRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.Bounce, int64, error) {
+	var items []models.Bounce
+	var total int64
+
+	ApplyScope(r.db.Model(&models.Bounce{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *BounceRepository) FindByEmailID(emailID uint) ([]models.Bounce, error) {

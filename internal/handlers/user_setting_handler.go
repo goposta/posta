@@ -19,7 +19,7 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // UserSettingHandler handles per-user settings.
@@ -31,7 +31,6 @@ func NewUserSettingHandler(repo *repositories.UserSettingRepository) *UserSettin
 	return &UserSettingHandler{repo: repo}
 }
 
-// --- Request types ---
 
 type UpdateUserSettingsRequest struct {
 	Body struct {
@@ -44,11 +43,10 @@ type UpdateUserSettingsRequest struct {
 		DefaultTemplateID  *uint   `json:"default_template_id"`
 		APIKeyExpiryDays   *int    `json:"api_key_expiry_days"`
 		BounceAutoSuppress *bool   `json:"bounce_auto_suppress"`
+		DefaultLanguage    *string `json:"default_language"`
 		DailyReport        *bool   `json:"daily_report"`
 	} `json:"body"`
 }
-
-// --- Handlers ---
 
 func (h *UserSettingHandler) GetSettings(c *okapi.Context) error {
 	userID := uint(c.GetInt("user_id"))
@@ -94,6 +92,9 @@ func (h *UserSettingHandler) UpdateSettings(c *okapi.Context, req *UpdateUserSet
 	}
 	if req.Body.BounceAutoSuppress != nil {
 		settings.BounceAutoSuppress = *req.Body.BounceAutoSuppress
+	}
+	if req.Body.DefaultLanguage != nil {
+		settings.DefaultLanguage = *req.Body.DefaultLanguage
 	}
 	if req.Body.DailyReport != nil {
 		settings.DailyReport = *req.Body.DailyReport

@@ -1,17 +1,16 @@
 # Posta
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/logo.png" alt="Posta" width="150" />
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/logo.png" alt="Posta" width="150" />
 </p>
 
-[![CI](https://github.com/jkaninda/posta/actions/workflows/ci.yml/badge.svg)](https://github.com/jkaninda/posta/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jkaninda/posta)](https://goreportcard.com/report/github.com/jkaninda/posta)
-[![Go](https://img.shields.io/github/go-mod/go-version/jkaninda/posta)](https://go.dev/)
-[![Go Reference](https://pkg.go.dev/badge/github.com/jkaninda/posta.svg)](https://pkg.go.dev/github.com/jkaninda/posta)
-[![GitHub Release](https://img.shields.io/github/v/release/jkaninda/posta)](https://github.com/jkaninda/posta/releases)
-![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/posta?style=flat-square)
-![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/posta?style=flat-square)
-
+[![CI](https://github.com/goposta/posta/actions/workflows/ci.yml/badge.svg)](https://github.com/goposta/posta/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/goposta/posta)](https://goreportcard.com/report/github.com/goposta/posta)
+[![Go](https://img.shields.io/github/go-mod/go-version/goposta/posta)](https://go.dev/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/goposta/posta.svg)](https://pkg.go.dev/github.com/goposta/posta)
+[![GitHub Release](https://img.shields.io/github/v/release/goposta/posta)](https://github.com/goposta/posta/releases)
+![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/goposta/posta?style=flat-square)
+![Docker Pulls](https://img.shields.io/docker/pulls/goposta/posta?style=flat-square)
 
 **Posta** is a self-hosted email delivery platform that allows applications to send emails through HTTP APIs while Posta manages SMTP delivery, templates, storage, security, and analytics.
 
@@ -152,6 +151,28 @@ Response:
 
 * **Automatic Suppression**
   Automatically suppress recipients based on bounce behavior.
+
+---
+
+## Workspaces
+
+* **Multi-Workspace Isolation**
+  Create workspaces to share resources with your team. Each workspace acts as an isolated environment — like GitHub Organizations.
+
+* **Role-Based Access Control**
+  Four roles: Owner, Admin, Editor, and Viewer. Control who can create resources, manage members, or view data.
+
+* **Member Invitations**
+  Invite users by email with a specific role. Invitees can accept or decline directly from the dashboard.
+
+* **Workspace Switcher**
+  Switch between your personal space and workspaces from the sidebar. All resources, analytics, and stats are scoped to the active context.
+
+* **Data Transfer**
+  Transfer personal resources (templates, contacts, SMTP servers, API keys, etc.) into a workspace.
+
+* **Workspace-Scoped API Keys**
+  API keys created in a workspace context are automatically scoped to that workspace.
 
 ---
 
@@ -298,7 +319,7 @@ Response:
 ## Local Development
 
 ```bash
-git clone https://github.com/jkaninda/posta.git
+git clone https://github.com/goposta/posta.git
 cd posta
 
 make dev-deps
@@ -340,45 +361,63 @@ Password: admin1234
 Posta includes a web dashboard for managing templates, SMTP servers, domains, contacts, API keys, and analytics.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/dashboard.png" alt="Posta Dashboard" width="900"/>
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/dashboard.png" alt="Posta Dashboard" width="900"/>
 </p>
 
 ### Email Analytics
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/analytics.png" alt="Email Analytics" width="900"/>
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/analytics.png" alt="Email Analytics" width="900"/>
+</p>
+
+### Email Logs
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/email-logs.png" alt="Email Logs" width="900"/>
+</p>
+
+### Email Detail
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/email-detail.png" alt="Email Detail" width="900"/>
 </p>
 
 ### Template Detail
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/template-detail.png" alt="Template Detail" width="900"/>
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/template-detail.png" alt="Template Detail" width="900"/>
 </p>
 
 ### Template Editor
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/template-editor.png" alt="Template Editor" width="900"/>
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/template-preview.png" alt="Template Preview" width="900"/>
 </p>
 
 ### Admin Platform Metrics
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/admin-platform-metrics.png" alt="Admin Platform Metrics" width="900"/>
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/admin-platform-metrics.png" alt="Admin Platform Metrics" width="900"/>
 </p>
 
 ### Admin Platform Metrics (Dark)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jkaninda/posta/main/docs/screenshots/admin-platform-metrics-dark.png" alt="Admin Platform Metrics Dark" width="900"/>
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/admin-metrics-light.png" alt="Admin Metrics Light" width="900"/>
+</p>
+
+### Admin Metrics (Dark)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/screenshots/admin-metrics-dark.png" alt="Admin Metrics Dark" width="900"/>
 </p>
 
 ---
 ## Official Clients
 
-- Go: https://github.com/jkaninda/posta-go
-- Php: https://github.com/jkaninda/posta-php
-- Java: https://github.com/jkaninda/posta-java
+- Go: https://github.com/goposta/posta-go
+- Php: https://github.com/goposta/posta-php
+- Java: https://github.com/goposta/posta-java
 
 ### Go Client SDK
 
@@ -388,7 +427,7 @@ An official Go client is available:
 Install:
 
 ```bash
-go get github.com/jkaninda/posta-go
+go get github.com/goposta/posta-go
 ```
 
 Example:
@@ -400,7 +439,7 @@ import (
     "fmt"
     "log"
 
-    posta "github.com/jkaninda/posta-go"
+    posta "github.com/goposta/posta-go"
 )
 
 func main() {

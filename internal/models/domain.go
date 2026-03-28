@@ -21,8 +21,9 @@ import "time"
 
 type Domain struct {
 	ID                uint      `json:"id" gorm:"primaryKey"`
-	UserID            uint      `json:"user_id" gorm:"uniqueIndex:idx_user_domain;not null"`
-	Domain            string    `json:"domain" gorm:"uniqueIndex:idx_user_domain;not null"`
+	UserID            uint      `json:"user_id" gorm:"index;not null"`
+	WorkspaceID       *uint     `json:"workspace_id,omitempty" gorm:"index"`
+	Domain            string    `json:"domain" gorm:"not null"`
 	OwnershipVerified bool      `json:"ownership_verified" gorm:"default:false"`
 	SPFVerified       bool      `json:"spf_verified" gorm:"default:false"`
 	DKIMVerified      bool      `json:"dkim_verified" gorm:"default:false"`

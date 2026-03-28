@@ -20,10 +20,11 @@ const saving = ref(false)
 const form = ref<LanguageInput>({
   code: '',
   name: '',
+  is_default: false,
 })
 
 function resetForm() {
-  form.value = { code: '', name: '' }
+  form.value = { code: '', name: '', is_default: false }
   editing.value = null
 }
 
@@ -37,6 +38,7 @@ function openEdit(lang: Language) {
   form.value = {
     code: lang.code,
     name: lang.name,
+    is_default: lang.is_default,
   }
   showModal.value = true
 }
@@ -129,6 +131,7 @@ onMounted(() => loadLanguages())
               <tr>
                 <th>Code</th>
                 <th>Name</th>
+                <th>Default</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -137,6 +140,7 @@ onMounted(() => loadLanguages())
               <tr v-for="lang in languages" :key="lang.id">
                 <td><span class="badge badge-neutral">{{ lang.code }}</span></td>
                 <td>{{ lang.name }}</td>
+                <td><span v-if="lang.is_default" class="badge badge-success">Default</span></td>
                 <td>{{ formatDate(lang.created_at) }}</td>
                 <td>
                   <div class="flex gap-2">
@@ -189,6 +193,13 @@ onMounted(() => loadLanguages())
           <div class="form-group">
             <label class="form-label">Name</label>
             <input v-model="form.name" class="form-input" placeholder="e.g. English, French" />
+          </div>
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" v-model="form.is_default" />
+              <span>Set as default language</span>
+            </label>
+            <span class="form-hint">The default language is used for new subscribers and as the fallback for campaigns.</span>
           </div>
         </div>
         <div class="modal-footer">

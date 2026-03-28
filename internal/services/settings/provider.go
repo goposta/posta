@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 // Provider gives live access to platform settings with a short cache.
@@ -131,6 +131,7 @@ func (p *Provider) AuditLogRetentionDays() int  { return p.GetInt("audit_log_ret
 func (p *Provider) WebhookDeliveryRetentionDays() int {
 	return p.GetInt("webhook_delivery_retention_days", 30)
 }
+func (p *Provider) TrackingEventRetentionDays() int { return p.GetInt("tracking_event_retention_days", 90) }
 func (p *Provider) LoginRateLimitCount() int {
 	return p.GetInt("login_rate_limit_count", 10)
 }

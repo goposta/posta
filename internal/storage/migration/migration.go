@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -29,6 +29,13 @@ import (
 func Run(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&models.User{},
+		&models.Plan{},
+		&models.Workspace{},
+		&models.WorkspaceMember{},
+		&models.WorkspaceInvitation{},
+		&models.OAuthProvider{},
+		&models.OAuthAccount{},
+		&models.WorkspaceSSOConfig{},
 		&models.APIKey{},
 		&models.Email{},
 		&models.StyleSheet{},
@@ -43,19 +50,41 @@ func Run(db *gorm.DB) error {
 		&models.Bounce{},
 		&models.Suppression{},
 		&models.Contact{},
-		&models.ContactList{},
-		&models.ContactListMember{},
 		&models.Event{},
 		&models.Setting{},
 		&models.UserSetting{},
 		&models.WebhookDelivery{},
 		&models.Session{},
+		&models.Subscriber{},
+		&models.SubscriberList{},
+		&models.SubscriberListMember{},
+		&models.Campaign{},
+		&models.CampaignMessage{},
+		&models.TrackedLink{},
+		&models.TrackingEvent{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
+
+	// Normalize: set workspace_id = NULL where it was previously 0 (personal data)
+	normalizeWorkspaceIDs(db)
+
 	// run constraints
 	runConstraints(db)
 
 	logger.Info("database migrated")
 	return nil
+}
+
+// normalizeWorkspaceIDs sets workspace_id to NULL where it is 0 (legacy default).
+// NULL means personal space; only non-NULL values reference a real workspace.
+func normalizeWorkspaceIDs(db *gorm.DB) {
+	tables := []string{
+		"api_keys", "emails", "templates", "smtp_servers", "domains",
+		"webhooks", "webhook_deliveries", "contacts",
+		"bounces", "suppressions", "style_sheets", "languages", "events",
+	}
+	for _, table := range tables {
+		db.Exec(fmt.Sprintf(`UPDATE %s SET workspace_id = NULL WHERE workspace_id = 0`, table))
+	}
 }

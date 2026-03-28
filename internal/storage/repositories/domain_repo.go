@@ -18,7 +18,7 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -54,9 +54,9 @@ func (r *DomainRepository) FindByUserID(userID uint, limit, offset int) ([]model
 	var domains []models.Domain
 	var total int64
 
-	r.db.Model(&models.Domain{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.Domain{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&domains).Error; err != nil {
@@ -71,6 +71,36 @@ func (r *DomainRepository) FindByUserIDAndDomain(userID uint, domain string) (*m
 		return nil, err
 	}
 	return &d, nil
+}
+
+func (r *DomainRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Domain, int64, error) {
+	var domains []models.Domain
+	var total int64
+
+	r.db.Model(&models.Domain{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&domains).Error; err != nil {
+		return nil, 0, err
+	}
+	return domains, total, nil
+}
+
+func (r *DomainRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.Domain, int64, error) {
+	var items []models.Domain
+	var total int64
+
+	ApplyScope(r.db.Model(&models.Domain{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 // IsOwnershipVerified checks whether the given domain is registered and ownership-verified for the user.

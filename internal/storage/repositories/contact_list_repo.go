@@ -18,7 +18,7 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -45,9 +45,32 @@ func (r *ContactListRepository) FindByID(id uint) (*models.ContactList, error) {
 func (r *ContactListRepository) FindByUserID(userID uint, limit, offset int) ([]models.ContactList, int64, error) {
 	var lists []models.ContactList
 	var total int64
-	r.db.Model(&models.ContactList{}).Where("user_id = ?", userID).Count(&total)
-	err := r.db.Where("user_id = ?", userID).Order("created_at DESC").Limit(limit).Offset(offset).Find(&lists).Error
+	r.db.Model(&models.ContactList{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
+	err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).Order("created_at DESC").Limit(limit).Offset(offset).Find(&lists).Error
 	return lists, total, err
+}
+
+func (r *ContactListRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.ContactList, int64, error) {
+	var lists []models.ContactList
+	var total int64
+	r.db.Model(&models.ContactList{}).Where("workspace_id = ?", workspaceID).Count(&total)
+	err := r.db.Where("workspace_id = ?", workspaceID).Order("created_at DESC").Limit(limit).Offset(offset).Find(&lists).Error
+	return lists, total, err
+}
+
+func (r *ContactListRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.ContactList, int64, error) {
+	var items []models.ContactList
+	var total int64
+
+	ApplyScope(r.db.Model(&models.ContactList{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *ContactListRepository) Update(list *models.ContactList) error {

@@ -18,7 +18,7 @@
 package repositories
 
 import (
-	"github.com/jkaninda/posta/internal/models"
+	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -55,15 +55,45 @@ func (r *WebhookRepository) FindByUserID(userID uint, limit, offset int) ([]mode
 	var webhooks []models.Webhook
 	var total int64
 
-	r.db.Model(&models.Webhook{}).Where("user_id = ?", userID).Count(&total)
+	r.db.Model(&models.Webhook{}).Where("user_id = ? AND workspace_id IS NULL", userID).Count(&total)
 
-	if err := r.db.Where("user_id = ?", userID).
+	if err := r.db.Where("user_id = ? AND workspace_id IS NULL", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&webhooks).Error; err != nil {
 		return nil, 0, err
 	}
 	return webhooks, total, nil
+}
+
+func (r *WebhookRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Webhook, int64, error) {
+	var webhooks []models.Webhook
+	var total int64
+
+	r.db.Model(&models.Webhook{}).Where("workspace_id = ?", workspaceID).Count(&total)
+
+	if err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&webhooks).Error; err != nil {
+		return nil, 0, err
+	}
+	return webhooks, total, nil
+}
+
+func (r *WebhookRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.Webhook, int64, error) {
+	var items []models.Webhook
+	var total int64
+
+	ApplyScope(r.db.Model(&models.Webhook{}), scope).Count(&total)
+
+	if err := ApplyScope(r.db, scope).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *WebhookRepository) FindByUserIDAndEvent(userID uint, event string) ([]models.Webhook, error) {

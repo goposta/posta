@@ -18,19 +18,23 @@
 package email
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/mail"
 	"strings"
 	"time"
 
 	"github.com/jkaninda/logger"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/services/ratelimit"
-	"github.com/jkaninda/posta/internal/services/settings"
-	"github.com/jkaninda/posta/internal/services/webhook"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/ratelimit"
+	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/services/webhook"
+	"github.com/goposta/posta/internal/storage/blob"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 const (
@@ -45,6 +49,19 @@ const (
 type EmailEnqueuer interface {
 	EnqueueEmailSend(emailID uint, queue string) error
 	EnqueueEmailSendAt(emailID uint, queue string, sendAt time.Time) error
+}
+
+// PlanLimitsProvider resolves effective plan limits for a given workspace.
+type PlanLimitsProvider interface {
+	EffectiveLimits(workspaceID *uint) *PlanLimits
+}
+
+// PlanLimits holds the resolved limits from a plan or global settings.
+type PlanLimits struct {
+	HourlyRateLimit     int
+	DailyRateLimit      int
+	MaxAttachmentSizeMB int
+	MaxBatchSize        int
 }
 
 type Service struct {
@@ -63,6 +80,8 @@ type Service struct {
 	dispatcher       *webhook.Dispatcher
 	enqueuer         EmailEnqueuer
 	settings         *settings.Provider
+	blobStore        blob.Store
+	planLimits       PlanLimitsProvider
 	devMode          bool
 	onSent           func()
 	onFailed         func()
@@ -113,10 +132,77 @@ func (s *Service) SetSettings(sp *settings.Provider) {
 	s.settings = sp
 }
 
+// SetPlanLimits sets the plan limits provider for plan-aware enforcement.
+func (s *Service) SetPlanLimits(pl PlanLimitsProvider) {
+	s.planLimits = pl
+}
+
 // SetEnqueuer sets the email enqueuer for asynchronous delivery.
 // When set, emails are enqueued to a background worker instead of being sent synchronously.
 func (s *Service) SetEnqueuer(eq EmailEnqueuer) {
 	s.enqueuer = eq
+}
+
+// SetBlobStore sets the blob storage backend for persisting email attachments.
+// When configured, attachment content is uploaded to the store and only metadata
+// (with a storage key) is kept in the database, reducing DB pressure.
+func (s *Service) SetBlobStore(bs blob.Store) {
+	s.blobStore = bs
+}
+
+// uploadAttachments stores each attachment's content in blob storage and replaces
+// the inline base64 content with a storage key reference. Returns the modified
+// attachments with StorageKey set and Content cleared.
+func (s *Service) uploadAttachments(ctx context.Context, emailUUID string, attachments []models.Attachment) ([]models.Attachment, error) {
+	result := make([]models.Attachment, len(attachments))
+	for i, att := range attachments {
+		decoded, err := base64.StdEncoding.DecodeString(att.Content)
+		if err != nil {
+			return nil, fmt.Errorf("attachment %q: invalid base64: %w", att.Filename, err)
+		}
+		key := fmt.Sprintf("emails/%s/%d_%s", emailUUID, i, att.Filename)
+		if err := s.blobStore.Put(ctx, key, bytes.NewReader(decoded), att.ContentType); err != nil {
+			return nil, fmt.Errorf("failed to upload attachment %q: %w", att.Filename, err)
+		}
+		result[i] = models.Attachment{
+			Filename:    att.Filename,
+			ContentType: att.ContentType,
+			StorageKey:  key,
+		}
+	}
+	return result, nil
+}
+
+// DownloadAttachments fetches attachment content from blob storage and populates
+// the base64 Content field for each attachment that has a StorageKey.
+func (s *Service) DownloadAttachments(ctx context.Context, attachments []models.Attachment) ([]models.Attachment, error) {
+	result := make([]models.Attachment, len(attachments))
+	for i, att := range attachments {
+		result[i] = att
+		if att.StorageKey == "" {
+			continue
+		}
+		rc, err := s.blobStore.Get(ctx, att.StorageKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download attachment %q: %w", att.Filename, err)
+		}
+		data, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read attachment %q: %w", att.Filename, err)
+		}
+		result[i].Content = base64.StdEncoding.EncodeToString(data)
+	}
+	return result, nil
+}
+
+// DeleteAttachments removes attachment blobs from storage for the given keys.
+func (s *Service) DeleteAttachments(ctx context.Context, attachments []models.Attachment) {
+	for _, att := range attachments {
+		if att.StorageKey != "" {
+			_ = s.blobStore.Delete(ctx, att.StorageKey)
+		}
+	}
 }
 
 // OnSent sets a callback invoked after each successful email send.
@@ -142,7 +228,8 @@ type SendRequest struct {
 }
 
 type SendTemplateRequest struct {
-	Template     string              `json:"template" required:"true"`
+	TemplateID   *uint               `json:"template_id,omitempty" doc:"Template ID (preferred, uses primary key index)"`
+	Template     string              `json:"template" doc:"Template name (fallback when template_id is not provided)"`
 	Language     string              `json:"language"`
 	From         string              `json:"from"`
 	To           []string            `json:"to" required:"true" minItems:"1"`
@@ -156,7 +243,8 @@ type SendResponse struct {
 }
 
 type BatchRequest struct {
-	Template   string           `json:"template" required:"true"`
+	TemplateID *uint            `json:"template_id,omitempty" doc:"Template ID (preferred, uses primary key index)"`
+	Template   string           `json:"template" doc:"Template name (fallback when template_id is not provided)"`
 	Language   string           `json:"language"`
 	From       string           `json:"from"`
 	Recipients []BatchRecipient `json:"recipients" required:"true" minItems:"1"`
@@ -198,7 +286,7 @@ type DryRunResponse struct {
 }
 
 // ValidateSend runs all validation checks without persisting or sending.
-func (s *Service) ValidateSend(ctx context.Context, userID uint, userEmail string, req *SendRequest) (*DryRunResponse, error) {
+func (s *Service) ValidateSend(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *SendRequest) (*DryRunResponse, error) {
 	if s.settings != nil && s.settings.MaintenanceMode() {
 		return nil, fmt.Errorf("maintenance: email sending is temporarily disabled")
 	}
@@ -209,7 +297,12 @@ func (s *Service) ValidateSend(ctx context.Context, userID uint, userEmail strin
 
 	if len(req.Attachments) > 0 {
 		maxSize := DefaultMaxAttachmentSize
-		if s.settings != nil {
+		if s.planLimits != nil {
+			pl := s.planLimits.EffectiveLimits(workspaceID)
+			if pl.MaxAttachmentSizeMB > 0 {
+				maxSize = int64(pl.MaxAttachmentSizeMB) * 1024 * 1024
+			}
+		} else if s.settings != nil {
 			maxSize = int64(s.settings.MaxAttachmentSizeMB()) * 1024 * 1024
 		}
 		if err := ValidateAttachments(req.Attachments, maxSize, DefaultMaxTotalSize); err != nil {
@@ -221,10 +314,11 @@ func (s *Service) ValidateSend(ctx context.Context, userID uint, userEmail strin
 		return nil, err
 	}
 
+	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	activeRecipients := req.To
 	suppressedCount := 0
 	if s.suppressionRepo != nil {
-		filtered, err := s.suppressionRepo.FilterSuppressed(userID, req.To)
+		filtered, err := s.suppressionRepo.FilterSuppressed(scope, req.To)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check suppression list: %w", err)
 		}
@@ -246,8 +340,8 @@ func (s *Service) ValidateSend(ctx context.Context, userID uint, userEmail strin
 }
 
 // ValidateSendWithTemplate validates a template send request without sending.
-func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, userEmail string, req *SendTemplateRequest) (*DryRunResponse, error) {
-	tmpl, err := s.templateRepo.FindByName(userID, req.Template)
+func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *SendTemplateRequest) (*DryRunResponse, error) {
+	tmpl, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
 	if err != nil {
 		return nil, fmt.Errorf("template not found: %s", req.Template)
 	}
@@ -262,7 +356,7 @@ func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, use
 		from = defaultFromAddress
 	}
 
-	resp, err := s.ValidateSend(ctx, userID, userEmail, &SendRequest{
+	resp, err := s.ValidateSend(ctx, userID, workspaceID, userEmail, &SendRequest{
 		From:        from,
 		To:          req.To,
 		Subject:     rendered.Subject,
@@ -278,17 +372,20 @@ func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, use
 }
 
 // ValidateSendBatch validates a batch send request without sending.
-func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, userEmail string, req *BatchRequest) (*DryRunResponse, error) {
-	if s.settings != nil {
-		maxBatch := s.settings.MaxBatchSize()
-		if maxBatch > 0 && len(req.Recipients) > maxBatch {
-			return nil, fmt.Errorf("batch size %d exceeds maximum allowed (%d)", len(req.Recipients), maxBatch)
-		}
+func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *BatchRequest) (*DryRunResponse, error) {
+	maxBatch := 0
+	if s.planLimits != nil {
+		maxBatch = s.planLimits.EffectiveLimits(workspaceID).MaxBatchSize
+	} else if s.settings != nil {
+		maxBatch = s.settings.MaxBatchSize()
+	}
+	if maxBatch > 0 && len(req.Recipients) > maxBatch {
+		return nil, fmt.Errorf("batch size %d exceeds maximum allowed (%d)", len(req.Recipients), maxBatch)
 	}
 
-	_, err := s.templateRepo.FindByName(userID, req.Template)
+	_, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
 	if err != nil {
-		return nil, fmt.Errorf("template not found: %s", req.Template)
+		return nil, fmt.Errorf("template not found: %w", err)
 	}
 
 	from := req.From
@@ -301,10 +398,11 @@ func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, userEmail 
 		emails[i] = r.Email
 	}
 
+	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	activeRecipients := emails
 	suppressedCount := 0
 	if s.suppressionRepo != nil {
-		filtered, err := s.suppressionRepo.FilterSuppressed(userID, emails)
+		filtered, err := s.suppressionRepo.FilterSuppressed(scope, emails)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check suppression list: %w", err)
 		}
@@ -322,20 +420,33 @@ func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, userEmail 
 	}, nil
 }
 
-func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, userEmail string, req *SendRequest) (*SendResponse, error) {
+func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *uint, userEmail string, req *SendRequest) (*SendResponse, error) {
 	// Enforce maintenance mode
 	if s.settings != nil && s.settings.MaintenanceMode() {
 		return nil, fmt.Errorf("maintenance: email sending is temporarily disabled")
 	}
 
-	if err := s.limiter.Allow(ctx, userEmail); err != nil {
-		return nil, fmt.Errorf("rate_limit: %w", err)
+	// Rate limiting: use plan limits if available, otherwise global.
+	if s.planLimits != nil {
+		pl := s.planLimits.EffectiveLimits(workspaceID)
+		if err := s.limiter.AllowWithLimits(ctx, userEmail, pl.HourlyRateLimit, pl.DailyRateLimit); err != nil {
+			return nil, fmt.Errorf("rate_limit: %w", err)
+		}
+	} else {
+		if err := s.limiter.Allow(ctx, userEmail); err != nil {
+			return nil, fmt.Errorf("rate_limit: %w", err)
+		}
 	}
 
 	// Validate attachments if present
 	if len(req.Attachments) > 0 {
 		maxSize := DefaultMaxAttachmentSize
-		if s.settings != nil {
+		if s.planLimits != nil {
+			pl := s.planLimits.EffectiveLimits(workspaceID)
+			if pl.MaxAttachmentSizeMB > 0 {
+				maxSize = int64(pl.MaxAttachmentSizeMB) * 1024 * 1024
+			}
+		} else if s.settings != nil {
 			maxSize = int64(s.settings.MaxAttachmentSizeMB()) * 1024 * 1024
 		}
 		if err := ValidateAttachments(req.Attachments, maxSize, DefaultMaxTotalSize); err != nil {
@@ -343,14 +454,18 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, userEmail str
 		}
 	}
 
-	// Enforce verified domain when user has strict mode enabled
-	if err := s.checkDomainVerification(userID, req.From); err != nil {
-		return nil, err
+	// Enforce verified domain when user has strict mode enabled (personal mode only;
+	// workspace domain verification is handled at the workspace level).
+	if workspaceID == nil {
+		if err := s.checkDomainVerification(userID, req.From); err != nil {
+			return nil, err
+		}
 	}
 
 	// Filter out suppressed recipients
+	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	if s.suppressionRepo != nil {
-		filtered, err := s.suppressionRepo.FilterSuppressed(userID, req.To)
+		filtered, err := s.suppressionRepo.FilterSuppressed(scope, req.To)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check suppression list: %w", err)
 		}
@@ -362,6 +477,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, userEmail str
 			}
 			em := &models.Email{
 				UserID:       userID,
+				WorkspaceID:  workspaceID,
 				APIKeyID:     apiKeyPtr,
 				Sender:       req.From,
 				Recipients:   req.To,
@@ -384,6 +500,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, userEmail str
 			for _, addr := range suppressed {
 				em := &models.Email{
 					UserID:       userID,
+					WorkspaceID:  workspaceID,
 					APIKeyID:     apiKeyPtr,
 					Sender:       req.From,
 					Recipients:   []string{addr},
@@ -397,19 +514,33 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, userEmail str
 		req.To = filtered
 	}
 
-	// Serialize attachments metadata for storage
+	// Serialize attachments for storage. When blob storage is configured,
+	// upload the binary content and store only the storage key reference.
+	// Otherwise store just filename + content_type metadata.
 	var attachmentsJSON string
 	if len(req.Attachments) > 0 {
-		type attachMeta struct {
-			Filename    string `json:"filename"`
-			ContentType string `json:"content_type"`
+		if s.blobStore != nil {
+			// Generate a temporary UUID for the blob key prefix.
+			// The real email UUID is assigned by the DB, so we use a timestamp-based key.
+			tempKey := fmt.Sprintf("%d", time.Now().UnixNano())
+			uploaded, err := s.uploadAttachments(ctx, tempKey, req.Attachments)
+			if err != nil {
+				return nil, fmt.Errorf("attachment upload: %w", err)
+			}
+			b, _ := json.Marshal(uploaded)
+			attachmentsJSON = string(b)
+		} else {
+			type attachMeta struct {
+				Filename    string `json:"filename"`
+				ContentType string `json:"content_type"`
+			}
+			meta := make([]attachMeta, len(req.Attachments))
+			for i, a := range req.Attachments {
+				meta[i] = attachMeta{Filename: a.Filename, ContentType: a.ContentType}
+			}
+			b, _ := json.Marshal(meta)
+			attachmentsJSON = string(b)
 		}
-		meta := make([]attachMeta, len(req.Attachments))
-		for i, a := range req.Attachments {
-			meta[i] = attachMeta{Filename: a.Filename, ContentType: a.ContentType}
-		}
-		b, _ := json.Marshal(meta)
-		attachmentsJSON = string(b)
 	}
 
 	// Auto-generate plain text from HTML when text body is not provided
@@ -434,6 +565,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, userEmail str
 
 	em := &models.Email{
 		UserID:              userID,
+		WorkspaceID:         workspaceID,
 		APIKeyID:            apiKeyPtr,
 		Sender:              req.From,
 		Recipients:          req.To,
@@ -498,12 +630,18 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, userEmail str
 	}
 
 	// Synchronous fallback: send email directly (no worker configured)
-	return s.sendSync(em, userID, req)
+	return s.sendSync(em, userID, workspaceID, req)
 }
 
 // sendSync performs synchronous SMTP delivery (used when no enqueuer is configured).
-func (s *Service) sendSync(em *models.Email, userID uint, req *SendRequest) (*SendResponse, error) {
-	smtpServer, err := s.smtpRepo.FindFirstByUserID(userID)
+func (s *Service) sendSync(em *models.Email, userID uint, workspaceID *uint, req *SendRequest) (*SendResponse, error) {
+	var smtpServer *models.SMTPServer
+	var err error
+	if workspaceID != nil {
+		smtpServer, err = s.smtpRepo.FindFirstByWorkspaceID(*workspaceID)
+	} else {
+		smtpServer, err = s.smtpRepo.FindFirstByUserID(userID)
+	}
 	if err != nil {
 		em.Status = models.EmailStatusFailed
 		em.ErrorMessage = "no SMTP server configured"
@@ -568,10 +706,10 @@ func (s *Service) sendSync(em *models.Email, userID uint, req *SendRequest) (*Se
 	return &SendResponse{ID: em.UUID, Status: em.Status}, nil
 }
 
-func (s *Service) SendWithTemplate(ctx context.Context, userID, apiKeyID uint, userEmail string, req *SendTemplateRequest) (*SendResponse, error) {
-	tmpl, err := s.templateRepo.FindByName(userID, req.Template)
+func (s *Service) SendWithTemplate(ctx context.Context, userID, apiKeyID uint, workspaceID *uint, userEmail string, req *SendTemplateRequest) (*SendResponse, error) {
+	tmpl, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
 	if err != nil {
-		return nil, fmt.Errorf("template not found: %s", req.Template)
+		return nil, fmt.Errorf("template not found: %w", err)
 	}
 
 	rendered, err := s.resolveAndRender(tmpl, req.Language, req.TemplateData)
@@ -584,7 +722,7 @@ func (s *Service) SendWithTemplate(ctx context.Context, userID, apiKeyID uint, u
 		from = defaultFromAddress
 	}
 
-	return s.Send(ctx, userID, apiKeyID, userEmail, &SendRequest{
+	return s.Send(ctx, userID, apiKeyID, workspaceID, userEmail, &SendRequest{
 		From:        from,
 		To:          req.To,
 		Subject:     rendered.Subject,
@@ -594,18 +732,21 @@ func (s *Service) SendWithTemplate(ctx context.Context, userID, apiKeyID uint, u
 	})
 }
 
-func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, userEmail string, req *BatchRequest) (*BatchResponse, error) {
-	// Enforce max batch size from platform settings
-	if s.settings != nil {
-		maxBatch := s.settings.MaxBatchSize()
-		if maxBatch > 0 && len(req.Recipients) > maxBatch {
-			return nil, fmt.Errorf("batch size %d exceeds maximum allowed (%d)", len(req.Recipients), maxBatch)
-		}
+func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspaceID *uint, userEmail string, req *BatchRequest) (*BatchResponse, error) {
+	// Enforce max batch size from plan or platform settings
+	maxBatch := 0
+	if s.planLimits != nil {
+		maxBatch = s.planLimits.EffectiveLimits(workspaceID).MaxBatchSize
+	} else if s.settings != nil {
+		maxBatch = s.settings.MaxBatchSize()
+	}
+	if maxBatch > 0 && len(req.Recipients) > maxBatch {
+		return nil, fmt.Errorf("batch size %d exceeds maximum allowed (%d)", len(req.Recipients), maxBatch)
 	}
 
-	tmpl, err := s.templateRepo.FindByName(userID, req.Template)
+	tmpl, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
 	if err != nil {
-		return nil, fmt.Errorf("template not found: %s", req.Template)
+		return nil, fmt.Errorf("template not found: %w", err)
 	}
 
 	from := req.From
@@ -621,7 +762,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, userEmai
 	for _, recipient := range req.Recipients {
 		// Check suppression
 		if s.suppressionRepo != nil {
-			suppressed, err := s.suppressionRepo.IsSuppressed(userID, recipient.Email)
+			suppressed, err := s.suppressionRepo.IsSuppressed(repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}, recipient.Email)
 			if err == nil && suppressed {
 				// Log the suppressed email
 				var apiKeyPtr *uint
@@ -630,6 +771,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, userEmai
 				}
 				em := &models.Email{
 					UserID:       userID,
+					WorkspaceID:  workspaceID,
 					APIKeyID:     apiKeyPtr,
 					Sender:       from,
 					Recipients:   []string{recipient.Email},
@@ -667,7 +809,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, userEmai
 			continue
 		}
 
-		sendResp, err := s.Send(ctx, userID, apiKeyID, userEmail, &SendRequest{
+		sendResp, err := s.Send(ctx, userID, apiKeyID, workspaceID, userEmail, &SendRequest{
 			From:    from,
 			To:      []string{recipient.Email},
 			Subject: rendered.Subject,
@@ -697,9 +839,9 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, userEmai
 
 // SendTestByTemplateID sends a test email using a template looked up by ID.
 // It uses apiKeyID=0 since test sends come from the dashboard, not an API key.
-func (s *Service) SendTestByTemplateID(ctx context.Context, userID uint, userEmail string, templateID uint, req *SendTestRequest) (*SendResponse, error) {
+func (s *Service) SendTestByTemplateID(ctx context.Context, userID uint, workspaceID *uint, userEmail string, templateID uint, req *SendTestRequest) (*SendResponse, error) {
 	tmpl, err := s.templateRepo.FindByID(templateID)
-	if err != nil || tmpl.UserID != userID {
+	if err != nil {
 		return nil, fmt.Errorf("template not found")
 	}
 
@@ -713,7 +855,7 @@ func (s *Service) SendTestByTemplateID(ctx context.Context, userID uint, userEma
 		from = defaultFromAddress
 	}
 
-	return s.Send(ctx, userID, 0, userEmail, &SendRequest{
+	return s.Send(ctx, userID, 0, workspaceID, userEmail, &SendRequest{
 		From:    from,
 		To:      req.To,
 		Subject: rendered.Subject,
@@ -729,9 +871,14 @@ type SendTestRequest struct {
 	TemplateData map[string]any `json:"template_data"`
 }
 
+// defaultRetryLimit is the fallback maximum number of manual retries when
+// no SMTP server is configured or the server's MaxRetries is zero.
+const defaultRetryLimit = 5
+
 // RetryEmail re-enqueues a failed email for another delivery attempt.
-// Only emails with status "failed" can be retried.
-func (s *Service) RetryEmail(emailUUID string, userID uint) (*SendResponse, error) {
+// Only emails with status "failed" can be retried, and the retry count
+// must not exceed the SMTP server's MaxRetries (or the default limit).
+func (s *Service) RetryEmail(emailUUID string, userID uint, workspaceID *uint) (*SendResponse, error) {
 	em, err := s.emailRepo.FindByUUID(emailUUID)
 	if err != nil {
 		return nil, fmt.Errorf("email not found")
@@ -739,9 +886,35 @@ func (s *Service) RetryEmail(emailUUID string, userID uint) (*SendResponse, erro
 	if em.UserID != userID {
 		return nil, fmt.Errorf("email not found")
 	}
+	// When called from a workspace-scoped context, verify the email belongs
+	// to that workspace.
+	if workspaceID != nil {
+		if em.WorkspaceID == nil || *em.WorkspaceID != *workspaceID {
+			return nil, fmt.Errorf("email not found")
+		}
+	}
 	if em.Status != models.EmailStatusFailed {
 		return nil, fmt.Errorf("only failed emails can be retried")
 	}
+
+	// Enforce retry limit from the SMTP server configuration.
+	maxRetries := defaultRetryLimit
+	if s.smtpRepo != nil {
+		var smtpServer *models.SMTPServer
+		if em.WorkspaceID != nil {
+			smtpServer, _ = s.smtpRepo.FindFirstByWorkspaceID(*em.WorkspaceID)
+		} else {
+			smtpServer, _ = s.smtpRepo.FindFirstByUserID(em.UserID)
+		}
+		if smtpServer != nil && smtpServer.MaxRetries > 0 {
+			maxRetries = smtpServer.MaxRetries
+		}
+	}
+	if em.RetryCount >= maxRetries {
+		return nil, fmt.Errorf("retry limit reached (%d/%d)", em.RetryCount, maxRetries)
+	}
+
+	em.RetryCount++
 
 	if s.enqueuer != nil {
 		em.Status = models.EmailStatusQueued
@@ -757,7 +930,7 @@ func (s *Service) RetryEmail(emailUUID string, userID uint) (*SendResponse, erro
 	}
 
 	// Synchronous fallback
-	return s.sendSync(em, userID, &SendRequest{
+	return s.sendSync(em, userID, em.WorkspaceID, &SendRequest{
 		From:                em.Sender,
 		To:                  em.Recipients,
 		Subject:             em.Subject,
@@ -768,14 +941,48 @@ func (s *Service) RetryEmail(emailUUID string, userID uint) (*SendResponse, erro
 	})
 }
 
-// RenderTemplate resolves a template by name and renders it with the given data,
+// RenderTemplate resolves a template by ID or name and renders it with the given data,
 // returning the rendered subject, HTML, and text without sending.
-func (s *Service) RenderTemplate(userID uint, templateName, language string, data map[string]any) (*RenderedTemplate, error) {
-	tmpl, err := s.templateRepo.FindByName(userID, templateName)
+func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uint, templateName, language string, data map[string]any) (*RenderedTemplate, error) {
+	tmpl, err := s.findTemplate(userID, workspaceID, templateID, templateName)
 	if err != nil {
-		return nil, fmt.Errorf("template not found: %s", templateName)
+		return nil, fmt.Errorf("template not found: %w", err)
 	}
 	return s.resolveAndRender(tmpl, language, data)
+}
+
+// findTemplate looks up a template by ID or name. When templateID is provided
+// it performs a fast primary-key lookup and verifies the caller owns the
+// resource. Otherwise it falls back to a name-based search (workspace first,
+// then personal).
+func (s *Service) findTemplate(userID uint, workspaceID *uint, templateID *uint, name string) (*models.Template, error) {
+	if templateID != nil && *templateID != 0 {
+		tmpl, err := s.templateRepo.FindByID(*templateID)
+		if err != nil {
+			return nil, err
+		}
+		// Verify ownership: must belong to the same user/workspace.
+		if workspaceID != nil {
+			if tmpl.WorkspaceID == nil || *tmpl.WorkspaceID != *workspaceID {
+				return nil, fmt.Errorf("template not found")
+			}
+		} else if tmpl.UserID != userID || tmpl.WorkspaceID != nil {
+			return nil, fmt.Errorf("template not found")
+		}
+		return tmpl, nil
+	}
+
+	if name == "" {
+		return nil, fmt.Errorf("template_id or template name is required")
+	}
+
+	if workspaceID != nil {
+		tmpl, err := s.templateRepo.FindByWorkspaceName(*workspaceID, name)
+		if err == nil {
+			return tmpl, nil
+		}
+	}
+	return s.templateRepo.FindByName(userID, name)
 }
 
 // resolveAndRender resolves the template content using versioned localizations

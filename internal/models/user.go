@@ -36,6 +36,9 @@ type User struct {
 	TwoFactorEnabled      bool       `json:"two_factor_enabled" gorm:"default:false"`
 	Active                bool       `json:"active" gorm:"default:true;not null"`
 	RequireVerifiedDomain bool       `json:"require_verified_domain" gorm:"default:false"`
+	AuthMethod            string     `json:"auth_method" gorm:"default:'password';not null"`
+	AvatarURL             string     `json:"avatar_url"`
+	ScheduledDeletionAt   *time.Time `json:"scheduled_deletion_at"`
 	CreatedAt             time.Time  `json:"created_at"`
 	LastLoginAt           *time.Time `json:"last_login_at"`
 }

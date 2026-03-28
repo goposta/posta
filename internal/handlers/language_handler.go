@@ -19,8 +19,8 @@ package handlers
 
 import (
 	"github.com/jkaninda/okapi"
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 type LanguageHandler struct {
@@ -28,15 +28,17 @@ type LanguageHandler struct {
 }
 type CreateLanguageRequest struct {
 	Body struct {
-		Code string `json:"code" required:"true"`
-		Name string `json:"name" required:"true"`
+		Code      string `json:"code" required:"true"`
+		Name      string `json:"name" required:"true"`
+		IsDefault bool   `json:"is_default"`
 	} `json:"body"`
 }
 type UpdateLanguageRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Code string `json:"code"`
-		Name string `json:"name"`
+		Code      string `json:"code"`
+		Name      string `json:"name"`
+		IsDefault *bool  `json:"is_default"`
 	} `json:"body"`
 }
 type DeleteLanguageRequest struct {
@@ -48,12 +50,22 @@ func NewLanguageHandler(repo *repositories.LanguageRepository) *LanguageHandler 
 }
 
 func (h *LanguageHandler) Create(c *okapi.Context, req *CreateLanguageRequest) error {
-	userID := c.GetInt("user_id")
+	if err := requireEdit(c); err != nil {
+		return err
+	}
+	scope := getScope(c)
+
+	// If marking as default, clear existing default first
+	if req.Body.IsDefault {
+		_ = h.repo.ClearDefault(scope)
+	}
 
 	l := &models.Language{
-		UserID: uint(userID),
-		Code:   req.Body.Code,
-		Name:   req.Body.Name,
+		UserID:      scope.UserID,
+		WorkspaceID: scope.WorkspaceID,
+		Code:        req.Body.Code,
+		Name:        req.Body.Name,
+		IsDefault:   req.Body.IsDefault,
 	}
 
 	if err := h.repo.Create(l); err != nil {
@@ -64,10 +76,11 @@ func (h *LanguageHandler) Create(c *okapi.Context, req *CreateLanguageRequest) e
 }
 
 func (h *LanguageHandler) Update(c *okapi.Context, req *UpdateLanguageRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	l, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || l.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, l.UserID, l.WorkspaceID) {
 		return c.AbortNotFound("language not found")
 	}
 
@@ -78,6 +91,16 @@ func (h *LanguageHandler) Update(c *okapi.Context, req *UpdateLanguageRequest) e
 		l.Name = req.Body.Name
 	}
 
+	// Handle default flag change
+	if req.Body.IsDefault != nil {
+		if *req.Body.IsDefault && !l.IsDefault {
+			// Setting as default — clear others first
+			scope := getScope(c)
+			_ = h.repo.ClearDefault(scope)
+		}
+		l.IsDefault = *req.Body.IsDefault
+	}
+
 	if err := h.repo.Update(l); err != nil {
 		return c.AbortInternalServerError("failed to update language")
 	}
@@ -86,10 +109,11 @@ func (h *LanguageHandler) Update(c *okapi.Context, req *UpdateLanguageRequest) e
 }
 
 func (h *LanguageHandler) Delete(c *okapi.Context, req *DeleteLanguageRequest) error {
-	userID := c.GetInt("user_id")
-
+	if err := requireEdit(c); err != nil {
+		return err
+	}
 	l, err := h.repo.FindByID(uint(req.ID))
-	if err != nil || l.UserID != uint(userID) {
+	if err != nil || !ownsResource(c, l.UserID, l.WorkspaceID) {
 		return c.AbortNotFound("language not found")
 	}
 
@@ -101,10 +125,9 @@ func (h *LanguageHandler) Delete(c *okapi.Context, req *DeleteLanguageRequest) e
 }
 
 func (h *LanguageHandler) List(c *okapi.Context, req *ListRequest) error {
-	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	languages, total, err := h.repo.FindByUserID(uint(userID), size, offset)
+	languages, total, err := h.repo.FindByScope(getScope(c), size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list languages")
 	}

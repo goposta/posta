@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jkaninda/posta/internal/models"
-	"github.com/jkaninda/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 )
 
 const apiKeyPrefix = "psk_"
@@ -41,7 +41,7 @@ func NewAPIKeyService(repo *repositories.APIKeyRepository) *APIKeyService {
 
 // GenerateKey creates a new API key and returns the raw key (only shown once).
 // If expiresAt is nil the key never expires.
-func (s *APIKeyService) GenerateKey(userID uint, name string, allowedIPs []string, expiresAt *time.Time) (string, *models.APIKey, error) {
+func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string, allowedIPs []string, expiresAt *time.Time) (string, *models.APIKey, error) {
 	rawBytes := make([]byte, 32)
 	if _, err := rand.Read(rawBytes); err != nil {
 		return "", nil, fmt.Errorf("failed to generate key: %w", err)
@@ -51,12 +51,13 @@ func (s *APIKeyService) GenerateKey(userID uint, name string, allowedIPs []strin
 	hash := hashKey(rawKey)
 
 	key := &models.APIKey{
-		UserID:     userID,
-		Name:       name,
-		KeyHash:    hash,
-		KeyPrefix:  rawKey[:len(apiKeyPrefix)+8],
-		AllowedIPs: allowedIPs,
-		ExpiresAt:  expiresAt,
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Name:        name,
+		KeyHash:     hash,
+		KeyPrefix:   rawKey[:len(apiKeyPrefix)+8],
+		AllowedIPs:  allowedIPs,
+		ExpiresAt:   expiresAt,
 	}
 
 	if err := s.repo.Create(key); err != nil {
