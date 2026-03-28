@@ -185,6 +185,45 @@ make dev-worker
 
 * Swagger UI: `/docs`
 * ReDoc: `/redoc`
+---
+
+# Dashboard
+
+Posta includes a web dashboard for managing templates, SMTP servers, domains, contacts, API keys, and analytics.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/dashboard.png" alt="Posta Dashboard" width="900"/>
+</p>
+
+### Email Analytics
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/analytics.png" alt="Email Analytics" width="900"/>
+</p>
+
+### Template Detail
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/template-detail.png" alt="Template Detail" width="900"/>
+</p>
+
+### Template Editor
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/template-editor.png" alt="Template Editor" width="900"/>
+</p>
+
+### Admin Platform Metrics
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/admin-platform-metrics.png" alt="Admin Platform Metrics" width="900"/>
+</p>
+
+### Admin Platform Metrics (Dark)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/admin-platform-metrics-dark.png" alt="Admin Platform Metrics Dark" width="900"/>
+</p>
 
 ---
 
