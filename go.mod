@@ -14,7 +14,7 @@ require (
 	github.com/jkaninda/logger v0.0.5
 	github.com/jkaninda/okapi v0.5.1
 	github.com/joho/godotenv v1.5.1
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.0
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.18.0
