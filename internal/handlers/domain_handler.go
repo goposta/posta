@@ -69,7 +69,7 @@ func (h *DomainHandler) Create(c *okapi.Context, req *CreateDomainRequest) error
 	scope := getScope(c)
 
 	if h.quota != nil {
-		if err := h.quota.CheckQuota(h.db, scope.WorkspaceID, "domains"); err != nil {
+		if err := h.quota.CheckQuota(h.db, scope.UserID, scope.WorkspaceID, "domains"); err != nil {
 			return c.AbortForbidden("Domain quota exceeded for this workspace", err)
 		}
 	}

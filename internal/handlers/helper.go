@@ -32,7 +32,7 @@ var errForbidden = errors.New("insufficient workspace permissions: editor role o
 
 // QuotaChecker verifies that creating a resource would not exceed plan limits.
 type QuotaChecker interface {
-	CheckQuota(db *gorm.DB, workspaceID *uint, resource string) error
+	CheckQuota(db *gorm.DB, userID uint, workspaceID *uint, resource string) error
 	CheckWorkspaceQuota(db *gorm.DB, userID uint) error
 }
 

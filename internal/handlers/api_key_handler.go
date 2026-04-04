@@ -71,7 +71,7 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 	scope := getScope(c)
 
 	if h.quota != nil {
-		if err := h.quota.CheckQuota(h.db, scope.WorkspaceID, "api_keys"); err != nil {
+		if err := h.quota.CheckQuota(h.db, scope.UserID, scope.WorkspaceID, "api_keys"); err != nil {
 			return c.AbortForbidden("API key quota exceeded for this workspace", err)
 		}
 	}

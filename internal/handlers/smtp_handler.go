@@ -124,7 +124,7 @@ func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
 	scope := getScope(c)
 
 	if h.quota != nil {
-		if err := h.quota.CheckQuota(h.db, scope.WorkspaceID, "smtp_servers"); err != nil {
+		if err := h.quota.CheckQuota(h.db, scope.UserID, scope.WorkspaceID, "smtp_servers"); err != nil {
 			return c.AbortForbidden("SMTP server quota exceeded for this workspace", err)
 		}
 	}

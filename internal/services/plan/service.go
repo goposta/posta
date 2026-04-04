@@ -101,7 +101,7 @@ func (s *Service) EffectivePlan(workspaceID *uint) *models.Plan {
 
 // CheckQuota verifies that creating one more resource of the given type
 // would not exceed the plan limit. Returns nil if within limit.
-func (s *Service) CheckQuota(db *gorm.DB, workspaceID *uint, resource string) error {
+func (s *Service) CheckQuota(db *gorm.DB, userID uint, workspaceID *uint, resource string) error {
 	limits := s.EffectiveLimits(workspaceID)
 
 	var limit int
@@ -130,7 +130,7 @@ func (s *Service) CheckQuota(db *gorm.DB, workspaceID *uint, resource string) er
 	if workspaceID != nil {
 		query = query.Where("workspace_id = ?", *workspaceID)
 	} else {
-		query = query.Where("workspace_id IS NULL")
+		query = query.Where("user_id = ? AND workspace_id IS NULL", userID)
 	}
 	if err := query.Count(&count).Error; err != nil {
 		return fmt.Errorf("failed to count %s: %w", resource, err)
