@@ -56,6 +56,7 @@ const routes = [
       { path: 'settings', name: 'settings', component: () => import('../views/settings/Settings.vue') },
       { path: 'workspaces', name: 'workspaces', component: () => import('../views/workspaces/Workspaces.vue') },
       { path: 'workspaces/:id', name: 'workspace-detail', component: () => import('../views/workspaces/WorkspaceSettings.vue') },
+      { path: 'about', name: 'about', component: () => import('../views/about/About.vue') },
       { path: 'profile', name: 'profile', component: () => import('../views/auth/Profile.vue') },
       { path: 'change-password', redirect: '/profile' },
       // Admin

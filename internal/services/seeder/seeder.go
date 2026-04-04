@@ -81,17 +81,34 @@ func (s *Seeder) SeedUserDefaults(userID uint, userName string) {
 		"year":    time.Now().Year(),
 		"docs":    fmt.Sprintf("%s/docs", goutils.Env("POSTA_WEB_URL", "")),
 		"features": []string{
-			"REST Email API",
-			"Versioned templates with localization",
-			"Multiple SMTP server management",
+			"REST API for transactional, batch, and templated emails",
+			"Scheduled sending and preview mode",
+			"Async processing with automatic retries and priority queues",
+			"Versioned and multi-language templates with variable substitution",
+			"Multiple SMTP providers with TLS and shared pools",
 			"Domain verification (SPF, DKIM, DMARC)",
-			"Email analytics and event webhooks",
+			"API keys with expiration, hashing, and IP allowlisting",
+			"JWT authentication, RBAC, and two-factor authentication",
+			"Contact tracking, segmentation, and suppression lists",
+			"Multi-tenant workspaces with scoped API keys",
+			"Event-driven webhooks with retry and delivery tracking",
+			"Email delivery analytics and Prometheus metrics",
+			"Web dashboard with dark/light mode",
+			"Official SDKs for Go, PHP, and Java",
 		},
 
 		"links": []map[string]string{
 			{
+				"title": "Website",
+				"url":   "https://goposta.dev/",
+			},
+			{
 				"title": "API Documentation",
-				"url":   "/docs",
+				"url":   "https://app.goposta.dev/docs",
+			},
+			{
+				"title": "Documentation",
+				"url":   "https://docs.goposta.dev/",
 			},
 			{
 				"title": "GitHub Repository",

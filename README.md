@@ -86,6 +86,7 @@ Response:
 * API keys with expiration, hashing, and IP allowlisting
 * JWT authentication and RBAC
 * Two-factor authentication (TOTP)
+* OAuth / SSO login (Google, Keycloak, authentik, and more)
 * Rate limiting and session management
 
 ### Contacts & Suppression
