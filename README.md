@@ -184,8 +184,9 @@ make dev-worker
 
 ## API Documentation
 
-* Swagger UI: `/docs`
-* ReDoc: `/redoc`
+* API Reference: [https://app.goposta.dev/docs](https://app.goposta.dev/docs)
+* OpenAPI Spec: [https://app.goposta.dev/openapi.json](https://app.goposta.dev/openapi.json)
+* Local: `/docs` on your Posta instance
 ---
 
 # Dashboard

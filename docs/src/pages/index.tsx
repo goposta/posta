@@ -25,7 +25,7 @@ function HomepageHeader() {
           <Link
             className="button button--secondary button--outline button--lg"
             style={{marginLeft: '1rem'}}
-            href="/swagger/index.html">
+            href="https://app.goposta.dev/docs">
             API Reference
           </Link>
         </div>

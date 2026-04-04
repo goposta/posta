@@ -9,7 +9,7 @@ description: Configure platform-wide settings
 Administrators can configure platform-wide settings that affect all users via the dashboard or `GET/PUT /api/v1/admin/settings`.
 
 :::tip
-For the full request/response schema, see the interactive [Swagger](/swagger/index.html) or [ReDoc](/redoc) API documentation.
+For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
 :::
 
 ## Available Settings

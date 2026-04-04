@@ -8,48 +8,74 @@ description: Deploy Posta with Docker Compose or from source
 
 Posta can be deployed using Docker Compose (recommended) or built from source.
 
-## Docker Compose (Recommended)
+:::tip
+Full Docker Compose examples are available in the [`examples/`](https://github.com/goposta/posta/tree/main/examples) folder of the repository.
+:::
 
-Create a `compose.yml` file:
+## Docker Compose — Embedded Worker (Simple)
+
+This setup runs Posta with the embedded worker enabled. The email processing worker runs inside the main server process, so no separate worker container is required. Ideal for development and small deployments.
+
+See [`examples/compose.yml`](https://github.com/goposta/posta/blob/main/examples/compose.yml)
 
 ```yaml
 services:
   posta:
-    image: goposta/posta:latest
+    image: jkaninda/posta:latest
     ports:
       - "9000:9000"
     environment:
-      POSTA_DB_HOST: postgres
+      POSTA_DB_HOST: posta-db
+      POSTA_DB_NAME: posta
       POSTA_DB_USER: posta
       POSTA_DB_PASSWORD: posta
-      POSTA_DB_NAME: posta
       POSTA_DB_PORT: 5432
-      POSTA_REDIS_ADDR: redis:6379
-      POSTA_JWT_SECRET: change-me-in-production
-      POSTA_ADMIN_EMAIL: admin@example.com
-      POSTA_ADMIN_PASSWORD: admin1234
+      POSTA_DB_SSL_MODE: disable
+      POSTA_REDIS_ADDR: "posta-redis:6379"
+      POSTA_JWT_SECRET: "change-me-in-production"
+      POSTA_ADMIN_EMAIL: "admin@example.com"
+      POSTA_ADMIN_PASSWORD: "admin1234"
       POSTA_EMBEDDED_WORKER: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     depends_on:
-      - postgres
-      - redis
+      posta-db:
+        condition: service_healthy
+      posta-redis:
+        condition: service_healthy
+    restart: unless-stopped
 
-  postgres:
-    image: postgres:16-alpine
+  posta-db:
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: posta
       POSTGRES_PASSWORD: posta
       POSTGRES_DB: posta
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posta"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  redis:
+  posta-redis:
     image: redis:7-alpine
     volumes:
-      - redisdata:/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  pgdata:
-  redisdata:
+  db_data:
+  redis_data:
 ```
 
 Start the services:
@@ -59,6 +85,97 @@ docker compose up -d
 ```
 
 Posta will be available at `http://localhost:9000`.
+
+## Docker Compose — Dedicated Worker (Production)
+
+For production environments, run the worker as a separate container. This allows the API server and background processing to scale independently.
+
+See [`examples/docker-compose-full.yml`](https://github.com/goposta/posta/blob/main/examples/docker-compose-full.yml)
+
+```yaml
+services:
+  posta:
+    image: jkaninda/posta:latest
+    ports:
+      - "9000:9000"
+    environment:
+      POSTA_DB_HOST: posta-db
+      POSTA_DB_NAME: posta
+      POSTA_DB_USER: posta
+      POSTA_DB_PASSWORD: posta
+      POSTA_DB_PORT: 5432
+      POSTA_DB_SSL_MODE: disable
+      POSTA_REDIS_ADDR: "posta-redis:6379"
+      POSTA_JWT_SECRET: "change-me-in-production"
+      POSTA_ADMIN_EMAIL: "admin@example.com"
+      POSTA_ADMIN_PASSWORD: "admin1234"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    depends_on:
+      posta-db:
+        condition: service_healthy
+      posta-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    image: jkaninda/posta:latest
+    command: ["worker"]
+    environment:
+      POSTA_DB_HOST: posta-db
+      POSTA_DB_NAME: posta
+      POSTA_DB_USER: posta
+      POSTA_DB_PASSWORD: posta
+      POSTA_DB_PORT: 5432
+      POSTA_DB_SSL_MODE: disable
+      POSTA_REDIS_ADDR: "posta-redis:6379"
+      POSTA_WORKER_CONCURRENCY: "10"
+      POSTA_WORKER_MAX_RETRIES: "5"
+    depends_on:
+      posta-db:
+        condition: service_healthy
+      posta-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  posta-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: posta
+      POSTGRES_PASSWORD: posta
+      POSTGRES_DB: posta
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posta"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  posta-redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
+  redis_data:
+```
+
+```bash
+docker compose -f docker-compose-full.yml up -d
+```
+
+You can run multiple worker instances for horizontal scaling. All workers share the same Redis queue.
 
 ## Build from Source
 
@@ -83,27 +200,15 @@ make build
 ./bin/posta server
 ```
 
-## Worker Deployment
-
-Posta processes emails asynchronously using background workers. You have two options:
-
-### Embedded Worker (Simple)
-
-Set `POSTA_EMBEDDED_WORKER=true` to run the worker within the API server process. This is the simplest setup for small deployments.
-
-### Standalone Worker (Scalable)
-
-For larger deployments, run the worker as a separate process:
+For standalone worker mode:
 
 ```bash
 # API server
 ./bin/posta server
 
-# Worker (separate process/container)
+# Worker (separate process)
 ./bin/posta worker
 ```
-
-You can run multiple worker instances for horizontal scaling. All workers share the same Redis queue.
 
 ## Health Checks
 

@@ -9,7 +9,7 @@ description: Send emails using pre-defined templates
 Send emails using pre-defined templates with variable substitution and multi-language support.
 
 :::tip
-For the full request/response schema, see the interactive [Swagger](/swagger/index.html) or [ReDoc](/redoc) API documentation.
+For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
 :::
 
 ## Example
