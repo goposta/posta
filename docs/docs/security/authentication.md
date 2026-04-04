@@ -73,6 +73,35 @@ Registration can be disabled via `POSTA_REGISTRATION_ENABLED=false`.
 GET /api/v1/auth/registration-status
 ```
 
+## OAuth / SSO Authentication
+
+Posta supports OAuth 2.0 / OpenID Connect for single sign-on. Administrators can configure OAuth providers (Google, Keycloak, authentik, and others) from the Admin Panel under **OAuth**.
+
+Users can then log in via their identity provider without needing a Posta-specific password.
+
+### Supported Providers
+
+Any OAuth 2.0 / OIDC-compliant provider can be configured, including:
+
+- **Google**
+- **Keycloak**
+- **authentik**
+- Custom OIDC providers
+
+### OAuth Login Flow
+
+```
+GET /api/v1/auth/oauth/{provider}/authorize
+```
+
+Redirects the user to the provider's authorization page. After authentication, the provider redirects back to:
+
+```
+GET /api/v1/auth/oauth/callback?code=...&state=...
+```
+
+Posta exchanges the authorization code for user info and issues a JWT token.
+
 ## API Key Authentication (Programmatic)
 
 API keys are used for sending emails and checking status via the API. See [API Keys](/docs/security/api-keys) for details on creating and managing keys.

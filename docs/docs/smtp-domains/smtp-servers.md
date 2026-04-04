@@ -9,7 +9,7 @@ description: Configure SMTP servers for email delivery
 Configure one or more SMTP servers for email delivery. Posta routes emails through your configured SMTP servers.
 
 :::tip
-For the full request/response schema, see the interactive [Swagger](/swagger/index.html) or [ReDoc](/redoc) API documentation.
+For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
 :::
 
 ## Adding an SMTP Server

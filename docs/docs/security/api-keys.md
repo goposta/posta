@@ -9,7 +9,7 @@ description: Create and manage API keys
 API keys provide programmatic access to Posta's email sending and status APIs.
 
 :::tip
-For the full request/response schema, see the interactive [Swagger](/swagger/index.html) or [ReDoc](/redoc) API documentation.
+For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
 :::
 
 ## Creating a Key

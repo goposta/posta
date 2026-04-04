@@ -61,7 +61,7 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          href: '/swagger/index.html',
+          href: 'https://app.goposta.dev/docs',
           label: 'API Reference',
           position: 'left',
         },
@@ -84,7 +84,7 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {label: 'Getting Started', to: '/docs/getting-started/introduction'},
-            {label: 'API Reference (Swagger)', href: '/swagger/index.html'},
+            {label: 'API Reference', href: 'https://app.goposta.dev/docs'},
             {label: 'SDKs', to: '/docs/sdks/overview'},
           ],
         },

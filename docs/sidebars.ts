@@ -40,6 +40,24 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Subscribers',
+      items: [
+        'subscribers/subscriber-management',
+        'subscribers/bulk-import',
+        'subscribers/subscriber-lists',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Campaigns',
+      items: [
+        'campaigns/overview',
+        'campaigns/sending',
+        'campaigns/ab-testing',
+      ],
+    },
+    {
+      type: 'category',
       label: 'SMTP & Domains',
       items: [
         'smtp-domains/smtp-servers',
@@ -60,12 +78,12 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Analytics & Monitoring',
+      label: 'Contacts & Suppression',
       items: [
-        'analytics/dashboard',
-        'analytics/email-analytics',
-        'analytics/prometheus-metrics',
-        'analytics/health-checks',
+        'contacts/contact-management',
+        'contacts/contact-lists',
+        'contacts/bounce-handling',
+        'contacts/suppression-list',
       ],
     },
     {
@@ -80,12 +98,19 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Contacts & Suppression',
+      label: 'Analytics & Monitoring',
       items: [
-        'contacts/contact-management',
-        'contacts/contact-lists',
-        'contacts/bounce-handling',
-        'contacts/suppression-list',
+        'analytics/dashboard',
+        'analytics/email-analytics',
+        'analytics/prometheus-metrics',
+        'analytics/health-checks',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Workspaces',
+      items: [
+        'workspaces/overview',
       ],
     },
     {
@@ -97,6 +122,8 @@ const sidebars: SidebarsConfig = {
         'admin/platform-metrics',
         'admin/shared-servers',
         'admin/scheduled-jobs',
+        'admin/oauth-providers',
+        'admin/plans',
       ],
     },
     {
@@ -119,13 +146,8 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'link',
-      label: 'API Reference (Swagger)',
-      href: '/swagger/index.html',
-    },
-    {
-      type: 'link',
-      label: 'API Reference (ReDoc)',
-      href: '/redoc',
+      label: 'API Reference',
+      href: 'https://app.goposta.dev/docs',
     },
   ],
 };

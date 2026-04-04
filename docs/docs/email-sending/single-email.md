@@ -9,7 +9,7 @@ description: Send a single email via the API
 Send a single email with HTML/text content, optional attachments, custom headers, and scheduled delivery.
 
 :::tip
-For the full request/response schema, see the interactive [Swagger](/swagger/index.html) or [ReDoc](/redoc) API documentation.
+For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
 :::
 
 ## Example
