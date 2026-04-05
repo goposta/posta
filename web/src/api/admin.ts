@@ -23,6 +23,9 @@ export const adminApi = {
   disable2FA(id: number) {
     return api.delete(`/admin/users/${id}/2fa`)
   },
+  revokeUserSessions(id: number) {
+    return api.post<ApiResponse<{ message: string; revoked: number }>>(`/admin/users/${id}/revoke-sessions`)
+  },
   getUserWorkspaces(id: number) {
     return api.get<ApiResponse<AdminWorkspace[]>>(`/admin/users/${id}/workspaces`)
   },

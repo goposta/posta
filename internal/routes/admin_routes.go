@@ -124,6 +124,19 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 		{
+			Method:      http.MethodPost,
+			Path:        "/users/{id:int}/revoke-sessions",
+			Handler:     okapi.H(r.h.admin.RevokeUserSessions),
+			Group:       adminGroup,
+			Summary:     "Revoke all user sessions",
+			Description: "Revoke all active sessions for a user (admin only)",
+			Response:    &dto.Response[okapi.M]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "User ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
 			Method:      http.MethodGet,
 			Path:        "/users/{id:int}/workspaces",
 			Handler:     okapi.H(r.h.admin.UserWorkspaces),

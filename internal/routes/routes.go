@@ -236,6 +236,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 
 	// Session management
 	r.h.user.SetSessionRepo(sessionRepo)
+	r.h.admin.SetSessionRepo(sessionRepo, sessionStore)
 
 	// Plans
 	r.h.plan = handlers.NewPlanHandler(planRepo, workspaceRepo, planService, auditLogger)

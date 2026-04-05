@@ -14,6 +14,7 @@ const { confirm } = useConfirm()
 const loading = ref(true)
 const metrics = ref<UserDetailMetrics | null>(null)
 const disabling2FA = ref(false)
+const revokingSessions = ref(false)
 const deleting = ref(false)
 const cancellingDeletion = ref(false)
 const workspaces = ref<AdminWorkspace[]>([])
@@ -56,6 +57,26 @@ async function handleDisable2FA() {
     notification.error('Failed to disable 2FA.')
   } finally {
     disabling2FA.value = false
+  }
+}
+
+async function handleRevokeSessions() {
+  if (!metrics.value) return
+  const confirmed = await confirm({
+    title: 'Revoke All Sessions',
+    message: 'Are you sure you want to revoke all active sessions for this user? They will be logged out immediately.',
+    confirmText: 'Revoke All Sessions',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+  revokingSessions.value = true
+  try {
+    const res = await adminApi.revokeUserSessions(metrics.value.user.id)
+    notification.success(res.data.data.message)
+  } catch {
+    notification.error('Failed to revoke sessions.')
+  } finally {
+    revokingSessions.value = false
   }
 }
 
@@ -190,6 +211,18 @@ function formatDate(date: string) {
                     @click="handleDisable2FA"
                   >
                     {{ disabling2FA ? 'Disabling...' : 'Disable 2FA' }}
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-weight: 600;">Sessions</td>
+                <td>
+                  <button
+                    class="btn btn-danger btn-sm"
+                    :disabled="revokingSessions"
+                    @click="handleRevokeSessions"
+                  >
+                    {{ revokingSessions ? 'Revoking...' : 'Revoke All Sessions' }}
                   </button>
                 </td>
               </tr>

@@ -26,6 +26,7 @@ import (
 	"github.com/goposta/posta/internal/services/cache"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/seeder"
+	"github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/hibiken/asynq"
@@ -48,6 +49,8 @@ type AdminHandler struct {
 	seeder         *seeder.Seeder
 	embeddedWorker bool
 	emailSettings  *settings.Provider
+	sessionRepo    *repositories.SessionRepository
+	sessionStore   *session.Store
 }
 type AdminCreateUserRequest struct {
 	Body struct {
@@ -126,6 +129,12 @@ func (h *AdminHandler) SetWorkspaceRepo(wsRepo *repositories.WorkspaceRepository
 
 func (h *AdminHandler) SetEmailSettings(s *settings.Provider) {
 	h.emailSettings = s
+}
+
+// SetSessionRepo sets the session repository and store for session management.
+func (h *AdminHandler) SetSessionRepo(repo *repositories.SessionRepository, store *session.Store) {
+	h.sessionRepo = repo
+	h.sessionStore = store
 }
 
 // CreateUser allows admins to create a new user.
@@ -450,6 +459,37 @@ func (h *AdminHandler) Disable2FA(c *okapi.Context, req *AdminGetUserRequest) er
 	}
 
 	return ok(c, okapi.M{"message": "2FA disabled"})
+}
+
+// RevokeUserSessions revokes all active sessions for a user.
+func (h *AdminHandler) RevokeUserSessions(c *okapi.Context, req *AdminGetUserRequest) error {
+	user, err := h.userRepo.FindByID(uint(req.ID))
+	if err != nil {
+		return c.AbortNotFound("user not found")
+	}
+
+	// Get active sessions first
+	sessions, err := h.sessionRepo.FindActiveByUserID(user.ID)
+	if err != nil {
+		return c.AbortInternalServerError("failed to load sessions")
+	}
+
+	count, err := h.sessionRepo.RevokeAllByUserID(user.ID)
+	if err != nil {
+		return c.AbortInternalServerError("failed to revoke sessions")
+	}
+
+	for _, s := range sessions {
+		h.sessionStore.MarkRevoked(c.Request().Context(), s.JTI, s.ExpiresAt)
+	}
+
+	if h.bus != nil {
+		adminID := uint(c.GetInt("user_id"))
+		h.bus.PublishSimple(models.EventCategoryUser, "user.sessions_revoked", &adminID, c.GetString("email"), c.RealIP(),
+			fmt.Sprintf("All sessions revoked for user %q by admin", user.Email), map[string]any{"user_id": user.ID, "revoked": count})
+	}
+
+	return ok(c, okapi.M{"message": fmt.Sprintf("%d session(s) revoked", count), "revoked": count})
 }
 
 // WorkerStatus is sent over SSE with the current worker count and details.
