@@ -26,6 +26,7 @@ import (
 	"github.com/goposta/posta/internal/cron/jobs"
 	"github.com/goposta/posta/internal/metrics"
 	"github.com/goposta/posta/internal/routes"
+	"github.com/goposta/posta/internal/services/crypto"
 	"github.com/goposta/posta/internal/services/retry"
 	"github.com/goposta/posta/internal/services/seeder"
 	"github.com/goposta/posta/internal/services/settings"
@@ -68,6 +69,9 @@ func runServer(cli *okapicli.CLI) {
 			if err := migration.Run(res.db); err != nil {
 				logger.Fatal("failed to run migrations", "error", err)
 			}
+
+			// Initialize SMTP password encryption
+			crypto.Init(cfg.EncryptionKey)
 
 			if err := storage.SeedAdmin(res.db, cfg.AdminEmail, cfg.AdminPassword); err != nil {
 				logger.Fatal("failed to seed admin user", "error", err)

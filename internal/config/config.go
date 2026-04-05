@@ -65,6 +65,9 @@ type Config struct {
 	GoogleOAuthClientSecret string
 	OAuthCallbackBaseURL    string
 
+	// Encryption key for SMTP password encryption (if empty, base64 encoding is used)
+	EncryptionKey string
+
 	// Blob storage settings (S3-compatible or filesystem)
 	BlobProvider    string
 	BlobS3Endpoint  string
@@ -147,6 +150,8 @@ func New() *Config {
 		GoogleOAuthClientID:     goutils.Env("POSTA_GOOGLE_OAUTH_CLIENT_ID", ""),
 		GoogleOAuthClientSecret: goutils.Env("POSTA_GOOGLE_OAUTH_CLIENT_SECRET", ""),
 		OAuthCallbackBaseURL:    goutils.Env("POSTA_OAUTH_CALLBACK_URL", ""),
+
+		EncryptionKey: goutils.Env("POSTA_ENCRYPTION_KEY", ""),
 
 		BlobProvider:    goutils.Env("POSTA_BLOB_PROVIDER", ""),
 		BlobS3Endpoint:  goutils.Env("POSTA_BLOB_S3_ENDPOINT", ""),

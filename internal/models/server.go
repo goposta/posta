@@ -18,9 +18,9 @@
 package models
 
 import (
-	"encoding/base64"
 	"time"
 
+	"github.com/goposta/posta/internal/services/crypto"
 	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
@@ -63,23 +63,30 @@ func (s *Server) IsEnabled() bool {
 	return s.Status == SMTPStatusEnabled
 }
 
-// BeforeSave encodes the password to base64 before writing to the database.
+// BeforeSave encrypts the password before writing to the database.
+// Uses AES-256-GCM if POSTA_ENCRYPTION_KEY is set, otherwise base64.
 func (s *Server) BeforeSave(tx *gorm.DB) error {
-	if s.Password != "" {
-		s.Password = base64.StdEncoding.EncodeToString([]byte(s.Password))
+	if s.Password == "" || crypto.IsEncrypted(s.Password) {
+		return nil
 	}
+	encrypted, err := crypto.Encrypt(s.Password)
+	if err != nil {
+		return err
+	}
+	s.Password = encrypted
 	return nil
 }
 
-// AfterFind decodes the base64-encoded password after reading from the database.
+// AfterFind decrypts the password after reading from the database.
 func (s *Server) AfterFind(tx *gorm.DB) error {
-	if s.Password != "" {
-		decoded, err := base64.StdEncoding.DecodeString(s.Password)
-		if err != nil {
-			return nil
-		}
-		s.Password = string(decoded)
+	if s.Password == "" {
+		return nil
 	}
+	plaintext, err := crypto.Decrypt(s.Password)
+	if err != nil {
+		return nil // degrade gracefully
+	}
+	s.Password = plaintext
 	return nil
 }
 

@@ -20,6 +20,7 @@ package main
 import (
 	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/metrics"
+	"github.com/goposta/posta/internal/services/crypto"
 	"github.com/goposta/posta/internal/services/tracking"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
@@ -39,6 +40,9 @@ func runWorker() error {
 			_ = sqlDB.Close()
 		}
 	}()
+
+	// Initialize SMTP password encryption
+	crypto.Init(cfg.EncryptionKey)
 
 	// Initialize blob storage for attachment retrieval
 	var blobStore blob.Store
