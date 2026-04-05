@@ -73,6 +73,11 @@ const routes = [
       { path: 'admin/settings', name: 'admin-settings', component: () => import('../views/admin/Settings.vue'), meta: { admin: true } },
     ],
   },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('../views/NotFound.vue'),
+  },
 ]
 
 const router = createRouter({
