@@ -271,54 +271,6 @@ func (h *AdminHandler) CancelUserDeletion(c *okapi.Context, req *AdminDeleteUser
 	return ok(c, map[string]any{"message": "Account deletion cancelled"})
 }
 
-// ListAllEmails returns all emails across all users (admin only).
-func (h *AdminHandler) ListAllEmails(c *okapi.Context, req *ListRequest) error {
-	page, size, offset := normalizePageParams(req.Page, req.Size)
-
-	emails, total, err := h.emailRepo.FindAll(size, offset)
-	if err != nil {
-		return c.AbortInternalServerError("failed to list emails")
-	}
-
-	if h.emailSettings == nil || !h.emailSettings.EmailContentVisibility() {
-		redactEmails(emails)
-	}
-
-	return paginated(c, emails, total, page, size)
-}
-
-// ListAllAPIKeys returns all API keys across all users (admin only).
-func (h *AdminHandler) ListAllAPIKeys(c *okapi.Context, req *ListRequest) error {
-	page, size, offset := normalizePageParams(req.Page, req.Size)
-
-	keys, total, err := h.keyRepo.FindAll(size, offset)
-	if err != nil {
-		return c.AbortInternalServerError("failed to list API keys")
-	}
-
-	return paginated(c, keys, total, page, size)
-}
-
-// RevokeAPIKey allows admins to revoke any API key.
-func (h *AdminHandler) RevokeAPIKey(c *okapi.Context, req *AdminRevokeKeyRequest) error {
-	_, err := h.keyRepo.FindByID(uint(req.ID))
-	if err != nil {
-		return c.AbortNotFound("API key not found")
-	}
-
-	if err := h.keyRepo.Revoke(uint(req.ID)); err != nil {
-		return c.AbortInternalServerError("failed to revoke API key")
-	}
-
-	if h.bus != nil {
-		adminID := uint(c.GetInt("user_id"))
-		h.bus.PublishSimple(models.EventCategoryUser, "apikey.revoked", &adminID, c.GetString("email"), c.RealIP(),
-			fmt.Sprintf("API key ID %d revoked", req.ID), map[string]any{"api_key_id": req.ID})
-	}
-
-	return ok(c, okapi.M{"message": "API key revoked"})
-}
-
 // Metrics returns platform-wide metrics (admin only).
 func (h *AdminHandler) Metrics(c *okapi.Context) error {
 	ctx := c.Request().Context()

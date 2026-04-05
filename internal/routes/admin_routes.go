@@ -137,41 +137,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// ==================== All API Keys ====================
-		{
-			Method:   http.MethodGet,
-			Path:     "/api-keys",
-			Handler:  okapi.H(r.h.admin.ListAllAPIKeys),
-			Group:    adminGroup,
-			Summary:  "List all API keys",
-			Request:  &handlers.ListRequest{},
-			Response: &dto.PageableResponse[models.APIKey]{},
-		},
-		{
-			Method:   http.MethodDelete,
-			Path:     "/api-keys/{id:int}",
-			Handler:  okapi.H(r.h.admin.RevokeAPIKey),
-			Group:    adminGroup,
-			Summary:  "Revoke any API key",
-			Response: &dto.Response[dto.MessageData]{},
-			Options: []okapi.RouteOption{
-				okapi.DocPathParam("id", "integer", "API key ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-			},
-		},
-
-		// ==================== All Emails ====================
-		{
-			Method:      http.MethodGet,
-			Path:        "/emails",
-			Handler:     okapi.H(r.h.admin.ListAllEmails),
-			Group:       adminGroup,
-			Summary:     "List all emails",
-			Description: "List all emails across all users",
-			Request:     &handlers.ListRequest{},
-			Response:    &dto.PageableResponse[models.Email]{},
-		},
-
 		// ==================== Events ====================
 		{
 			Method:      http.MethodGet,
