@@ -143,3 +143,6 @@ func (p *Provider) LoginRateLimitWindowMinutes() int {
 func (p *Provider) EmailContentVisibility() bool {
 	return p.GetBool("email_content_visibility", false)
 }
+func (p *Provider) CustomHeadersEnabled() bool {
+	return p.GetBool("custom_headers_enabled", false)
+}

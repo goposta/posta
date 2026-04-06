@@ -565,9 +565,9 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		req.Text = HTMLToText(req.HTML)
 	}
 
-	// Serialize custom headers for storage
+	// Serialize custom headers for storage (only when the setting is enabled)
 	var headersJSON string
-	if len(req.Headers) > 0 {
+	if len(req.Headers) > 0 && s.settings != nil && s.settings.CustomHeadersEnabled() {
 		filtered := filterCustomHeaders(req.Headers)
 		if len(filtered) > 0 {
 			b, _ := json.Marshal(filtered)
