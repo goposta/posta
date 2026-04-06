@@ -23,7 +23,6 @@ import (
 
 	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type ContactRepository struct {
@@ -41,25 +40,12 @@ func (r *ContactRepository) RecordSent(userID uint, workspaceID *uint, recipient
 	now := time.Now()
 	for _, raw := range recipients {
 		addr, name := parseRecipient(raw)
-		contact := models.Contact{
-			UserID:      userID,
-			WorkspaceID: workspaceID,
-			Email:       addr,
-			Name:        name,
-			SentCount:   1,
-			LastSentAt:  &now,
-		}
-		updates := map[string]interface{}{
-			"sent_count":   gorm.Expr("contacts.sent_count + 1"),
-			"last_sent_at": now,
-		}
-		if name != "" {
-			updates["name"] = name
-		}
-		r.db.Clauses(clause.OnConflict{
-			OnConstraint: "idx_user_email",
-			DoUpdates:    clause.Assignments(updates),
-		}).Create(&contact)
+		r.db.Exec(`INSERT INTO contacts (user_id, workspace_id, email, name, sent_count, fail_count, last_sent_at, created_at)
+			VALUES (?, ?, ?, ?, 1, 0, ?, ?)
+			ON CONFLICT (user_id, COALESCE(workspace_id, 0), email)
+			DO UPDATE SET sent_count = contacts.sent_count + 1, last_sent_at = EXCLUDED.last_sent_at`+
+			nameUpdateClause(name),
+			userID, workspaceID, addr, name, now, now)
 	}
 }
 
@@ -67,24 +53,20 @@ func (r *ContactRepository) RecordSent(userID uint, workspaceID *uint, recipient
 func (r *ContactRepository) RecordFailed(userID uint, workspaceID *uint, recipients []string) {
 	for _, raw := range recipients {
 		addr, name := parseRecipient(raw)
-		contact := models.Contact{
-			UserID:      userID,
-			WorkspaceID: workspaceID,
-			Email:       addr,
-			Name:        name,
-			FailCount:   1,
-		}
-		updates := map[string]interface{}{
-			"fail_count": gorm.Expr("contacts.fail_count + 1"),
-		}
-		if name != "" {
-			updates["name"] = name
-		}
-		r.db.Clauses(clause.OnConflict{
-			OnConstraint: "idx_user_email",
-			DoUpdates:    clause.Assignments(updates),
-		}).Create(&contact)
+		r.db.Exec(`INSERT INTO contacts (user_id, workspace_id, email, name, sent_count, fail_count, created_at)
+			VALUES (?, ?, ?, ?, 0, 1, ?)
+			ON CONFLICT (user_id, COALESCE(workspace_id, 0), email)
+			DO UPDATE SET fail_count = contacts.fail_count + 1`+
+			nameUpdateClause(name),
+			userID, workspaceID, addr, name, time.Now())
 	}
+}
+
+func nameUpdateClause(name string) string {
+	if name != "" {
+		return `, name = EXCLUDED.name`
+	}
+	return ""
 }
 
 // parseRecipient extracts the bare email and display name from a recipient
