@@ -58,6 +58,11 @@ type UpdateTemplateRequest struct {
 type DeleteTemplateRequest struct {
 	ID int `param:"id"`
 }
+type ListTemplatesRequest struct {
+	Page   int    `query:"page" default:"0"`
+	Size   int    `query:"size" default:"20"`
+	Search string `query:"search"`
+}
 type PreviewTemplateRequest struct {
 	Body struct {
 		SubjectTemplate string         `json:"subject_template" required:"true"`
@@ -160,10 +165,10 @@ func (h *TemplateHandler) Update(c *okapi.Context, req *UpdateTemplateRequest) e
 	return ok(c, tmpl)
 }
 
-func (h *TemplateHandler) List(c *okapi.Context, req *ListRequest) error {
+func (h *TemplateHandler) List(c *okapi.Context, req *ListTemplatesRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	templates, total, err := h.repo.FindByScope(getScope(c), size, offset)
+	templates, total, err := h.repo.FindByScope(getScope(c), req.Search, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list templates")
 	}

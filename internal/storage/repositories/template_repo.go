@@ -88,13 +88,21 @@ func (r *TemplateRepository) FindByWorkspaceID(workspaceID uint, limit, offset i
 	return templates, total, nil
 }
 
-func (r *TemplateRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.Template, int64, error) {
+func (r *TemplateRepository) FindByScope(scope ResourceScope, search string, limit, offset int) ([]models.Template, int64, error) {
 	var items []models.Template
 	var total int64
 
-	ApplyScope(r.db.Model(&models.Template{}), scope).Count(&total)
+	q := ApplyScope(r.db.Model(&models.Template{}), scope)
+	if search != "" {
+		q = q.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	q.Count(&total)
 
-	if err := ApplyScope(r.db, scope).
+	qItems := ApplyScope(r.db, scope)
+	if search != "" {
+		qItems = qItems.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	if err := qItems.
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&items).Error; err != nil {

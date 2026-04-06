@@ -110,7 +110,7 @@ func (h *WorkspaceDataHandler) Export(c *okapi.Context) error {
 		return c.AbortNotFound("workspace not found")
 	}
 
-	templates, _, err := h.templateRepo.FindByScope(scope, exportLimit, 0)
+	templates, _, err := h.templateRepo.FindByScope(scope, "", exportLimit, 0)
 	if err != nil {
 		return c.AbortInternalServerError("failed to load templates")
 	}

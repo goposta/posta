@@ -29,6 +29,8 @@ const pageable = ref<Pageable>({
   empty: true,
 });
 const loading = ref(true);
+const search = ref('');
+let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const showModal = ref(false);
 const editing = ref<Template | null>(null);
@@ -81,7 +83,7 @@ function closeModal() {
 async function loadTemplates(page = 0) {
   loading.value = true;
   try {
-    const res = await templatesApi.list(page, pageable.value.size);
+    const res = await templatesApi.list(page, pageable.value.size, search.value);
     templates.value = res.data.data;
     pageable.value = res.data.pageable;
   } catch {
@@ -89,6 +91,11 @@ async function loadTemplates(page = 0) {
   } finally {
     loading.value = false;
   }
+}
+
+function onSearchInput() {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => loadTemplates(0), 300);
 }
 
 async function saveTemplate() {
@@ -217,14 +224,25 @@ onMounted(() => {
       </div>
     </div>
 
+    <div class="card">
+      <div class="flex gap-2 mb-4">
+        <input
+          v-model="search"
+          class="form-input"
+          placeholder="Search by name or description..."
+          style="max-width: 320px"
+          @input="onSearchInput"
+        />
+      </div>
+
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
     </div>
 
-    <div v-else class="card">
+    <div v-else>
       <div v-if="templates.length === 0" class="empty-state">
-        <h3>No Templates</h3>
-        <p>Create your first template to reuse email layouts.</p>
+        <h3>{{ search ? 'No Results' : 'No Templates' }}</h3>
+        <p>{{ search ? 'No templates match your search.' : 'Create your first template to reuse email layouts.' }}</p>
       </div>
 
       <template v-else>
@@ -328,6 +346,7 @@ onMounted(() => {
           </div>
         </div>
       </template>
+    </div>
     </div>
 
     <!-- Create/Edit Template Modal -->

@@ -104,7 +104,7 @@ func (h *UserDataHandler) Export(c *okapi.Context) error {
 	userID := uint(c.GetInt("user_id"))
 	scope := repositories.ResourceScope{UserID: userID}
 
-	templates, _, err := h.templateRepo.FindByScope(scope, exportLimit, 0)
+	templates, _, err := h.templateRepo.FindByScope(scope, "", exportLimit, 0)
 	if err != nil {
 		return c.AbortInternalServerError("failed to load templates")
 	}
