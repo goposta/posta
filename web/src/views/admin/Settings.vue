@@ -29,6 +29,7 @@ const settingMeta: Record<string, { label: string; description: string; category
   audit_log_retention_days: { label: 'Audit Log Retention (days)', description: 'How long to keep audit/event logs.', category: 'Retention' },
   webhook_delivery_retention_days: { label: 'Webhook Delivery Retention (days)', description: 'How long to keep webhook delivery logs.', category: 'Retention' },
   email_content_visibility: { label: 'Email Content Visibility', description: 'When enabled, email body content (HTML/Text) is visible in the dashboard. When disabled, content is redacted for privacy.', category: 'Privacy' },
+  custom_headers_enabled: { label: 'Custom Email Headers', description: 'Allow users to include custom headers when sending emails. When disabled, custom headers are silently ignored.', category: 'Security' },
 }
 
 const categories = ['General', 'Security', 'Privacy', 'Limits', 'Retention']
