@@ -287,6 +287,10 @@ type DryRunResponse struct {
 
 // ValidateSend runs all validation checks without persisting or sending.
 func (s *Service) ValidateSend(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *SendRequest) (*DryRunResponse, error) {
+	if err := validateAddresses(req.From, req.To); err != nil {
+		return nil, err
+	}
+
 	if s.settings != nil && s.settings.MaintenanceMode() {
 		return nil, fmt.Errorf("maintenance: email sending is temporarily disabled")
 	}
@@ -373,6 +377,19 @@ func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, wor
 
 // ValidateSendBatch validates a batch send request without sending.
 func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *BatchRequest) (*DryRunResponse, error) {
+	from := req.From
+	if from == "" {
+		from = defaultFromAddress
+	}
+	if err := validateEmailAddress(from); err != nil {
+		return nil, fmt.Errorf("invalid sender: %w", err)
+	}
+	for _, r := range req.Recipients {
+		if err := validateEmailAddress(r.Email); err != nil {
+			return nil, fmt.Errorf("invalid recipient: %w", err)
+		}
+	}
+
 	maxBatch := 0
 	if s.planLimits != nil {
 		maxBatch = s.planLimits.EffectiveLimits(workspaceID).MaxBatchSize
@@ -386,11 +403,6 @@ func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceI
 	_, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
 	if err != nil {
 		return nil, fmt.Errorf("template not found: %w", err)
-	}
-
-	from := req.From
-	if from == "" {
-		from = defaultFromAddress
 	}
 
 	emails := make([]string, len(req.Recipients))
@@ -421,6 +433,11 @@ func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceI
 }
 
 func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *uint, userEmail string, req *SendRequest) (*SendResponse, error) {
+	// Validate email addresses
+	if err := validateAddresses(req.From, req.To); err != nil {
+		return nil, err
+	}
+
 	// Enforce maintenance mode
 	if s.settings != nil && s.settings.MaintenanceMode() {
 		return nil, fmt.Errorf("maintenance: email sending is temporarily disabled")
@@ -744,14 +761,25 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 		return nil, fmt.Errorf("batch size %d exceeds maximum allowed (%d)", len(req.Recipients), maxBatch)
 	}
 
-	tmpl, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
-	if err != nil {
-		return nil, fmt.Errorf("template not found: %w", err)
-	}
-
 	from := req.From
 	if from == "" {
 		from = defaultFromAddress
+	}
+
+	// Validate sender address
+	if err := validateEmailAddress(from); err != nil {
+		return nil, fmt.Errorf("invalid sender: %w", err)
+	}
+	// Validate all recipient addresses
+	for _, r := range req.Recipients {
+		if err := validateEmailAddress(r.Email); err != nil {
+			return nil, fmt.Errorf("invalid recipient: %w", err)
+		}
+	}
+
+	tmpl, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
+	if err != nil {
+		return nil, fmt.Errorf("template not found: %w", err)
 	}
 
 	resp := &BatchResponse{
@@ -1140,6 +1168,35 @@ func (s *Service) checkDomainVerification(userID uint, from string) error {
 		return fmt.Errorf("domain_verification: domain %q is not verified. Add and verify the domain or disable strict domain mode", senderDomain)
 	}
 
+	return nil
+}
+
+// validateEmailAddress checks that a string is a valid RFC 5322 email address
+func validateEmailAddress(addr string) error {
+	parsed, err := mail.ParseAddress(addr)
+	if err != nil {
+		return fmt.Errorf("invalid email address %q: %w", addr, err)
+	}
+	parts := strings.SplitN(parsed.Address, "@", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("invalid email address %q: missing local part or domain", addr)
+	}
+	if !strings.Contains(parts[1], ".") {
+		return fmt.Errorf("invalid email address %q: domain has no TLD", addr)
+	}
+	return nil
+}
+
+// validateAddresses validates the From and all To addresses.
+func validateAddresses(from string, to []string) error {
+	if err := validateEmailAddress(from); err != nil {
+		return fmt.Errorf("invalid sender: %w", err)
+	}
+	for _, addr := range to {
+		if err := validateEmailAddress(addr); err != nil {
+			return fmt.Errorf("invalid recipient: %w", err)
+		}
+	}
 	return nil
 }
 
