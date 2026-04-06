@@ -13,7 +13,8 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 	// Public OAuth routes (no auth required)
 	oauthPublic := r.v1.Group("/auth/oauth").WithTags([]string{"OAuth"})
 
-	routes := []okapi.RouteDefinition{
+	routes := make([]okapi.RouteDefinition, 0, 12)
+	routes = append(routes, []okapi.RouteDefinition{
 		{
 			Method:      http.MethodGet,
 			Path:        "/providers",
@@ -46,7 +47,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 				okapi.DocHide(),
 			},
 		},
-	}
+	}...)
 
 	// Authenticated OAuth routes (linked accounts)
 	oauthUser := r.v1.Group("/users/me/oauth", r.mw.jwtAuth.Middleware).WithTags([]string{"OAuth"})

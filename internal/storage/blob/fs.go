@@ -49,7 +49,7 @@ func (f *fsStore) Put(_ context.Context, key string, r io.Reader, _ string) erro
 	if err != nil {
 		return fmt.Errorf("fs create %q: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	if _, err := io.Copy(file, r); err != nil {
 		return fmt.Errorf("fs write %q: %w", path, err)
 	}

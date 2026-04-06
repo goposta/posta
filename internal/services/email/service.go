@@ -187,7 +187,7 @@ func (s *Service) DownloadAttachments(ctx context.Context, attachments []models.
 			return nil, fmt.Errorf("failed to download attachment %q: %w", att.Filename, err)
 		}
 		data, err := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read attachment %q: %w", att.Filename, err)
 		}

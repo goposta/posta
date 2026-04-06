@@ -128,6 +128,6 @@ func (s *Service) UnsubscribeURL(messageID uint) string {
 // hashLink generates a deterministic hash for a campaign + URL combination.
 func hashLink(campaignID uint, url string) string {
 	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%d:%s", campaignID, url)))
+	_, _ = fmt.Fprintf(h, "%d:%s", campaignID, url)
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }

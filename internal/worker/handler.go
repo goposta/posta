@@ -130,7 +130,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 				}
 			}
 			if !allowed {
-				h.markFailed(em, fmt.Sprintf("sender %q is not in the allowed emails list", em.Sender), 0)
+				h.markFailed(em, fmt.Sprintf("sender %q is not in the allowed emails list", em.Sender))
 				return nil
 			}
 		}
@@ -145,7 +145,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 					// In strict mode the sender's domain must be ownership-verified.
 					if shared.SecurityMode == models.ServerSecurityModeStrict {
 						if h.domainRepo == nil || !h.domainRepo.IsOwnershipVerified(em.UserID, domain) {
-							h.markFailed(em, fmt.Sprintf("shared server %q requires verified domain ownership for %q", shared.Name, domain), 0)
+							h.markFailed(em, fmt.Sprintf("shared server %q requires verified domain ownership for %q", shared.Name, domain))
 							return nil
 						}
 					}
@@ -157,7 +157,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 	}
 
 	if smtpServer == nil {
-		h.markFailed(em, "no SMTP server configured for this account or domain", 0)
+		h.markFailed(em, "no SMTP server configured for this account or domain")
 		// Don't retry – adding a server won't happen automatically.
 		return nil
 	}
@@ -179,13 +179,13 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 				if att.StorageKey != "" && att.Content == "" {
 					rc, err := h.blobStore.Get(ctx, att.StorageKey)
 					if err != nil {
-						h.markFailed(em, fmt.Sprintf("failed to fetch attachment %q from storage: %v", att.Filename, err), 0)
+						h.markFailed(em, fmt.Sprintf("failed to fetch attachment %q from storage: %v", att.Filename, err))
 						return nil
 					}
 					data, err := io.ReadAll(rc)
-					rc.Close()
+					_ = rc.Close()
 					if err != nil {
-						h.markFailed(em, fmt.Sprintf("failed to read attachment %q: %v", att.Filename, err), 0)
+						h.markFailed(em, fmt.Sprintf("failed to read attachment %q: %v", att.Filename, err))
 						return nil
 					}
 					attachments[i].Content = base64.StdEncoding.EncodeToString(data)
@@ -241,13 +241,10 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 	return nil
 }
 
-func (h *EmailSendHandler) markFailed(em *models.Email, reason string, sharedServerID uint) {
+func (h *EmailSendHandler) markFailed(em *models.Email, reason string) {
 	em.Status = models.EmailStatusFailed
 	em.ErrorMessage = reason
 	_ = h.emailRepo.Update(em)
-	if sharedServerID != 0 && h.serverRepo != nil {
-		go h.serverRepo.IncrementFailedCount(sharedServerID)
-	}
 	h.dispatcher.Dispatch(em.UserID, "email.failed", em.UUID, em.Sender)
 	if h.onFailed != nil {
 		h.onFailed()

@@ -32,7 +32,8 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	userGroup := r.v1.Group("/workspaces", r.mw.jwtAuth.Middleware).WithTags([]string{"Workspaces"})
 	userGroup.WithBearerAuth()
 
-	routes := []okapi.RouteDefinition{
+	routes := make([]okapi.RouteDefinition, 0, 20)
+	routes = append(routes, []okapi.RouteDefinition{
 		{
 			Method:      http.MethodPost,
 			Path:        "",
@@ -55,7 +56,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Description: "List all workspaces the current user is a member of",
 			Response:    &dto.Response[[]handlers.WorkspaceResponse]{},
 		},
-	}
+	}...)
 
 	// Workspace-scoped routes (require workspace context via middleware)
 	wsGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTags([]string{"Workspaces"})
