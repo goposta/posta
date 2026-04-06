@@ -320,7 +320,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Handler:  okapi.H(r.h.template.List),
 			Group:    userGroup,
 			Summary:  "List templates",
-			Request:  &handlers.ListRequest{},
+			Request:  &handlers.ListTemplatesRequest{},
 			Response: &dto.PageableResponse[models.Template]{},
 		},
 		{

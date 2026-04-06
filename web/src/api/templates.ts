@@ -15,8 +15,8 @@ import type {
 } from './types'
 
 export const templatesApi = {
-  list(page = 0, size = 20) {
-    return api.get<PaginatedResponse<Template>>('/users/me/templates', { params: { page, size } })
+  list(page = 0, size = 20, search = '') {
+    return api.get<PaginatedResponse<Template>>('/users/me/templates', { params: { page, size, search } })
   },
   create(data: TemplateInput) {
     return api.post<ApiResponse<Template>>('/users/me/templates', data)
