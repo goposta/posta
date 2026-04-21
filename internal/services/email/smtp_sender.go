@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"mime"
 	"net/mail"
 	"net/smtp"
 	"strings"
@@ -182,7 +183,7 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 
 	fmt.Fprintf(&b, "From: %s\r\n", from)
 	fmt.Fprintf(&b, "To: %s\r\n", strings.Join(to, ", "))
-	fmt.Fprintf(&b, "Subject: %s\r\n", subject)
+	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject))
 	b.WriteString("MIME-Version: 1.0\r\n")
 
 	// RFC 8058: List-Unsubscribe headers
