@@ -5,7 +5,7 @@ import type { User, UserProfile, AuthResponse } from '../api/types'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('posta_token') || '')
-  const user = ref<User | null>(JSON.parse(localStorage.getItem('posta_user') || 'null'))
+  const user = ref<User | UserProfile | null>(JSON.parse(localStorage.getItem('posta_user') || 'null'))
 
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
@@ -17,6 +17,8 @@ export const useAuthStore = defineStore('auth', () => {
       throw { requires2FA: true }
     }
     setAuth(res.data.data)
+    // Refresh to pick up extended profile fields (email_verified_at, etc).
+    await fetchUser()
     return res.data.data
   }
 

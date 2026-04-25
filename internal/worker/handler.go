@@ -38,17 +38,19 @@ import (
 
 // EmailSendHandler processes email:send tasks from the Asynq queue.
 type EmailSendHandler struct {
-	emailRepo   *repositories.EmailRepository
-	smtpRepo    *repositories.SMTPRepository
-	serverRepo  *repositories.ServerRepository
-	domainRepo  *repositories.DomainRepository
-	contactRepo *repositories.ContactRepository
-	messageRepo *repositories.CampaignMessageRepository
-	sender      *email.SMTPSender
-	dispatcher  *webhook.Dispatcher
-	blobStore   blob.Store
-	onSent      func()
-	onFailed    func()
+	emailRepo    *repositories.EmailRepository
+	smtpRepo     *repositories.SMTPRepository
+	serverRepo   *repositories.ServerRepository
+	domainRepo   *repositories.DomainRepository
+	contactRepo  *repositories.ContactRepository
+	messageRepo  *repositories.CampaignMessageRepository
+	campaignRepo *repositories.CampaignRepository
+	sender       *email.SMTPSender
+	stamper      *email.Stamper
+	dispatcher   *webhook.Dispatcher
+	blobStore    blob.Store
+	onSent       func()
+	onFailed     func()
 }
 
 func NewEmailSendHandler(
@@ -79,6 +81,19 @@ func (h *EmailSendHandler) SetCampaignMessageRepo(r *repositories.CampaignMessag
 	h.messageRepo = r
 }
 
+// SetCampaignRepo lets the handler consult the campaign's live status before
+// sending. When set, already-queued emails for cancelled/paused campaigns are
+// dropped instead of dispatched.
+func (h *EmailSendHandler) SetCampaignRepo(r *repositories.CampaignRepository) {
+	h.campaignRepo = r
+}
+
+// SetStamper enables X-Mailer/X-Posta-* header stamping and optional
+// X-Posta-Signature HMAC. Nil disables stamping.
+func (h *EmailSendHandler) SetStamper(s *email.Stamper) {
+	h.stamper = s
+}
+
 // OnSent sets a callback invoked after each successful email send.
 func (h *EmailSendHandler) OnSent(fn func()) { h.onSent = fn }
 
@@ -95,6 +110,31 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 	em, err := h.emailRepo.FindByID(payload.EmailID)
 	if err != nil {
 		return fmt.Errorf("email not found: %w", err)
+	}
+
+	// If this email was enqueued as part of a campaign, respect the live
+	// campaign status. A paused campaign releases the message back to pending
+	// so a Resume will re-dispatch it; cancelled drops it permanently.
+	if h.messageRepo != nil && h.campaignRepo != nil {
+		if msg, mErr := h.messageRepo.FindByEmailID(em.ID); mErr == nil {
+			if camp, cErr := h.campaignRepo.FindByID(msg.CampaignID); cErr == nil {
+				switch camp.Status {
+				case models.CampaignStatusCancelled:
+					_ = h.messageRepo.UpdateStatus(msg.ID, models.CampaignMsgSkipped, "campaign cancelled")
+					em.Status = models.EmailStatusFailed
+					em.ErrorMessage = "campaign cancelled"
+					_ = h.emailRepo.Update(em)
+					logger.Info("worker: dropping email for cancelled campaign", "email_id", em.ID, "campaign_id", camp.ID)
+					return nil
+				case models.CampaignStatusPaused:
+					_ = h.messageRepo.UpdateStatus(msg.ID, models.CampaignMsgPending, "")
+					em.Status = models.EmailStatusQueued
+					_ = h.emailRepo.Update(em)
+					logger.Info("worker: releasing email back to pending (campaign paused)", "email_id", em.ID, "campaign_id", camp.ID)
+					return nil
+				}
+			}
+		}
 	}
 
 	// Mark as processing
@@ -198,6 +238,32 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 	var headers map[string]string
 	if em.HeadersJSON != "" {
 		_ = json.Unmarshal([]byte(em.HeadersJSON), &headers)
+	}
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
+	// Stamp Posta headers. Campaign mail gets campaign-aware headers; everything
+	// else gets transactional headers. A final HMAC signs the message identity.
+	if h.stamper != nil {
+		var campMsg *models.CampaignMessage
+		if h.messageRepo != nil {
+			if m, err := h.messageRepo.FindByEmailID(em.ID); err == nil {
+				campMsg = m
+			}
+		}
+		if campMsg != nil {
+			// Opens and clicks are rewritten together in the tracking service's
+			tracked := em.HTMLBody != "" && em.ListUnsubscribeURL != ""
+			h.stamper.StampCampaign(
+				headers, em,
+				campMsg.CampaignID, campMsg.ID,
+				tracked, tracked,
+			)
+		} else {
+			h.stamper.StampTransactional(headers, em)
+		}
+		h.stamper.Sign(headers, em, em.Recipients, em.Subject)
 	}
 
 	if err := h.sender.Send(smtpServer, em.Sender, em.Recipients, em.Subject, em.HTMLBody, em.TextBody, attachments, headers, em.ListUnsubscribeURL, em.ListUnsubscribePost); err != nil {

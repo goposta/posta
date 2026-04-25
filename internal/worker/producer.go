@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -85,16 +86,32 @@ func (p *Producer) EnqueueEmailSendAt(emailID uint, queue string, sendAt time.Ti
 }
 
 // EnqueueCampaignStart enqueues a campaign start task (fan-out to subscribers).
+// The TaskID is derived from the campaign ID so double-clicks and retries
+// collapse into a single Redis entry instead of fanning out twice.
 func (p *Producer) EnqueueCampaignStart(campaignID uint) error {
-	task, err := NewCampaignStartTask(campaignID, asynq.Queue(QueueBulk), asynq.MaxRetry(3))
+	task, err := NewCampaignStartTask(
+		campaignID,
+		asynq.Queue(QueueBulk),
+		asynq.MaxRetry(3),
+		asynq.TaskID(fmt.Sprintf("campaign:start:%d", campaignID)),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create campaign start task: %w", err)
 	}
-	_, err = p.client.Enqueue(task)
-	return err
+	if _, err := p.client.Enqueue(task); err != nil {
+		// asynq.ErrTaskIDConflict means the task is already pending: treat as success.
+		if errors.Is(err, asynq.ErrTaskIDConflict) {
+			return nil
+		}
+		return fmt.Errorf("failed to enqueue campaign start: %w", err)
+	}
+	return nil
 }
 
-// EnqueueCampaignBatch enqueues a campaign batch processing task.
+// EnqueueCampaignBatch enqueues a campaign batch processing task. A per-run
+// random suffix keeps successive batches distinct while still letting us dedupe
+// the *first* kick-off from Send (callers that want dedupe pass delay=0 after
+// transitioning status atomically).
 func (p *Producer) EnqueueCampaignBatch(campaignID uint, delay time.Duration) error {
 	opts := []asynq.Option{asynq.Queue(QueueBulk), asynq.MaxRetry(3)}
 	if delay > 0 {
@@ -106,6 +123,22 @@ func (p *Producer) EnqueueCampaignBatch(campaignID uint, delay time.Duration) er
 	}
 	_, err = p.client.Enqueue(task)
 	return err
+}
+
+// EnqueueInboundProcess enqueues an inbound-process task that dispatches the
+// email.inbound webhook for a received message.
+func (p *Producer) EnqueueInboundProcess(inboundEmailID uint) error {
+	task, err := NewInboundProcessTask(inboundEmailID,
+		asynq.Queue(QueueTransactional),
+		asynq.MaxRetry(p.maxRetries),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create inbound task: %w", err)
+	}
+	if _, err := p.client.Enqueue(task); err != nil {
+		return fmt.Errorf("failed to enqueue inbound task: %w", err)
+	}
+	return nil
 }
 
 // Close closes the underlying Asynq client.

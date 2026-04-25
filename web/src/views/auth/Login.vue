@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '../../api/auth'
 import { oauthApi } from '../../api/oauth'
 import { useAuthStore } from '../../stores/auth'
@@ -9,6 +9,7 @@ import { useThemeStore } from '../../stores/theme'
 import type { OAuthProviderInfo } from '../../api/types'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const notification = useNotificationStore()
 const theme = useThemeStore()
@@ -20,7 +21,13 @@ const loading = ref(false)
 const requires2FA = ref(false)
 const registrationEnabled = ref(false)
 const oauthProviders = ref<OAuthProviderInfo[]>([])
+const ssoAvailable = ref(false)
+const ssoMode = ref(false)
 const loginError = ref(router.currentRoute.value.query.error as string || '')
+const emailError = ref('')
+const passwordError = ref('')
+const codeError = ref('')
+const showPassword = ref(false)
 
 onMounted(async () => {
   try {
@@ -30,6 +37,7 @@ onMounted(async () => {
     ])
     registrationEnabled.value = regRes.data.data.registration_enabled
     oauthProviders.value = oauthRes.data.data.providers || []
+    ssoAvailable.value = !!oauthRes.data.data.sso_available
   } catch { /* ignore */ }
 })
 
@@ -38,19 +46,60 @@ function oauthLogin(slug: string) {
   window.location.href = `/api/v1/auth/oauth/${slug}/authorize`
 }
 
-async function handleLogin() {
-  if (!email.value || !password.value) {
-    notification.error('Please fill in all fields.')
+const ssoChecking = ref(false)
+function enterSSOMode() {
+  ssoMode.value = true
+  password.value = ''
+}
+function exitSSOMode() {
+  ssoMode.value = false
+}
+async function submitSSO() {
+  emailError.value = ''
+  if (!email.value) {
+    emailError.value = 'Enter your email to continue.'
     return
   }
-  if (requires2FA.value && !twoFactorCode.value) {
-    notification.error('Please enter your 2FA code.')
-    return
+  ssoChecking.value = true
+  try {
+    const res = await oauthApi.discoverSSO(email.value)
+    const slug = res.data.data?.slug
+    if (slug) {
+      oauthLogin(slug)
+      return
+    }
+    notification.info('No SSO configured for this email.')
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      notification.info('No SSO configured for this email.')
+    } else {
+      notification.error('SSO lookup failed.')
+    }
+  } finally {
+    ssoChecking.value = false
+  }
+}
+
+async function handleLogin() {
+  emailError.value = ''
+  passwordError.value = ''
+  codeError.value = ''
+  if (requires2FA.value) {
+    if (!twoFactorCode.value) {
+      codeError.value = 'Enter the 6-digit code from your authenticator app.'
+      return
+    }
+  } else {
+    if (!email.value) emailError.value = 'Enter your email address.'
+    if (!password.value) passwordError.value = 'Enter your password.'
+    if (emailError.value || passwordError.value) return
   }
   loading.value = true
   try {
     await auth.login(email.value, password.value, requires2FA.value ? twoFactorCode.value : undefined)
-    router.push('/')
+    const redirect = route.query.redirect
+    const target = typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/'
+    router.push(target)
   } catch (err: any) {
     if (err?.requires2FA) {
       requires2FA.value = true
@@ -84,44 +133,89 @@ function resetLogin() {
   <div class="auth-page">
     <div class="auth-card">
       <div class="auth-header">
-        <div class="auth-logo">
-          <img src="/logo.png" alt="Posta" class="logo-img" />
-          <span>Posta</span>
-        </div>
-        <p class="auth-subtitle">{{ requires2FA ? 'Two-Factor Authentication' : 'Sign in to your account' }}</p>
+        <div class="auth-wordmark" aria-label="Posta">Posta<span class="auth-wordmark-dot">.</span></div>
+        <h1 class="auth-title">
+          {{ requires2FA ? 'Two-factor authentication' : (ssoMode ? 'Continue with SSO' : 'Sign in to your account') }}
+        </h1>
+        <p v-if="requires2FA" class="auth-subtitle">Enter the code from your authenticator app.</p>
+        <p v-else-if="ssoMode" class="auth-subtitle">We'll redirect you to your identity provider.</p>
       </div>
 
-      <form class="auth-form" @submit.prevent="handleLogin">
+      <form class="auth-form" @submit.prevent="ssoMode ? submitSSO() : handleLogin()">
         <template v-if="!requires2FA">
           <div class="form-group">
             <label class="form-label" for="email">Email</label>
-            <input id="email" v-model="email" type="email" class="form-input" placeholder="you@example.com" autocomplete="email" />
+            <input
+              id="email"
+              v-model="email"
+              type="email"
+              class="form-input"
+              :class="{ 'form-input-error': emailError }"
+              placeholder="you@example.com"
+              autocomplete="email"
+              @input="emailError = ''"
+            />
+            <small v-if="emailError" class="form-error">{{ emailError }}</small>
           </div>
-          <div class="form-group">
+          <div v-if="!ssoMode" class="form-group">
             <label class="form-label" for="password">Password</label>
-            <input id="password" v-model="password" type="password" class="form-input" placeholder="Enter your password" autocomplete="current-password" />
+            <div class="password-wrap">
+              <input
+                id="password"
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                class="form-input"
+                :class="{ 'form-input-error': passwordError }"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+                @input="passwordError = ''"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                :title="showPassword ? 'Hide password' : 'Show password'"
+                @click="showPassword = !showPassword"
+              >
+                <svg v-if="showPassword" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <small v-if="passwordError" class="form-error">{{ passwordError }}</small>
           </div>
         </template>
         <template v-else>
           <div class="form-group">
-            <label class="form-label" for="2fa-code">Authentication Code</label>
+            <label class="form-label" for="2fa-code">Authentication code</label>
             <input
               id="2fa-code"
               v-model="twoFactorCode"
               type="text"
               class="form-input totp-input"
+              :class="{ 'form-input-error': codeError }"
               placeholder="000000"
               maxlength="6"
               inputmode="numeric"
               autocomplete="one-time-code"
               autofocus
+              @input="codeError = ''"
             />
-            <small class="form-hint">Enter the 6-digit code from your authenticator app</small>
+            <small v-if="codeError" class="form-error">{{ codeError }}</small>
           </div>
         </template>
-        <button type="submit" class="btn btn-primary auth-btn" :disabled="loading">
+        <button v-if="!ssoMode" type="submit" class="btn btn-primary auth-btn" :disabled="loading">
           <span v-if="loading" class="spinner"></span>
           {{ loading ? 'Signing in...' : 'Sign in' }}
+        </button>
+        <button v-if="ssoMode" type="submit" class="btn btn-primary auth-btn" :disabled="ssoChecking">
+          <span v-if="ssoChecking" class="spinner"></span>
+          {{ ssoChecking ? 'Checking...' : 'Continue' }}
+        </button>
+        <button v-if="!requires2FA && !ssoMode && ssoAvailable" type="button" class="btn btn-secondary auth-btn" style="margin-top: 8px" @click="enterSSOMode">
+          Continue with SSO
+        </button>
+        <button v-if="ssoMode" type="button" class="btn btn-secondary auth-btn" style="margin-top: 8px" @click="exitSSOMode">
+          Back to password sign in
         </button>
         <button v-if="requires2FA" type="button" class="btn btn-secondary auth-btn" style="margin-top: 8px" @click="resetLogin">
           Back to Login
@@ -129,7 +223,7 @@ function resetLogin() {
       </form>
 
       <!-- OAuth Providers -->
-      <div v-if="oauthProviders.length > 0 && !requires2FA" class="oauth-section">
+      <div v-if="oauthProviders.length > 0 && !requires2FA && !ssoMode" class="oauth-section">
         <div class="oauth-divider">
           <span>or</span>
         </div>
@@ -190,26 +284,56 @@ function resetLogin() {
 
 .auth-header { text-align: center; padding: 36px 32px 0; }
 
-.auth-logo {
+.auth-wordmark {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--text-primary);
+  margin-bottom: 24px;
+  line-height: 1;
+}
+.auth-wordmark-dot {
+  color: var(--primary-500);
+  margin-left: 1px;
+}
+
+.auth-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+  margin: 0 0 8px;
+}
+
+.auth-subtitle { font-size: 14px; color: var(--text-muted); margin: 0; }
+
+.password-wrap { position: relative; }
+.password-wrap .form-input { padding-right: 40px; }
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
 }
-.auth-logo .logo-img {
-  width: 100px;
-  height: 100px;
-  object-fit: contain;
-}
-.auth-logo span {
-  font-size: 32px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
-}
+.password-toggle:hover { color: var(--text-primary); }
 
-.auth-subtitle { font-size: 14px; color: var(--text-muted); }
+.form-input-error { border-color: var(--danger-500, #ef4444); }
+.form-input-error:focus { border-color: var(--danger-500, #ef4444); }
+
+.form-error {
+  display: block;
+  font-size: 12px;
+  color: var(--danger-600, #dc2626);
+  margin-top: 6px;
+}
 
 .auth-form { padding: 28px 32px 20px; }
 
@@ -225,12 +349,6 @@ function resetLogin() {
   text-align: center;
   letter-spacing: 8px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-}
-
-.form-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 6px;
 }
 
 .auth-footer {

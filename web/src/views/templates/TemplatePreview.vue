@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { templatesApi } from '../../api/templates'
 import type { Template, TemplatePreview, TemplateLocalization, TemplateVersion } from '../../api/types'
@@ -19,19 +19,43 @@ const previewError = ref('')
 const activeTab = ref<'html' | 'text'>('html')
 const sampleData = ref('{\n  "name": "John",\n  "company": "Acme"\n}')
 
+const allTemplates = ref<Template[]>([])
+const search = ref('')
+const searchOpen = ref(false)
+
+const searchResults = computed<Template[]>(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return allTemplates.value.slice(0, 10)
+  return allTemplates.value.filter(t => t.name.toLowerCase().includes(q)).slice(0, 20)
+})
+
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 watch(sampleData, () => {
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => renderPreview(), 500)
 })
 
-onMounted(async () => {
-  const id = Number(route.params.id)
+watch(() => route.params.id, (id) => {
+  if (id) loadTemplate(Number(id))
+})
+
+onMounted(() => {
+  loadTemplate(Number(route.params.id))
+})
+
+async function loadTemplate(id: number) {
+  loading.value = true
+  template.value = null
+  version.value = null
+  localization.value = null
+  preview.value = null
 
   try {
-    // Load template
-    const res = await templatesApi.list(0, 100)
-    template.value = res.data.data.find((t: Template) => t.id === id) || null
+    if (allTemplates.value.length === 0) {
+      const res = await templatesApi.list(0, 100)
+      allTemplates.value = res.data.data
+    }
+    template.value = allTemplates.value.find((t: Template) => t.id === id) || null
 
     if (!template.value) {
       notify.error('Template not found')
@@ -39,9 +63,10 @@ onMounted(async () => {
       return
     }
 
+    search.value = template.value.name
+
     if (template.value.sample_data) sampleData.value = template.value.sample_data
 
-    // Load the active version and its default localization
     if (template.value.active_version_id) {
       const versionsRes = await templatesApi.listVersions(id)
       version.value = (versionsRes.data.data || []).find((v: TemplateVersion) => v.id === template.value!.active_version_id) || null
@@ -59,7 +84,18 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+function selectTemplate(t: Template) {
+  searchOpen.value = false
+  if (t.id === template.value?.id) return
+  router.push(`/templates/${t.id}/preview`)
+}
+
+function onSearchBlur() {
+  // Delay so click on a result still registers.
+  setTimeout(() => { searchOpen.value = false }, 150)
+}
 
 async function renderPreview() {
   if (!template.value || !localization.value || !template.value.active_version_id) return
@@ -106,6 +142,33 @@ function formatDate(dateStr: string): string {
     <div class="page-header">
       <h1>Template Preview</h1>
       <button class="btn btn-secondary" @click="router.push('/templates')">Back to Templates</button>
+    </div>
+
+    <div class="template-search" style="margin-bottom: 16px; position: relative; max-width: 420px;">
+      <input
+        v-model="search"
+        type="text"
+        class="form-input"
+        placeholder="Search templates by name..."
+        @focus="searchOpen = true"
+        @blur="onSearchBlur"
+      />
+      <div v-if="searchOpen && searchResults.length > 0" class="template-search-results">
+        <button
+          v-for="t in searchResults"
+          :key="t.id"
+          type="button"
+          class="template-search-item"
+          :class="{ active: t.id === template?.id }"
+          @mousedown.prevent="selectTemplate(t)"
+        >
+          <span class="template-search-name">{{ t.name }}</span>
+          <span v-if="t.description" class="template-search-desc">{{ t.description }}</span>
+        </button>
+      </div>
+      <div v-else-if="searchOpen && search.trim()" class="template-search-results template-search-empty">
+        No templates match "{{ search }}"
+      </div>
     </div>
 
     <div v-if="loading" class="loading-page">
@@ -305,5 +368,55 @@ function formatDate(dateStr: string): string {
   letter-spacing: 0.06em;
   color: var(--text-muted);
   margin-bottom: 6px;
+}
+
+.template-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.template-search-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-primary);
+}
+.template-search-item:last-child { border-bottom: none; }
+.template-search-item:hover { background: var(--bg-hover, rgba(0, 0, 0, 0.04)); }
+.template-search-item.active { background: var(--primary-50, rgba(0, 95, 204, 0.08)); }
+
+.template-search-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.template-search-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.template-search-empty {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
 }
 </style>

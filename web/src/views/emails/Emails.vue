@@ -86,6 +86,7 @@ function formatDate(date: string | null) {
                 <th>Subject</th>
                 <th>From</th>
                 <th>Recipients</th>
+                <th>Template</th>
                 <th>Status</th>
                 <th>Sent At</th>
                 <th></th>
@@ -101,6 +102,7 @@ function formatDate(date: string | null) {
                 <td>{{ email.subject }}</td>
                 <td>{{ email.sender }}</td>
                 <td>{{ email.recipients.join(', ') }}</td>
+                <td>{{ email.template_name || 'N/A' }}</td>
                 <td><span :class="statusBadgeClass(email.status)">{{ email.status }}</span></td>
                 <td>{{ formatDate(email.sent_at) }}</td>
                 <td>

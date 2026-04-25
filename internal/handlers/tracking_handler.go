@@ -18,7 +18,6 @@
 package handlers
 
 import (
-	"encoding/base64"
 	"fmt"
 	"html"
 	"net/http"
@@ -31,14 +30,14 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// 1x1 transparent GIF
-var transparentPixel, _ = base64.StdEncoding.DecodeString("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
-
 type TrackingHandler struct {
 	trackingRepo    *repositories.TrackingRepository
 	messageRepo     *repositories.CampaignMessageRepository
 	campaignRepo    *repositories.CampaignRepository
 	subRepo         *repositories.SubscriberRepository
+	listRepo        *repositories.SubscriberListRepository
+	emailRepo       *repositories.EmailRepository
+	suppressionRepo *repositories.SuppressionRepository
 	trackingService *tracking.Service
 }
 
@@ -47,6 +46,9 @@ func NewTrackingHandler(
 	messageRepo *repositories.CampaignMessageRepository,
 	campaignRepo *repositories.CampaignRepository,
 	subRepo *repositories.SubscriberRepository,
+	listRepo *repositories.SubscriberListRepository,
+	emailRepo *repositories.EmailRepository,
+	suppressionRepo *repositories.SuppressionRepository,
 	trackingService *tracking.Service,
 ) *TrackingHandler {
 	return &TrackingHandler{
@@ -54,17 +56,22 @@ func NewTrackingHandler(
 		messageRepo:     messageRepo,
 		campaignRepo:    campaignRepo,
 		subRepo:         subRepo,
+		listRepo:        listRepo,
+		emailRepo:       emailRepo,
+		suppressionRepo: suppressionRepo,
 		trackingService: trackingService,
 	}
 }
 
 type TrackingOpenRequest struct {
-	MessageID int `param:"message_id"`
+	MessageID int    `param:"message_id"`
+	Sig       string `query:"sig"`
 }
 
 type TrackingClickRequest struct {
 	MessageID int    `param:"message_id"`
 	Hash      string `param:"hash"`
+	Sig       string `query:"sig"`
 }
 
 type TrackingUnsubscribeRequest struct {
@@ -72,9 +79,16 @@ type TrackingUnsubscribeRequest struct {
 }
 
 // OpenPixel serves a 1x1 transparent GIF and records the open event.
+// Signature is mandatory; unsigned or bad-sig requests get 404.
 func (h *TrackingHandler) OpenPixel(c *okapi.Context, req *TrackingOpenRequest) error {
-	// Record open asynchronously
-	go h.recordOpen(uint(req.MessageID), c.RealIP(), c.Request().UserAgent())
+	if req.Sig == "" || !h.trackingService.VerifyOpenSig(uint(req.MessageID), req.Sig) {
+		return c.AbortNotFound("not found")
+	}
+
+	ua := c.Request().UserAgent()
+	if !isBotUA(ua) {
+		go h.recordOpen(uint(req.MessageID), c.RealIP(), ua)
+	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "image/gif")
 	c.ResponseWriter().Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -85,6 +99,10 @@ func (h *TrackingHandler) OpenPixel(c *okapi.Context, req *TrackingOpenRequest) 
 
 // ClickRedirect records the click and redirects to the original URL.
 func (h *TrackingHandler) ClickRedirect(c *okapi.Context, req *TrackingClickRequest) error {
+	if req.Sig == "" || !h.trackingService.VerifyClickSig(uint(req.MessageID), req.Hash, req.Sig) {
+		return c.AbortNotFound("not found")
+	}
+
 	link, err := h.trackingRepo.FindLinkByHash(req.Hash)
 	if err != nil {
 		return c.AbortNotFound("link not found")
@@ -95,8 +113,10 @@ func (h *TrackingHandler) ClickRedirect(c *okapi.Context, req *TrackingClickRequ
 		return c.AbortBadRequest("invalid redirect URL")
 	}
 
-	// Record click asynchronously
-	go h.recordClick(uint(req.MessageID), link.ID, c.RealIP(), c.Request().UserAgent())
+	ua := c.Request().UserAgent()
+	if !isBotUA(ua) {
+		go h.recordClick(uint(req.MessageID), link.ID, c.RealIP(), ua)
+	}
 
 	c.Redirect(http.StatusFound, link.OriginalURL)
 	return nil
@@ -132,6 +152,70 @@ button:hover{background:#7e22ce}.done{color:#16a34a;font-weight:600}</style></he
 	return c.HTMLView(http.StatusOK, html, okapi.M{})
 }
 
+// TxUnsubscribePage renders a confirmation page for a transactional one-click
+// unsubscribe link. The link is RFC 8058 compliant: the POST variant will
+// opt the recipient out without any further interaction.
+func (h *TrackingHandler) TxUnsubscribePage(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
+	emailID, err := h.trackingService.VerifyTxUnsubscribeToken(req.Token)
+	if err != nil {
+		return c.HTMLView(http.StatusNotFound, "Invalid or expired unsubscribe link", okapi.M{})
+	}
+	em, err := h.emailRepo.FindByID(emailID)
+	if err != nil || em == nil {
+		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
+	}
+	shown := ""
+	if len(em.Recipients) > 0 {
+		shown = em.Recipients[0]
+	}
+	page := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribe</title>
+<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}
+.card{background:#fff;border-radius:12px;padding:40px;max-width:420px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+h1{font-size:20px;margin-bottom:8px}p{color:#6b7280;font-size:14px;margin-bottom:20px}
+button{background:#9333ea;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:15px;cursor:pointer}
+button:hover{background:#7e22ce}</style></head><body>
+<div class="card"><h1>Unsubscribe</h1><p>%s</p>
+<form method="POST"><button type="submit">Confirm Unsubscribe</button></form></div></body></html>`, html.EscapeString(shown))
+
+	return c.HTMLView(http.StatusOK, page, okapi.M{})
+}
+
+// TxUnsubscribeConfirm processes a POST to the transactional unsubscribe link.
+// It is the RFC 8058 one-click endpoint — idempotent and requires no session.
+// All recipients on the email are added to the scoped suppression list.
+func (h *TrackingHandler) TxUnsubscribeConfirm(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
+	emailID, err := h.trackingService.VerifyTxUnsubscribeToken(req.Token)
+	if err != nil {
+		return c.HTMLView(http.StatusNotFound, "Invalid or expired unsubscribe link", okapi.M{})
+	}
+	em, err := h.emailRepo.FindByID(emailID)
+	if err != nil || em == nil {
+		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
+	}
+
+	if h.suppressionRepo != nil {
+		for _, addr := range em.Recipients {
+			if addr == "" {
+				continue
+			}
+			_ = h.suppressionRepo.Upsert(&models.Suppression{
+				UserID:      em.UserID,
+				WorkspaceID: em.WorkspaceID,
+				Email:       addr,
+				Reason:      "one_click_unsubscribe",
+			})
+		}
+	}
+
+	confirmHTML := `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title>
+<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}
+.card{background:#fff;border-radius:12px;padding:40px;max-width:420px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+h1{font-size:20px;color:#16a34a}p{color:#6b7280;font-size:14px}</style></head><body>
+<div class="card"><h1>Unsubscribed</h1><p>You will no longer receive emails of this type from the sender.</p></div></body></html>`
+
+	return c.HTMLView(http.StatusOK, confirmHTML, okapi.M{})
+}
+
 // UnsubscribeConfirm processes the unsubscribe action.
 func (h *TrackingHandler) UnsubscribeConfirm(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	messageID, err := h.trackingService.VerifyUnsubscribeToken(req.Token)
@@ -144,22 +228,20 @@ func (h *TrackingHandler) UnsubscribeConfirm(c *okapi.Context, req *TrackingUnsu
 		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
 	}
 
-	// Update subscriber status
-	sub, err := h.subRepo.FindByID(msg.SubscriberID)
+	camp, err := h.campaignRepo.FindByID(msg.CampaignID)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Subscriber not found", okapi.M{})
+		return c.HTMLView(http.StatusNotFound, "Campaign not found", okapi.M{})
 	}
 
-	now := time.Now()
-	sub.Status = models.SubscriberStatusUnsubscribed
-	sub.UnsubscribedAt = &now
-	_ = h.subRepo.Update(sub)
+	// Suppress this subscriber on the campaign's list
+	if h.listRepo != nil {
+		_ = h.listRepo.SuppressMember(camp.ListID, msg.SubscriberID, "user_unsubscribed")
+	}
 
-	// Update campaign message
-	msg.UnsubscribedAt = &now
+	// Mark the campaign message itself.
 	_ = h.messageRepo.UpdateUnsubscribedAt(msg.ID)
 
-	// Record event
+	// Record event for analytics.
 	_ = h.trackingRepo.CreateEvent(&models.TrackingEvent{
 		CampaignMessageID: msg.ID,
 		EventType:         models.TrackingEventUnsubscribe,
@@ -171,7 +253,7 @@ func (h *TrackingHandler) UnsubscribeConfirm(c *okapi.Context, req *TrackingUnsu
 <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}
 .card{background:#fff;border-radius:12px;padding:40px;max-width:420px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
 h1{font-size:20px;color:#16a34a}p{color:#6b7280;font-size:14px}</style></head><body>
-<div class="card"><h1>Unsubscribed</h1><p>You have been successfully unsubscribed.</p></div></body></html>`
+<div class="card"><h1>Unsubscribed</h1><p>You have been removed from this mailing list. Other lists you are subscribed to are unaffected.</p></div></body></html>`
 
 	return c.HTMLView(http.StatusOK, confirmHTML, okapi.M{})
 }

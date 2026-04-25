@@ -131,6 +131,17 @@ function parseHeaders(json: string): Record<string, string> | null {
                 <td>{{ email.smtp_hostname || 'N/A' }}</td>
               </tr>
               <tr>
+                <td style="font-weight: 600">Template</td>
+                <td>{{ email.template_name || 'N/A' }}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 600">Provider</td>
+                <td>
+                  <span v-if="email.provider" class="badge badge-info">{{ email.provider }}</span>
+                  <span v-else style="color: var(--text-muted)">N/A</span>
+                </td>
+              </tr>
+              <tr>
                 <td style="font-weight: 600">Retry Count</td>
                 <td>{{ email.retry_count }}</td>
               </tr>

@@ -40,6 +40,12 @@ export const authApi = {
   registrationStatus() {
     return api.get<ApiResponse<{ registration_enabled: boolean }>>('/auth/registration-status')
   },
+  verifyEmail(token: string) {
+    return api.get<ApiResponse<{ message: string }>>(`/auth/verify-email?token=${encodeURIComponent(token)}`)
+  },
+  resendVerificationEmail() {
+    return api.post<ApiResponse<{ message: string }>>('/users/me/verify-email/resend')
+  },
   getMyPlan() {
     return api.get<ApiResponse<Plan | null>>('/users/me/plan')
   },

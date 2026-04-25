@@ -25,6 +25,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/services/auth"
+	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/ratelimit"
 	sessionpkg "github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/storage/repositories"
@@ -104,6 +105,38 @@ func JWTAdminQueryAuth(cfg *config.Config, sessionStore ...*sessionpkg.Store) ok
 		// auth.OnUnauthorized = sessionAwareUnauthorized
 	}
 	return auth
+}
+
+// JWTQueryAuth creates user JWT auth via query param (for SSE endpoints —
+// browsers cannot attach Authorization headers to EventSource connections).
+func JWTQueryAuth(cfg *config.Config, sessionStore ...*sessionpkg.Store) okapi.JWTAuth {
+	auth := baseJWTAuth(cfg)
+	auth.TokenLookup = "query:token"
+	if len(sessionStore) > 0 && sessionStore[0] != nil {
+		auth.ValidateClaims = sessionValidator(sessionStore[0])
+	}
+	return auth
+}
+
+// RequireVerifiedEmail blocks actions that are risky when the caller's email
+func RequireVerifiedEmail(verifier *emailverify.Service, userRepo *repositories.UserRepository) okapi.Middleware {
+	return func(c *okapi.Context) error {
+		if verifier == nil || !verifier.Required() {
+			return c.Next()
+		}
+		userID := c.GetInt("user_id")
+		if userID == 0 {
+			return c.Next()
+		}
+		user, err := userRepo.FindByID(uint(userID))
+		if err != nil {
+			return c.AbortUnauthorized("user not found")
+		}
+		if user.EmailVerifiedAt == nil {
+			return c.AbortForbidden("email address is not verified")
+		}
+		return c.Next()
+	}
 }
 
 // LoginRateLimitMiddleware limits login attempts per IP address using Redis.

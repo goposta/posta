@@ -93,6 +93,33 @@ func (r *CampaignMessageRepository) SetEmailID(id uint, emailID uint) error {
 	return r.db.Model(&models.CampaignMessage{}).Where("id = ?", id).Update("email_id", emailID).Error
 }
 
+func (r *CampaignMessageRepository) CountByStatusForCampaigns(campaignIDs []uint) (map[uint]map[models.CampaignMessageStatus]int64, error) {
+	result := make(map[uint]map[models.CampaignMessageStatus]int64, len(campaignIDs))
+	if len(campaignIDs) == 0 {
+		return result, nil
+	}
+	type row struct {
+		CampaignID uint
+		Status     models.CampaignMessageStatus
+		Count      int64
+	}
+	var rows []row
+	if err := r.db.Model(&models.CampaignMessage{}).
+		Select("campaign_id, status, COUNT(*) as count").
+		Where("campaign_id IN ?", campaignIDs).
+		Group("campaign_id, status").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, rw := range rows {
+		if _, ok := result[rw.CampaignID]; !ok {
+			result[rw.CampaignID] = make(map[models.CampaignMessageStatus]int64)
+		}
+		result[rw.CampaignID][rw.Status] = rw.Count
+	}
+	return result, nil
+}
+
 func (r *CampaignMessageRepository) CountByStatus(campaignID uint) (map[models.CampaignMessageStatus]int64, error) {
 	type result struct {
 		Status models.CampaignMessageStatus
@@ -112,6 +139,17 @@ func (r *CampaignMessageRepository) CountByStatus(campaignID uint) (map[models.C
 		counts[r.Status] = r.Count
 	}
 	return counts, nil
+}
+
+// SkipPendingForCampaign marks all still-pending CampaignMessages as skipped.
+func (r *CampaignMessageRepository) SkipPendingForCampaign(campaignID uint, reason string) (int64, error) {
+	res := r.db.Model(&models.CampaignMessage{}).
+		Where("campaign_id = ? AND status = ?", campaignID, models.CampaignMsgPending).
+		Updates(map[string]interface{}{
+			"status":        models.CampaignMsgSkipped,
+			"error_message": reason,
+		})
+	return res.RowsAffected, res.Error
 }
 
 func (r *CampaignMessageRepository) CountPending(campaignID uint) (int64, error) {

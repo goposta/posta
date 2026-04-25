@@ -18,6 +18,8 @@
 package repositories
 
 import (
+	"time"
+
 	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -38,6 +40,15 @@ func (r *SubscriberListRepository) Create(list *models.SubscriberList) error {
 func (r *SubscriberListRepository) FindByID(id uint) (*models.SubscriberList, error) {
 	var list models.SubscriberList
 	if err := r.db.First(&list, id).Error; err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+// FindByNameForScope resolves a list by name within the given scope.
+func (r *SubscriberListRepository) FindByNameForScope(scope ResourceScope, name string) (*models.SubscriberList, error) {
+	var list models.SubscriberList
+	if err := ApplyScope(r.db, scope).Where("name = ?", name).First(&list).Error; err != nil {
 		return nil, err
 	}
 	return &list, nil
@@ -103,6 +114,17 @@ func (r *SubscriberListRepository) MemberCount(listID uint) int64 {
 	return count
 }
 
+// IsMember returns true when the subscriber is currently a member of the list.
+// Used by the API Subscribe endpoint to decide whether a call actually added
+// a new member (so the response's member_added flag is accurate).
+func (r *SubscriberListRepository) IsMember(listID, subscriberID uint) bool {
+	var count int64
+	r.db.Model(&models.SubscriberListMember{}).
+		Where("list_id = ? AND subscriber_id = ?", listID, subscriberID).
+		Count(&count)
+	return count > 0
+}
+
 func (r *SubscriberListRepository) BulkAddMembers(listID uint, subscriberIDs []uint) (int, error) {
 	if len(subscriberIDs) == 0 {
 		return 0, nil
@@ -116,4 +138,51 @@ func (r *SubscriberListRepository) BulkAddMembers(listID uint, subscriberIDs []u
 	}
 	result := r.db.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(members, 100)
 	return int(result.RowsAffected), result.Error
+}
+
+// SuppressMember records a list-scoped opt-out (works for static and dynamic
+func (r *SubscriberListRepository) SuppressMember(listID, subscriberID uint, reason string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		row := models.SubscriberListUnsubscribe{
+			ListID:         listID,
+			SubscriberID:   subscriberID,
+			Reason:         reason,
+			UnsubscribedAt: time.Now(),
+		}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+			return err
+		}
+
+		return tx.Where("list_id = ? AND subscriber_id = ?", listID, subscriberID).
+			Delete(&models.SubscriberListMember{}).Error
+	})
+}
+
+// SuppressedSubscriberIDs returns the set of subscriber IDs that have opted
+func (r *SubscriberListRepository) SuppressedSubscriberIDs(listID uint) (map[uint]struct{}, error) {
+	var ids []uint
+	if err := r.db.Model(&models.SubscriberListUnsubscribe{}).
+		Where("list_id = ?", listID).
+		Pluck("subscriber_id", &ids).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[uint]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
+	}
+	return out, nil
+}
+
+// IsSuppressed checks whether a subscriber has opted out of a specific list.
+func (r *SubscriberListRepository) IsSuppressed(listID, subscriberID uint) bool {
+	var count int64
+	r.db.Model(&models.SubscriberListUnsubscribe{}).
+		Where("list_id = ? AND subscriber_id = ?", listID, subscriberID).
+		Count(&count)
+	return count > 0
+}
+
+func (r *SubscriberListRepository) UnsuppressMember(listID, subscriberID uint) error {
+	return r.db.Where("list_id = ? AND subscriber_id = ?", listID, subscriberID).
+		Delete(&models.SubscriberListUnsubscribe{}).Error
 }

@@ -29,7 +29,10 @@ import (
 // workspaceRoutes returns route definitions for workspace management.
 func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	// Routes that don't require workspace context (user-level)
-	userGroup := r.v1.Group("/workspaces", r.mw.jwtAuth.Middleware).WithTags([]string{"Workspaces"})
+	userGroup := r.v1.Group("/workspaces", r.mw.jwtAuth.Middleware).WithTagInfo(okapi.GroupTag{
+		Name:        "Workspaces",
+		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings.",
+	})
 	userGroup.WithBearerAuth()
 
 	routes := make([]okapi.RouteDefinition, 0, 20)
@@ -39,11 +42,13 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Path:        "",
 			Handler:     okapi.H(r.h.workspace.Create),
 			Group:       userGroup,
+			Middlewares: []okapi.Middleware{r.mw.verifiedEmail},
 			Summary:     "Create workspace",
 			Description: "Create a new workspace. The creator becomes the owner.",
 			Request:     &handlers.CreateWorkspaceRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[handlers.WorkspaceResponse]{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
@@ -59,7 +64,10 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// Workspace-scoped routes (require workspace context via middleware)
-	wsGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTags([]string{"Workspaces"})
+	wsGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTagInfo(okapi.GroupTag{
+		Name:        "Workspaces",
+		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings (including SSO).",
+	})
 	wsGroup.WithBearerAuth()
 
 	routes = append(routes, []okapi.RouteDefinition{
@@ -139,12 +147,14 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Path:        "/invitations",
 			Handler:     okapi.H(r.h.workspace.InviteMember),
 			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{r.mw.verifiedEmail},
 			Summary:     "Invite member",
 			Description: "Invite a user to the workspace via email",
 			Request:     &handlers.InviteMemberRequest{},
 			Options: []okapi.RouteOption{
 				workspaceHeaderRequired,
 				okapi.DocResponse(201, &dto.Response[handlers.InvitationResponse]{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -219,7 +229,10 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// User-level invitation actions (no workspace context needed)
-	invGroup := r.v1.Group("/invitations", r.mw.jwtAuth.Middleware).WithTags([]string{"Workspaces"})
+	invGroup := r.v1.Group("/invitations", r.mw.jwtAuth.Middleware).WithTagInfo(okapi.GroupTag{
+		Name:        "Workspaces",
+		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings (including SSO).",
+	})
 	invGroup.WithBearerAuth()
 
 	routes = append(routes, []okapi.RouteDefinition{

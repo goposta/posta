@@ -191,6 +191,70 @@ func (h *AnalyticsHandler) UserDashboardAnalytics(c *okapi.Context, req *Dashboa
 	return ok(c, resp)
 }
 
+type ProviderBreakdownRequest struct {
+	From string `query:"from"`
+	To   string `query:"to"`
+}
+
+type ProviderBreakdownResponse struct {
+	Providers []repositories.ProviderBreakdownPoint `json:"providers"`
+}
+
+// UserProviderBreakdown returns delivery counts grouped by recipient mailbox
+// provider (Gmail, Outlook, Yahoo, ...) for the authenticated scope.
+func (h *AnalyticsHandler) UserProviderBreakdown(c *okapi.Context, req *ProviderBreakdownRequest) error {
+	scope := getScope(c)
+	ctx := c.Request().Context()
+
+	scopeKey := int(scope.UserID)
+	if scope.WorkspaceID != nil {
+		scopeKey = int(*scope.WorkspaceID) + 1000000
+	}
+	cacheKey := cache.UserProviderBreakdownKey(scopeKey, req.From, req.To)
+	var resp ProviderBreakdownResponse
+	if h.cache.Get(ctx, cacheKey, &resp) {
+		return ok(c, resp)
+	}
+
+	from, to := parseTimeRange(req.From, req.To)
+
+	var rows []repositories.ProviderBreakdownPoint
+	var err error
+	if scope.WorkspaceID != nil {
+		rows, err = h.repo.WorkspaceProviderBreakdown(*scope.WorkspaceID, from, to)
+	} else {
+		rows, err = h.repo.ProviderBreakdown(scope.UserID, from, to)
+	}
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch provider breakdown")
+	}
+
+	resp = ProviderBreakdownResponse{Providers: rows}
+	h.cache.Set(ctx, cacheKey, resp, cache.AnalyticsTTL)
+	return ok(c, resp)
+}
+
+// AdminProviderBreakdown returns provider breakdown across all users.
+func (h *AnalyticsHandler) AdminProviderBreakdown(c *okapi.Context, req *ProviderBreakdownRequest) error {
+	ctx := c.Request().Context()
+
+	cacheKey := cache.AdminProviderBreakdownKey(req.From, req.To)
+	var resp ProviderBreakdownResponse
+	if h.cache.Get(ctx, cacheKey, &resp) {
+		return ok(c, resp)
+	}
+
+	from, to := parseTimeRange(req.From, req.To)
+	rows, err := h.repo.AdminProviderBreakdown(from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to fetch provider breakdown")
+	}
+
+	resp = ProviderBreakdownResponse{Providers: rows}
+	h.cache.Set(ctx, cacheKey, resp, cache.AnalyticsTTL)
+	return ok(c, resp)
+}
+
 func (h *AnalyticsHandler) AdminDashboardAnalytics(c *okapi.Context, req *DashboardAnalyticsRequest) error {
 	ctx := c.Request().Context()
 

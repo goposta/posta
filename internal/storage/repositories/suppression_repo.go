@@ -23,6 +23,7 @@ import (
 
 	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // normalizeEmail extracts the bare email address from a string that may be in
@@ -46,6 +47,14 @@ func NewSuppressionRepository(db *gorm.DB) *SuppressionRepository {
 func (r *SuppressionRepository) Create(suppression *models.Suppression) error {
 	suppression.Email = normalizeEmail(suppression.Email)
 	return r.db.Create(suppression).Error
+}
+
+// Upsert adds a suppression idempotently. If a row already exists for the same
+// (user_id, workspace_id, email), the existing row is kept and no error is
+// returned. Intended for automated paths (bounces, one-click unsubscribe).
+func (r *SuppressionRepository) Upsert(suppression *models.Suppression) error {
+	suppression.Email = normalizeEmail(suppression.Email)
+	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(suppression).Error
 }
 
 func (r *SuppressionRepository) Delete(scope ResourceScope, email string) error {

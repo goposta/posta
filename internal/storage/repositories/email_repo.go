@@ -143,3 +143,14 @@ func (r *EmailRepository) DeleteOlderThan(before time.Time) (int64, error) {
 	result := r.db.Where("created_at < ?", before).Delete(&models.Email{})
 	return result.RowsAffected, result.Error
 }
+
+// AttachmentsJSONOlderThan returns the attachments_json blob for every email
+// row older than the cutoff. The caller decodes each to enumerate blob-storage
+// keys so they can be deleted before the rows are dropped.
+func (r *EmailRepository) AttachmentsJSONOlderThan(before time.Time) ([]string, error) {
+	var out []string
+	err := r.db.Model(&models.Email{}).
+		Where("created_at < ? AND attachments_json <> ''", before).
+		Pluck("attachments_json", &out).Error
+	return out, err
+}

@@ -103,6 +103,19 @@ func (r *DomainRepository) FindByScope(scope ResourceScope, limit, offset int) (
 	return items, total, nil
 }
 
+// FindVerifiedByName returns an ownership-verified Domain row matching the given name,
+// regardless of the owning user. Used for routing inbound email to the right tenant.
+// Returns gorm.ErrRecordNotFound if no verified domain matches.
+func (r *DomainRepository) FindVerifiedByName(domainName string) (*models.Domain, error) {
+	var d models.Domain
+	if err := r.db.Where("LOWER(domain) = LOWER(?) AND ownership_verified = ?", domainName, true).
+		Order("created_at ASC").
+		First(&d).Error; err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
 // IsOwnershipVerified checks whether the given domain is registered and ownership-verified for the user.
 func (r *DomainRepository) IsOwnershipVerified(userID uint, domainName string) bool {
 	var count int64

@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"strings"
+
 	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
 )
@@ -33,24 +35,57 @@ func (r *OAuthProviderRepository) FindBySlug(slug string) (*models.OAuthProvider
 	return &p, nil
 }
 
-// FindEnabled returns all enabled global providers (workspace_id IS NULL).
+// FindEnabled returns enabled, non-hidden global providers for the login page button list.
 func (r *OAuthProviderRepository) FindEnabled() ([]models.OAuthProvider, error) {
 	var providers []models.OAuthProvider
-	if err := r.db.Where("enabled = true AND workspace_id IS NULL").
+	if err := r.db.Where("enabled = true AND hidden = false AND workspace_id IS NULL").
 		Order("name ASC").Find(&providers).Error; err != nil {
 		return nil, err
 	}
 	return providers, nil
 }
 
-// FindEnabledForWorkspace returns enabled providers: global + workspace-scoped.
+// FindEnabledForWorkspace returns enabled, non-hidden providers: global + workspace-scoped.
 func (r *OAuthProviderRepository) FindEnabledForWorkspace(wsID uint) ([]models.OAuthProvider, error) {
 	var providers []models.OAuthProvider
-	if err := r.db.Where("enabled = true AND (workspace_id IS NULL OR workspace_id = ?)", wsID).
+	if err := r.db.Where("enabled = true AND hidden = false AND (workspace_id IS NULL OR workspace_id = ?)", wsID).
 		Order("name ASC").Find(&providers).Error; err != nil {
 		return nil, err
 	}
 	return providers, nil
+}
+
+// HasEnabledHidden reports whether any enabled, hidden provider exists.
+// Drives the visibility of the "Continue with SSO" entry point on the login page.
+func (r *OAuthProviderRepository) HasEnabledHidden() (bool, error) {
+	var count int64
+	if err := r.db.Model(&models.OAuthProvider{}).
+		Where("enabled = true AND hidden = true").Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// FindEnabledByDomain scans enabled providers (including hidden) whose AllowedDomains CSV
+// contains the given domain. Used for email-based SSO discovery.
+func (r *OAuthProviderRepository) FindEnabledByDomain(domain string) (*models.OAuthProvider, error) {
+	if domain == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var providers []models.OAuthProvider
+	if err := r.db.Where("enabled = true AND allowed_domains <> ''").
+		Find(&providers).Error; err != nil {
+		return nil, err
+	}
+	target := strings.ToLower(strings.TrimSpace(domain))
+	for i := range providers {
+		for _, d := range strings.Split(providers[i].AllowedDomains, ",") {
+			if strings.ToLower(strings.TrimSpace(d)) == target {
+				return &providers[i], nil
+			}
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 // FindAll returns all providers (admin).

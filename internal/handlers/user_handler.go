@@ -27,24 +27,27 @@ import (
 	"github.com/google/uuid"
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/services/seeder"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/twofactor"
 	"github.com/goposta/posta/internal/storage/repositories"
+	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserHandler struct {
-	repo        *repositories.UserRepository
-	sessionRepo *repositories.SessionRepository
-	jwtSecret   []byte
-	seeder      *seeder.Seeder
-	bus         *eventbus.EventBus
-	settings    *settings.Provider
-	notifier    *notification.Service
+	repo          *repositories.UserRepository
+	sessionRepo   *repositories.SessionRepository
+	jwtSecret     []byte
+	seeder        *seeder.Seeder
+	bus           *eventbus.EventBus
+	settings      *settings.Provider
+	notifier      *notification.Service
+	emailVerifier *emailverify.Service
 }
 
 func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder *seeder.Seeder, bus *eventbus.EventBus) *UserHandler {
@@ -71,6 +74,11 @@ func (h *UserHandler) SetNotifier(n *notification.Service) {
 	h.notifier = n
 }
 
+// SetEmailVerifier wires the email verification service.
+func (h *UserHandler) SetEmailVerifier(s *emailverify.Service) {
+	h.emailVerifier = s
+}
+
 type LoginRequest struct {
 	Body struct {
 		Email         string `json:"email" required:"true" format:"email"`
@@ -90,14 +98,16 @@ type AuthResponse struct {
 }
 
 type UserProfile struct {
-	ID                    uint            `json:"id"`
-	Name                  string          `json:"name"`
-	Email                 string          `json:"email"`
-	Role                  models.UserRole `json:"role"`
-	TwoFactorEnabled      bool            `json:"two_factor_enabled"`
-	RequireVerifiedDomain bool            `json:"require_verified_domain"`
-	ScheduledDeletionAt   *time.Time      `json:"scheduled_deletion_at"`
-	CreatedAt             time.Time       `json:"created_at"`
+	ID                        uint            `json:"id"`
+	Name                      string          `json:"name"`
+	Email                     string          `json:"email"`
+	Role                      models.UserRole `json:"role"`
+	TwoFactorEnabled          bool            `json:"two_factor_enabled"`
+	RequireVerifiedDomain     bool            `json:"require_verified_domain"`
+	ScheduledDeletionAt       *time.Time      `json:"scheduled_deletion_at"`
+	EmailVerifiedAt           *time.Time      `json:"email_verified_at"`
+	EmailVerificationRequired bool            `json:"email_verification_required"`
+	CreatedAt                 time.Time       `json:"created_at"`
 }
 
 type Enable2FAResponse struct {
@@ -196,11 +206,19 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 			fmt.Sprintf("User %q registered", user.Email), nil)
 	}
 
-	// Send welcome email (best-effort)
-	if h.notifier != nil {
-		go func() {
-			_ = h.notifier.SendToUser(user.ID, "Welcome to Posta!", notification.TemplateWelcome, nil)
-		}()
+	// Email verification: if the notifier is configured, send a verification email.
+	// Otherwise (self-hosted without SMTP) auto-verify so the account isn't locked out.
+	// The welcome email is deferred until after verification (see VerifyEmail).
+	if h.emailVerifier != nil {
+		if h.emailVerifier.Required() {
+			go func() {
+				if err := h.emailVerifier.IssueAndSend(user); err != nil {
+					logger.Error("failed to send verification email", "user_id", user.ID, "err", err)
+				}
+			}()
+		} else {
+			_ = h.emailVerifier.MarkVerifiedNow(user)
+		}
 	}
 
 	// Auto-login: generate JWT token
@@ -226,6 +244,57 @@ func (h *UserHandler) RegistrationStatus(c *okapi.Context) error {
 	return ok(c, okapi.M{"registration_enabled": enabled})
 }
 
+type VerifyEmailRequest struct {
+	Token string `query:"token" required:"true"`
+}
+
+// VerifyEmail redeems a verification token and marks the user's email as verified.
+func (h *UserHandler) VerifyEmail(c *okapi.Context, req *VerifyEmailRequest) error {
+	if h.emailVerifier == nil {
+		return c.AbortBadRequest("email verification is not enabled")
+	}
+	user, newlyVerified, err := h.emailVerifier.Redeem(req.Token)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	if newlyVerified {
+		if h.bus != nil {
+			h.bus.PublishSimple(models.EventCategoryUser, "user.email_verified", &user.ID, user.Email, c.RealIP(),
+				fmt.Sprintf("User %q verified email", user.Email), nil)
+		}
+		// Fire the welcome email now that we know the address works.
+		if h.notifier != nil {
+			go func(uid uint) {
+				_ = h.notifier.SendToUser(uid, "Welcome to Posta!", notification.TemplateWelcome, nil)
+			}(user.ID)
+		}
+	}
+	return ok(c, okapi.M{"message": "email verified"})
+}
+
+// ResendVerificationEmail issues a fresh token for the authenticated user.
+func (h *UserHandler) ResendVerificationEmail(c *okapi.Context) error {
+	if h.emailVerifier == nil || !h.emailVerifier.Required() {
+		return c.AbortBadRequest("email verification is not enabled")
+	}
+	userID := c.GetInt("user_id")
+	user, err := h.repo.FindByID(uint(userID))
+	if err != nil {
+		return c.AbortNotFound("user not found")
+	}
+	if user.EmailVerifiedAt != nil {
+		return ok(c, okapi.M{"message": "email already verified"})
+	}
+	if err := h.emailVerifier.CanResend(user.ID); err != nil {
+		return c.AbortTooManyRequests(err.Error())
+	}
+	if err := h.emailVerifier.IssueAndSend(user); err != nil {
+		logger.Error("failed to resend verification email", "user_id", user.ID, "err", err)
+		return c.AbortInternalServerError("failed to send verification email")
+	}
+	return ok(c, okapi.M{"message": "verification email sent"})
+}
+
 // UpdateProfile allows authenticated users to update their profile (name).
 func (h *UserHandler) UpdateProfile(c *okapi.Context, req *UpdateProfileRequest) error {
 	userID := c.GetInt("user_id")
@@ -242,16 +311,7 @@ func (h *UserHandler) UpdateProfile(c *okapi.Context, req *UpdateProfileRequest)
 		return c.AbortInternalServerError("failed to update profile")
 	}
 
-	return ok(c, UserProfile{
-		ID:                    user.ID,
-		Name:                  user.Name,
-		Email:                 user.Email,
-		Role:                  user.Role,
-		TwoFactorEnabled:      user.TwoFactorEnabled,
-		RequireVerifiedDomain: user.RequireVerifiedDomain,
-		ScheduledDeletionAt:   user.ScheduledDeletionAt,
-		CreatedAt:             user.CreatedAt,
-	})
+	return ok(c, h.buildProfile(user))
 }
 
 // ChangePassword allows authenticated users to change their own password.
@@ -369,16 +429,23 @@ func (h *UserHandler) Me(c *okapi.Context) error {
 		return c.AbortNotFound("user not found")
 	}
 
-	return ok(c, UserProfile{
-		ID:                    user.ID,
-		Name:                  user.Name,
-		Email:                 user.Email,
-		Role:                  user.Role,
-		TwoFactorEnabled:      user.TwoFactorEnabled,
-		RequireVerifiedDomain: user.RequireVerifiedDomain,
-		ScheduledDeletionAt:   user.ScheduledDeletionAt,
-		CreatedAt:             user.CreatedAt,
-	})
+	return ok(c, h.buildProfile(user))
+}
+
+func (h *UserHandler) buildProfile(user *models.User) UserProfile {
+	required := h.emailVerifier != nil && h.emailVerifier.Required()
+	return UserProfile{
+		ID:                        user.ID,
+		Name:                      user.Name,
+		Email:                     user.Email,
+		Role:                      user.Role,
+		TwoFactorEnabled:          user.TwoFactorEnabled,
+		RequireVerifiedDomain:     user.RequireVerifiedDomain,
+		ScheduledDeletionAt:       user.ScheduledDeletionAt,
+		EmailVerifiedAt:           user.EmailVerifiedAt,
+		EmailVerificationRequired: required,
+		CreatedAt:                 user.CreatedAt,
+	}
 }
 
 // Setup2FA generates a TOTP secret for the user (doesn't enable yet).

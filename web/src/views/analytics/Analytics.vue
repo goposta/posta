@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { analyticsApi } from '../../api/analytics'
-import type { DailyCount, StatusBreakdown, DashboardAnalyticsResponse } from '../../api/types'
+import type { DailyCount, StatusBreakdown, DashboardAnalyticsResponse, ProviderBreakdownPoint } from '../../api/types'
 
 const loading = ref(true)
 const dailyCounts = ref<DailyCount[]>([])
 const statusBreakdown = ref<StatusBreakdown[]>([])
 const dashAnalytics = ref<DashboardAnalyticsResponse | null>(null)
+const providerBreakdown = ref<ProviderBreakdownPoint[]>([])
 
 const fromDate = ref('')
 const toDate = ref('')
@@ -22,13 +23,15 @@ toDate.value = now.toISOString().slice(0, 10)
 async function loadAnalytics() {
   loading.value = true
   try {
-    const [res, dashRes] = await Promise.all([
+    const [res, dashRes, provRes] = await Promise.all([
       analyticsApi.user(fromDate.value, toDate.value, statusFilter.value || undefined),
       analyticsApi.dashboardAnalytics(fromDate.value, toDate.value),
+      analyticsApi.providerBreakdown(fromDate.value, toDate.value),
     ])
     dailyCounts.value = res.data.data.daily_counts || []
     statusBreakdown.value = res.data.data.status_breakdown || []
     dashAnalytics.value = dashRes.data.data
+    providerBreakdown.value = provRes.data.data.providers || []
   } catch (e) {
     console.error('Failed to load analytics', e)
   } finally {
@@ -68,6 +71,41 @@ const totalBreakdown = computed(() => statusBreakdown.value.reduce((sum, s) => s
 function breakdownPercent(count: number): string {
   if (totalBreakdown.value === 0) return '0'
   return ((count / totalBreakdown.value) * 100).toFixed(1)
+}
+
+// Provider-specific colors for the mailbox provider breakdown.
+const providerColors: Record<string, string> = {
+  Gmail: '#ea4335',
+  'Google Workspace': '#4285f4',
+  Outlook: '#0078d4',
+  Yahoo: '#6001d2',
+  'Apple iCloud': '#8e8e93',
+  Proton: '#6d4aff',
+  AOL: '#00bfff',
+  GMX: '#1c4587',
+  Zoho: '#f04e23',
+  Fastmail: '#2968a6',
+  Yandex: '#ffcc00',
+  China: '#c20000',
+  Other: '#9ca3af',
+}
+
+function providerColor(name: string): string {
+  return providerColors[name] ?? '#6366f1'
+}
+
+const providerTotal = computed(() => providerBreakdown.value.reduce((sum, p) => sum + p.total, 0))
+
+function providerPercent(total: number): string {
+  if (providerTotal.value === 0) return '0'
+  return ((total / providerTotal.value) * 100).toFixed(1)
+}
+
+function providerRateClass(rate: number, total: number): string {
+  if (total === 0) return ''
+  if (rate < 75) return 'rate-danger'
+  if (rate < 90) return 'rate-warning'
+  return ''
 }
 
 // Delivery rate chart helpers
@@ -223,6 +261,51 @@ const avgDeliveryRate = computed(() => {
                 ></div>
               </div>
               <div class="breakdown-value">{{ s.count }} <span class="breakdown-pct">({{ breakdownPercent(s.count) }}%)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Deliverability by Provider -->
+      <div class="card" style="margin-top: 24px">
+        <div class="card-header">
+          <h2>Deliverability by Provider <span class="card-header-sub">{{ providerTotal }} recipients in period</span></h2>
+        </div>
+        <div class="card-body">
+          <div v-if="providerBreakdown.length === 0" class="empty-state">
+            <h3>No data</h3>
+            <p>No recipient data in the selected range.</p>
+          </div>
+          <div v-else class="provider-table">
+            <div class="provider-row provider-head">
+              <div class="provider-cell provider-name">Provider</div>
+              <div class="provider-cell provider-bar-cell">Volume</div>
+              <div class="provider-cell provider-num">Sent</div>
+              <div class="provider-cell provider-num">Failed</div>
+              <div class="provider-cell provider-num">Rate</div>
+            </div>
+            <div v-for="p in providerBreakdown" :key="p.provider" class="provider-row">
+              <div class="provider-cell provider-name">
+                <span class="breakdown-dot" :style="{ background: providerColor(p.provider) }"></span>
+                {{ p.provider }}
+              </div>
+              <div class="provider-cell provider-bar-cell">
+                <div class="breakdown-bar-track">
+                  <div
+                    class="breakdown-bar-fill"
+                    :style="{ width: providerPercent(p.total) + '%', background: providerColor(p.provider) }"
+                  ></div>
+                </div>
+                <div class="provider-pct">{{ providerPercent(p.total) }}%</div>
+              </div>
+              <div class="provider-cell provider-num">{{ p.sent }}</div>
+              <div class="provider-cell provider-num">{{ p.failed }}</div>
+              <div
+                class="provider-cell provider-num provider-rate"
+                :class="providerRateClass(p.delivery_rate, p.sent + p.failed)"
+              >
+                {{ (p.sent + p.failed) > 0 ? p.delivery_rate.toFixed(1) + '%' : '—' }}
+              </div>
             </div>
           </div>
         </div>
@@ -629,5 +712,90 @@ const avgDeliveryRate = computed(() => {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+/* Provider breakdown */
+.provider-table {
+  display: grid;
+  gap: 6px;
+}
+
+.provider-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(200px, 3fr) 80px 80px 80px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.provider-row:last-child {
+  border-bottom: none;
+}
+
+.provider-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding-bottom: 6px;
+}
+
+.provider-cell {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.provider-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.provider-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.provider-bar-cell .breakdown-bar-track {
+  flex: 1;
+}
+
+.provider-pct {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 44px;
+  text-align: right;
+}
+
+.provider-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.provider-rate {
+  font-weight: 600;
+}
+
+.provider-rate.rate-warning {
+  color: var(--warning-600, #ca8a04);
+}
+
+.provider-rate.rate-danger {
+  color: var(--danger-600, #dc2626);
+}
+
+@media (max-width: 640px) {
+  .provider-row {
+    grid-template-columns: minmax(120px, 1fr) 60px 60px 60px;
+  }
+  .provider-bar-cell {
+    grid-column: 1 / -1;
+    order: 99;
+    margin-top: 4px;
+  }
 }
 </style>

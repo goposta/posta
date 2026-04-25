@@ -49,6 +49,9 @@ type DashboardStats struct {
 	TotalBounces      int64         `json:"total_bounces"`
 	TotalSuppressions int64         `json:"total_suppressions"`
 	TotalWebhooks     int64         `json:"total_webhooks"`
+	TotalInbound      int64         `json:"total_inbound"`
+	ForwardedInbound  int64         `json:"forwarded_inbound"`
+	FailedInbound     int64         `json:"failed_inbound"`
 	DailyVolume       []DailyVolume `json:"daily_volume"`
 
 	// Webhook delivery stats
@@ -105,6 +108,11 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 	applyScope(&models.Bounce{}).Count(&stats.TotalBounces)
 	applyScope(&models.Suppression{}).Count(&stats.TotalSuppressions)
 	applyScope(&models.Webhook{}).Count(&stats.TotalWebhooks)
+
+	// Inbound email counts
+	applyScope(&models.InboundEmail{}).Count(&stats.TotalInbound)
+	applyScope(&models.InboundEmail{}).Where("status = ?", models.InboundStatusForwarded).Count(&stats.ForwardedInbound)
+	applyScope(&models.InboundEmail{}).Where("status = ?", models.InboundStatusFailed).Count(&stats.FailedInbound)
 
 	// Failure rate
 	if stats.TotalEmails > 0 {

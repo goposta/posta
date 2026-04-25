@@ -29,7 +29,10 @@ import (
 
 // adminRoutes returns route definitions for admin endpoints.
 func (r *Router) adminRoutes() []okapi.RouteDefinition {
-	adminGroup := r.v1.Group("/admin", r.mw.jwtAdminAuth.Middleware).WithTags([]string{"Admin"})
+	adminGroup := r.v1.Group("/admin", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
+		Name:        "Admin",
+		Description: "Platform-level administration: users, workspaces, global settings, OAuth providers, and live event streams. Admin-only.",
+	})
 	adminGroup.WithBearerAuth()
 
 	routes := []okapi.RouteDefinition{
@@ -235,6 +238,16 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Description: "Returns platform-wide delivery rate trends, bounce rate graphs, and latency percentiles",
 			Request:     &handlers.DashboardAnalyticsRequest{},
 			Response:    &dto.Response[handlers.DashboardAnalyticsResponse]{},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/analytics/providers",
+			Handler:     okapi.H(r.h.analytics.AdminProviderBreakdown),
+			Group:       adminGroup,
+			Summary:     "Platform deliverability by provider",
+			Description: "Returns platform-wide sent/failed counts and delivery rate grouped by recipient mailbox provider",
+			Request:     &handlers.ProviderBreakdownRequest{},
+			Response:    &dto.Response[handlers.ProviderBreakdownResponse]{},
 		},
 
 		// ==================== Platform Settings ====================
@@ -477,7 +490,10 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 
 // adminSSERoutes returns route definitions for admin SSE (Server-Sent Events) endpoints.
 func (r *Router) adminSSERoutes() []okapi.RouteDefinition {
-	adminSSE := r.v1.Group("/admin", r.mw.jwtAdminQueryAuth.Middleware).WithTags([]string{"Admin"})
+	adminSSE := r.v1.Group("/admin", r.mw.jwtAdminQueryAuth.Middleware).WithTagInfo(okapi.GroupTag{
+		Name:        "Admin",
+		Description: "Platform-level administration: users, workspaces, global settings, OAuth providers, and live event streams. Admin-only.",
+	})
 
 	return []okapi.RouteDefinition{
 		{

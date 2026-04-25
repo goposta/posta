@@ -18,6 +18,13 @@ const confirmPassword = ref('')
 const loading = ref(false)
 const registrationEnabled = ref<boolean | null>(null)
 
+const nameError = ref('')
+const emailError = ref('')
+const passwordError = ref('')
+const confirmError = ref('')
+const showPassword = ref(false)
+const showConfirm = ref(false)
+
 onMounted(async () => {
   try {
     const res = await authApi.registrationStatus()
@@ -31,26 +38,30 @@ onMounted(async () => {
 })
 
 async function handleRegister() {
-  if (!name.value.trim() || !email.value || !password.value || !confirmPassword.value) {
-    notification.error('Please fill in all fields.')
-    return
+  nameError.value = ''
+  emailError.value = ''
+  passwordError.value = ''
+  confirmError.value = ''
+  if (!name.value.trim()) nameError.value = 'Enter your name.'
+  if (!email.value) emailError.value = 'Enter your email address.'
+  if (!password.value) {
+    passwordError.value = 'Enter a password.'
+  } else if (password.value.length < 8) {
+    passwordError.value = 'Password must be at least 8 characters.'
   }
-  if (password.value.length < 8) {
-    notification.error('Password must be at least 8 characters.')
-    return
+  if (!confirmPassword.value) {
+    confirmError.value = 'Confirm your password.'
+  } else if (password.value && password.value !== confirmPassword.value) {
+    confirmError.value = 'Passwords do not match.'
   }
-  if (password.value !== confirmPassword.value) {
-    notification.error('Passwords do not match.')
-    return
-  }
+  if (nameError.value || emailError.value || passwordError.value || confirmError.value) return
+
   loading.value = true
   try {
     const res = await authApi.register(name.value.trim(), email.value.trim(), password.value)
-    // Auto-login with the returned token
     const data = res.data.data
     localStorage.setItem('posta_token', data.token)
     localStorage.setItem('posta_user', JSON.stringify(data.user))
-    // Reload to pick up auth state
     window.location.href = '/'
   } catch (err: any) {
     const message = err?.response?.data?.error?.message || err?.response?.data?.error || err?.message || 'Registration failed.'
@@ -65,33 +76,95 @@ async function handleRegister() {
   <div class="auth-page" v-if="registrationEnabled">
     <div class="auth-card">
       <div class="auth-header">
-        <div class="auth-logo">
-          <img src="/logo.png" alt="Posta" class="logo-img" />
-          <span>Posta</span>
-        </div>
-        <p class="auth-subtitle">Create your account</p>
+        <div class="auth-wordmark" aria-label="Posta">Posta<span class="auth-wordmark-dot">.</span></div>
+        <h1 class="auth-title">Create your account</h1>
+        <p class="auth-subtitle">Get started in under a minute.</p>
       </div>
 
       <form class="auth-form" @submit.prevent="handleRegister">
         <div class="form-group">
           <label class="form-label" for="name">Name</label>
-          <input id="name" v-model="name" type="text" class="form-input" placeholder="Your name" autocomplete="name" />
+          <input
+            id="name"
+            v-model="name"
+            type="text"
+            class="form-input"
+            :class="{ 'form-input-error': nameError }"
+            placeholder="Your name"
+            autocomplete="name"
+            @input="nameError = ''"
+          />
+          <small v-if="nameError" class="form-error">{{ nameError }}</small>
         </div>
         <div class="form-group">
           <label class="form-label" for="email">Email</label>
-          <input id="email" v-model="email" type="email" class="form-input" placeholder="you@example.com" autocomplete="email" />
+          <input
+            id="email"
+            v-model="email"
+            type="email"
+            class="form-input"
+            :class="{ 'form-input-error': emailError }"
+            placeholder="you@example.com"
+            autocomplete="email"
+            @input="emailError = ''"
+          />
+          <small v-if="emailError" class="form-error">{{ emailError }}</small>
         </div>
         <div class="form-group">
           <label class="form-label" for="password">Password</label>
-          <input id="password" v-model="password" type="password" class="form-input" placeholder="Minimum 8 characters" autocomplete="new-password" />
+          <div class="password-wrap">
+            <input
+              id="password"
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              class="form-input"
+              :class="{ 'form-input-error': passwordError }"
+              placeholder="Minimum 8 characters"
+              autocomplete="new-password"
+              @input="passwordError = ''"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              :title="showPassword ? 'Hide password' : 'Show password'"
+              @click="showPassword = !showPassword"
+            >
+              <svg v-if="showPassword" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <small v-if="passwordError" class="form-error">{{ passwordError }}</small>
         </div>
         <div class="form-group">
-          <label class="form-label" for="confirm-password">Confirm Password</label>
-          <input id="confirm-password" v-model="confirmPassword" type="password" class="form-input" placeholder="Re-enter your password" autocomplete="new-password" />
+          <label class="form-label" for="confirm-password">Confirm password</label>
+          <div class="password-wrap">
+            <input
+              id="confirm-password"
+              v-model="confirmPassword"
+              :type="showConfirm ? 'text' : 'password'"
+              class="form-input"
+              :class="{ 'form-input-error': confirmError }"
+              placeholder="Re-enter your password"
+              autocomplete="new-password"
+              @input="confirmError = ''"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              :aria-label="showConfirm ? 'Hide password' : 'Show password'"
+              :title="showConfirm ? 'Hide password' : 'Show password'"
+              @click="showConfirm = !showConfirm"
+            >
+              <svg v-if="showConfirm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <small v-if="confirmError" class="form-error">{{ confirmError }}</small>
         </div>
         <button type="submit" class="btn btn-primary auth-btn" :disabled="loading">
           <span v-if="loading" class="spinner"></span>
-          {{ loading ? 'Creating account...' : 'Create Account' }}
+          {{ loading ? 'Creating account…' : 'Create account' }}
         </button>
       </form>
 
@@ -130,26 +203,28 @@ async function handleRegister() {
 
 .auth-header { text-align: center; padding: 36px 32px 0; }
 
-.auth-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.auth-logo .logo-img {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-}
-.auth-logo span {
-  font-size: 26px;
+.auth-wordmark {
+  font-size: 32px;
   font-weight: 800;
+  letter-spacing: -1px;
   color: var(--text-primary);
-  letter-spacing: -0.5px;
+  margin-bottom: 24px;
+  line-height: 1;
+}
+.auth-wordmark-dot {
+  color: var(--primary-500);
+  margin-left: 1px;
 }
 
-.auth-subtitle { font-size: 14px; color: var(--text-muted); }
+.auth-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+  margin: 0 0 8px;
+}
+
+.auth-subtitle { font-size: 14px; color: var(--text-muted); margin: 0; }
 
 .auth-form { padding: 28px 32px 20px; }
 
@@ -158,6 +233,34 @@ async function handleRegister() {
   padding: 11px 18px;
   font-size: 15px;
   margin-top: 4px;
+}
+
+.password-wrap { position: relative; }
+.password-wrap .form-input { padding-right: 40px; }
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.password-toggle:hover { color: var(--text-primary); }
+
+.form-input-error { border-color: var(--danger-500, #ef4444); }
+.form-input-error:focus { border-color: var(--danger-500, #ef4444); }
+
+.form-error {
+  display: block;
+  font-size: 12px;
+  color: var(--danger-600, #dc2626);
+  margin-top: 6px;
 }
 
 .auth-footer {

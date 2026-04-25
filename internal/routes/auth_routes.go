@@ -64,7 +64,10 @@ func (r *Router) infoRoute() okapi.RouteDefinition {
 
 // authRoutes returns route definitions for authentication endpoints.
 func (r *Router) authRoutes() []okapi.RouteDefinition {
-	authGroup := r.v1.Group("/auth", r.mw.loginLimiter).WithTags([]string{"Auth"})
+	authGroup := r.v1.Group("/auth", r.mw.loginLimiter).WithTagInfo(okapi.GroupTag{
+		Name:        "Auth",
+		Description: "Sign in, register, and verify email ownership. Public endpoints — protected by a per-IP login rate limiter.",
+	})
 
 	return []okapi.RouteDefinition{
 		{
@@ -104,13 +107,30 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Description: "Check whether user self-registration is enabled",
 			Response:    &dto.Response[any]{},
 		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/verify-email",
+			Handler:     okapi.H(r.h.user.VerifyEmail),
+			Group:       authGroup,
+			Summary:     "Verify email address",
+			Description: "Redeem a verification token sent to the user's email address",
+			Request:     &handlers.VerifyEmailRequest{},
+			Response:    &dto.Response[any]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+			},
+		},
 	}
 }
 
 // apiAuthRoutes returns route definitions for API-key authenticated endpoints.
 func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
-	apiAuth := r.v1.Group("", r.mw.apiKey).WithTags([]string{"Emails"})
-	apiAuth.WithBearerAuth()
+	apiAuth := r.v1.Group("", r.mw.apiKey).
+		WithTagInfo(okapi.GroupTag{
+			Name:        "Emails",
+			Description: "Send transactional and templated emails, run batch sends, and manage scheduled delivery. Authenticated with an API key.",
+		}).
+		WithSecurity([]map[string][]string{{"ApiKeyAuth": {}}})
 
 	return []okapi.RouteDefinition{
 		{
@@ -124,6 +144,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[email.SendResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
@@ -138,6 +159,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[email.SendResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
@@ -152,6 +174,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[email.BatchResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
@@ -193,6 +216,48 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 				okapi.DocPathParam("id", "string", "Email UUID"),
 				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+
+		{
+			Method:      http.MethodPost,
+			Path:        "/subscriber-lists/{id:int}/unsubscribe",
+			Handler:     okapi.H(r.h.subscriberList.UnsubscribeByEmail),
+			Group:       apiAuth,
+			Summary:     "Unsubscribe an email from a list",
+			Description: "Opts an email out of a specific list.",
+			Request:     &handlers.ListUnsubscribeByEmailRequest{},
+			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "List ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/subscriber-lists/{id:int}/resubscribe",
+			Handler:     okapi.H(r.h.subscriberList.ResubscribeByEmail),
+			Group:       apiAuth,
+			Summary:     "Re-subscribe an email to a list",
+			Description: "Reverses a list-scoped opt-out and re-adds to the list (static lists only). Idempotent.",
+			Request:     &handlers.ListResubscribeByEmailRequest{},
+			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "List ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/subscriber-lists/subscribe",
+			Handler:     okapi.H(r.h.subscriberList.Subscribe),
+			Group:       apiAuth,
+			Summary:     "Subscribe an email to a list",
+			Description: "Adds an email to a named list, creating the list on first use. Clears any prior list-scoped opt-out for this (list, email). Idempotent.",
+			Request:     &handlers.ListSubscribeRequest{},
+			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 	}

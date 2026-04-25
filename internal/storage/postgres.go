@@ -19,6 +19,7 @@ package storage
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/jkaninda/logger"
@@ -50,11 +51,13 @@ func SeedAdmin(db *gorm.DB, email, password string) error {
 		return fmt.Errorf("failed to hash admin password: %w", err)
 	}
 
+	now := time.Now()
 	admin := &models.User{
-		Email:        email,
-		Name:         "Admin",
-		PasswordHash: string(hash),
-		Role:         models.UserRoleAdmin,
+		Email:           email,
+		Name:            "Admin",
+		PasswordHash:    string(hash),
+		Role:            models.UserRoleAdmin,
+		EmailVerifiedAt: &now,
 	}
 	if err := db.Create(admin).Error; err != nil {
 		return fmt.Errorf("failed to create admin user: %w", err)

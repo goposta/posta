@@ -38,6 +38,7 @@ func Run(db *gorm.DB) error {
 		&models.WorkspaceSSOConfig{},
 		&models.APIKey{},
 		&models.Email{},
+		&models.InboundEmail{},
 		&models.StyleSheet{},
 		&models.Template{},
 		&models.TemplateVersion{},
@@ -55,9 +56,11 @@ func Run(db *gorm.DB) error {
 		&models.UserSetting{},
 		&models.WebhookDelivery{},
 		&models.Session{},
+		&models.UserEmailVerification{},
 		&models.Subscriber{},
 		&models.SubscriberList{},
 		&models.SubscriberListMember{},
+		&models.SubscriberListUnsubscribe{},
 		&models.Campaign{},
 		&models.CampaignMessage{},
 		&models.TrackedLink{},
@@ -66,25 +69,9 @@ func Run(db *gorm.DB) error {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	// Normalize: set workspace_id = NULL where it was previously 0 (personal data)
-	normalizeWorkspaceIDs(db)
-
 	// run constraints
 	runConstraints(db)
 
 	logger.Info("database migrated")
 	return nil
-}
-
-// normalizeWorkspaceIDs sets workspace_id to NULL where it is 0 (legacy default).
-// NULL means personal space; only non-NULL values reference a real workspace.
-func normalizeWorkspaceIDs(db *gorm.DB) {
-	tables := []string{
-		"api_keys", "emails", "templates", "smtp_servers", "domains",
-		"webhooks", "webhook_deliveries", "contacts",
-		"bounces", "suppressions", "style_sheets", "languages", "events",
-	}
-	for _, table := range tables {
-		db.Exec(fmt.Sprintf(`UPDATE %s SET workspace_id = NULL WHERE workspace_id = 0`, table))
-	}
 }

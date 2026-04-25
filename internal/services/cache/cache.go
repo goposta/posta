@@ -39,6 +39,8 @@ const (
 	prefixAdminAnalytics     = "cache:analytics:admin"
 	prefixDashAnalytics      = "cache:dash_analytics:user:"
 	prefixAdminDashAnalytics = "cache:dash_analytics:admin"
+	prefixUserProvider       = "cache:provider:user:"
+	prefixAdminProvider      = "cache:provider:admin"
 )
 
 // Cache provides Redis-backed caching for dashboard stats and metrics.
@@ -101,6 +103,14 @@ func AdminDashboardAnalyticsKey(from, to string) string {
 	return fmt.Sprintf("%s:%s:%s", prefixAdminDashAnalytics, from, to)
 }
 
+func UserProviderBreakdownKey(userID int, from, to string) string {
+	return fmt.Sprintf("%s%d:%s:%s", prefixUserProvider, userID, from, to)
+}
+
+func AdminProviderBreakdownKey(from, to string) string {
+	return fmt.Sprintf("%s:%s:%s", prefixAdminProvider, from, to)
+}
+
 // InvalidateUser removes all cached data scoped to a specific user.
 func (c *Cache) InvalidateUser(ctx context.Context, userID int) {
 	c.Delete(ctx, DashboardKey(userID))
@@ -108,6 +118,7 @@ func (c *Cache) InvalidateUser(ctx context.Context, userID int) {
 	// Per-user analytics (date-range queries include user ID in key)
 	c.InvalidateByPattern(ctx, fmt.Sprintf("%s%d:*", prefixUserAnalytics, userID))
 	c.InvalidateByPattern(ctx, fmt.Sprintf("%s%d:*", prefixDashAnalytics, userID))
+	c.InvalidateByPattern(ctx, fmt.Sprintf("%s%d:*", prefixUserProvider, userID))
 	// Admin-level caches are affected since user data rolls up into them.
 	c.Delete(ctx, AdminMetricsKey())
 }
@@ -129,6 +140,7 @@ func (c *Cache) InvalidateByPattern(ctx context.Context, pattern string) {
 func (c *Cache) InvalidateAnalytics(ctx context.Context) {
 	c.InvalidateByPattern(ctx, "cache:analytics:*")
 	c.InvalidateByPattern(ctx, "cache:dash_analytics:*")
+	c.InvalidateByPattern(ctx, "cache:provider:*")
 }
 
 // InvalidateAll removes all cache keys (dashboard + metrics + analytics).

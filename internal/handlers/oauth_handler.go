@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,11 +82,23 @@ type UnlinkOAuthRequest struct {
 	ProviderID int `param:"provider_id"`
 }
 
-// ListProviders returns enabled OAuth providers for the login page (public).
+type DiscoverSSORequest struct {
+	Body struct {
+		Email string `json:"email" required:"true"`
+	} `json:"body"`
+}
+
+type DiscoverSSOResponse struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// ListProviders returns enabled OAuth providers for the login page
 func (h *OAuthHandler) ListProviders(c *okapi.Context) error {
 	providers, err := h.providerRepo.FindEnabled()
 	if err != nil {
-		return ok(c, okapi.M{"providers": []OAuthProviderInfo{}})
+		return ok(c, okapi.M{"providers": []OAuthProviderInfo{}, "sso_available": false})
 	}
 
 	var result []OAuthProviderInfo
@@ -98,7 +111,31 @@ func (h *OAuthHandler) ListProviders(c *okapi.Context) error {
 		})
 	}
 
-	return ok(c, okapi.M{"providers": result})
+	ssoAvailable, _ := h.providerRepo.HasEnabledHidden()
+
+	return ok(c, okapi.M{"providers": result, "sso_available": ssoAvailable})
+}
+
+// DiscoverSSO looks up an enabled OAuth provider whose AllowedDomains matches the
+// email's domain.
+func (h *OAuthHandler) DiscoverSSO(c *okapi.Context, req *DiscoverSSORequest) error {
+	email := strings.TrimSpace(req.Body.Email)
+	at := strings.LastIndex(email, "@")
+	if at < 0 || at == len(email)-1 {
+		return c.AbortBadRequest("invalid email")
+	}
+	domain := email[at+1:]
+
+	provider, err := h.providerRepo.FindEnabledByDomain(domain)
+	if err != nil {
+		return c.AbortNotFound("no SSO provider for this email")
+	}
+
+	return ok(c, DiscoverSSOResponse{
+		Slug: provider.Slug,
+		Name: provider.Name,
+		Type: string(provider.Type),
+	})
 }
 
 // Authorize redirects the user to the OAuth provider's authorization page.

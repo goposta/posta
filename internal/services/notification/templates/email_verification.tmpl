@@ -1,0 +1,14 @@
+{{ define "content" }}
+<h2>Verify your email address</h2>
+<p>Hi {{ .UserName }},</p>
+<p>To finish setting up your {{ .AppName }} account, please confirm this is your email address by clicking the button below.</p>
+
+<p style="text-align: center; margin: 32px 0;">
+  <a href="{{ .VerifyURL }}" class="btn">Verify email</a>
+</p>
+
+<p class="muted">Or paste this link into your browser:<br>
+<a href="{{ .VerifyURL }}">{{ .VerifyURL }}</a></p>
+
+<p class="muted">This link expires in {{ .ExpiryHours }} hours. If you didn't create an account, you can safely ignore this email.</p>
+{{ end }}

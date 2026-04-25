@@ -44,11 +44,13 @@ type Config struct {
 	AdminEmail           string
 	AdminPassword        string
 	OpenAPIDocs          bool
-	MetricsEnabled       bool
-	WebDir               string
-	AppWebURL            string
-	ApiBaseURL           string
-	CORSOrigins          string
+	securitySchemes      okapi.SecuritySchemes
+
+	MetricsEnabled bool
+	WebDir         string
+	AppWebURL      string
+	ApiBaseURL     string
+	CORSOrigins    string
 
 	// Worker settings
 	EmbeddedWorker    bool
@@ -68,6 +70,8 @@ type Config struct {
 	// System SMTP for platform notifications (daily reports, invitations, etc.)
 	SystemSMTP SystemSMTPConfig
 
+	EmailVerificationRequired bool
+
 	// Encryption key for SMTP password encryption (if empty, base64 encoding is used)
 	EncryptionKey string
 
@@ -81,6 +85,20 @@ type Config struct {
 	BlobS3UseSSL    bool
 	BlobS3PathStyle bool
 	BlobFSPath      string
+
+	// Inbound email settings
+	InboundEnabled        bool
+	InboundSMTPHost       string
+	InboundSMTPPort       int
+	InboundMaxMessageSize int64
+	InboundMaxAttachSize  int64
+	InboundWebhookSecret  string
+	InboundHostname       string
+	InboundTLSMode        string
+	InboundTLSCertFile    string
+	InboundTLSKeyFile     string
+	InboundSMTPRateLimit  int // per-IP max sessions per window; 0 disables
+	InboundSMTPRateWindow int // rate-limit window in seconds
 }
 type SystemSMTPConfig struct {
 	Host       string
@@ -148,10 +166,12 @@ func New() *Config {
 		AdminEmail:           goutils.Env("POSTA_ADMIN_EMAIL", "admin@example.com"),
 		AdminPassword:        goutils.Env("POSTA_ADMIN_PASSWORD", "admin1234"),
 		OpenAPIDocs:          goutils.EnvBool("POSTA_OPENAPI_DOCS", true),
-		MetricsEnabled:       goutils.EnvBool("POSTA_METRICS_ENABLED", false),
-		WebDir:               goutils.Env("POSTA_WEB_DIR", "web/dist"),
-		AppWebURL:            goutils.Env("POSTA_WEB_URL", ""),
-		ApiBaseURL:           goutils.Env("POSTA_API_URL", ""),
+		securitySchemes:      okapi.SecuritySchemes{},
+
+		MetricsEnabled: goutils.EnvBool("POSTA_METRICS_ENABLED", false),
+		WebDir:         goutils.Env("POSTA_WEB_DIR", "web/dist"),
+		AppWebURL:      goutils.Env("POSTA_WEB_URL", ""),
+		ApiBaseURL:     goutils.Env("POSTA_API_URL", ""),
 
 		CORSOrigins: goutils.Env("POSTA_CORS_ORIGINS", "*"),
 
@@ -176,6 +196,8 @@ func New() *Config {
 			Encryption: goutils.Env("POSTA_SYSTEM_SMTP_ENCRYPTION", "starttls"),
 		},
 
+		EmailVerificationRequired: goutils.EnvBool("POSTA_EMAIL_VERIFICATION_REQUIRED", true),
+
 		EncryptionKey: goutils.Env("POSTA_ENCRYPTION_KEY", ""),
 
 		BlobProvider:    goutils.Env("POSTA_BLOB_PROVIDER", ""),
@@ -187,10 +209,30 @@ func New() *Config {
 		BlobS3UseSSL:    goutils.EnvBool("POSTA_BLOB_S3_USE_SSL", true),
 		BlobS3PathStyle: goutils.EnvBool("POSTA_BLOB_S3_PATH_STYLE", false),
 		BlobFSPath:      goutils.Env("POSTA_BLOB_FS_PATH", "data/attachments"),
+
+		InboundEnabled:        goutils.EnvBool("POSTA_INBOUND_ENABLED", false),
+		InboundSMTPHost:       goutils.Env("POSTA_INBOUND_SMTP_HOST", "0.0.0.0"),
+		InboundSMTPPort:       goutils.EnvInt("POSTA_INBOUND_SMTP_PORT", 2525),
+		InboundMaxMessageSize: int64(goutils.EnvInt("POSTA_INBOUND_MAX_MESSAGE_SIZE", 26214400)),
+		InboundMaxAttachSize:  int64(goutils.EnvInt("POSTA_INBOUND_MAX_ATTACH_SIZE", 10485760)),
+		InboundWebhookSecret:  goutils.Env("POSTA_INBOUND_WEBHOOK_SECRET", ""),
+		InboundHostname:       goutils.Env("POSTA_INBOUND_HOSTNAME", "posta.local"),
+		InboundTLSMode:        goutils.Env("POSTA_INBOUND_TLS_MODE", "none"),
+		InboundTLSCertFile:    goutils.Env("POSTA_INBOUND_TLS_CERT_FILE", ""),
+		InboundTLSKeyFile:     goutils.Env("POSTA_INBOUND_TLS_KEY_FILE", ""),
+		InboundSMTPRateLimit:  goutils.EnvInt("POSTA_INBOUND_SMTP_RATE_LIMIT", 60),
+		InboundSMTPRateWindow: goutils.EnvInt("POSTA_INBOUND_SMTP_RATE_WINDOW", 60),
 	}
 }
 func (c *Config) validate() error {
-
+	if c.InboundEnabled && c.InboundTLSMode != "" && c.InboundTLSMode != "none" {
+		if c.InboundTLSMode != "starttls" {
+			return fmt.Errorf("unsupported POSTA_INBOUND_TLS_MODE %q (use none or starttls)", c.InboundTLSMode)
+		}
+		if c.InboundTLSCertFile == "" || c.InboundTLSKeyFile == "" {
+			return fmt.Errorf("POSTA_INBOUND_TLS_MODE=%s requires POSTA_INBOUND_TLS_CERT_FILE and POSTA_INBOUND_TLS_KEY_FILE", c.InboundTLSMode)
+		}
+	}
 	return nil
 }
 func (c *Config) validateWorker() error {
@@ -228,15 +270,38 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowCredentials: true,
 	})
+
 	if c.OpenAPIDocs {
+		// Dashboard / JWT-authenticated endpoints.
+		c.securitySchemes = append(c.securitySchemes, okapi.SecurityScheme{
+			Name:         "BearerAuth",
+			Description:  "Bearer token issued by /auth/login. Send as: `Authorization: Bearer <JWT>`.",
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "JWT",
+		})
+		// API-key authenticated endpoints.
+		c.securitySchemes = append(c.securitySchemes, okapi.SecurityScheme{
+			Name:         "ApiKeyAuth",
+			Description:  "Long-lived API key. Send as: `Authorization: Bearer <API_KEY>`. Manage keys under Settings → API Keys.",
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "Posta API Key",
+		})
 		app.WithOpenAPIDocs(okapi.OpenAPI{
 			Title:   "Posta API",
 			Version: "v1",
 			License: okapi.License{
-				Name: "Apache",
+				Name: "Apache-2.0",
 				URL:  "http://www.apache.org/licenses/LICENSE-2.0",
 			},
-			Servers: apiServers,
+			Contact: okapi.Contact{
+				Name:  "Posta",
+				URL:   "https://github.com/goposta/posta",
+				Email: "hello@goposta.dev",
+			},
+			Servers:         apiServers,
+			SecuritySchemes: c.securitySchemes,
 		})
 	}
 	app.WithErrorHandler(errorhandlers.CustomErrorHandler())

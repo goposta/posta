@@ -59,10 +59,10 @@ var (
 		},
 	)
 
-	emailsQueuedTotal = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Name: "posta_emails_queued_total",
-			Help: "Total number of emails enqueued for delivery",
+	emailsQueueSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "posta_emails_queue_size",
+			Help: "Number of emails currently enqueued for delivery",
 		},
 	)
 
@@ -103,6 +103,58 @@ var (
 			Help: "Total number of email suppressions added",
 		},
 	)
+
+	inboundReceivedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "posta_inbound_messages_received_total",
+			Help: "Total number of inbound messages accepted for processing, by source",
+		},
+		[]string{"source"},
+	)
+
+	inboundForwardedTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "posta_inbound_messages_forwarded_total",
+			Help: "Total number of inbound messages successfully dispatched to subscribers",
+		},
+	)
+
+	inboundFailedTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "posta_inbound_messages_failed_total",
+			Help: "Total number of inbound messages that permanently failed to forward",
+		},
+	)
+
+	inboundRejectedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "posta_inbound_messages_rejected_total",
+			Help: "Total number of inbound messages rejected at ingestion, by reason",
+		},
+		[]string{"reason"},
+	)
+
+	inboundBytesTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "posta_inbound_bytes_total",
+			Help: "Total bytes of raw inbound messages accepted",
+		},
+	)
+
+	inboundIngestDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "posta_inbound_ingest_duration_seconds",
+			Help:    "Time spent ingesting an inbound message (parse + blob upload + DB write)",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+
+	activeWorkers = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "posta_active_workers",
+			Help: "Number of currently-connected Asynq workers (embedded + standalone)",
+		},
+	)
 )
 
 func init() {
@@ -110,12 +162,19 @@ func init() {
 	prometheus.MustRegister(httpRequestDuration)
 	prometheus.MustRegister(emailsSentTotal)
 	prometheus.MustRegister(emailsFailedTotal)
-	prometheus.MustRegister(emailsQueuedTotal)
+	prometheus.MustRegister(emailsQueueSize)
 	prometheus.MustRegister(emailRetriesTotal)
 	prometheus.MustRegister(webhookDeliveriesTotal)
 	prometheus.MustRegister(webhookDeliveryDuration)
 	prometheus.MustRegister(bouncesTotal)
 	prometheus.MustRegister(suppressionsTotal)
+	prometheus.MustRegister(inboundReceivedTotal)
+	prometheus.MustRegister(inboundForwardedTotal)
+	prometheus.MustRegister(inboundFailedTotal)
+	prometheus.MustRegister(inboundRejectedTotal)
+	prometheus.MustRegister(inboundBytesTotal)
+	prometheus.MustRegister(inboundIngestDuration)
+	prometheus.MustRegister(activeWorkers)
 }
 
 // IncrementEmailSent increments the emails sent counter.
@@ -128,9 +187,15 @@ func IncrementEmailFailed() {
 	emailsFailedTotal.Inc()
 }
 
-// IncrementEmailQueued increments the emails queued counter.
+// IncrementEmailQueued increments the in-flight queue-size gauge.
 func IncrementEmailQueued() {
-	emailsQueuedTotal.Inc()
+	emailsQueueSize.Inc()
+}
+
+// DecrementEmailQueued decrements the in-flight queue-size gauge, called when
+// a queued email finishes delivery (sent or permanently failed).
+func DecrementEmailQueued() {
+	emailsQueueSize.Dec()
 }
 
 // IncrementEmailRetry increments the email retries counter.
@@ -156,6 +221,43 @@ func IncrementBounce(bounceType string) {
 // IncrementSuppression increments the suppression counter.
 func IncrementSuppression() {
 	suppressionsTotal.Inc()
+}
+
+// IncrementInboundReceived increments the inbound received counter for the given source.
+func IncrementInboundReceived(source string) {
+	inboundReceivedTotal.WithLabelValues(source).Inc()
+}
+
+// IncrementInboundForwarded increments the inbound forwarded counter.
+func IncrementInboundForwarded() {
+	inboundForwardedTotal.Inc()
+}
+
+// IncrementInboundFailed increments the permanently-failed inbound counter.
+func IncrementInboundFailed() {
+	inboundFailedTotal.Inc()
+}
+
+// IncrementInboundRejected increments the rejected inbound counter for the given reason.
+func IncrementInboundRejected(reason string) {
+	inboundRejectedTotal.WithLabelValues(reason).Inc()
+}
+
+// AddInboundBytes adds n bytes to the inbound bytes counter.
+func AddInboundBytes(n int64) {
+	if n > 0 {
+		inboundBytesTotal.Add(float64(n))
+	}
+}
+
+// ObserveInboundIngestDuration records how long a single ingest took, in seconds.
+func ObserveInboundIngestDuration(seconds float64) {
+	inboundIngestDuration.Observe(seconds)
+}
+
+// SetActiveWorkers updates the active worker gauge.
+func SetActiveWorkers(n int) {
+	activeWorkers.Set(float64(n))
 }
 
 // PrometheusMiddleware records HTTP request metrics.

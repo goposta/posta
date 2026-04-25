@@ -296,6 +296,11 @@ func (s *OAuthService) FindOrCreateUser(provider *models.OAuthProvider, info *OA
 		if existingUser.AvatarURL == "" {
 			existingUser.AvatarURL = info.AvatarURL
 		}
+		// Trusted IdP confirmed the email — auto-verify if still pending.
+		if existingUser.EmailVerifiedAt == nil {
+			now := time.Now()
+			existingUser.EmailVerifiedAt = &now
+		}
 		_ = s.userRepo.Update(existingUser)
 
 		return existingUser, false, nil
@@ -311,13 +316,15 @@ func (s *OAuthService) FindOrCreateUser(provider *models.OAuthProvider, info *OA
 		name = strings.SplitN(email, "@", 2)[0]
 	}
 
+	now := time.Now()
 	newUser := &models.User{
-		Email:      email,
-		Name:       name,
-		Role:       models.UserRoleUser,
-		AuthMethod: "oauth",
-		AvatarURL:  info.AvatarURL,
-		Active:     true,
+		Email:           email,
+		Name:            name,
+		Role:            models.UserRoleUser,
+		AuthMethod:      "oauth",
+		AvatarURL:       info.AvatarURL,
+		Active:          true,
+		EmailVerifiedAt: &now,
 	}
 	if err := s.userRepo.Create(newUser); err != nil {
 		return nil, false, fmt.Errorf("failed to create user: %w", err)

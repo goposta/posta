@@ -44,6 +44,7 @@ type Email struct {
 	Sender              string         `json:"sender" gorm:"not null"`
 	Recipients          pq.StringArray `json:"recipients" gorm:"type:text[];not null"`
 	Subject             string         `json:"subject" gorm:"not null"`
+	TemplateName        string         `json:"template_name,omitempty"`
 	HTMLBody            string         `json:"html_body"`
 	TextBody            string         `json:"text_body"`
 	AttachmentsJSON     string         `json:"attachments_json,omitempty" gorm:"type:text"`
@@ -56,6 +57,7 @@ type Email struct {
 	CreatedAt           time.Time      `json:"created_at"`
 	SentAt              *time.Time     `json:"sent_at"`
 	ScheduledAt         *time.Time     `json:"scheduled_at"`
+	Provider            string         `json:"provider,omitempty" gorm:"index;size:32"`
 
 	SMTPHostname string `json:"smtp_hostname,omitempty"`
 
