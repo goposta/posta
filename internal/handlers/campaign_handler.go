@@ -18,11 +18,14 @@
 package handlers
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/goposta/posta/internal/worker"
+	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 )
 
@@ -32,6 +35,7 @@ type CampaignHandler struct {
 	listRepo       *repositories.SubscriberListRepository
 	subscriberRepo *repositories.SubscriberRepository
 	templateRepo   *repositories.TemplateRepository
+	domainRepo     *repositories.DomainRepository
 	producer       *worker.Producer
 }
 
@@ -41,6 +45,7 @@ func NewCampaignHandler(
 	listRepo *repositories.SubscriberListRepository,
 	subscriberRepo *repositories.SubscriberRepository,
 	templateRepo *repositories.TemplateRepository,
+	domainRepo *repositories.DomainRepository,
 	producer *worker.Producer,
 ) *CampaignHandler {
 	return &CampaignHandler{
@@ -49,6 +54,7 @@ func NewCampaignHandler(
 		listRepo:       listRepo,
 		subscriberRepo: subscriberRepo,
 		templateRepo:   templateRepo,
+		domainRepo:     domainRepo,
 		producer:       producer,
 	}
 }
@@ -187,17 +193,27 @@ func (h *CampaignHandler) List(c *okapi.Context, req *ListCampaignsRequest) erro
 		return c.AbortInternalServerError("failed to list campaigns")
 	}
 
+	// Single grouped query instead of N per-campaign stats calls.
+	ids := make([]uint, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	countsByID, cerr := h.messageRepo.CountByStatusForCampaigns(ids)
+	if cerr != nil {
+		// Stats are best-effort; still return the list.
+		countsByID = nil
+	}
+
 	result := make([]CampaignWithStats, len(items))
 	for i, item := range items {
-		stats := h.buildStats(item.ID)
-		result[i] = CampaignWithStats{Campaign: item, Stats: stats}
+		result[i] = CampaignWithStats{Campaign: item, Stats: statsFromCounts(countsByID[item.ID])}
 	}
 	return paginated(c, result, total, page, size)
 }
 
 func (h *CampaignHandler) Get(c *okapi.Context, req *CampaignActionRequest) error {
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
 	stats := h.buildStats(campaign.ID)
@@ -208,8 +224,8 @@ func (h *CampaignHandler) Update(c *okapi.Context, req *UpdateCampaignRequest) e
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
 	}
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
 	if campaign.Status != models.CampaignStatusDraft {
@@ -271,14 +287,18 @@ func (h *CampaignHandler) Delete(c *okapi.Context, req *CampaignActionRequest) e
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
 	}
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
-	if campaign.Status != models.CampaignStatusDraft && campaign.Status != models.CampaignStatusCancelled {
-		return c.AbortBadRequest("can only delete draft or cancelled campaigns")
+	// Block deletion mid-flight so the worker doesn't race against row removal.
+	// Callers should Cancel first, then Delete.
+	if campaign.Status == models.CampaignStatusSending {
+		return c.AbortBadRequest("cancel the campaign before deleting it")
 	}
-	if err := h.campaignRepo.Delete(campaign.ID); err != nil {
+	// Snapshot stats so post-deletion analytics survive.
+	snapshot := h.snapshotFor(campaign)
+	if err := h.campaignRepo.Delete(campaign.ID, snapshot); err != nil {
 		return c.AbortInternalServerError("failed to delete campaign")
 	}
 	return noContent(c)
@@ -288,28 +308,54 @@ func (h *CampaignHandler) Send(c *okapi.Context, req *CampaignActionRequest) err
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
 	}
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
 	if campaign.Status != models.CampaignStatusDraft {
 		return c.AbortBadRequest("can only send draft campaigns")
 	}
 
+	// Deliverability check: surface unverified sender domains as a warning in
+	// logs rather than blocking, since the SMTP-server/shared-server layer has
+	// its own policy and legitimate setups exist where ownership isn't yet
+	// proven (DNS propagation, shared-server tenants, etc.).
+	h.warnSenderDeliverable(campaign)
+
 	if campaign.ScheduledAt != nil && campaign.ScheduledAt.After(time.Now()) {
-		// Schedule for later
-		if err := h.campaignRepo.UpdateStatus(campaign.ID, models.CampaignStatusScheduled); err != nil {
-			return c.AbortInternalServerError("failed to schedule campaign")
+		if err := h.campaignRepo.TransitionStatus(
+			campaign.ID,
+			[]models.CampaignStatus{models.CampaignStatusDraft},
+			models.CampaignStatusScheduled,
+		); err != nil {
+			return translateTransitionErr(c, err, "failed to schedule campaign")
 		}
 		campaign.Status = models.CampaignStatusScheduled
 		return ok(c, campaign)
 	}
 
-	// Send immediately
-	if err := h.campaignRepo.UpdateStatus(campaign.ID, models.CampaignStatusSending); err != nil {
-		return c.AbortInternalServerError("failed to update campaign status")
+	if h.producer == nil {
+		return c.AbortInternalServerError("background worker is not configured; cannot send campaigns")
 	}
+
+	// Atomically claim the draft -> sending transition. Losing the race returns 409
+	// so a double-click or concurrent Send doesn't double-enqueue.
+	if err := h.campaignRepo.TransitionStatus(
+		campaign.ID,
+		[]models.CampaignStatus{models.CampaignStatusDraft},
+		models.CampaignStatusSending,
+	); err != nil {
+		return translateTransitionErr(c, err, "failed to update campaign status")
+	}
+
+	// Idempotent enqueue: TaskID dedupes retries of the same campaign start.
 	if err := h.producer.EnqueueCampaignStart(campaign.ID); err != nil {
+		// Roll back so the campaign is retryable, not stuck.
+		_ = h.campaignRepo.TransitionStatus(
+			campaign.ID,
+			[]models.CampaignStatus{models.CampaignStatusSending},
+			models.CampaignStatusDraft,
+		)
 		return c.AbortInternalServerError("failed to enqueue campaign")
 	}
 	campaign.Status = models.CampaignStatusSending
@@ -320,15 +366,16 @@ func (h *CampaignHandler) Pause(c *okapi.Context, req *CampaignActionRequest) er
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
 	}
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
-	if campaign.Status != models.CampaignStatusSending {
-		return c.AbortBadRequest("can only pause sending campaigns")
-	}
-	if err := h.campaignRepo.UpdateStatus(campaign.ID, models.CampaignStatusPaused); err != nil {
-		return c.AbortInternalServerError("failed to pause campaign")
+	if err := h.campaignRepo.TransitionStatus(
+		campaign.ID,
+		[]models.CampaignStatus{models.CampaignStatusSending},
+		models.CampaignStatusPaused,
+	); err != nil {
+		return translateTransitionErr(c, err, "failed to pause campaign")
 	}
 	campaign.Status = models.CampaignStatusPaused
 	return ok(c, campaign)
@@ -338,17 +385,26 @@ func (h *CampaignHandler) Resume(c *okapi.Context, req *CampaignActionRequest) e
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
 	}
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
-	if campaign.Status != models.CampaignStatusPaused {
-		return c.AbortBadRequest("can only resume paused campaigns")
+	if h.producer == nil {
+		return c.AbortInternalServerError("background worker is not configured; cannot resume campaigns")
 	}
-	if err := h.campaignRepo.UpdateStatus(campaign.ID, models.CampaignStatusSending); err != nil {
-		return c.AbortInternalServerError("failed to resume campaign")
+	if err := h.campaignRepo.TransitionStatus(
+		campaign.ID,
+		[]models.CampaignStatus{models.CampaignStatusPaused},
+		models.CampaignStatusSending,
+	); err != nil {
+		return translateTransitionErr(c, err, "failed to resume campaign")
 	}
 	if err := h.producer.EnqueueCampaignBatch(campaign.ID, 0); err != nil {
+		_ = h.campaignRepo.TransitionStatus(
+			campaign.ID,
+			[]models.CampaignStatus{models.CampaignStatusSending},
+			models.CampaignStatusPaused,
+		)
 		return c.AbortInternalServerError("failed to enqueue campaign batch")
 	}
 	campaign.Status = models.CampaignStatusSending
@@ -359,18 +415,24 @@ func (h *CampaignHandler) Cancel(c *okapi.Context, req *CampaignActionRequest) e
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
 	}
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
-	if campaign.Status != models.CampaignStatusSending &&
-		campaign.Status != models.CampaignStatusPaused &&
-		campaign.Status != models.CampaignStatusScheduled {
-		return c.AbortBadRequest("can only cancel sending, paused, or scheduled campaigns")
+	if err := h.campaignRepo.TransitionStatus(
+		campaign.ID,
+		[]models.CampaignStatus{
+			models.CampaignStatusSending,
+			models.CampaignStatusPaused,
+			models.CampaignStatusScheduled,
+		},
+		models.CampaignStatusCancelled,
+	); err != nil {
+		return translateTransitionErr(c, err, "failed to cancel campaign")
 	}
-	if err := h.campaignRepo.UpdateStatus(campaign.ID, models.CampaignStatusCancelled); err != nil {
-		return c.AbortInternalServerError("failed to cancel campaign")
-	}
+	// Drain: mark still-pending messages as skipped. Already-queued emails are
+	// filtered at dispatch time by EmailSendHandler checking the campaign status.
+	_, _ = h.messageRepo.SkipPendingForCampaign(campaign.ID, "campaign cancelled")
 	campaign.Status = models.CampaignStatusCancelled
 	return ok(c, campaign)
 }
@@ -379,8 +441,8 @@ func (h *CampaignHandler) Duplicate(c *okapi.Context, req *CampaignActionRequest
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
 	}
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
 	scope := getScope(c)
@@ -395,13 +457,13 @@ func (h *CampaignHandler) Duplicate(c *okapi.Context, req *CampaignActionRequest
 		TemplateID:        campaign.TemplateID,
 		TemplateVersionID: campaign.TemplateVersionID,
 		Language:          campaign.Language,
-		TemplateData:      campaign.TemplateData,
+		TemplateData:      cloneTemplateData(campaign.TemplateData),
 		Status:            models.CampaignStatusDraft,
 		ListID:            campaign.ListID,
 		SendRate:          campaign.SendRate,
 		SendAtLocalTime:   campaign.SendAtLocalTime,
 		ABTestEnabled:     campaign.ABTestEnabled,
-		ABTestVariants:    campaign.ABTestVariants,
+		ABTestVariants:    append(models.ABTestVariants(nil), campaign.ABTestVariants...),
 	}
 
 	if err := h.campaignRepo.Create(clone); err != nil {
@@ -411,8 +473,8 @@ func (h *CampaignHandler) Duplicate(c *okapi.Context, req *CampaignActionRequest
 }
 
 func (h *CampaignHandler) ListMessages(c *okapi.Context, req *ListCampaignMessagesRequest) error {
-	campaign, err := h.campaignRepo.FindByID(uint(req.ID))
-	if err != nil || !ownsResource(c, campaign.UserID, campaign.WorkspaceID) {
+	campaign, err := h.findScoped(c, uint(req.ID))
+	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
 	page, size, offset := normalizePageParams(req.Page, req.Size)
@@ -421,6 +483,108 @@ func (h *CampaignHandler) ListMessages(c *okapi.Context, req *ListCampaignMessag
 		return c.AbortInternalServerError("failed to list campaign messages")
 	}
 	return paginated(c, items, total, page, size)
+}
+
+// findScoped centralizes the "find + workspace ownership check" pattern so it
+// can't be forgotten at a callsite.
+func (h *CampaignHandler) findScoped(c *okapi.Context, id uint) (*models.Campaign, error) {
+	return h.campaignRepo.FindByIDForScope(id, getScope(c))
+}
+
+// warnSenderDeliverable logs (but does not block) when the sender domain is
+// registered for this user/workspace but lacks ownership/SPF/DKIM verification.
+// Blocking belongs to the SMTP-server layer, which already enforces per-server
+// policy — here we just give the operator a hint that their bounce rate is
+// about to spike.
+func (h *CampaignHandler) warnSenderDeliverable(campaign *models.Campaign) {
+	if h.domainRepo == nil {
+		return
+	}
+	at := strings.LastIndexByte(campaign.FromEmail, '@')
+	if at < 0 || at == len(campaign.FromEmail)-1 {
+		return
+	}
+	domain := strings.ToLower(campaign.FromEmail[at+1:])
+	d, err := h.domainRepo.FindByUserIDAndDomain(campaign.UserID, domain)
+	if err != nil || d == nil {
+		return
+	}
+	if !d.OwnershipVerified || !d.SPFVerified || !d.DKIMVerified {
+		logger.Warn("campaign: sending from domain with incomplete DNS verification",
+			"campaign_id", campaign.ID,
+			"domain", domain,
+			"ownership_verified", d.OwnershipVerified,
+			"spf_verified", d.SPFVerified,
+			"dkim_verified", d.DKIMVerified,
+		)
+	}
+}
+
+// snapshotFor captures the pre-deletion stats of a campaign so reports survive.
+func (h *CampaignHandler) snapshotFor(campaign *models.Campaign) models.TemplateData {
+	stats := h.buildStats(campaign.ID)
+	if stats == nil {
+		return nil
+	}
+	return models.TemplateData{
+		"total":       stats.Total,
+		"pending":     stats.Pending,
+		"queued":      stats.Queued,
+		"sent":        stats.Sent,
+		"failed":      stats.Failed,
+		"skipped":     stats.Skipped,
+		"snapshot_at": time.Now().UTC().Format(time.RFC3339),
+		"from_email":  campaign.FromEmail,
+		"list_id":     campaign.ListID,
+		"template_id": campaign.TemplateID,
+	}
+}
+
+// cloneTemplateData is a shallow copy at the top level; campaign template data
+// is JSON so shared references below the top level would only matter if a
+// caller mutated them, which is not a pattern we use.
+func cloneTemplateData(src models.TemplateData) models.TemplateData {
+	if src == nil {
+		return nil
+	}
+	dst := make(models.TemplateData, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// translateTransitionErr maps an atomic transition failure to either 409 (on
+// conflict) or 500 (on any other DB error).
+func translateTransitionErr(c *okapi.Context, err error, genericMsg string) error {
+	if errors.Is(err, repositories.ErrStatusConflict) {
+		return c.AbortConflict("campaign is not in a state that allows this action")
+	}
+	return c.AbortInternalServerError(genericMsg)
+}
+
+// statsFromCounts projects a status->count map into the CampaignStats shape.
+func statsFromCounts(counts map[models.CampaignMessageStatus]int64) *CampaignStats {
+	if counts == nil {
+		return nil
+	}
+	stats := &CampaignStats{}
+	for status, count := range counts {
+		stats.Total += count
+		switch status {
+		case models.CampaignMsgPending:
+			stats.Pending = count
+		case models.CampaignMsgQueued:
+			stats.Queued = count
+		case models.CampaignMsgSent:
+			stats.Sent = count
+		case models.CampaignMsgFailed:
+			stats.Failed = count
+		case models.CampaignMsgSkipped:
+			stats.Skipped = count
+		}
+	}
+	return stats
 }
 
 // buildStats computes stats for a campaign from the message counts.

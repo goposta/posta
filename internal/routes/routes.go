@@ -35,7 +35,9 @@ import (
 	"github.com/goposta/posta/internal/services/auth"
 	"github.com/goposta/posta/internal/services/cache"
 	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/notification"
 	planpkg "github.com/goposta/posta/internal/services/plan"
 	"github.com/goposta/posta/internal/services/ratelimit"
@@ -64,12 +66,14 @@ type Router struct {
 
 type routerMiddleware struct {
 	jwtAuth           okapi.JWTAuth
+	jwtQueryAuth      okapi.JWTAuth
 	jwtAdminAuth      okapi.JWTAuth
 	jwtAdminQueryAuth okapi.JWTAuth
 	loginLimiter      okapi.Middleware
 	apiKey            okapi.Middleware
 	workspace         okapi.Middleware
 	optionalWorkspace okapi.Middleware
+	verifiedEmail     okapi.Middleware
 }
 
 type routerHandlers struct {
@@ -109,6 +113,7 @@ type routerHandlers struct {
 	bounceWebhook   *handlers.BounceWebhookHandler
 	workspaceData   *handlers.WorkspaceDataHandler
 	plan            *handlers.PlanHandler
+	inbound         *handlers.InboundHandler
 }
 
 func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) {
@@ -134,6 +139,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	userSettingRepo := repositories.NewUserSettingRepository(db)
 	sessionRepo := repositories.NewSessionRepository(db)
 	workspaceRepo := repositories.NewWorkspaceRepository(db)
+	emailVerifyRepo := repositories.NewUserEmailVerificationRepository(db)
 
 	// Session store (Redis-backed blacklist)
 	sessionStore := sessionpkg.NewStore(redisClient)
@@ -190,6 +196,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 
 	// Start worker connection monitor
 	wm := workermon.New(inspector, bus, 15*time.Second)
+	wm.OnCount(metrics.SetActiveWorkers)
 	wm.Start(ctx)
 
 	r := &Router{
@@ -198,6 +205,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		v1:  app.Group("/api/v1"),
 		mw: routerMiddleware{
 			jwtAuth:           middlewares.JWTAuth(cfg, sessionStore),
+			jwtQueryAuth:      middlewares.JWTQueryAuth(cfg, sessionStore),
 			jwtAdminAuth:      middlewares.JWTAdminAuth(cfg, sessionStore),
 			jwtAdminQueryAuth: middlewares.JWTAdminQueryAuth(cfg, sessionStore),
 			loginLimiter:      loginLimiterMiddleware(cfg, limiter),
@@ -248,11 +256,18 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	r.h.smtp.SetQuota(planService, db)
 
 	// Notifications
+	var notif *notification.Service
 	if len(notifier) > 0 && notifier[0] != nil {
-		r.h.user.SetNotifier(notifier[0])
-		r.h.workspace.SetNotifier(notifier[0], cfg.AppWebURL)
-		r.h.apiKey.SetNotifier(notifier[0])
+		notif = notifier[0]
+		r.h.user.SetNotifier(notif)
+		r.h.workspace.SetNotifier(notif, cfg.AppWebURL)
+		r.h.apiKey.SetNotifier(notif)
 	}
+
+	// Email verification service (coordinates token issuance, delivery, redemption)
+	emailVerifySvc := emailverify.NewService(userRepo, emailVerifyRepo, notif, cfg.AppWebURL, cfg.EmailVerificationRequired)
+	r.h.user.SetEmailVerifier(emailVerifySvc)
+	r.mw.verifiedEmail = middlewares.RequireVerifiedEmail(emailVerifySvc, userRepo)
 
 	// Email content privacy
 	r.h.email.SetSettings(settingsProvider)
@@ -286,21 +301,65 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	r.h.subscriber = handlers.NewSubscriberHandler(subscriberRepo)
 	r.h.subscriberList = handlers.NewSubscriberListHandler(subscriberListRepo, subscriberRepo)
 
+	// Enable list-aware API sends now that the subscriber repos exist.
+	emailService.SetListAutoSubscribe(subscriberListRepo, subscriberRepo)
+
 	// Campaigns
 	campaignRepo := repositories.NewCampaignRepository(db)
 	campaignMessageRepo := repositories.NewCampaignMessageRepository(db)
 	r.h.campaign = handlers.NewCampaignHandler(
 		campaignRepo, campaignMessageRepo,
-		subscriberListRepo, subscriberRepo, templateRepo, producer,
+		subscriberListRepo, subscriberRepo, templateRepo, domainRepo, producer,
 	)
 
 	// Tracking
 	trackingRepo := repositories.NewTrackingRepository(db)
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
-	r.h.tracking = handlers.NewTrackingHandler(trackingRepo, campaignMessageRepo, campaignRepo, subscriberRepo, trackingService)
+	r.h.tracking = handlers.NewTrackingHandler(trackingRepo, campaignMessageRepo, campaignRepo, subscriberRepo, subscriberListRepo, emailRepo, suppressionRepo, trackingService)
+
+	// Auto-attach RFC 8058 one-click unsubscribe URLs on transactional sends
+	// that target a subscriber list (so Gmail/Yahoo bulk-sender requirements
+	// are met without the caller having to build the header themselves).
+	emailService.SetTxUnsubscribeGenerator(trackingService)
 
 	// Bounce webhook
 	r.h.bounceWebhook = handlers.NewBounceWebhookHandler(subscriberRepo, emailRepo, campaignMessageRepo)
+
+	// Inbound email
+	if cfg.InboundEnabled {
+		inboundEmailRepo := repositories.NewInboundEmailRepository(db)
+		inboundSvc := inbound.NewService(
+			inboundEmailRepo,
+			domainRepo,
+			suppressionRepo,
+			inbound.Config{
+				MaxMessageSize:    cfg.InboundMaxMessageSize,
+				MaxAttachmentSize: cfg.InboundMaxAttachSize,
+			},
+		)
+		if blobStore != nil {
+			inboundSvc.SetBlobStore(blobStore)
+		}
+		if producer != nil {
+			inboundSvc.SetEnqueuer(producer)
+		}
+		inboundSvc.SetEventBus(bus)
+		inboundSvc.OnReceived(func(src models.InboundSource) { metrics.IncrementInboundReceived(string(src)) })
+		inboundSvc.OnRejected(metrics.IncrementInboundRejected)
+		inboundSvc.OnBytes(metrics.AddInboundBytes)
+
+		r.h.inbound = handlers.NewInboundHandler(
+			inboundSvc,
+			inboundEmailRepo,
+			blobStore,
+			cfg.InboundWebhookSecret,
+			[]byte(cfg.JWTSecret),
+		)
+		if producer != nil {
+			r.h.inbound.SetEnqueuer(producer)
+		}
+		r.h.inbound.SetEventBus(bus)
+	}
 
 	// Workspace data export/import
 	r.h.workspaceData = handlers.NewWorkspaceDataHandler(
@@ -382,6 +441,10 @@ func (r *Router) registerRoutes() {
 	r.app.Register(r.trackingRoutes()...)
 	r.app.Register(r.trackingAnalyticsRoutes()...)
 	r.app.Register(r.bounceWebhookRoutes()...)
+	if r.cfg.InboundEnabled && r.h.inbound != nil {
+		r.app.Register(r.inboundWebhookRoutes()...)
+		r.app.Register(r.inboundUserRoutes()...)
+	}
 	r.app.Register(r.adminRoutes()...)
 	r.app.Register(r.adminSSERoutes()...)
 

@@ -29,7 +29,10 @@ import (
 
 // userRoutes returns route definitions for all authenticated user endpoints.
 func (r *Router) userRoutes() []okapi.RouteDefinition {
-	userGroup := r.v1.Group("/users/me", r.mw.jwtAuth.Middleware, r.mw.optionalWorkspace).WithTags([]string{"User"})
+	userGroup := r.v1.Group("/users/me", r.mw.jwtAuth.Middleware, r.mw.optionalWorkspace).WithTagInfo(okapi.GroupTag{
+		Name:        "User",
+		Description: "Manage the authenticated user: profile, password, API keys, notification preferences, and session.",
+	})
 	userGroup.WithBearerAuth()
 
 	routes := []okapi.RouteDefinition{
@@ -61,6 +64,18 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Description: "Change the current user's password",
 			Request:     &handlers.ChangePasswordRequest{},
 			Response:    &dto.Response[dto.MessageData]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/verify-email/resend",
+			Handler:     r.h.user.ResendVerificationEmail,
+			Group:       userGroup,
+			Summary:     "Resend verification email",
+			Description: "Issue a fresh verification email for the authenticated user",
+			Response:    &dto.Response[dto.MessageData]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+			},
 		},
 
 		// ==================== Plan ====================
@@ -197,6 +212,16 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.DashboardAnalyticsRequest{},
 			Response:    &dto.Response[handlers.DashboardAnalyticsResponse]{},
 		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/analytics/providers",
+			Handler:     okapi.H(r.h.analytics.UserProviderBreakdown),
+			Group:       userGroup,
+			Summary:     "Deliverability by provider",
+			Description: "Returns sent/failed counts and delivery rate grouped by recipient mailbox provider (Gmail, Outlook, Yahoo, ...)",
+			Request:     &handlers.ProviderBreakdownRequest{},
+			Response:    &dto.Response[handlers.ProviderBreakdownResponse]{},
+		},
 
 		// ==================== Email Logs ====================
 		{
@@ -270,11 +295,13 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Path:        "/api-keys",
 			Handler:     okapi.H(r.h.apiKey.Create),
 			Group:       userGroup,
+			Middlewares: []okapi.Middleware{r.mw.verifiedEmail},
 			Summary:     "Create API key",
 			Description: "Generate a new API key. The raw key is only shown once in the response.",
 			Request:     &handlers.CreateAPIKeyRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[dto.APIKeyCreatedData]{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -1180,6 +1207,30 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Description: "Evaluate filter rules and return the number of matching subscribers",
 			Request:     &handlers.PreviewSegmentRequest{},
 			Response:    &dto.Response[okapi.M]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/subscriber-lists/{id:int}/unsubscribe",
+			Handler:     okapi.H(r.h.subscriberList.UnsubscribeByEmail),
+			Group:       userGroup,
+			Tags:        []string{"Subscriber Lists"},
+			Summary:     "Unsubscribe an email from a list",
+			Description: "API-key-accessible list opt-out. Idempotent. Does not change global subscriber status.",
+			Request:     &handlers.ListUnsubscribeByEmailRequest{},
+			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
+			Options:     []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/subscriber-lists/{id:int}/resubscribe",
+			Handler:     okapi.H(r.h.subscriberList.ResubscribeByEmail),
+			Group:       userGroup,
+			Tags:        []string{"Subscriber Lists"},
+			Summary:     "Re-subscribe an email to a list",
+			Description: "Reverses a list-scoped opt-out and re-adds to the list (static lists). Idempotent.",
+			Request:     &handlers.ListResubscribeByEmailRequest{},
+			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
+			Options:     []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
 		},
 
 		// ==================== Campaigns ====================

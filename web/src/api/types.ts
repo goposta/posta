@@ -36,6 +36,7 @@ export interface User {
   auth_method: string
   plan_id: number | null
   scheduled_deletion_at: string | null
+  email_verified_at: string | null
   created_at: string
   last_login_at: string | null
 }
@@ -54,6 +55,7 @@ export interface Email {
   sender: string
   recipients: string[]
   subject: string
+  template_name?: string
   html_body: string
   text_body: string
   attachments_json: string
@@ -66,6 +68,44 @@ export interface Email {
   created_at: string
   sent_at: string | null
   scheduled_at: string | null
+  provider?: string
+}
+
+export type InboundEmailStatus = 'received' | 'forwarded' | 'failed' | 'rejected'
+export type InboundSource = 'smtp' | 'webhook'
+
+export interface InboundAttachmentMeta {
+  filename: string
+  content_type: string
+  size: number
+  storage_key?: string
+  content?: string
+}
+
+export interface InboundEmail {
+  id: number
+  uuid: string
+  user_id: number
+  workspace_id?: number | null
+  domain_id: number
+  message_id: string
+  sender: string
+  recipients: string[]
+  subject: string
+  text_body: string
+  html_body: string
+  attachments_json: string
+  headers_json: string
+  raw_storage_key?: string
+  size: number
+  spam_score?: number | null
+  status: InboundEmailStatus
+  source: InboundSource
+  error_message?: string
+  retry_count: number
+  received_at: string
+  forwarded_at?: string | null
+  created_at: string
 }
 
 export interface ApiKey {
@@ -385,6 +425,9 @@ export interface DashboardStats {
   total_suppressions: number
   total_webhooks: number
   total_contact_lists: number
+  total_inbound?: number
+  forwarded_inbound?: number
+  failed_inbound?: number
   daily_volume: DailyVolume[]
   webhook_deliveries: WebhookDeliveryStats | null
 }
@@ -412,6 +455,11 @@ export interface AdminMetrics {
   shared_smtp_servers: number
   total_domains: number
   total_workspaces: number
+  total_inbound?: number
+  forwarded_inbound?: number
+  failed_inbound?: number
+  received_inbound?: number
+  rejected_inbound?: number
   webhook_deliveries: WebhookDeliveryStats | null
   server_uptime_seconds: number
   current_goroutines: number
@@ -466,6 +514,9 @@ export interface UserDetailMetrics {
   total_suppressions: number
   total_domains: number
   total_smtp_servers: number
+  total_inbound?: number
+  forwarded_inbound?: number
+  failed_inbound?: number
   webhook_deliveries: WebhookDeliveryStats | null
 }
 
@@ -513,6 +564,19 @@ export interface DashboardAnalyticsResponse {
   delivery_rate_trends: DeliveryRatePoint[]
   bounce_rate_trends: BounceRatePoint[]
   latency_percentiles: LatencyPercentiles
+}
+
+export interface ProviderBreakdownPoint {
+  provider: string
+  sent: number
+  failed: number
+  bounced: number
+  total: number
+  delivery_rate: number
+}
+
+export interface ProviderBreakdownResponse {
+  providers: ProviderBreakdownPoint[]
 }
 
 // Contact Lists
@@ -590,6 +654,7 @@ export interface Setup2FAResponse {
 export interface UserProfile extends User {
   require_verified_domain: boolean
   scheduled_deletion_at: string | null
+  email_verification_required: boolean
 }
 
 // User Data Export/Import
@@ -796,6 +861,7 @@ export interface OAuthProviderAdmin {
   issuer: string
   scopes: string
   enabled: boolean
+  hidden: boolean
   auto_register: boolean
   allowed_domains: string
   created_at: string
@@ -813,7 +879,14 @@ export interface OAuthProviderInput {
   userinfo_url?: string
   scopes?: string
   auto_register?: boolean
+  hidden?: boolean
   allowed_domains?: string
+}
+
+export interface SSODiscovery {
+  slug: string
+  name: string
+  type: string
 }
 
 export interface WorkspaceSSOConfig {

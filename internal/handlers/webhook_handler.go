@@ -53,10 +53,10 @@ func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) err
 	scope := getScope(c)
 
 	// Validate event names
-	validEvents := map[string]bool{"email.sent": true, "email.failed": true}
+	validEvents := map[string]bool{"email.sent": true, "email.failed": true, "email.inbound": true}
 	for _, event := range req.Body.Events {
 		if !validEvents[event] {
-			return c.AbortBadRequest("invalid event: " + event + ". Valid events: email.sent, email.failed")
+			return c.AbortBadRequest("invalid event: " + event + ". Valid events: email.sent, email.failed, email.inbound")
 		}
 	}
 

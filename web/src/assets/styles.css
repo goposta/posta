@@ -534,18 +534,105 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 /* ─── DNS Records ─── */
+.dns-panel { display: flex; flex-direction: column; gap: 16px; }
+.dns-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dns-panel-title { margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.dns-panel-subtitle { margin: 0; font-size: 13px; color: var(--text-secondary); max-width: 640px; line-height: 1.5; }
+.dns-panel-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.dns-record-list { display: flex; flex-direction: column; gap: 12px; }
+
 .dns-record {
-  background: var(--bg-tertiary);
+  background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius);
-  padding: 14px 16px;
-  margin-bottom: 10px;
+  padding: 16px;
 }
-.dns-record .dns-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
-.dns-record .dns-type { font-size: 11px; font-weight: 700; color: var(--primary-500); text-transform: uppercase; letter-spacing: 0.06em; }
-.dns-record .dns-name { font-size: 13px; color: var(--text-tertiary); margin-top: 2px; }
-.dns-record .dns-value { font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); margin-top: 6px; word-break: break-all; }
 .dns-record-highlight { border-color: var(--primary-300); background: var(--primary-50, rgba(79, 70, 229, 0.04)); }
+.dns-record-verified { border-color: var(--success-300, #86efac); background: var(--success-50, rgba(34, 197, 94, 0.04)); }
+
+.dns-record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.dns-record-head-left { display: flex; align-items: center; gap: 10px; }
+.dns-record .dns-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.dns-type-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-100, rgba(79, 70, 229, 0.1));
+  color: var(--primary-600, var(--primary-500));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dns-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.dns-status-ok { background: var(--success-100, rgba(34, 197, 94, 0.12)); color: var(--success-700, #15803d); }
+.dns-status-pending { background: var(--bg-tertiary); color: var(--text-secondary); }
+
+.dns-record-desc { margin: 2px 0 12px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+.dns-field { margin-top: 10px; }
+.dns-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.dns-field-row { display: flex; align-items: flex-start; gap: 8px; }
+.dns-field-value {
+  flex: 1;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm, 6px);
+  padding: 6px 10px;
+  word-break: break-all;
+  user-select: all;
+}
+.dns-field-value-block { white-space: pre-wrap; }
+.dns-field-hint { margin-top: 6px; font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
+.dns-field-hint code {
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+}
+.dns-ttl-hint { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-primary); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+}
+.btn-ghost:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.btn-xs {
+  font-size: 11px;
+  padding: 4px 10px;
+  line-height: 1.2;
+  height: auto;
+}
 
 /* ─── Status ─── */
 .verified { color: var(--success-600); }

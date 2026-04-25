@@ -42,7 +42,8 @@ func NewService(repo *repositories.TrackingRepository, baseURL string, hmacKey [
 	return &Service{repo: repo, baseURL: strings.TrimRight(baseURL, "/"), hmacKey: hmacKey}
 }
 
-var linkRegex = regexp.MustCompile(`href\s*=\s*["'](https?://[^"']+)["']`)
+// (?i) makes the href match case-insensitive so HREF="…" still matches.
+var linkRegex = regexp.MustCompile(`(?i)href\s*=\s*["'](https?://[^"']+)["']`)
 
 // ProcessHTML rewrites links for click tracking and injects the open tracking pixel.
 func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) string {
@@ -50,17 +51,25 @@ func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) stri
 		return html
 	}
 
+	trackingPrefix := s.baseURL + "/t/"
+
 	// Rewrite links for click tracking
 	html = linkRegex.ReplaceAllStringFunc(html, func(match string) string {
-		// Extract URL from href="..."
 		sub := linkRegex.FindStringSubmatch(match)
 		if len(sub) < 2 {
 			return match
 		}
 		originalURL := sub[1]
 
-		// Skip unsubscribe links and tracking URLs
-		if strings.Contains(originalURL, "/t/") {
+		// Skip URLs that are already our own tracking endpoints. The previous
+		// `Contains("/t/")` check accidentally skipped any legitimate link
+		// whose path segment contained "/t/" (e.g. blog posts).
+		if strings.HasPrefix(originalURL, trackingPrefix) {
+			return match
+		}
+		// Skip non-http schemes that slipped through the regex bound (defense-in-depth).
+		lower := strings.ToLower(originalURL)
+		if strings.HasPrefix(lower, "mailto:") || strings.HasPrefix(lower, "tel:") {
 			return match
 		}
 
@@ -70,12 +79,14 @@ func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) stri
 			return match
 		}
 
-		trackedURL := fmt.Sprintf("%s/t/c/%d/%s", s.baseURL, messageID, hash)
+		trackedURL := s.ClickURL(messageID, hash)
 		return strings.Replace(match, originalURL, trackedURL, 1)
 	})
 
-	// Inject open tracking pixel before </body>
-	pixel := fmt.Sprintf(`<img src="%s/t/o/%d.png" width="1" height="1" alt="" style="display:none" />`, s.baseURL, messageID)
+	// Inject open tracking pixel before </body>. The URL is HMAC-signed so
+	// metrics can't be inflated by a third party hitting the predictable
+	// /t/o/<msg_id> path.
+	pixel := fmt.Sprintf(`<img src="%s" width="1" height="1" alt="" style="display:none" />`, s.OpenURL(messageID))
 	if strings.Contains(html, "</body>") {
 		html = strings.Replace(html, "</body>", pixel+"</body>", 1)
 	} else {
@@ -83,6 +94,38 @@ func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) stri
 	}
 
 	return html
+}
+
+// OpenURL builds a signed open-tracking pixel URL.
+func (s *Service) OpenURL(messageID uint) string {
+	return fmt.Sprintf("%s/t/o/%d.gif?sig=%s", s.baseURL, messageID, s.signOpen(messageID))
+}
+
+// ClickURL builds a signed click-tracking redirect URL.
+func (s *Service) ClickURL(messageID uint, hash string) string {
+	return fmt.Sprintf("%s/t/c/%d/%s?sig=%s", s.baseURL, messageID, hash, s.signClick(messageID, hash))
+}
+
+// VerifyOpenSig checks an open-tracking signature.
+func (s *Service) VerifyOpenSig(messageID uint, sig string) bool {
+	return hmac.Equal([]byte(sig), []byte(s.signOpen(messageID)))
+}
+
+// VerifyClickSig checks a click-tracking signature.
+func (s *Service) VerifyClickSig(messageID uint, hash, sig string) bool {
+	return hmac.Equal([]byte(sig), []byte(s.signClick(messageID, hash)))
+}
+
+func (s *Service) signOpen(messageID uint) string {
+	mac := hmac.New(sha256.New, s.hmacKey)
+	_, _ = fmt.Fprintf(mac, "open:%d", messageID)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)[:16])
+}
+
+func (s *Service) signClick(messageID uint, hash string) string {
+	mac := hmac.New(sha256.New, s.hmacKey)
+	_, _ = fmt.Fprintf(mac, "click:%d:%s", messageID, hash)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)[:16])
 }
 
 // SignUnsubscribeToken creates an HMAC-signed token encoding the message ID.
@@ -123,6 +166,50 @@ func (s *Service) VerifyUnsubscribeToken(token string) (uint, error) {
 // UnsubscribeURL generates the unsubscribe URL for a campaign message.
 func (s *Service) UnsubscribeURL(messageID uint) string {
 	return fmt.Sprintf("%s/t/u/%s", s.baseURL, s.SignUnsubscribeToken(messageID))
+}
+
+// SignTxUnsubscribeToken creates an HMAC-signed token encoding a transactional
+// email ID. The "tx:" prefix distinguishes it from campaign-message tokens so
+// the two token kinds can't be confused or replayed against the wrong handler.
+func (s *Service) SignTxUnsubscribeToken(emailID uint) string {
+	payload := "tx:" + strconv.FormatUint(uint64(emailID), 10)
+	mac := hmac.New(sha256.New, s.hmacKey)
+	mac.Write([]byte(payload))
+	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + sig
+}
+
+// VerifyTxUnsubscribeToken verifies a transactional unsubscribe
+func (s *Service) VerifyTxUnsubscribeToken(token string) (uint, error) {
+	parts := strings.SplitN(token, ".", 2)
+	if len(parts) != 2 {
+		return 0, errors.New("invalid token format")
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return 0, errors.New("invalid token encoding")
+	}
+	mac := hmac.New(sha256.New, s.hmacKey)
+	mac.Write(payloadBytes)
+	expectedSig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(parts[1]), []byte(expectedSig)) {
+		return 0, errors.New("invalid token signature")
+	}
+	payload := string(payloadBytes)
+	if !strings.HasPrefix(payload, "tx:") {
+		return 0, errors.New("wrong token kind")
+	}
+	id, err := strconv.ParseUint(payload[3:], 10, 64)
+	if err != nil {
+		return 0, errors.New("invalid email ID in token")
+	}
+	return uint(id), nil
+}
+
+// TxUnsubscribeURL returns the public one-click unsubscribe URL for a
+// transactional email. Suitable for RFC 8058 List-Unsubscribe-Post headers.
+func (s *Service) TxUnsubscribeURL(emailID uint) string {
+	return fmt.Sprintf("%s/t/u/tx/%s", s.baseURL, s.SignTxUnsubscribeToken(emailID))
 }
 
 // hashLink generates a deterministic hash for a campaign + URL combination.

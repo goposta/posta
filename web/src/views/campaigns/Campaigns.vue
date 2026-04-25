@@ -119,9 +119,12 @@ async function saveCampaign() {
 }
 
 async function deleteCampaign(campaign: Campaign) {
+  const warnLossOfData = ['sent', 'paused'].includes(campaign.status)
   const confirmed = await confirm({
     title: 'Delete Campaign',
-    message: `Are you sure you want to delete "${campaign.name}"? This action cannot be undone.`,
+    message: warnLossOfData
+      ? `Delete "${campaign.name}"? Per-message delivery records will be removed. An aggregate stats snapshot is kept for reporting.`
+      : `Are you sure you want to delete "${campaign.name}"? This action cannot be undone.`,
     confirmText: 'Delete',
     variant: 'danger',
   })
@@ -133,6 +136,10 @@ async function deleteCampaign(campaign: Campaign) {
   } catch (e: any) {
     notify.error(e?.response?.data?.error?.message || 'Failed to delete campaign')
   }
+}
+
+function canDeleteStatus(status: CampaignStatus): boolean {
+  return status !== 'sending'
 }
 
 function statusBadgeClass(status: CampaignStatus): string {
@@ -221,7 +228,7 @@ onMounted(() => loadCampaigns())
                   <div style="display: flex; gap: 6px">
                     <button class="btn btn-secondary btn-sm" @click="router.push(`/campaigns/${campaign.id}`)">View</button>
                     <button
-                      v-if="wsStore.canEdit && (campaign.status === 'draft' || campaign.status === 'cancelled')"
+                      v-if="wsStore.canEdit && canDeleteStatus(campaign.status)"
                       class="btn btn-danger btn-sm"
                       @click="deleteCampaign(campaign)"
                     >Delete</button>

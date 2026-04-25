@@ -11,7 +11,10 @@ import (
 // oauthRoutes returns route definitions for OAuth authentication.
 func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 	// Public OAuth routes (no auth required)
-	oauthPublic := r.v1.Group("/auth/oauth").WithTags([]string{"OAuth"})
+	oauthPublic := r.v1.Group("/auth/oauth").WithTagInfo(okapi.GroupTag{
+		Name:        "OAuth",
+		Description: "Single sign-on via external identity providers (Google, GitHub, generic OIDC). Covers public flow, user-account linking, admin provider config, and workspace SSO enforcement.",
+	})
 
 	routes := make([]okapi.RouteDefinition, 0, 12)
 	routes = append(routes, []okapi.RouteDefinition{
@@ -23,6 +26,16 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 			Summary:     "List OAuth providers",
 			Description: "Returns enabled OAuth providers for the login page",
 			Response:    &dto.Response[okapi.M]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/discover",
+			Handler:     okapi.H(r.h.oauth.DiscoverSSO),
+			Group:       oauthPublic,
+			Summary:     "Discover SSO provider by email",
+			Description: "Returns the OAuth provider slug whose allowed domains match the given email's domain. Used for email-first SSO login.",
+			Request:     &handlers.DiscoverSSORequest{},
+			Response:    &dto.Response[handlers.DiscoverSSOResponse]{},
 		},
 		{
 			Method:      http.MethodGet,
@@ -50,7 +63,10 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// Authenticated OAuth routes (linked accounts)
-	oauthUser := r.v1.Group("/users/me/oauth", r.mw.jwtAuth.Middleware).WithTags([]string{"OAuth"})
+	oauthUser := r.v1.Group("/users/me/oauth", r.mw.jwtAuth.Middleware).WithTagInfo(okapi.GroupTag{
+		Name:        "OAuth",
+		Description: "Single sign-on via external identity providers (Google, GitHub, generic OIDC). Covers public flow, user-account linking, admin provider config, and workspace SSO enforcement.",
+	})
 	oauthUser.WithBearerAuth()
 
 	routes = append(routes, []okapi.RouteDefinition{
@@ -76,7 +92,16 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// Admin OAuth provider management
-	oauthAdmin := r.v1.Group("/admin/oauth/providers", r.mw.jwtAdminAuth.Middleware).WithTags([]string{"Admin", "OAuth"})
+	oauthAdmin := r.v1.Group("/admin/oauth/providers", r.mw.jwtAdminAuth.Middleware).WithTagInfo(
+		okapi.GroupTag{
+			Name:        "Admin",
+			Description: "Platform-level administration: users, workspaces, global settings, OAuth providers, and live event streams. Admin-only.",
+		},
+		okapi.GroupTag{
+			Name:        "OAuth",
+			Description: "Single sign-on via external identity providers (Google, GitHub, generic OIDC). Covers public flow, user-account linking, admin provider config, and workspace SSO enforcement.",
+		},
+	)
 	oauthAdmin.WithBearerAuth()
 
 	routes = append(routes, []okapi.RouteDefinition{
@@ -125,7 +150,16 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// Workspace SSO config
-	wsSSO := r.v1.Group("/workspaces/current/sso", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTags([]string{"Workspaces", "OAuth"})
+	wsSSO := r.v1.Group("/workspaces/current/sso", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTagInfo(
+		okapi.GroupTag{
+			Name:        "Workspaces",
+			Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings (including SSO).",
+		},
+		okapi.GroupTag{
+			Name:        "OAuth",
+			Description: "Single sign-on via external identity providers (Google, GitHub, generic OIDC). Covers public flow, user-account linking, admin provider config, and workspace SSO enforcement.",
+		},
+	)
 	wsSSO.WithBearerAuth()
 
 	routes = append(routes, []okapi.RouteDefinition{

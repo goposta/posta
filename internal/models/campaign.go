@@ -21,6 +21,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type CampaignStatus string
@@ -84,5 +86,9 @@ type Campaign struct {
 	CompletedAt       *time.Time     `json:"completed_at,omitempty"`
 	CreatedAt         time.Time      `json:"created_at"`
 	UpdatedAt         *time.Time     `json:"updated_at,omitempty"`
-	User              User           `json:"-" gorm:"foreignKey:UserID"`
+	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
+	// Snapshot captures the aggregated stats at soft-delete time so analytics
+	// for past sends survive after CampaignMessage rows are purged.
+	Snapshot TemplateData `json:"snapshot,omitempty" gorm:"type:text"`
+	User     User         `json:"-" gorm:"foreignKey:UserID"`
 }

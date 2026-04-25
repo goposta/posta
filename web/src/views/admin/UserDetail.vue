@@ -15,6 +15,7 @@ const loading = ref(true)
 const metrics = ref<UserDetailMetrics | null>(null)
 const disabling2FA = ref(false)
 const revokingSessions = ref(false)
+const settingVerified = ref(false)
 const deleting = ref(false)
 const forceDeleting = ref(false)
 const cancellingDeletion = ref(false)
@@ -59,6 +60,29 @@ async function handleDisable2FA() {
     notification.error('Failed to disable 2FA.')
   } finally {
     disabling2FA.value = false
+  }
+}
+
+async function handleSetEmailVerified(verified: boolean) {
+  if (!metrics.value) return
+  const confirmed = await confirm({
+    title: verified ? 'Mark email as verified' : 'Revoke email verification',
+    message: verified
+      ? "This will mark the user's email address as verified and unlock verification-gated actions."
+      : "This will clear the user's email verification. Verification-gated actions will be blocked until they re-verify.",
+    confirmText: verified ? 'Mark verified' : 'Revoke',
+    variant: verified ? 'info' : 'danger',
+  })
+  if (!confirmed) return
+  settingVerified.value = true
+  try {
+    const res = await adminApi.updateUser(metrics.value.user.id, { email_verified: verified })
+    metrics.value.user.email_verified_at = res.data.data.email_verified_at
+    notification.success(verified ? 'Email marked as verified.' : 'Email verification revoked.')
+  } catch {
+    notification.error('Failed to update email verification.')
+  } finally {
+    settingVerified.value = false
   }
 }
 
@@ -255,6 +279,31 @@ function formatDate(date: string) {
                 </td>
               </tr>
               <tr>
+                <td style="font-weight: 600;">Email verified</td>
+                <td>
+                  <span v-if="metrics.user.email_verified_at" class="badge badge-success">Verified</span>
+                  <span v-else class="badge badge-neutral">Not verified</span>
+                  <button
+                    v-if="!metrics.user.email_verified_at"
+                    class="btn btn-primary btn-sm"
+                    style="margin-left: 12px;"
+                    :disabled="settingVerified"
+                    @click="handleSetEmailVerified(true)"
+                  >
+                    {{ settingVerified ? 'Updating...' : 'Mark verified' }}
+                  </button>
+                  <button
+                    v-else
+                    class="btn btn-danger btn-sm"
+                    style="margin-left: 12px;"
+                    :disabled="settingVerified"
+                    @click="handleSetEmailVerified(false)"
+                  >
+                    {{ settingVerified ? 'Updating...' : 'Revoke verification' }}
+                  </button>
+                </td>
+              </tr>
+              <tr>
                 <td style="font-weight: 600;">Sessions</td>
                 <td>
                   <button
@@ -362,6 +411,18 @@ function formatDate(date: string) {
         <div class="stat-card">
           <div class="stat-label">SMTP Servers</div>
           <div class="stat-value">{{ metrics.total_smtp_servers }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Inbound Received</div>
+          <div class="stat-value">{{ metrics.total_inbound ?? 0 }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Inbound Forwarded</div>
+          <div class="stat-value">{{ metrics.forwarded_inbound ?? 0 }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Inbound Failed</div>
+          <div class="stat-value">{{ metrics.failed_inbound ?? 0 }}</div>
         </div>
       </div>
 

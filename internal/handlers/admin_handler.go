@@ -64,8 +64,9 @@ type AdminCreateUserRequest struct {
 type AdminUpdateUserRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Role   string `json:"role" enum:"admin,user"`
-		Active *bool  `json:"active"`
+		Role          string `json:"role" enum:"admin,user"`
+		Active        *bool  `json:"active"`
+		EmailVerified *bool  `json:"email_verified"`
 	} `json:"body"`
 }
 type AdminDeleteUserRequest struct {
@@ -90,6 +91,11 @@ type PlatformMetrics struct {
 	SharedSmtpServers  int64                              `json:"shared_smtp_servers"`
 	TotalDomains       int64                              `json:"total_domains"`
 	TotalWorkspaces    int64                              `json:"total_workspaces"`
+	TotalInbound       int64                              `json:"total_inbound"`
+	ForwardedInbound   int64                              `json:"forwarded_inbound"`
+	FailedInbound      int64                              `json:"failed_inbound"`
+	ReceivedInbound    int64                              `json:"received_inbound"`
+	RejectedInbound    int64                              `json:"rejected_inbound"`
 	WebhookDeliveries  *repositories.WebhookDeliveryStats `json:"webhook_deliveries"`
 	ServerUptime       float64                            `json:"server_uptime_seconds"`
 	CurrentGoroutines  int                                `json:"current_goroutines"`
@@ -128,6 +134,9 @@ type UserDetailMetrics struct {
 	TotalSuppressions int64                              `json:"total_suppressions"`
 	TotalDomains      int64                              `json:"total_domains"`
 	TotalSmtpServers  int64                              `json:"total_smtp_servers"`
+	TotalInbound      int64                              `json:"total_inbound"`
+	ForwardedInbound  int64                              `json:"forwarded_inbound"`
+	FailedInbound     int64                              `json:"failed_inbound"`
 	WebhookDeliveries *repositories.WebhookDeliveryStats `json:"webhook_deliveries"`
 }
 
@@ -215,6 +224,16 @@ func (h *AdminHandler) UpdateUser(c *okapi.Context, req *AdminUpdateUserRequest)
 			return c.AbortBadRequest("cannot disable your own account")
 		}
 		user.Active = *req.Body.Active
+	}
+	if req.Body.EmailVerified != nil {
+		if *req.Body.EmailVerified {
+			if user.EmailVerifiedAt == nil {
+				now := time.Now()
+				user.EmailVerifiedAt = &now
+			}
+		} else {
+			user.EmailVerifiedAt = nil
+		}
 	}
 	if err := h.userRepo.Update(user); err != nil {
 		return c.AbortInternalServerError("failed to update user")
@@ -358,6 +377,13 @@ func (h *AdminHandler) Metrics(c *okapi.Context) error {
 	h.db.Model(&models.Domain{}).Count(&m.TotalDomains)
 	h.db.Model(&models.Workspace{}).Count(&m.TotalWorkspaces)
 
+	// Inbound email counts (platform-wide)
+	h.db.Model(&models.InboundEmail{}).Count(&m.TotalInbound)
+	h.db.Model(&models.InboundEmail{}).Where("status = ?", models.InboundStatusForwarded).Count(&m.ForwardedInbound)
+	h.db.Model(&models.InboundEmail{}).Where("status = ?", models.InboundStatusFailed).Count(&m.FailedInbound)
+	h.db.Model(&models.InboundEmail{}).Where("status = ?", models.InboundStatusReceived).Count(&m.ReceivedInbound)
+	h.db.Model(&models.InboundEmail{}).Where("status = ?", models.InboundStatusRejected).Count(&m.RejectedInbound)
+
 	if m.TotalEmails > 0 {
 		m.FailureRate = float64(m.FailedEmails) / float64(m.TotalEmails) * 100
 	}
@@ -426,6 +452,9 @@ func (h *AdminHandler) UserMetrics(c *okapi.Context, req *AdminGetUserRequest) e
 	h.db.Model(&models.Suppression{}).Where("user_id = ?", req.ID).Count(&m.TotalSuppressions)
 	h.db.Model(&models.Domain{}).Where("user_id = ?", req.ID).Count(&m.TotalDomains)
 	h.db.Model(&models.SMTPServer{}).Where("user_id = ?", req.ID).Count(&m.TotalSmtpServers)
+	h.db.Model(&models.InboundEmail{}).Where("user_id = ?", req.ID).Count(&m.TotalInbound)
+	h.db.Model(&models.InboundEmail{}).Where("user_id = ? AND status = ?", req.ID, models.InboundStatusForwarded).Count(&m.ForwardedInbound)
+	h.db.Model(&models.InboundEmail{}).Where("user_id = ? AND status = ?", req.ID, models.InboundStatusFailed).Count(&m.FailedInbound)
 
 	if m.TotalEmails > 0 {
 		m.FailureRate = float64(m.FailedEmails) / float64(m.TotalEmails) * 100

@@ -155,8 +155,29 @@ type Payload struct {
 	Timestamp string `json:"timestamp"`
 }
 
-// Dispatch sends webhook notifications for the given event. Runs asynchronously.
+// Dispatch sends webhook notifications for the given event using the default
+// outbound payload shape ({event, email_id, timestamp}). Runs asynchronously.
 func (d *Dispatcher) Dispatch(userID uint, event string, emailID string, from string) {
+	payload := Payload{
+		Event:     event,
+		EmailID:   emailID,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		logger.Error("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	d.DispatchJSON(userID, event, body, from)
+}
+
+// DispatchJSON sends a pre-serialized JSON body to all webhooks subscribed to event
+// for the given user that pass the sender-address filter. Runs asynchronously.
+// Callers own the payload shape — this is the escape hatch used by the inbound
+// pipeline (which has a richer payload than the outbound Payload struct).
+func (d *Dispatcher) DispatchJSON(userID uint, event string, body []byte, fromAddr string) {
 	go func() {
 		webhooks, err := d.repo.FindByUserIDAndEvent(userID, event)
 		if err != nil {
@@ -164,20 +185,8 @@ func (d *Dispatcher) Dispatch(userID uint, event string, emailID string, from st
 			return
 		}
 
-		payload := Payload{
-			Event:     event,
-			EmailID:   emailID,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-		}
-
-		body, err := json.Marshal(payload)
-		if err != nil {
-			logger.Error("failed to marshal webhook payload", "error", err)
-			return
-		}
-
 		for _, wh := range webhooks {
-			if !matchesFilters(wh.Filters, from) {
+			if !matchesFilters(wh.Filters, fromAddr) {
 				continue
 			}
 			d.deliverWithRetry(userID, wh, body, event)

@@ -32,9 +32,6 @@ func runConstraints(db *gorm.DB) {
 		END IF;
 	END $$`)
 
-	// Ensure template_localizations cascade-deletes when a version is removed.
-	// GORM's AutoMigrate does not update existing FK constraints, so we
-	// drop and recreate if the current constraint lacks ON DELETE CASCADE.
 	db.Exec(`DO $$ BEGIN
 		IF EXISTS (
 			SELECT 1 FROM pg_constraint c
@@ -49,19 +46,28 @@ func runConstraints(db *gorm.DB) {
 		END IF;
 	END $$`)
 
-	// Rebuild unique indexes to include workspace_id so that
-	// the same name/email can exist in different workspaces.
 	rebuildUniqueIndexes(db)
+
+	// Partial unique index: at most one ownership-verified row per domain name
+	// (case-insensitive). Prevents two tenants from both verifying the same domain.
+	db.Exec(`DO $$ BEGIN
+		DROP INDEX IF EXISTS idx_verified_domain;
+		CREATE UNIQUE INDEX idx_verified_domain ON domains (LOWER(domain)) WHERE ownership_verified = true;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
+	// Composite index for fast Message-ID dedup lookups on inbound_emails.
+	db.Exec(`DO $$ BEGIN
+		CREATE INDEX IF NOT EXISTS idx_inbound_user_message_id ON inbound_emails (user_id, message_id) WHERE message_id <> '';
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
 }
 
-// rebuildUniqueIndexes drops legacy two-column unique indexes and replaces
-// them with expression indexes that use COALESCE(workspace_id, 0) so that
-// NULL workspace_id values (personal space) are treated as equal.
 func rebuildUniqueIndexes(db *gorm.DB) {
 	type indexDef struct {
 		table  string
 		name   string
-		column string // the varying column (name, email, code, domain)
+		column string
 	}
 
 	indexes := []indexDef{

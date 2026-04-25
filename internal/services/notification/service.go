@@ -43,6 +43,7 @@ const (
 	TemplateAPIKeyExpiry    = "api_key_expiry"
 	TemplateBounceAlert     = "bounce_alert"
 	TemplateRoleChanged     = "role_changed"
+	TemplateEmailVerify     = "email_verification"
 )
 
 // Service sends platform notification emails via the system SMTP server.
@@ -86,6 +87,7 @@ func (s *Service) loadTemplates() {
 		TemplateAPIKeyExpiry,
 		TemplateBounceAlert,
 		TemplateRoleChanged,
+		TemplateEmailVerify,
 	}
 	for _, name := range names {
 		tmpl := template.Must(template.ParseFS(templateFS,
@@ -146,6 +148,11 @@ func (s *Service) SendToUser(userID uint, subject, templateName string, data map
 
 	if !settings.EmailNotifications {
 		logger.Debug("notification service: email notifications disabled for user", "user_id", userID)
+		return nil
+	}
+
+	if templateName != TemplateEmailVerify && user.EmailVerifiedAt == nil {
+		logger.Debug("notification service: skipping send to unverified user", "user_id", userID, "template", templateName)
 		return nil
 	}
 

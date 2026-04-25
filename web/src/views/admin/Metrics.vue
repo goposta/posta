@@ -421,6 +421,59 @@ const avgDeliveryRate = computed(() => {
         </div>
       </div>
 
+      <!-- Inbound Email Metrics -->
+      <div class="metrics-section-label">Inbound Email</div>
+      <div class="stats-grid" style="margin-bottom: 28px;">
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Total Inbound</div>
+            <div class="stat-icon stat-icon-info">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </div>
+          </div>
+          <div class="stat-value">{{ metrics.total_inbound ?? 0 }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Forwarded</div>
+            <div class="stat-icon stat-icon-success">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+          <div class="stat-value">{{ metrics.forwarded_inbound ?? 0 }}</div>
+          <div class="stat-sub">Delivered to user webhooks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Failed</div>
+            <div class="stat-icon stat-icon-danger">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+          </div>
+          <div class="stat-value">{{ metrics.failed_inbound ?? 0 }}</div>
+          <div class="stat-sub">Webhook dispatch exhausted retries</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Received (pending)</div>
+            <div class="stat-icon stat-icon-info">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="stat-value">{{ metrics.received_inbound ?? 0 }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Rejected</div>
+            <div class="stat-icon stat-icon-warning">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            </div>
+          </div>
+          <div class="stat-value">{{ metrics.rejected_inbound ?? 0 }}</div>
+          <div class="stat-sub">Unverified domain / suppressed / too large</div>
+        </div>
+      </div>
+
       <!-- Email delivery progress bar -->
       <div class="card" style="margin-bottom: 28px;">
         <div class="card-body">

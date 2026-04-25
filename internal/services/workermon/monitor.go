@@ -35,10 +35,15 @@ type Monitor struct {
 	inspector *asynq.Inspector
 	bus       *eventbus.EventBus
 	interval  time.Duration
+	onCount   func(int)
 
 	mu    sync.Mutex
 	known map[string]workerInfo // keyed by "host:pid"
 }
+
+// OnCount sets a callback invoked with the current worker count after each poll.
+// Used to feed metrics gauges.
+func (m *Monitor) OnCount(fn func(int)) { m.onCount = fn }
 
 type workerInfo struct {
 	Host   string
@@ -131,4 +136,8 @@ func (m *Monitor) check() {
 	}
 
 	m.known = current
+
+	if m.onCount != nil {
+		m.onCount(len(current))
+	}
 }

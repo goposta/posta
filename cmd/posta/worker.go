@@ -22,6 +22,7 @@ import (
 	"github.com/goposta/posta/internal/cron/jobs"
 	"github.com/goposta/posta/internal/metrics"
 	"github.com/goposta/posta/internal/services/crypto"
+	"github.com/goposta/posta/internal/services/email"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/services/tracking"
 	"github.com/goposta/posta/internal/storage/blob"
@@ -81,12 +82,31 @@ func runWorker() error {
 		handler.SetBlobStore(blobStore)
 	}
 	handler.SetCampaignMessageRepo(repositories.NewCampaignMessageRepository(db))
-	handler.OnSent(metrics.IncrementEmailSent)
-	handler.OnFailed(metrics.IncrementEmailFailed)
+	handler.SetCampaignRepo(repositories.NewCampaignRepository(db))
+	handler.SetStamper(email.NewStamper("Posta", config.Version, []byte(cfg.JWTSecret)))
+	handler.OnSent(func() {
+		metrics.IncrementEmailSent()
+		metrics.DecrementEmailQueued()
+	})
+	handler.OnFailed(func() {
+		metrics.IncrementEmailFailed()
+		metrics.DecrementEmailQueued()
+	})
 
 	exhaustedHandler := worker.NewExhaustedErrorHandler(
-		repositories.NewEmailRepository(db), dispatcher, metrics.IncrementEmailFailed,
+		repositories.NewEmailRepository(db), dispatcher, func() {
+			metrics.IncrementEmailFailed()
+			metrics.DecrementEmailQueued()
+		},
 	)
+
+	errorHandlers := []asynq.ErrorHandler{exhaustedHandler}
+	if cfg.InboundEnabled {
+		inboundExhausted := worker.NewInboundExhaustedErrorHandler(
+			repositories.NewInboundEmailRepository(db), metrics.IncrementInboundFailed,
+		)
+		errorHandlers = append(errorHandlers, inboundExhausted)
+	}
 
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: cfg.Redis.Addr, Password: cfg.Redis.Password},
@@ -97,7 +117,7 @@ func runWorker() error {
 				worker.QueueBulk:          3,
 				worker.QueueLow:           1,
 			},
-			ErrorHandler: exhaustedHandler,
+			ErrorHandler: worker.ChainErrorHandlers(errorHandlers...),
 		},
 	)
 
@@ -137,6 +157,18 @@ func runWorker() error {
 	mux.HandleFunc(worker.TypeCampaignStart, campaignProcessor.HandleCampaignStart)
 	mux.HandleFunc(worker.TypeCampaignBatch, campaignProcessor.HandleCampaignBatch)
 	mux.HandleFunc(jobs.TypeDailyReport, dailyReportHandler.ProcessTask)
+
+	if cfg.InboundEnabled {
+		inboundHandler := worker.NewInboundProcessHandler(
+			repositories.NewInboundEmailRepository(db),
+			newWebhookDispatcher(db, cfg),
+			cfg.ApiBaseURL,
+			[]byte(cfg.JWTSecret),
+		)
+		inboundHandler.OnForwarded(metrics.IncrementInboundForwarded)
+		inboundHandler.OnFailed(metrics.IncrementInboundFailed)
+		mux.HandleFunc(worker.TypeInboundProcess, inboundHandler.ProcessTask)
+	}
 
 	logger.Info("Posta worker started",
 		"version", config.Version,

@@ -68,11 +68,27 @@ Response:
 * Async processing with Redis and Asynq
 * Automatic retries and priority queues
 
+### Inbound Email
+
+* Built-in SMTP receiver for incoming messages (default port `2525`, STARTTLS supported)
+* HTTP ingestion endpoint for third-party providers (SendGrid, Mailgun, etc.) with HMAC-signed webhooks
+* Full RFC 5322 parsing with attachment extraction and blob storage (S3 or filesystem)
+* Domain verification enforcement — only verified/owned domains accept mail (SMTP 550 otherwise)
+* Suppression list checks, Message-ID deduplication, and per-IP rate limiting
+* `email.inbound` webhook dispatch with retries and delivery tracking
+* Real-time SSE stream for inbound notifications and `.eml` / attachment downloads
+
 ### Templates
 
 * Versioned and multi-language templates
 * Variable substitution and stylesheet inlining
 * Import/export and preview support
+
+### Campaigns
+
+* Bulk email campaigns with scheduling and subscriber targeting
+* Draft, scheduled, sending, paused, and cancelled lifecycle states
+* A/B testing with multi-variant splits and per-variant performance metrics
 
 ### SMTP & Domains
 
@@ -89,11 +105,18 @@ Response:
 * OAuth / SSO login (Google, Keycloak, authentik, and more)
 * Rate limiting and session management
 
-### Contacts & Suppression
+### Contacts & Subscribers
 
-* Contact tracking and segmentation
-* Bounce and complaint handling
+* Contact tracking, lists, and segmentation
+* Subscriber lifecycle (active, bounced, unsubscribed)
+* Hard/soft bounce and complaint handling
 * Automatic suppression lists
+
+### Tracking
+
+* Pixel-based open tracking
+* Click tracking with link rewriting
+* Per-email engagement metrics
 
 ### Workspaces
 
@@ -109,7 +132,7 @@ Response:
 
 ### Analytics & Monitoring
 
-* Email delivery metrics and trends
+* Email delivery, open, and click metrics
 * Prometheus integration
 * Health endpoints and daily reports
 
@@ -123,7 +146,7 @@ Response:
 ### Dashboard
 
 * Vue-based UI for managing all resources
-* Analytics, templates, SMTP, contacts, and logs
+* Analytics, templates, SMTP, domains, contacts, campaigns, and logs
 * Dark/light mode and user preferences
 
 ---

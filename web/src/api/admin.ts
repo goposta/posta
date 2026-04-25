@@ -8,7 +8,7 @@ export const adminApi = {
   createUser(name: string, email: string, password: string, role: string) {
     return api.post<ApiResponse<User>>('/admin/users', { name, email, password, role })
   },
-  updateUser(id: number, data: { role?: string; active?: boolean }) {
+  updateUser(id: number, data: { role?: string; active?: boolean; email_verified?: boolean }) {
     return api.put<ApiResponse<User>>(`/admin/users/${id}`, data)
   },
   deleteUser(id: number) {

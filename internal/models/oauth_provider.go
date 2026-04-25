@@ -41,6 +41,7 @@ type OAuthProvider struct {
 	UserInfoURL    string            `json:"userinfo_url"`
 	Scopes         string            `json:"scopes" gorm:"default:'openid email profile'"`
 	Enabled        bool              `json:"enabled" gorm:"default:true;not null"`
+	Hidden         bool              `json:"hidden" gorm:"default:false;not null"`
 	AutoRegister   bool              `json:"auto_register" gorm:"default:true"`
 	AllowedDomains string            `json:"allowed_domains"`
 	CreatedAt      time.Time         `json:"created_at"`

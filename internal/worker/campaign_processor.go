@@ -81,8 +81,6 @@ func NewCampaignProcessor(
 const campaignBatchSize = 100
 
 // HandleCampaignStart processes a campaign:start task.
-// It resolves the subscriber list, creates campaign_messages in bulk,
-// then enqueues the first CampaignBatch task.
 func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task) error {
 	var payload CampaignPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -128,11 +126,22 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 		return nil
 	}
 
+	// Pull list-scoped opt-outs once. Required for dynamic lists (where the
+	// filter rules can re-include a previously-unsubscribed subscriber on the
+	// next send) and a defense-in-depth check for static lists.
+	suppressed, sErr := p.listRepo.SuppressedSubscriberIDs(campaign.ListID)
+	if sErr != nil {
+		logger.Warn("campaign: failed to load list suppressions, proceeding without", "list_id", campaign.ListID, "error", sErr)
+		suppressed = nil
+	}
+
 	// Create campaign messages in bulk
 	messages := make([]models.CampaignMessage, 0, len(subscribers))
 	for _, sub := range subscribers {
-		// Only include subscribed subscribers
 		if sub.Status != models.SubscriberStatusSubscribed {
+			continue
+		}
+		if _, opt := suppressed[sub.ID]; opt {
 			continue
 		}
 		messages = append(messages, models.CampaignMessage{
@@ -150,12 +159,10 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 
 	// Assign A/B test variants if enabled
 	if campaign.ABTestEnabled && len(campaign.ABTestVariants) > 0 {
-		// Shuffle messages for random distribution
 		rand.Shuffle(len(messages), func(i, j int) {
 			messages[i], messages[j] = messages[j], messages[i]
 		})
 
-		// Assign variants based on split percentages
 		idx := 0
 		for _, variant := range campaign.ABTestVariants {
 			count := len(messages) * variant.SplitPercentage / 100
@@ -171,7 +178,6 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 			}
 			idx = end
 		}
-		// Assign remaining messages to last variant
 		if idx < len(messages) {
 			lastVariant := campaign.ABTestVariants[len(campaign.ABTestVariants)-1].Name
 			for i := idx; i < len(messages); i++ {
@@ -240,6 +246,12 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 		return nil
 	}
 
+	// Resolve template name once so it can be stamped on each email record.
+	var templateName string
+	if tmpl, err := p.templateRepo.FindByID(campaign.TemplateID); err == nil && tmpl != nil {
+		templateName = tmpl.Name
+	}
+
 	// Cache resolved content per language to avoid re-rendering for each subscriber
 	contentCache := make(map[string]*resolvedContent)
 	resolveForLang := func(lang string) *resolvedContent {
@@ -297,14 +309,16 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 
 		// Create email record
 		em := &models.Email{
-			UserID:      campaign.UserID,
-			WorkspaceID: campaign.WorkspaceID,
-			Sender:      sender,
-			Recipients:  pq.StringArray{msg.Subscriber.Email},
-			Subject:     content.Subject,
-			HTMLBody:    content.HTMLBody,
-			TextBody:    content.TextBody,
-			Status:      models.EmailStatusQueued,
+			UserID:       campaign.UserID,
+			WorkspaceID:  campaign.WorkspaceID,
+			Sender:       sender,
+			Recipients:   pq.StringArray{msg.Subscriber.Email},
+			Subject:      content.Subject,
+			TemplateName: templateName,
+			HTMLBody:     content.HTMLBody,
+			TextBody:     content.TextBody,
+			Status:       models.EmailStatusQueued,
+			Provider:     email.ClassifyProvider(msg.Subscriber.Email),
 		}
 
 		if err := p.emailRepo.Create(em); err != nil {
@@ -337,11 +351,10 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 	}
 
 	if remaining > 0 {
-		// Compute rate limiting delay
 		var delay time.Duration
 		if campaign.SendRate > 0 {
-			// SendRate is messages per minute
-			delay = time.Duration(float64(time.Minute) / float64(campaign.SendRate) * float64(campaignBatchSize))
+			sent := len(pendingMessages)
+			delay = time.Duration(float64(sent) / float64(campaign.SendRate) * float64(time.Minute))
 		}
 		return p.producer.EnqueueCampaignBatch(campaign.ID, delay)
 	}

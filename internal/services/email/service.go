@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/mail"
@@ -35,6 +36,7 @@ import (
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
+	"gorm.io/gorm"
 )
 
 const (
@@ -64,6 +66,13 @@ type PlanLimits struct {
 	MaxBatchSize        int
 }
 
+// TxUnsubscribeGenerator produces a signed one-click (RFC 8058) unsubscribe
+// URL for a transactional email. Kept as a narrow interface so the email
+// service does not depend directly on the tracking package.
+type TxUnsubscribeGenerator interface {
+	TxUnsubscribeURL(emailID uint) string
+}
+
 type Service struct {
 	emailRepo        *repositories.EmailRepository
 	smtpRepo         *repositories.SMTPRepository
@@ -74,6 +83,8 @@ type Service struct {
 	contactRepo      *repositories.ContactRepository
 	domainRepo       *repositories.DomainRepository
 	userRepo         *repositories.UserRepository
+	listRepo         *repositories.SubscriberListRepository
+	subscriberRepo   *repositories.SubscriberRepository
 	sender           *SMTPSender
 	renderer         *TemplateRenderer
 	limiter          *ratelimit.RedisLimiter
@@ -82,6 +93,7 @@ type Service struct {
 	settings         *settings.Provider
 	blobStore        blob.Store
 	planLimits       PlanLimitsProvider
+	txUnsubGen       TxUnsubscribeGenerator
 	devMode          bool
 	onSent           func()
 	onFailed         func()
@@ -141,6 +153,21 @@ func (s *Service) SetPlanLimits(pl PlanLimitsProvider) {
 // When set, emails are enqueued to a background worker instead of being sent synchronously.
 func (s *Service) SetEnqueuer(eq EmailEnqueuer) {
 	s.enqueuer = eq
+}
+
+// SetListAutoSubscribe enables the optional `list` field on API sends: when
+// set, a send to a single recipient can auto-add that recipient to a named
+// list (creating it if needed), and respect per-list opt-outs.
+func (s *Service) SetListAutoSubscribe(listRepo *repositories.SubscriberListRepository, subRepo *repositories.SubscriberRepository) {
+	s.listRepo = listRepo
+	s.subscriberRepo = subRepo
+}
+
+// SetTxUnsubscribeGenerator wires the one-click unsubscribe URL generator.
+// When set, transactional sends that use a subscriber list but don't supply an
+// explicit list_unsubscribe_url will get an auto-generated RFC 8058 URL.
+func (s *Service) SetTxUnsubscribeGenerator(gen TxUnsubscribeGenerator) {
+	s.txUnsubGen = gen
 }
 
 // SetBlobStore sets the blob storage backend for persisting email attachments.
@@ -225,6 +252,10 @@ type SendRequest struct {
 	ListUnsubscribeURL  string              `json:"list_unsubscribe_url,omitempty"`
 	ListUnsubscribePost bool                `json:"list_unsubscribe_post,omitempty"`
 	SendAt              *time.Time          `json:"send_at,omitempty"`
+	// List (optional) adds the recipient to a subscriber list by name.
+	List string `json:"list,omitempty" doc:"list (optional) adds the recipient to a subscriber list by name."`
+	// TemplateName is populated by internal template-send paths
+	TemplateName string `json:"-"`
 }
 
 type SendTemplateRequest struct {
@@ -240,6 +271,15 @@ type SendTemplateRequest struct {
 type SendResponse struct {
 	ID     string             `json:"id"`
 	Status models.EmailStatus `json:"status"`
+	// List auto-subscribe outcome. All optional; populated only when the
+	// request's `list` field was set. Skipped=true means the email was NOT
+	// queued because the recipient is suppressed or not in 'subscribed' status.
+	ListID        *uint  `json:"list_id,omitempty"`
+	SubscriberID  *uint  `json:"subscriber_id,omitempty"`
+	ListCreated   bool   `json:"list_created,omitempty"`
+	MemberAdded   bool   `json:"member_added,omitempty"`
+	Skipped       bool   `json:"skipped,omitempty"`
+	SkippedReason string `json:"skipped_reason,omitempty"`
 }
 
 type BatchRequest struct {
@@ -479,6 +519,44 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		}
 	}
 
+	// Optional: list auto-subscribe + per-list suppression gate. Runs before
+	// suppression/rate/attachments work is persisted so a skipped send doesn't
+	// leak DB writes. Only applies to single-recipient sends.
+	listResult, err := s.resolveAutoSubscribe(userID, workspaceID, req)
+	if err != nil {
+		return nil, err
+	}
+	if listResult != nil && listResult.Skipped {
+		// Record a 'suppressed' email row for the audit trail, mirroring the
+		// behavior for the global suppression list, then return 200 with
+		// skipped=true so callers can branch on compliance without parsing 4xx.
+		var apiKeyPtr *uint
+		if apiKeyID > 0 {
+			apiKeyPtr = &apiKeyID
+		}
+		em := &models.Email{
+			UserID:       userID,
+			WorkspaceID:  workspaceID,
+			APIKeyID:     apiKeyPtr,
+			Sender:       req.From,
+			Recipients:   req.To,
+			Subject:      req.Subject,
+			TemplateName: req.TemplateName,
+			Status:       models.EmailStatusSuppressed,
+			ErrorMessage: listResult.SkippedReason,
+			Provider:     ClassifyRecipients(req.To),
+		}
+		_ = s.emailRepo.Create(em)
+		return &SendResponse{
+			ID:            em.UUID,
+			Status:        em.Status,
+			ListID:        listResult.ListID,
+			SubscriberID:  listResult.SubscriberID,
+			Skipped:       true,
+			SkippedReason: listResult.SkippedReason,
+		}, nil
+	}
+
 	// Filter out suppressed recipients
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	if s.suppressionRepo != nil {
@@ -499,10 +577,12 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 				Sender:       req.From,
 				Recipients:   req.To,
 				Subject:      req.Subject,
+				TemplateName: req.TemplateName,
 				HTMLBody:     req.HTML,
 				TextBody:     req.Text,
 				Status:       models.EmailStatusSuppressed,
 				ErrorMessage: "all recipients are suppressed",
+				Provider:     ClassifyRecipients(req.To),
 			}
 			_ = s.emailRepo.Create(em)
 			return &SendResponse{ID: em.UUID, Status: em.Status}, nil
@@ -522,8 +602,10 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 					Sender:       req.From,
 					Recipients:   []string{addr},
 					Subject:      req.Subject,
+					TemplateName: req.TemplateName,
 					Status:       models.EmailStatusSuppressed,
 					ErrorMessage: "recipient is suppressed",
+					Provider:     ClassifyProvider(addr),
 				}
 				_ = s.emailRepo.Create(em)
 			}
@@ -587,6 +669,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		Sender:              req.From,
 		Recipients:          req.To,
 		Subject:             req.Subject,
+		TemplateName:        req.TemplateName,
 		HTMLBody:            req.HTML,
 		TextBody:            req.Text,
 		AttachmentsJSON:     attachmentsJSON,
@@ -594,10 +677,19 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		ListUnsubscribeURL:  req.ListUnsubscribeURL,
 		ListUnsubscribePost: req.ListUnsubscribePost,
 		Status:              models.EmailStatusPending,
+		Provider:            ClassifyRecipients(req.To),
 	}
 
 	if err := s.emailRepo.Create(em); err != nil {
 		return nil, fmt.Errorf("failed to store email: %w", err)
+	}
+
+	// Auto-attach an RFC 8058 one-click unsubscribe URL when the recipient is
+	// being added to a subscriber list and the caller did not supply their own.
+	if em.ListUnsubscribeURL == "" && req.List != "" && s.txUnsubGen != nil {
+		em.ListUnsubscribeURL = s.txUnsubGen.TxUnsubscribeURL(em.ID)
+		em.ListUnsubscribePost = true
+		_ = s.emailRepo.Update(em)
 	}
 
 	if s.devMode {
@@ -609,7 +701,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 			s.onSent()
 		}
 		logger.Info("dev mode: email stored but not sent", "id", em.UUID)
-		return &SendResponse{ID: em.UUID, Status: em.Status}, nil
+		return decorateWithList(&SendResponse{ID: em.UUID, Status: em.Status}, listResult), nil
 	}
 
 	// Scheduled sending
@@ -623,7 +715,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 			_ = s.emailRepo.Update(em)
 			return nil, fmt.Errorf("failed to schedule email: %w", err)
 		}
-		return &SendResponse{ID: em.UUID, Status: em.Status}, nil
+		return decorateWithList(&SendResponse{ID: em.UUID, Status: em.Status}, listResult), nil
 	}
 
 	// Asynchronous path: enqueue the email for background delivery
@@ -643,11 +735,122 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 			s.onQueued()
 		}
 		logger.Debug("email enqueued for background delivery", "id", em.UUID)
-		return &SendResponse{ID: em.UUID, Status: em.Status}, nil
+		return decorateWithList(&SendResponse{ID: em.UUID, Status: em.Status}, listResult), nil
 	}
 
 	// Synchronous fallback: send email directly (no worker configured)
-	return s.sendSync(em, userID, workspaceID, req)
+	resp, err := s.sendSync(em, userID, workspaceID, req)
+	if err != nil {
+		return nil, err
+	}
+	return decorateWithList(resp, listResult), nil
+}
+
+// autoSubscribeResult captures the outcome of resolveAutoSubscribe for
+// stitching into the SendResponse.
+type autoSubscribeResult struct {
+	ListID        *uint
+	SubscriberID  *uint
+	ListCreated   bool
+	MemberAdded   bool
+	Skipped       bool
+	SkippedReason string
+}
+
+func decorateWithList(resp *SendResponse, r *autoSubscribeResult) *SendResponse {
+	if resp == nil || r == nil {
+		return resp
+	}
+	resp.ListID = r.ListID
+	resp.SubscriberID = r.SubscriberID
+	resp.ListCreated = r.ListCreated
+	resp.MemberAdded = r.MemberAdded
+	return resp
+}
+
+func (s *Service) resolveAutoSubscribe(userID uint, workspaceID *uint, req *SendRequest) (*autoSubscribeResult, error) {
+	if s.listRepo == nil || s.subscriberRepo == nil {
+		return nil, nil
+	}
+	listName := strings.TrimSpace(req.List)
+	if listName == "" || len(req.To) != 1 {
+		return nil, nil
+	}
+	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
+
+	// Find-or-create list (static by default).
+	listCreated := false
+	list, err := s.listRepo.FindByNameForScope(scope, listName)
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("list lookup: %w", err)
+		}
+		newList := &models.SubscriberList{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Name:        listName,
+			Type:        models.SubscriberListTypeStatic,
+		}
+		if err := s.listRepo.Create(newList); err != nil {
+			return nil, fmt.Errorf("list create: %w", err)
+		}
+		list = newList
+		listCreated = true
+	}
+	if list.Type == models.SubscriberListTypeDynamic {
+		return &autoSubscribeResult{
+			ListID:        &list.ID,
+			Skipped:       true,
+			SkippedReason: "list_is_dynamic",
+		}, nil
+	}
+
+	recipient := req.To[0]
+	sub, err := s.subscriberRepo.FindByEmail(scope, recipient)
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("subscriber lookup: %w", err)
+		}
+		now := time.Now()
+		newSub := &models.Subscriber{
+			UserID:       userID,
+			WorkspaceID:  workspaceID,
+			Email:        strings.ToLower(strings.TrimSpace(recipient)),
+			Status:       models.SubscriberStatusSubscribed,
+			SubscribedAt: &now,
+		}
+		if err := s.subscriberRepo.Create(newSub); err != nil {
+			return nil, fmt.Errorf("subscriber create: %w", err)
+		}
+		sub = newSub
+	}
+
+	result := &autoSubscribeResult{
+		ListID:       &list.ID,
+		SubscriberID: &sub.ID,
+		ListCreated:  listCreated,
+	}
+
+	if sub.Status != models.SubscriberStatusSubscribed {
+		result.Skipped = true
+		result.SkippedReason = "subscriber_" + string(sub.Status)
+		return result, nil
+	}
+	if s.listRepo.IsSuppressed(list.ID, sub.ID) {
+		result.Skipped = true
+		result.SkippedReason = "subscriber_unsubscribed_from_list"
+		return result, nil
+	}
+
+	// Add to list (idempotent; OnConflict DoNothing).
+	if err := s.listRepo.AddMember(&models.SubscriberListMember{
+		ListID:       list.ID,
+		SubscriberID: sub.ID,
+	}); err != nil {
+		return nil, fmt.Errorf("list add member: %w", err)
+	}
+	result.MemberAdded = true
+	return result, nil
 }
 
 // sendSync performs synchronous SMTP delivery (used when no enqueuer is configured).
@@ -740,17 +943,17 @@ func (s *Service) SendWithTemplate(ctx context.Context, userID, apiKeyID uint, w
 	}
 
 	return s.Send(ctx, userID, apiKeyID, workspaceID, userEmail, &SendRequest{
-		From:        from,
-		To:          req.To,
-		Subject:     rendered.Subject,
-		HTML:        rendered.HTML,
-		Text:        rendered.Text,
-		Attachments: req.Attachments,
+		From:         from,
+		To:           req.To,
+		Subject:      rendered.Subject,
+		HTML:         rendered.HTML,
+		Text:         rendered.Text,
+		Attachments:  req.Attachments,
+		TemplateName: tmpl.Name,
 	})
 }
 
 func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspaceID *uint, userEmail string, req *BatchRequest) (*BatchResponse, error) {
-	// Enforce max batch size from plan or platform settings
 	maxBatch := 0
 	if s.planLimits != nil {
 		maxBatch = s.planLimits.EffectiveLimits(workspaceID).MaxBatchSize
@@ -804,8 +1007,10 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 					Sender:       from,
 					Recipients:   []string{recipient.Email},
 					Subject:      req.Template,
+					TemplateName: tmpl.Name,
 					Status:       models.EmailStatusSuppressed,
 					ErrorMessage: "recipient is suppressed",
+					Provider:     ClassifyProvider(recipient.Email),
 				}
 				_ = s.emailRepo.Create(em)
 
@@ -838,11 +1043,12 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 		}
 
 		sendResp, err := s.Send(ctx, userID, apiKeyID, workspaceID, userEmail, &SendRequest{
-			From:    from,
-			To:      []string{recipient.Email},
-			Subject: rendered.Subject,
-			HTML:    rendered.HTML,
-			Text:    rendered.Text,
+			From:         from,
+			To:           []string{recipient.Email},
+			Subject:      rendered.Subject,
+			HTML:         rendered.HTML,
+			Text:         rendered.Text,
+			TemplateName: tmpl.Name,
 		})
 		if err != nil {
 			resp.Failed++
@@ -884,11 +1090,12 @@ func (s *Service) SendTestByTemplateID(ctx context.Context, userID uint, workspa
 	}
 
 	return s.Send(ctx, userID, 0, workspaceID, userEmail, &SendRequest{
-		From:    from,
-		To:      req.To,
-		Subject: rendered.Subject,
-		HTML:    rendered.HTML,
-		Text:    rendered.Text,
+		From:         from,
+		To:           req.To,
+		Subject:      rendered.Subject,
+		HTML:         rendered.HTML,
+		Text:         rendered.Text,
+		TemplateName: tmpl.Name,
 	})
 }
 

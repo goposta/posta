@@ -29,7 +29,7 @@ func (r *Router) trackingRoutes() []okapi.RouteDefinition {
 	return []okapi.RouteDefinition{
 		{
 			Method:  http.MethodGet,
-			Path:    "/t/o/{message_id:int}.png",
+			Path:    "/t/o/{message_id:int}.gif",
 			Handler: okapi.H(r.h.tracking.OpenPixel),
 			Tags:    []string{"Tracking"},
 			Summary: "Open tracking pixel",
@@ -59,12 +59,32 @@ func (r *Router) trackingRoutes() []okapi.RouteDefinition {
 			Summary: "Confirm unsubscribe",
 			Options: []okapi.RouteOption{okapi.DocHide()},
 		},
+		{
+			Method:  http.MethodGet,
+			Path:    "/t/u/tx/{token}",
+			Handler: okapi.H(r.h.tracking.TxUnsubscribePage),
+			Tags:    []string{"Tracking"},
+			Summary: "Transactional unsubscribe page",
+			Options: []okapi.RouteOption{okapi.DocHide()},
+		},
+		{
+			Method:  http.MethodPost,
+			Path:    "/t/u/tx/{token}",
+			Handler: okapi.H(r.h.tracking.TxUnsubscribeConfirm),
+			Tags:    []string{"Tracking"},
+			Summary: "Transactional one-click unsubscribe (RFC 8058)",
+			Options: []okapi.RouteOption{okapi.DocHide()},
+		},
 	}
 }
 
 // bounceWebhookRoutes returns the bounce webhook route (authenticated via API key).
 func (r *Router) bounceWebhookRoutes() []okapi.RouteDefinition {
-	bounceGroup := r.app.Group("/webhooks/bounce", r.mw.apiKey).WithTags([]string{"Webhooks"})
+	bounceGroup := r.app.Group("/webhooks/bounce", r.mw.apiKey).WithTagInfo(okapi.GroupTag{
+		Name:        "Webhooks",
+		Description: "Inbound webhook endpoints that receive bounce and complaint notifications from upstream mail providers. Authenticated with an API key.",
+	}).WithSecurity([]map[string][]string{{"ApiKeyAuth": {}}})
+
 	return []okapi.RouteDefinition{
 		{
 			Method:   http.MethodPost,
@@ -80,7 +100,10 @@ func (r *Router) bounceWebhookRoutes() []okapi.RouteDefinition {
 
 // trackingAnalyticsRoutes returns the authenticated campaign analytics route.
 func (r *Router) trackingAnalyticsRoutes() []okapi.RouteDefinition {
-	userGroup := r.v1.Group("/users/me", r.mw.jwtAuth.Middleware, r.mw.optionalWorkspace).WithTags([]string{"Campaigns"})
+	userGroup := r.v1.Group("/users/me", r.mw.jwtAuth.Middleware, r.mw.optionalWorkspace).WithTagInfo(okapi.GroupTag{
+		Name:        "Campaigns",
+		Description: "Email campaign analytics — open, click, bounce, and engagement metrics for campaigns you own.",
+	})
 	userGroup.WithBearerAuth()
 
 	return []okapi.RouteDefinition{

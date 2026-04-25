@@ -31,7 +31,7 @@ const createdWebhook = ref<Webhook | null>(null)
 const showSecretModal = ref(false)
 const copied = ref(false)
 
-const availableEvents = ['email.sent', 'email.failed']
+const availableEvents = ['email.sent', 'email.failed', 'email.inbound']
 
 async function fetchWebhooks(page = 0) {
   loading.value = true
@@ -221,6 +221,7 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
               <label class="form-label">Sender Filters <span class="text-muted">(optional)</span></label>
               <p style="font-size: 0.85em; color: var(--text-muted); margin: 0 0 8px;">
                 Restrict this webhook to specific senders. Enter an email address or domain. Leave empty to fire for all emails.
+                For <code>email.inbound</code>, the filter matches the <strong>sender</strong> of the incoming message (the <code>From</code> address), not the recipient.
               </p>
               <div style="display: flex; gap: 8px;">
                 <input

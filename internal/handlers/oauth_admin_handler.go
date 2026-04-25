@@ -31,6 +31,7 @@ type CreateOAuthProviderRequest struct {
 		UserInfoURL    string `json:"userinfo_url"`
 		Scopes         string `json:"scopes"`
 		AutoRegister   *bool  `json:"auto_register"`
+		Hidden         *bool  `json:"hidden"`
 		AllowedDomains string `json:"allowed_domains"`
 	} `json:"body"`
 }
@@ -47,6 +48,7 @@ type UpdateOAuthProviderRequest struct {
 		UserInfoURL    string `json:"userinfo_url"`
 		Scopes         string `json:"scopes"`
 		Enabled        *bool  `json:"enabled"`
+		Hidden         *bool  `json:"hidden"`
 		AutoRegister   *bool  `json:"auto_register"`
 		AllowedDomains string `json:"allowed_domains"`
 	} `json:"body"`
@@ -64,6 +66,7 @@ type OAuthProviderResponse struct {
 	Issuer         string `json:"issuer"`
 	Scopes         string `json:"scopes"`
 	Enabled        bool   `json:"enabled"`
+	Hidden         bool   `json:"hidden"`
 	AutoRegister   bool   `json:"auto_register"`
 	AllowedDomains string `json:"allowed_domains"`
 	CreatedAt      string `json:"created_at"`
@@ -110,6 +113,9 @@ func (h *OAuthAdminHandler) CreateProvider(c *okapi.Context, req *CreateOAuthPro
 	}
 	if req.Body.AutoRegister != nil {
 		provider.AutoRegister = *req.Body.AutoRegister
+	}
+	if req.Body.Hidden != nil {
+		provider.Hidden = *req.Body.Hidden
 	}
 	if provider.Scopes == "" {
 		provider.Scopes = "openid email profile"
@@ -170,6 +176,9 @@ func (h *OAuthAdminHandler) UpdateProvider(c *okapi.Context, req *UpdateOAuthPro
 	}
 	if req.Body.Enabled != nil {
 		provider.Enabled = *req.Body.Enabled
+	}
+	if req.Body.Hidden != nil {
+		provider.Hidden = *req.Body.Hidden
 	}
 	if req.Body.AutoRegister != nil {
 		provider.AutoRegister = *req.Body.AutoRegister
@@ -253,6 +262,7 @@ func toProviderResponse(p *models.OAuthProvider) OAuthProviderResponse {
 		Issuer:         p.Issuer,
 		Scopes:         p.Scopes,
 		Enabled:        p.Enabled,
+		Hidden:         p.Hidden,
 		AutoRegister:   p.AutoRegister,
 		AllowedDomains: p.AllowedDomains,
 		CreatedAt:      p.CreatedAt.Format(time.RFC3339),

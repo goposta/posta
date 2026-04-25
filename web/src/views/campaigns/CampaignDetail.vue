@@ -31,7 +31,7 @@ const canSend = computed(() => campaign.value?.status === 'draft')
 const canPause = computed(() => campaign.value?.status === 'sending')
 const canResume = computed(() => campaign.value?.status === 'paused')
 const canCancel = computed(() => ['sending', 'paused', 'scheduled'].includes(campaign.value?.status ?? ''))
-const canDelete = computed(() => ['draft', 'cancelled'].includes(campaign.value?.status ?? ''))
+const canDelete = computed(() => campaign.value ? campaign.value.status !== 'sending' : false)
 const showAnalyticsTab = computed(() => ['sending', 'sent', 'paused', 'cancelled'].includes(campaign.value?.status ?? ''))
 
 async function loadCampaign() {
@@ -84,77 +84,70 @@ function switchMessageStatus(status: string) {
   loadMessages(0)
 }
 
+// runAction wraps a status-changing API call so we (a) always clear the loading
+// flag, (b) surface 409 conflicts clearly and refresh the campaign so the
+// action buttons resync with server state.
+async function runAction(fn: () => Promise<unknown>, successMsg: string, failMsg: string) {
+  actionLoading.value = true
+  try {
+    await fn()
+    notify.success(successMsg)
+    await loadCampaign()
+  } catch (e: any) {
+    const status = e?.response?.status
+    const msg = e?.response?.data?.error?.message
+    if (status === 409) {
+      notify.error(msg || 'Campaign state changed; refreshing')
+      await loadCampaign()
+    } else {
+      notify.error(msg || failMsg)
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
 async function sendCampaign() {
   const confirmed = await confirm({
     title: 'Send Campaign',
     message: `Are you sure you want to send "${campaign.value?.name}"? This will start delivering emails to all subscribers in the list.`,
     confirmText: 'Send',
-    variant: 'primary',
+    variant: 'info',
   })
   if (!confirmed) return
-  actionLoading.value = true
-  try {
+  await runAction(async () => {
     await campaignsApi.send(campaignId)
-    notify.success('Campaign is being sent')
-    await loadCampaign()
     await loadMessages(0)
-  } catch (e: any) {
-    notify.error(e?.response?.data?.error?.message || 'Failed to send campaign')
-  } finally {
-    actionLoading.value = false
-  }
+  }, 'Campaign is being sent', 'Failed to send campaign')
 }
 
 async function pauseCampaign() {
-  actionLoading.value = true
-  try {
-    await campaignsApi.pause(campaignId)
-    notify.success('Campaign paused')
-    await loadCampaign()
-  } catch (e: any) {
-    notify.error(e?.response?.data?.error?.message || 'Failed to pause campaign')
-  } finally {
-    actionLoading.value = false
-  }
+  await runAction(() => campaignsApi.pause(campaignId), 'Campaign paused', 'Failed to pause campaign')
 }
 
 async function resumeCampaign() {
-  actionLoading.value = true
-  try {
-    await campaignsApi.resume(campaignId)
-    notify.success('Campaign resumed')
-    await loadCampaign()
-  } catch (e: any) {
-    notify.error(e?.response?.data?.error?.message || 'Failed to resume campaign')
-  } finally {
-    actionLoading.value = false
-  }
+  await runAction(() => campaignsApi.resume(campaignId), 'Campaign resumed', 'Failed to resume campaign')
 }
 
 async function cancelCampaign() {
   const confirmed = await confirm({
     title: 'Cancel Campaign',
-    message: `Are you sure you want to cancel "${campaign.value?.name}"? Pending messages will not be sent.`,
+    message: `Are you sure you want to cancel "${campaign.value?.name}"? Pending messages will be skipped; any already-queued messages will be dropped at dispatch time.`,
     confirmText: 'Cancel Campaign',
     variant: 'danger',
   })
   if (!confirmed) return
-  actionLoading.value = true
-  try {
-    await campaignsApi.cancel(campaignId)
-    notify.success('Campaign cancelled')
-    await loadCampaign()
-  } catch (e: any) {
-    notify.error(e?.response?.data?.error?.message || 'Failed to cancel campaign')
-  } finally {
-    actionLoading.value = false
-  }
+  await runAction(() => campaignsApi.cancel(campaignId), 'Campaign cancelled', 'Failed to cancel campaign')
 }
 
 async function deleteCampaign() {
+  const status = campaign.value?.status
+  const warnLossOfData = status === 'sent' || status === 'sending' || status === 'paused'
   const confirmed = await confirm({
     title: 'Delete Campaign',
-    message: `Are you sure you want to delete "${campaign.value?.name}"? This action cannot be undone.`,
+    message: warnLossOfData
+      ? `Delete "${campaign.value?.name}"? Per-message delivery records will be removed. An aggregate stats snapshot is kept for reporting.`
+      : `Are you sure you want to delete "${campaign.value?.name}"? This action cannot be undone.`,
     confirmText: 'Delete',
     variant: 'danger',
   })

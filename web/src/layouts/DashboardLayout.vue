@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useWorkspaceStore } from '../stores/workspace'
 import { infoApi, type AppInfo } from '../api/info'
+import EmailVerificationBanner from '../components/EmailVerificationBanner.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -57,6 +58,7 @@ const navItems = [
   { name: 'Dashboard', path: '/', icon: 'grid' },
   { name: 'Analytics', path: '/analytics', icon: 'bar-chart' },
   { name: 'Emails', path: '/emails', icon: 'mail' },
+  { name: 'Inbound', path: '/inbound-emails', icon: 'inbox' },
   { name: 'Templates', path: '/templates', icon: 'file-text' },
   { name: 'Languages', path: '/languages', icon: 'type' },
   { name: 'Stylesheets', path: '/stylesheets', icon: 'edit-3' },
@@ -116,7 +118,7 @@ function logout() {
         <div class="sidebar-brand">
           <div class="logo" @click="navigate('/')">
             <img src="/logo.png" alt="Posta" class="logo-img" />
-            <span v-if="!sidebarCollapsed" class="logo-text">Posta</span>
+            <span v-if="!sidebarCollapsed" class="logo-text">Posta<span class="logo-text-dot">.</span></span>
           </div>
           <button class="collapse-btn" @click="toggleSidebar" :title="sidebarCollapsed ? 'Expand' : 'Collapse'">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path :d="sidebarCollapsed ? 'M6 3l5 5-5 5' : 'M10 3L5 8l5 5'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -252,6 +254,7 @@ function logout() {
         </div>
       </header>
       <div class="main-body">
+        <EmailVerificationBanner />
         <router-view />
       </div>
       <footer class="main-footer">
@@ -277,6 +280,7 @@ function getIcon(name: string): string {
   const icons: Record<string, string> = {
     'grid': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="1.5" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="10.5" y="1.5" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="1.5" y="10.5" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="10.5" y="10.5" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>',
     'mail': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3.5" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M2 5.5l7 5 7-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'inbox': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M16.5 10.5H13.5l-1.5 2.25h-6L4.5 10.5H1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.1 3.2L1.5 10.5v4.5A1.5 1.5 0 003 16.5h12a1.5 1.5 0 001.5-1.5v-4.5l-2.6-7.3A1.5 1.5 0 0012.48 2.25H5.52a1.5 1.5 0 00-1.42 1.05z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'key': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M15.5 2.5l-2 2m1 1l-2 2-3-3 2-2m-3.18 3.18a4 4 0 10-5.64 5.64 4 4 0 005.64-5.64z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'file-text': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M10.5 1.5H4.5a1.5 1.5 0 00-1.5 1.5v12a1.5 1.5 0 001.5 1.5h9a1.5 1.5 0 001.5-1.5V6l-4.5-4.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 1.5V6H15M12 9.75H6M12 12.75H6M7.5 6.75H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'server': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="14" height="5" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="11" width="14" height="5" rx="1.5" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="4.5" r="0.75" fill="currentColor"/><circle cx="5" cy="13.5" r="0.75" fill="currentColor"/></svg>',
@@ -350,6 +354,10 @@ export default { methods: { getIcon } }
   font-weight: 800;
   color: var(--sidebar-text-active);
   letter-spacing: -0.5px;
+}
+.logo-text-dot {
+  color: var(--primary-500);
+  margin-left: 1px;
 }
 
 /* Workspace Switcher */

@@ -18,6 +18,7 @@
 package repositories
 
 import (
+	"errors"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
@@ -39,6 +40,16 @@ func (r *CampaignRepository) Create(c *models.Campaign) error {
 func (r *CampaignRepository) FindByID(id uint) (*models.Campaign, error) {
 	var c models.Campaign
 	if err := r.db.First(&c, id).Error; err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// FindByIDForScope returns the campaign only if it belongs to the given scope.
+// Prefer this over FindByID in request handlers so scoping lives in one place.
+func (r *CampaignRepository) FindByIDForScope(id uint, scope ResourceScope) (*models.Campaign, error) {
+	var c models.Campaign
+	if err := ApplyScope(r.db, scope).First(&c, id).Error; err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -68,8 +79,18 @@ func (r *CampaignRepository) Update(c *models.Campaign) error {
 	return r.db.Save(c).Error
 }
 
-func (r *CampaignRepository) Delete(id uint) error {
+// Delete soft-deletes the campaign and purges its CampaignMessage rows.
+// A snapshot of aggregated stats is written to campaigns.snapshot first so
+// post-deletion analytics survive. The snapshot is optional; callers pass nil
+// for a bare delete (e.g., never-sent drafts).
+func (r *CampaignRepository) Delete(id uint, snapshot models.TemplateData) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if snapshot != nil {
+			if err := tx.Model(&models.Campaign{}).Where("id = ?", id).
+				Update("snapshot", snapshot).Error; err != nil {
+				return err
+			}
+		}
 		if err := tx.Where("campaign_id = ?", id).Delete(&models.CampaignMessage{}).Error; err != nil {
 			return err
 		}
@@ -86,6 +107,44 @@ func (r *CampaignRepository) UpdateStatus(id uint, status models.CampaignStatus)
 		updates["completed_at"] = time.Now()
 	}
 	return r.db.Model(&models.Campaign{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// ErrStatusConflict indicates the campaign was not in any of the expected source statuses,
+// so the transition did not happen. Used to detect concurrent writes / double-clicks.
+var ErrStatusConflict = errors.New("campaign status conflict")
+
+// TransitionStatus atomically moves a campaign from one of `from` statuses to `to`.
+// Returns ErrStatusConflict when no row matched (concurrent transition).
+func (r *CampaignRepository) TransitionStatus(id uint, from []models.CampaignStatus, to models.CampaignStatus) error {
+	updates := map[string]interface{}{"status": to, "updated_at": time.Now()}
+	if to == models.CampaignStatusSending {
+		updates["started_at"] = time.Now()
+	}
+	if to == models.CampaignStatusSent || to == models.CampaignStatusCancelled {
+		updates["completed_at"] = time.Now()
+	}
+	res := r.db.Model(&models.Campaign{}).
+		Where("id = ? AND status IN ?", id, from).
+		Updates(updates)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrStatusConflict
+	}
+	return nil
+}
+
+// FindStuckSending returns campaigns that have been in `sending` status longer
+// than `stuckFor` but still have pending messages — typically the result of a
+// worker crash between enqueue and completion. Used by the restart sweep.
+func (r *CampaignRepository) FindStuckSending(stuckFor time.Duration) ([]models.Campaign, error) {
+	var items []models.Campaign
+	cutoff := time.Now().Add(-stuckFor)
+	err := r.db.
+		Where("status = ? AND (started_at IS NULL OR started_at < ?)", models.CampaignStatusSending, cutoff).
+		Find(&items).Error
+	return items, err
 }
 
 func (r *CampaignRepository) FindScheduledReady() ([]models.Campaign, error) {

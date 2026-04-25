@@ -40,6 +40,7 @@ type User struct {
 	AvatarURL             string     `json:"avatar_url"`
 	PlanID                *uint      `json:"plan_id" gorm:"index"`
 	ScheduledDeletionAt   *time.Time `json:"scheduled_deletion_at"`
+	EmailVerifiedAt       *time.Time `json:"email_verified_at"`
 	CreatedAt             time.Time  `json:"created_at"`
 	LastLoginAt           *time.Time `json:"last_login_at"`
 

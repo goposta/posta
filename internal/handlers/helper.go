@@ -18,8 +18,10 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/models"
@@ -29,6 +31,20 @@ import (
 )
 
 var errForbidden = errors.New("insufficient workspace permissions: editor role or higher required")
+
+// 1x1 transparent GIF
+var transparentPixel, _ = base64.StdEncoding.DecodeString("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+var botUASubstrings = []string{
+	"bot", "crawler", "spider", "scanner",
+	"barracuda", "mimecast", "proofpoint",
+	"symantec", "trendmicro", "fortinet",
+	"sophos", "messagelabs", "ironport",
+	"safelinks",
+	"googleimageproxy",
+	"yahoomailproxy",
+	"http-client", "go-http-client", "curl/", "wget/",
+	"headlesschrome", "phantomjs", "puppeteer", "playwright",
+}
 
 // QuotaChecker verifies that creating a resource would not exceed plan limits.
 type QuotaChecker interface {
@@ -116,4 +132,16 @@ func paginated[T any](c *okapi.Context, items []T, total int64, page, size int) 
 			Empty:         len(items) == 0,
 		},
 	})
+}
+func isBotUA(ua string) bool {
+	if ua == "" {
+		return true
+	}
+	low := strings.ToLower(ua)
+	for _, needle := range botUASubstrings {
+		if strings.Contains(low, needle) {
+			return true
+		}
+	}
+	return false
 }

@@ -357,3 +357,103 @@ func (r *AnalyticsRepository) WorkspaceLatencyPercentiles(workspaceID uint, from
 		Scan(&result).Error
 	return &result, err
 }
+
+// ProviderBreakdownPoint represents delivery counts bucketed by recipient mailbox provider.
+type ProviderBreakdownPoint struct {
+	Provider     string  `json:"provider"`
+	Sent         int64   `json:"sent"`
+	Failed       int64   `json:"failed"`
+	Bounced      int64   `json:"bounced"`
+	Total        int64   `json:"total"`
+	DeliveryRate float64 `json:"delivery_rate"`
+}
+
+type providerRow struct {
+	Provider string
+	Status   string
+	Count    int64
+}
+
+// queryProviderRows groups the persisted `provider` column by (provider, status).
+// The column is populated at send time by email.ClassifyRecipients, so the query
+// is a single indexed aggregate — no CASE expression, no unnest.
+func (r *AnalyticsRepository) queryProviderRows(where string, args []any) ([]providerRow, error) {
+	var rows []providerRow
+	err := r.db.Table("emails").
+		Select("COALESCE(NULLIF(provider, ''), 'Other') as provider, status, COUNT(*) as count").
+		Where(where, args...).
+		Group("provider, status").
+		Scan(&rows).Error
+	return rows, err
+}
+
+// ProviderBreakdown returns delivery counts bucketed by mailbox provider for a user.
+func (r *AnalyticsRepository) ProviderBreakdown(userID uint, from, to time.Time) ([]ProviderBreakdownPoint, error) {
+	rows, err := r.queryProviderRows(
+		"user_id = ? AND workspace_id IS NULL AND created_at >= ? AND created_at <= ?",
+		[]any{userID, from, to},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return buildProviderBreakdown(rows), nil
+}
+
+// WorkspaceProviderBreakdown returns delivery counts by provider for a workspace.
+func (r *AnalyticsRepository) WorkspaceProviderBreakdown(workspaceID uint, from, to time.Time) ([]ProviderBreakdownPoint, error) {
+	rows, err := r.queryProviderRows(
+		"workspace_id = ? AND created_at >= ? AND created_at <= ?",
+		[]any{workspaceID, from, to},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return buildProviderBreakdown(rows), nil
+}
+
+// AdminProviderBreakdown returns delivery counts by provider across all users.
+func (r *AnalyticsRepository) AdminProviderBreakdown(from, to time.Time) ([]ProviderBreakdownPoint, error) {
+	rows, err := r.queryProviderRows(
+		"created_at >= ? AND created_at <= ?",
+		[]any{from, to},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return buildProviderBreakdown(rows), nil
+}
+
+func buildProviderBreakdown(rows []providerRow) []ProviderBreakdownPoint {
+	agg := make(map[string]*ProviderBreakdownPoint)
+	for _, row := range rows {
+		p, ok := agg[row.Provider]
+		if !ok {
+			p = &ProviderBreakdownPoint{Provider: row.Provider}
+			agg[row.Provider] = p
+		}
+		switch row.Status {
+		case "sent":
+			p.Sent += row.Count
+		case "failed":
+			p.Failed += row.Count
+		case "suppressed":
+			p.Bounced += row.Count
+		}
+		p.Total += row.Count
+	}
+	out := make([]ProviderBreakdownPoint, 0, len(agg))
+	for _, p := range agg {
+		deliverable := p.Sent + p.Failed
+		if deliverable > 0 {
+			p.DeliveryRate = float64(p.Sent) / float64(deliverable) * 100
+		}
+		out = append(out, *p)
+	}
+	// Sort by total volume desc for stable rendering.
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].Total > out[j-1].Total; j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out
+}

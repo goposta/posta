@@ -24,9 +24,10 @@ import (
 )
 
 const (
-	TypeEmailSend     = "email:send"
-	TypeCampaignStart = "campaign:start"
-	TypeCampaignBatch = "campaign:batch"
+	TypeEmailSend      = "email:send"
+	TypeCampaignStart  = "campaign:start"
+	TypeCampaignBatch  = "campaign:batch"
+	TypeInboundProcess = "inbound:process"
 
 	QueueTransactional = "transactional"
 	QueueBulk          = "bulk"
@@ -64,4 +65,18 @@ func NewCampaignBatchTask(campaignID uint, opts ...asynq.Option) (*asynq.Task, e
 		return nil, err
 	}
 	return asynq.NewTask(TypeCampaignBatch, payload, opts...), nil
+}
+
+type InboundProcessPayload struct {
+	InboundEmailID uint `json:"inbound_email_id"`
+}
+
+// NewInboundProcessTask creates an Asynq task to dispatch an inbound email's
+// email.inbound webhook to subscribers.
+func NewInboundProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(InboundProcessPayload{InboundEmailID: id})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeInboundProcess, payload, opts...), nil
 }

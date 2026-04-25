@@ -18,11 +18,14 @@
 package handlers
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
+	"gorm.io/gorm"
 )
 
 type SubscriberListHandler struct {
@@ -84,6 +87,47 @@ type PreviewSegmentRequest struct {
 	Body struct {
 		FilterRules []models.FilterRule `json:"filter_rules" required:"true"`
 	} `json:"body"`
+}
+
+// ListUnsubscribeByEmailRequest is the API-key-accessible unsubscribe that
+// takes an email address (the caller usually doesn't know the subscriber ID).
+type ListUnsubscribeByEmailRequest struct {
+	ID   int `param:"id"`
+	Body struct {
+		Email  string `json:"email" required:"true" format:"email"`
+		Reason string `json:"reason"`
+	} `json:"body"`
+}
+
+// ListResubscribeByEmailRequest is the inverse of ListUnsubscribeByEmailRequest.
+type ListResubscribeByEmailRequest struct {
+	ID   int `param:"id"`
+	Body struct {
+		Email string `json:"email" required:"true" format:"email"`
+	} `json:"body"`
+}
+
+// ListSubscribeRequest is the API-key-accessible "subscribe this person to
+// this list" endpoint. The list is identified by name (not id) and created on
+// first use, so external platforms (n8n, forms) don't need a prior list-id
+// lookup. Any prior per-list opt-out for the same (list, email) is cleared —
+// this is the explicit inverse of /unsubscribe.
+type ListSubscribeRequest struct {
+	Body struct {
+		Email string `json:"email" required:"true" format:"email"`
+		Name  string `json:"name"`
+		List  string `json:"list" required:"true"`
+	} `json:"body"`
+}
+
+type ListSubscribeResponse struct {
+	ListID            uint   `json:"list_id"`
+	SubscriberID      uint   `json:"subscriber_id"`
+	Email             string `json:"email"`
+	Action            string `json:"action"` // "subscribed" | "unsubscribed" | "resubscribed" | "noop"
+	ListCreated       bool   `json:"list_created,omitempty"`
+	SubscriberCreated bool   `json:"subscriber_created,omitempty"`
+	MemberAdded       bool   `json:"member_added,omitempty"`
 }
 
 type SubscriberListWithCount struct {
@@ -289,4 +333,148 @@ func (h *SubscriberListHandler) PreviewSegment(c *okapi.Context, req *PreviewSeg
 		return c.AbortInternalServerError("failed to evaluate segment")
 	}
 	return ok(c, okapi.M{"count": count})
+}
+
+// Subscribe adds an email to a named list via API key.
+func (h *SubscriberListHandler) Subscribe(c *okapi.Context, req *ListSubscribeRequest) error {
+	if err := requireEdit(c); err != nil {
+		return c.AbortForbidden("insufficient workspace permissions", err)
+	}
+	scope := getScope(c)
+
+	listName := strings.TrimSpace(req.Body.List)
+	if listName == "" {
+		return c.AbortBadRequest("list is required")
+	}
+	email := strings.ToLower(strings.TrimSpace(req.Body.Email))
+	if email == "" {
+		return c.AbortBadRequest("email is required")
+	}
+
+	// Find-or-create list in scope.
+	listCreated := false
+	list, err := h.repo.FindByNameForScope(scope, listName)
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.AbortInternalServerError("list lookup failed")
+		}
+		list = &models.SubscriberList{
+			UserID:      scope.UserID,
+			WorkspaceID: scope.WorkspaceID,
+			Name:        listName,
+			Type:        models.SubscriberListTypeStatic,
+		}
+		if err := h.repo.Create(list); err != nil {
+			return c.AbortInternalServerError("failed to create list")
+		}
+		listCreated = true
+	}
+	if list.Type == models.SubscriberListTypeDynamic {
+		return c.AbortBadRequest("cannot subscribe to a dynamic list; adjust filter rules instead")
+	}
+
+	// Find-or-create subscriber.
+	subscriberCreated := false
+	sub, err := h.subscriberRepo.FindByEmail(scope, email)
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.AbortInternalServerError("subscriber lookup failed")
+		}
+		now := time.Now()
+		sub = &models.Subscriber{
+			UserID:       scope.UserID,
+			WorkspaceID:  scope.WorkspaceID,
+			Email:        email,
+			Name:         strings.TrimSpace(req.Body.Name),
+			Status:       models.SubscriberStatusSubscribed,
+			SubscribedAt: &now,
+		}
+		if err := h.subscriberRepo.Create(sub); err != nil {
+			return c.AbortInternalServerError("failed to create subscriber")
+		}
+		subscriberCreated = true
+	} else if req.Body.Name != "" && sub.Name == "" {
+		// Fill in a name we didn't have before; don't overwrite a set one.
+		sub.Name = strings.TrimSpace(req.Body.Name)
+		_ = h.subscriberRepo.Update(sub)
+	}
+
+	_ = h.repo.UnsuppressMember(list.ID, sub.ID)
+
+	memberAdded := !h.repo.IsMember(list.ID, sub.ID)
+	if err := h.repo.AddMember(&models.SubscriberListMember{
+		ListID:       list.ID,
+		SubscriberID: sub.ID,
+	}); err != nil {
+		return c.AbortInternalServerError("failed to add to list")
+	}
+
+	return ok(c, ListSubscribeResponse{
+		ListID:            list.ID,
+		SubscriberID:      sub.ID,
+		Email:             sub.Email,
+		Action:            "subscribed",
+		ListCreated:       listCreated,
+		SubscriberCreated: subscriberCreated,
+		MemberAdded:       memberAdded,
+	})
+}
+
+// UnsubscribeByEmail opts an email out of a specific list.
+func (h *SubscriberListHandler) UnsubscribeByEmail(c *okapi.Context, req *ListUnsubscribeByEmailRequest) error {
+	if err := requireEdit(c); err != nil {
+		return c.AbortForbidden("insufficient workspace permissions", err)
+	}
+	list, err := h.repo.FindByID(uint(req.ID))
+	if err != nil || !ownsResource(c, list.UserID, list.WorkspaceID) {
+		return c.AbortNotFound("list not found")
+	}
+	sub, err := h.subscriberRepo.FindByEmail(getScope(c), req.Body.Email)
+	if err != nil || sub == nil {
+		return c.AbortNotFound("subscriber not found for this email")
+	}
+	reason := req.Body.Reason
+	if reason == "" {
+		reason = "api"
+	}
+	if err := h.repo.SuppressMember(list.ID, sub.ID, reason); err != nil {
+		return c.AbortInternalServerError("failed to unsubscribe")
+	}
+	return ok(c, ListSubscribeResponse{
+		ListID:       list.ID,
+		SubscriberID: sub.ID,
+		Email:        sub.Email,
+		Action:       "unsubscribed",
+	})
+}
+
+// ResubscribeByEmail removes the list-scoped opt-out AND re-adds the
+// subscriber to the list (static lists only).
+func (h *SubscriberListHandler) ResubscribeByEmail(c *okapi.Context, req *ListResubscribeByEmailRequest) error {
+	if err := requireEdit(c); err != nil {
+		return c.AbortForbidden("insufficient workspace permissions", err)
+	}
+	list, err := h.repo.FindByID(uint(req.ID))
+	if err != nil || !ownsResource(c, list.UserID, list.WorkspaceID) {
+		return c.AbortNotFound("list not found")
+	}
+	sub, err := h.subscriberRepo.FindByEmail(getScope(c), req.Body.Email)
+	if err != nil || sub == nil {
+		return c.AbortNotFound("subscriber not found for this email")
+	}
+	if err := h.repo.UnsuppressMember(list.ID, sub.ID); err != nil {
+		return c.AbortInternalServerError("failed to resubscribe")
+	}
+	if list.Type == models.SubscriberListTypeStatic {
+		_ = h.repo.AddMember(&models.SubscriberListMember{
+			ListID:       list.ID,
+			SubscriberID: sub.ID,
+		})
+	}
+	return ok(c, ListSubscribeResponse{
+		ListID:       list.ID,
+		SubscriberID: sub.ID,
+		Email:        sub.Email,
+		Action:       "resubscribed",
+	})
 }

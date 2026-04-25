@@ -83,3 +83,15 @@ type SubscriberListMember struct {
 	List       SubscriberList `json:"-" gorm:"foreignKey:ListID"`
 	Subscriber Subscriber     `json:"-" gorm:"foreignKey:SubscriberID"`
 }
+
+// SubscriberListUnsubscribe records that a specific subscriber has opted out
+type SubscriberListUnsubscribe struct {
+	ID             uint      `json:"id" gorm:"primaryKey"`
+	ListID         uint      `json:"list_id" gorm:"uniqueIndex:idx_listunsub_sub;not null"`
+	SubscriberID   uint      `json:"subscriber_id" gorm:"uniqueIndex:idx_listunsub_sub;not null;index"`
+	Reason         string    `json:"reason" gorm:"size:64"`
+	UnsubscribedAt time.Time `json:"unsubscribed_at"`
+
+	List       SubscriberList `json:"-" gorm:"foreignKey:ListID"`
+	Subscriber Subscriber     `json:"-" gorm:"foreignKey:SubscriberID"`
+}

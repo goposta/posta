@@ -5,13 +5,17 @@ import type {
   OAuthLinkedAccount,
   OAuthProviderAdmin,
   OAuthProviderInput,
+  SSODiscovery,
   WorkspaceSSOConfig,
 } from './types'
 
 export const oauthApi = {
   // Public
   providers() {
-    return api.get<ApiResponse<{ providers: OAuthProviderInfo[] }>>('/auth/oauth/providers')
+    return api.get<ApiResponse<{ providers: OAuthProviderInfo[]; sso_available: boolean }>>('/auth/oauth/providers')
+  },
+  discoverSSO(email: string) {
+    return api.post<ApiResponse<SSODiscovery>>('/auth/oauth/discover', { email })
   },
 
   // Linked accounts (authenticated user)

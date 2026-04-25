@@ -18,7 +18,7 @@ const form = ref({
   client_id: '', client_secret: '', issuer: '',
   auth_url: '', token_url: '', userinfo_url: '',
   scopes: 'openid email profile',
-  auto_register: true, allowed_domains: '',
+  auto_register: true, hidden: false, allowed_domains: '',
 })
 
 // Edit modal
@@ -28,7 +28,7 @@ const editingProvider = ref<OAuthProviderAdmin | null>(null)
 const editForm = ref({
   name: '', client_id: '', client_secret: '', issuer: '',
   auth_url: '', token_url: '', userinfo_url: '',
-  scopes: '', auto_register: true, allowed_domains: '',
+  scopes: '', auto_register: true, hidden: false, allowed_domains: '',
 })
 
 async function fetchProviders() {
@@ -54,7 +54,7 @@ async function createProvider() {
     await oauthApi.adminCreate(form.value)
     notify.success('Provider created')
     showCreateModal.value = false
-    form.value = { name: '', slug: '', type: 'oidc', client_id: '', client_secret: '', issuer: '', auth_url: '', token_url: '', userinfo_url: '', scopes: 'openid email profile', auto_register: true, allowed_domains: '' }
+    form.value = { name: '', slug: '', type: 'oidc', client_id: '', client_secret: '', issuer: '', auth_url: '', token_url: '', userinfo_url: '', scopes: 'openid email profile', auto_register: true, hidden: false, allowed_domains: '' }
     await fetchProviders()
   } catch (err: any) {
     notify.error(err.response?.data?.error?.message || 'Failed to create provider')
@@ -75,6 +75,7 @@ function openEdit(p: OAuthProviderAdmin) {
     userinfo_url: '',
     scopes: p.scopes || '',
     auto_register: p.auto_register,
+    hidden: p.hidden,
     allowed_domains: p.allowed_domains || '',
   }
   showEditModal.value = true
@@ -91,6 +92,7 @@ async function updateProvider() {
     if (editForm.value.issuer) data.issuer = editForm.value.issuer
     if (editForm.value.scopes) data.scopes = editForm.value.scopes
     data.auto_register = editForm.value.auto_register
+    data.hidden = editForm.value.hidden
     data.allowed_domains = editForm.value.allowed_domains
     await oauthApi.adminUpdate(editingProvider.value.id, data)
     notify.success('Provider updated')
@@ -154,6 +156,7 @@ onMounted(fetchProviders)
               <th>Slug</th>
               <th>Type</th>
               <th>Status</th>
+              <th>Visibility</th>
               <th>Auto Register</th>
               <th>Created</th>
               <th>Actions</th>
@@ -165,6 +168,7 @@ onMounted(fetchProviders)
               <td><code>{{ p.slug }}</code></td>
               <td><span class="badge badge-neutral">{{ p.type }}</span></td>
               <td><span class="badge" :class="p.enabled ? 'badge-primary' : 'badge-neutral'">{{ p.enabled ? 'enabled' : 'disabled' }}</span></td>
+              <td><span class="badge" :class="p.hidden ? 'badge-neutral' : 'badge-primary'">{{ p.hidden ? 'hidden' : 'visible' }}</span></td>
               <td>{{ p.auto_register ? 'Yes' : 'No' }}</td>
               <td>{{ formatDate(p.created_at) }}</td>
               <td>
@@ -235,6 +239,12 @@ onMounted(fetchProviders)
                 Auto-register new users on first login
               </label>
             </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                <input type="checkbox" v-model="form.hidden" />
+                Hide from login page (only reachable via email-based SSO discovery)
+              </label>
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" @click="showCreateModal = false">Cancel</button>
@@ -281,6 +291,12 @@ onMounted(fetchProviders)
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" v-model="editForm.auto_register" />
                 Auto-register new users on first login
+              </label>
+            </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                <input type="checkbox" v-model="editForm.hidden" />
+                Hide from login page (only reachable via email-based SSO discovery)
               </label>
             </div>
           </div>
