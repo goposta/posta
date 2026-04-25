@@ -196,7 +196,7 @@ func New() *Config {
 			Encryption: goutils.Env("POSTA_SYSTEM_SMTP_ENCRYPTION", "starttls"),
 		},
 
-		EmailVerificationRequired: goutils.EnvBool("POSTA_EMAIL_VERIFICATION_REQUIRED", true),
+		EmailVerificationRequired: goutils.EnvBool("POSTA_EMAIL_VERIFICATION_REQUIRED", false),
 
 		EncryptionKey: goutils.Env("POSTA_ENCRYPTION_KEY", ""),
 
