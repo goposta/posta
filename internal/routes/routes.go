@@ -301,9 +301,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	r.h.subscriber = handlers.NewSubscriberHandler(subscriberRepo)
 	r.h.subscriberList = handlers.NewSubscriberListHandler(subscriberListRepo, subscriberRepo)
 
-	// Enable list-aware API sends now that the subscriber repos exist.
-	emailService.SetListAutoSubscribe(subscriberListRepo, subscriberRepo)
-
 	// Campaigns
 	campaignRepo := repositories.NewCampaignRepository(db)
 	campaignMessageRepo := repositories.NewCampaignMessageRepository(db)
