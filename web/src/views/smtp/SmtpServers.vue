@@ -7,6 +7,9 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
 import { useWorkspaceStore } from '../../stores/workspace'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -14,13 +17,12 @@ const wsStore = useWorkspaceStore()
 const { confirm } = useConfirm()
 
 const servers = ref<SmtpServer[]>([])
-const pageable = ref<Pageable | null>(null)
 const loading = ref(true)
 const currentPage = ref(0)
 
 const showModal = ref(false)
 const editing = ref<SmtpServer | null>(null)
-const form = ref<SmtpServerInput>({
+  const form = ref<SmtpServerInput>({
   host: '',
   port: 587,
   username: '',
@@ -31,18 +33,18 @@ const form = ref<SmtpServerInput>({
 const allowedEmailsText = ref('')
 const saving = ref(false)
 
-async function fetchServers() {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await smtpApi.list(currentPage.value)
     servers.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load SMTP servers')
+  } catch (e) {
+    console.error('Failed to load SMTP servers', e)
   } finally {
     loading.value = false
   }
-}
+})
 
 function openCreate() {
   editing.value = null
@@ -74,7 +76,7 @@ async function save() {
       .split(',')
       .map(e => e.trim())
       .filter(e => e.length > 0),
-  }
+    }
   try {
     if (editing.value) {
       await smtpApi.update(editing.value.id, data)
@@ -84,7 +86,7 @@ async function save() {
       notify.success('SMTP server created')
     }
     showModal.value = false
-    await fetchServers()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to save SMTP server')
   } finally {
@@ -103,29 +105,15 @@ async function deleteServer(server: SmtpServer) {
   try {
     await smtpApi.delete(server.id)
     notify.success('SMTP server deleted')
-    await fetchServers()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete SMTP server')
   }
 }
 
-function prevPage() {
-  if (currentPage.value > 0) {
-    currentPage.value--
-    fetchServers()
-  }
-}
-
-function nextPage() {
-  if (pageable.value && currentPage.value < pageable.value.total_pages - 1) {
-    currentPage.value++
-    fetchServers()
-  }
-}
 const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   showModal.value = false;
 });
-onMounted(fetchServers)
 </script>
 
 <template>
@@ -194,16 +182,7 @@ onMounted(fetchServers)
           <p>Add an SMTP server to start sending emails.</p>
         </div>
 
-        <div v-if="pageable && !pageable.empty" class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }}
-            ({{ pageable.total_elements }} total)
-          </span>
-          <div class="pagination-buttons">
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage === 0" @click="prevPage">Previous</button>
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage >= pageable.total_pages - 1" @click="nextPage">Next</button>
-          </div>
-        </div>
+  <Pagination :pageable="pageable" @page="goToPage" />
       </div>
     </template>
 

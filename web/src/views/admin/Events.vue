@@ -3,11 +3,11 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { adminApi } from '../../api/admin'
 import { useAuthStore } from '../../stores/auth'
 import type { Event, Pageable } from '../../api/types'
-
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
 const auth = useAuthStore()
 const loading = ref(true)
 const events = ref<Event[]>([])
-const pageable = ref<Pageable | null>(null)
 const page = ref(0)
 const category = ref('')
 const liveEvents = ref<Event[]>([])
@@ -15,7 +15,6 @@ const streaming = ref(false)
 let eventSource: EventSource | null = null
 
 onMounted(() => {
-  loadEvents()
   startStream()
 })
 
@@ -23,10 +22,11 @@ onBeforeUnmount(() => {
   stopStream()
 })
 
-async function loadEvents() {
+
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    const res = await adminApi.listEvents(page.value, 20, category.value || undefined)
+    const res = await adminApi.listEvents(page, 20, category.value || undefined)
     events.value = res.data.data
     pageable.value = res.data.pageable
   } catch (e) {
@@ -34,17 +34,15 @@ async function loadEvents() {
   } finally {
     loading.value = false
   }
-}
+})
 
-async function changePage(newPage: number) {
-  page.value = newPage
-  await loadEvents()
-}
+
 
 function filterByCategory(cat: string) {
   category.value = cat
   page.value = 0
-  loadEvents()
+  goToPage(pageable.value.current_page
+  )
 }
 
 function startStream() {
@@ -53,7 +51,7 @@ function startStream() {
   if (!token) return
   const url = `${baseUrl}/admin/events/stream?token=${encodeURIComponent(token)}`
   eventSource = new EventSource(url)
-
+  
   eventSource.onopen = () => {
     streaming.value = true
   }
@@ -200,11 +198,8 @@ function timeAgo(date: string) {
               </tr>
             </tbody>
           </table>
-          <div v-if="pageable && pageable.total_pages > 1" class="pagination">
-            <button class="btn btn-sm btn-secondary" :disabled="page === 0" @click="changePage(page - 1)">Previous</button>
-            <span>Page {{ page + 1 }} of {{ pageable.total_pages }}</span>
-            <button class="btn btn-sm btn-secondary" :disabled="page >= pageable.total_pages - 1" @click="changePage(page + 1)">Next</button>
-          </div>
+            <Pagination :pageable="pageable" @page="goToPage" />
+          
         </div>
       </div>
     </template>

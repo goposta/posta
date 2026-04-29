@@ -6,13 +6,15 @@ import type { User, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
 
 const router = useRouter()
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
 const loading = ref(true)
 const users = ref<User[]>([])
-const pageable = ref<Pageable | null>(null)
 const page = ref(0)
 
 const showCreateForm = ref(false)
@@ -22,10 +24,6 @@ const newUser = ref({ name: '', email: '', password: '', role: 'user' })
 const editingUser = ref<User | null>(null)
 const editForm = ref({ role: '', active: true })
 const editLoading = ref(false)
-
-onMounted(() => {
-  loadUsers()
-})
 
 async function createUser() {
   if (!newUser.value.email || !newUser.value.password) {
@@ -42,7 +40,7 @@ async function createUser() {
     notify.success('User created successfully')
     showCreateForm.value = false
     newUser.value = { name: '', email: '', password: '', role: 'user' }
-    await loadUsers()
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     const message = e?.response?.data?.error?.message || 'Failed to create user'
     notify.error(message)
@@ -51,23 +49,19 @@ async function createUser() {
   }
 }
 
-async function loadUsers() {
+
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    const res = await adminApi.listUsers(page.value)
+    const res = await adminApi.listUsers(page)
     users.value = res.data.data
     pageable.value = res.data.pageable
   } catch (e) {
-    notify.error('Failed to load users')
+    console.error('Failed to load API users', e)
   } finally {
     loading.value = false
   }
-}
-
-async function changePage(newPage: number) {
-  page.value = newPage
-  await loadUsers()
-}
+})
 
 function roleBadgeClass(role: string) {
   switch (role) {
@@ -132,7 +126,7 @@ async function deleteUser(user: User) {
   try {
     await adminApi.deleteUser(user.id)
     notify.success('Account disabled and scheduled for deletion.')
-    await loadUsers()
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     const message = e?.response?.data?.error?.message || 'Failed to delete user'
     notify.error(message)
@@ -149,7 +143,7 @@ async function forceDeleteUser(user: User) {
   try {
     await adminApi.forceDeleteUser(user.id)
     notify.success('User permanently deleted.')
-    await loadUsers()
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     const message = e?.response?.data?.error?.message || 'Failed to force delete user'
     notify.error(message)
@@ -252,23 +246,8 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
               </tr>
             </tbody>
           </table>
-          <div v-if="pageable && pageable.total_pages > 1" class="pagination">
-            <button
-              class="btn btn-sm btn-secondary"
-              :disabled="page === 0"
-              @click="changePage(page - 1)"
-            >
-              Previous
-            </button>
-            <span>Page {{ page + 1 }} of {{ pageable.total_pages }}</span>
-            <button
-              class="btn btn-sm btn-secondary"
-              :disabled="page >= pageable.total_pages - 1"
-              @click="changePage(page + 1)"
-            >
-              Next
-            </button>
-          </div>
+  <Pagination :pageable="pageable" @page="goToPage" />
+          
         </div>
       </div>
     </template>

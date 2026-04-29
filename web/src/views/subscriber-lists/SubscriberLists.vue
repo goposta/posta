@@ -7,6 +7,8 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { useWorkspaceStore } from '../../stores/workspace'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -14,7 +16,6 @@ const wsStore = useWorkspaceStore()
 const { confirm } = useConfirm()
 
 const lists = ref<SubscriberListItem[]>([])
-const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, total_elements: 0, empty: true })
 const loading = ref(true)
 
 // Create modal
@@ -36,18 +37,18 @@ const operatorOptions = [
   { value: 'in', label: 'in' },
 ]
 
-async function loadLists(page = 0) {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await subscriberListsApi.list(page, pageable.value.size)
     lists.value = res.data.data ?? []
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load subscriber lists')
+  } catch (e) {
+    console.error('Failed to load suscriber lists', e)
   } finally {
     loading.value = false
   }
-}
+})
 
 function openCreate() {
   formName.value = ''
@@ -77,7 +78,7 @@ async function saveList() {
     })
     notify.success('Subscriber list created')
     showModal.value = false
-    await loadLists(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     notify.error(e?.response?.data?.error?.message || 'Failed to create subscriber list')
   } finally {
@@ -96,7 +97,7 @@ async function deleteList(list: SubscriberListItem) {
   try {
     await subscriberListsApi.delete(list.id)
     notify.success('Subscriber list deleted')
-    await loadLists(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete subscriber list')
   }
@@ -114,7 +115,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   showModal.value = false
 })
 
-onMounted(() => loadLists())
 </script>
 
 <template>
@@ -165,15 +165,8 @@ onMounted(() => loadLists())
           </table>
         </div>
 
-        <div class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{ pageable.total_elements }} segments)
-          </span>
-          <div class="pagination-buttons">
-            <button class="btn btn-secondary btn-sm" :disabled="pageable.current_page === 0" @click="loadLists(pageable.current_page - 1)">Previous</button>
-            <button class="btn btn-secondary btn-sm" :disabled="pageable.current_page >= pageable.total_pages - 1" @click="loadLists(pageable.current_page + 1)">Next</button>
-          </div>
-        </div>
+  <Pagination :pageable="pageable" @page="goToPage" />
+        
       </template>
     </div>
 

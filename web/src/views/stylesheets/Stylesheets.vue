@@ -6,20 +6,22 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
 import { useWorkspaceStore } from '../../stores/workspace'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
 
 const notify = useNotificationStore()
 const wsStore = useWorkspaceStore()
 const { confirm } = useConfirm()
 
 const stylesheets = ref<StyleSheet[]>([])
-const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, total_elements: 0, empty: true })
-const loading = ref(true)
+  const loading = ref(true)
 
 const showModal = ref(false)
 const editing = ref<StyleSheet | null>(null)
-const saving = ref(false)
+  const saving = ref(false)
 
-const form = ref<StyleSheetInput>({
+  const form = ref<StyleSheetInput>({
   name: '',
   css: '',
 })
@@ -47,19 +49,19 @@ function closeModal() {
   showModal.value = false
   resetForm()
 }
-
-async function loadStylesheets(page = 0) {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await stylesheetsApi.list(page, pageable.value.size)
     stylesheets.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load stylesheets')
+  } catch (e) {
+    console.error('Failed to load stylesheets', e)
   } finally {
     loading.value = false
   }
-}
+})
+
 
 async function saveStylesheet() {
   if (!form.value.name.trim()) return
@@ -73,7 +75,7 @@ async function saveStylesheet() {
       notify.success('Stylesheet created')
     }
     closeModal()
-    await loadStylesheets(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error(editing.value ? 'Failed to update stylesheet' : 'Failed to create stylesheet')
   } finally {
@@ -92,7 +94,7 @@ async function deleteStylesheet(sheet: StyleSheet) {
   try {
     await stylesheetsApi.delete(sheet.id)
     notify.success('Stylesheet deleted')
-    await loadStylesheets(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete stylesheet')
   }
@@ -104,7 +106,6 @@ function formatDate(dateStr: string): string {
 const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   closeModal()
 }); 
-onMounted(() => loadStylesheets())
 </script>
 
 <template>
@@ -154,27 +155,8 @@ onMounted(() => loadStylesheets())
           </table>
         </div>
 
-        <div class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{ pageable.total_elements }} stylesheets)
-          </span>
-          <div class="pagination-buttons">
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page === 0"
-              @click="loadStylesheets(pageable.current_page - 1)"
-            >
-              Previous
-            </button>
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page >= pageable.total_pages - 1"
-              @click="loadStylesheets(pageable.current_page + 1)"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+<Pagination :pageable="pageable" @page="goToPage" />
+        
       </template>
     </div>
 

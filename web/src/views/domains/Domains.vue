@@ -6,13 +6,15 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
 import { useWorkspaceStore } from '../../stores/workspace'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
 
 const notify = useNotificationStore()
 const wsStore = useWorkspaceStore()
 const { confirm } = useConfirm()
 
 const domains = ref<Domain[]>([])
-const pageable = ref<Pageable | null>(null)
 const loading = ref(true)
 const currentPage = ref(0)
 
@@ -59,9 +61,9 @@ const recordRows = computed<RecordRow[]>(() => {
   if (!d || !d.dns_records) return []
   return [
     { key: 'verification', ...recordDescriptions.verification, record: d.dns_records.verification, verified: !!d.ownership_verified },
-    { key: 'spf',          ...recordDescriptions.spf,          record: d.dns_records.spf,          verified: !!d.spf_verified },
-    { key: 'dkim',         ...recordDescriptions.dkim,         record: d.dns_records.dkim,         verified: !!d.dkim_verified },
-    { key: 'dmarc',        ...recordDescriptions.dmarc,        record: d.dns_records.dmarc,        verified: !!d.dmarc_verified },
+    { key: 'spf', ...recordDescriptions.spf, record: d.dns_records.spf, verified: !!d.spf_verified },
+    { key: 'dkim', ...recordDescriptions.dkim, record: d.dns_records.dkim, verified: !!d.dkim_verified },
+    { key: 'dmarc', ...recordDescriptions.dmarc, record: d.dns_records.dmarc, verified: !!d.dmarc_verified },
   ]
 })
 
@@ -92,18 +94,19 @@ async function copyAllRecords() {
   await copy(lines.join('\n'), 'All records')
 }
 
-async function fetchDomains() {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await domainsApi.list(currentPage.value)
     domains.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load domains')
+  } catch (e) {
+    console.error('Failed to load domains', e)
   } finally {
     loading.value = false
   }
-}
+})
+
 
 async function addDomain() {
   if (!newDomain.value.trim()) return
@@ -113,7 +116,7 @@ async function addDomain() {
     notify.success('Domain added')
     showAddModal.value = false
     newDomain.value = ''
-    await fetchDomains()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to add domain')
   } finally {
@@ -126,7 +129,7 @@ async function verifyDomain(domain: Domain) {
   try {
     await domainsApi.verify(domain.id)
     notify.success(`Verification initiated for ${domain.domain}`)
-    await fetchDomains()
+    await goToPage(pageable.value.current_page)
     if (expandedDomainId.value === domain.id) {
       const res = await domainsApi.get(domain.id)
       dnsRecordsDomain.value = res.data.data
@@ -172,29 +175,14 @@ async function deleteDomain(domain: Domain) {
       expandedDomainId.value = null
       dnsRecordsDomain.value = null
     }
-    await fetchDomains()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete domain')
-  }
-}
-
-function prevPage() {
-  if (currentPage.value > 0) {
-    currentPage.value--
-    fetchDomains()
-  }
-}
-
-function nextPage() {
-  if (pageable.value && currentPage.value < pageable.value.total_pages - 1) {
-    currentPage.value++
-    fetchDomains()
   }
 }
 const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   showAddModal.value = false;
 });
-onMounted(fetchDomains)
 </script>
 
 <template>
@@ -244,11 +232,13 @@ onMounted(fetchDomains)
                   </td>
                   <td>
                     <div class="flex gap-2">
-                      <button v-if="wsStore.canEdit" class="btn btn-secondary btn-sm" @click="verifyDomain(domain)">Verify</button>
+                      <button v-if="wsStore.canEdit" class="btn btn-secondary btn-sm"
+                        @click="verifyDomain(domain)">Verify</button>
                       <button class="btn btn-secondary btn-sm" @click="viewDnsRecords(domain)">
                         {{ expandedDomainId === domain.id ? 'Hide DNS' : 'View DNS Records' }}
                       </button>
-                      <button v-if="wsStore.canEdit" class="btn btn-danger btn-sm" @click="deleteDomain(domain)">Delete</button>
+                      <button v-if="wsStore.canEdit" class="btn btn-danger btn-sm"
+                        @click="deleteDomain(domain)">Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -263,29 +253,22 @@ onMounted(fetchDomains)
                           <h4 class="dns-panel-title">DNS records for {{ domain.domain }}</h4>
                           <p class="dns-panel-subtitle">
                             Add the records below at your DNS provider, then click
-                            <strong>Re-check</strong>. Propagation is usually under 15 minutes but can take up to 48 hours.
+                            <strong>Re-check</strong>. Propagation is usually under 15 minutes but can take up to 48
+                            hours.
                           </p>
                         </div>
                         <div class="dns-panel-actions">
                           <button class="btn btn-secondary btn-sm" @click="copyAllRecords">Copy all</button>
-                          <button
-                            v-if="wsStore.canEdit"
-                            class="btn btn-primary btn-sm"
-                            :disabled="verifying"
-                            @click="verifyDomain(domain)"
-                          >
+                          <button v-if="wsStore.canEdit" class="btn btn-primary btn-sm" :disabled="verifying"
+                            @click="verifyDomain(domain)">
                             {{ verifying ? 'Checking…' : 'Re-check' }}
                           </button>
                         </div>
                       </div>
 
                       <div class="dns-record-list">
-                        <div
-                          v-for="row in recordRows"
-                          :key="row.key"
-                          class="dns-record"
-                          :class="{ 'dns-record-highlight': row.key === 'verification', 'dns-record-verified': row.verified }"
-                        >
+                        <div v-for="row in recordRows" :key="row.key" class="dns-record"
+                          :class="{ 'dns-record-highlight': row.key === 'verification', 'dns-record-verified': row.verified }">
                           <div class="dns-record-head">
                             <div class="dns-record-head-left">
                               <span class="dns-label">{{ row.label }}</span>
@@ -304,16 +287,11 @@ onMounted(fetchDomains)
                             <div class="dns-field-label">Host / Name</div>
                             <div class="dns-field-row">
                               <code class="dns-field-value">{{ row.record.name }}</code>
-                              <button
-                                type="button"
-                                class="btn btn-ghost btn-xs"
-                                @click="copy(row.record.name, 'Host')"
-                              >Copy</button>
+                              <button type="button" class="btn btn-ghost btn-xs"
+                                @click="copy(row.record.name, 'Host')">Copy</button>
                             </div>
-                            <div
-                              v-if="hostShortForm(row.record.name, domain.domain) !== row.record.name"
-                              class="dns-field-hint"
-                            >
+                            <div v-if="hostShortForm(row.record.name, domain.domain) !== row.record.name"
+                              class="dns-field-hint">
                               Some providers (Cloudflare, Route 53, GoDaddy) only accept the subdomain part —
                               use <code>{{ hostShortForm(row.record.name, domain.domain) }}</code> instead.
                             </div>
@@ -323,11 +301,8 @@ onMounted(fetchDomains)
                             <div class="dns-field-label">Value</div>
                             <div class="dns-field-row">
                               <code class="dns-field-value dns-field-value-block">{{ row.record.value }}</code>
-                              <button
-                                type="button"
-                                class="btn btn-ghost btn-xs"
-                                @click="copy(row.record.value, 'Value')"
-                              >Copy</button>
+                              <button type="button" class="btn btn-ghost btn-xs"
+                                @click="copy(row.record.value, 'Value')">Copy</button>
                             </div>
                           </div>
 
@@ -351,23 +326,14 @@ onMounted(fetchDomains)
           <h3>No domains</h3>
           <p>Add a domain to verify your sending identity.</p>
         </div>
+        <Pagination :pageable="pageable" @page="goToPage" />
 
-        <div v-if="pageable && !pageable.empty" class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }}
-            ({{ pageable.total_elements }} total)
-          </span>
-          <div class="pagination-buttons">
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage === 0" @click="prevPage">Previous</button>
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage >= pageable.total_pages - 1" @click="nextPage">Next</button>
-          </div>
-        </div>
+
       </div>
     </template>
 
     <!-- Add Domain Modal -->
-    <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" 
-      @mouseup="confirmClickEnd">
+    <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
           <h3>Add Domain</h3>

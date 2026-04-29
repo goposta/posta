@@ -6,19 +6,22 @@ import type { SharedServer, SharedServerInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
+
 
 const router = useRouter()
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
 
 const servers = ref<SharedServer[]>([])
-const pageable = ref<Pageable | null>(null)
 const loading = ref(true)
 const currentPage = ref(0)
 
 const showModal = ref(false)
 const editing = ref<SharedServer | null>(null)
-const form = ref<SharedServerInput>({
+  const form = ref<SharedServerInput>({
   name: '',
   host: '',
   port: 587,
@@ -31,19 +34,18 @@ const form = ref<SharedServerInput>({
 })
 const allowedDomainsText = ref('')
 const saving = ref(false)
-
-async function fetchServers() {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await serversApi.list(currentPage.value)
     servers.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load shared servers')
+  } catch (e) {
+    console.error('Failed to load shared servers', e)
   } finally {
     loading.value = false
   }
-}
+})
 
 function openCreate() {
   editing.value = null
@@ -87,7 +89,7 @@ async function save() {
       notify.success('Server created')
     }
     showModal.value = false
-    await fetchServers()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to save server')
   } finally {
@@ -107,23 +109,9 @@ async function deleteServer(server: SharedServer) {
   try {
     await serversApi.delete(server.id)
     notify.success('Server deleted')
-    await fetchServers()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete server')
-  }
-}
-
-function prevPage() {
-  if (currentPage.value > 0) {
-    currentPage.value--
-    fetchServers()
-  }
-}
-
-function nextPage() {
-  if (pageable.value && currentPage.value < pageable.value.total_pages - 1) {
-    currentPage.value++
-    fetchServers()
   }
 }
 
@@ -131,7 +119,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   showModal.value = false;
 });
 
-onMounted(fetchServers)
 </script>
 
 <template>
@@ -202,16 +189,8 @@ onMounted(fetchServers)
           <p>Add a shared SMTP server to give accounts without personal SMTP configuration a delivery path.</p>
         </div>
 
-        <div v-if="pageable && !pageable.empty" class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }}
-            ({{ pageable.total_elements }} total)
-          </span>
-          <div class="pagination-buttons">
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage === 0" @click="prevPage">Previous</button>
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage >= pageable.total_pages - 1" @click="nextPage">Next</button>
-          </div>
-        </div>
+<Pagination :pageable="pageable" @page="goToPage" />
+       
       </div>
     </template>
 
