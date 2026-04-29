@@ -2,13 +2,17 @@
 import { ref, onMounted } from 'vue'
 import { auditApi } from '../../api/audit'
 import type { Event, Pageable } from '../../api/types'
+import Pagination from '../../components/Pagination.vue'
+import { usePagination } from '@/composables/usePagination'
+
 
 const events = ref<Event[]>([])
-const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, total_elements: 0, empty: true })
 const loading = ref(true)
 const categoryFilter = ref('')
 
-async function loadEvents(page = 0) {
+
+
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await auditApi.list(page, pageable.value.size, categoryFilter.value || undefined)
@@ -19,7 +23,7 @@ async function loadEvents(page = 0) {
   } finally {
     loading.value = false
   }
-}
+})
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString()
@@ -34,7 +38,6 @@ function categoryBadgeClass(category: string): string {
   }
 }
 
-onMounted(() => loadEvents())
 </script>
 
 <template>
@@ -42,7 +45,7 @@ onMounted(() => loadEvents())
     <div class="page-header">
       <h1>Audit Log</h1>
       <div class="page-header-actions">
-        <select v-model="categoryFilter" class="form-input" style="min-width: 140px" @change="loadEvents(0)">
+        <select v-model="categoryFilter" class="form-select" style="min-width: 140px" @change="goToPage(0)">
           <option value="">All categories</option>
           <option value="user">User</option>
           <option value="email">Email</option>
@@ -85,15 +88,9 @@ onMounted(() => loadEvents())
           </table>
         </div>
 
-        <div class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{ pageable.total_elements }} events)
-          </span>
-          <div class="pagination-buttons">
-            <button class="btn btn-secondary btn-sm" :disabled="pageable.current_page === 0" @click="loadEvents(pageable.current_page - 1)">Previous</button>
-            <button class="btn btn-secondary btn-sm" :disabled="pageable.current_page >= pageable.total_pages - 1" @click="loadEvents(pageable.current_page + 1)">Next</button>
-          </div>
-        </div>
+        <Pagination :pageable="pageable" @page="goToPage" />
+
+
       </template>
     </div>
   </div>

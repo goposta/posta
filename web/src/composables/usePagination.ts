@@ -7,7 +7,7 @@ export function usePagination(fetchFn: (page: number) => Promise<void>) {
   const router = useRouter()
   const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, total_elements: 0, empty: true })
 
-  function goToPage(page: number) {
+  async function goToPage(page: number) {
     router.replace({ query: { ...route.query, page: page > 0 ? String(page + 1) : undefined } })
     fetchFn(page)
   }

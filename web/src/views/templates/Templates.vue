@@ -14,6 +14,10 @@ import { useNotificationStore } from "../../stores/notification";
 import { useConfirm } from "../../composables/useConfirm";
 import { useModalSafeClose } from "../../composables/useModalSafeClose";
 import { useWorkspaceStore } from "../../stores/workspace";
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
+
 
 const router = useRouter();
 const notify = useNotificationStore();
@@ -21,19 +25,12 @@ const wsStore = useWorkspaceStore();
 const { confirm } = useConfirm();
 
 const templates = ref<Template[]>([]);
-const pageable = ref<Pageable>({
-  current_page: 0,
-  size: 20,
-  total_pages: 0,
-  total_elements: 0,
-  empty: true,
-});
 const loading = ref(true);
 const search = ref("");
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-
-const showModal = ref(false);
-const editing = ref<Template | null>(null);
+  
+  const showModal = ref(false);
+  const editing = ref<Template | null>(null);
 const saving = ref(false);
 
 const languages = ref<Language[]>([]);
@@ -80,22 +77,21 @@ function closeModal() {
   resetForm();
 }
 
-async function loadTemplates(page = 0) {
-  loading.value = true;
+const { pageable, goToPage } = usePagination(async (page) => {
+  loading.value = true
   try {
     const res = await templatesApi.list(page, pageable.value.size, search.value);
     templates.value = res.data.data;
     pageable.value = res.data.pageable;
-  } catch {
-    notify.error("Failed to load templates");
+  } catch (e) {
+    console.error('Failed to load templates', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-}
-
+})
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => loadTemplates(0), 300);
+  searchTimeout = setTimeout(() => goToPage(0), 300);
 }
 
 async function saveTemplate() {
@@ -110,7 +106,7 @@ async function saveTemplate() {
       notify.success("Template created");
     }
     closeModal();
-    await loadTemplates(pageable.value.current_page);
+    await goToPage(pageable.value.current_page);
   } catch {
     notify.error(
       editing.value ? "Failed to update template" : "Failed to create template"
@@ -131,7 +127,7 @@ async function deleteTemplate(template: Template) {
   try {
     await templatesApi.delete(template.id);
     notify.success("Template deleted");
-    await loadTemplates(pageable.value.current_page);
+    await goToPage(pageable.value.current_page);
   } catch {
     notify.error("Failed to delete template");
   }
@@ -155,7 +151,7 @@ async function exportTemplate(template: Template) {
 }
 
 const importInput = ref<HTMLInputElement | null>(null);
-const importing = ref(false);
+  const importing = ref(false);
 
 function triggerImport() {
   importInput.value?.click();
@@ -165,7 +161,7 @@ async function handleImportFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
-
+  
   importing.value = true;
   try {
     const name = file.name.toLowerCase();
@@ -178,7 +174,7 @@ async function handleImportFile(event: Event) {
       await templatesApi.importTemplate(data);
       notify.success("Template imported");
     }
-    await loadTemplates(pageable.value.current_page);
+    await goToPage(pageable.value.current_page);
   } catch (e: any) {
     const msg =
       e?.response?.data?.message ||
@@ -202,7 +198,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 });
 
 onMounted(() => {
-  loadTemplates();
   loadLanguages();
 });
 </script>
@@ -351,30 +346,8 @@ onMounted(() => {
             </table>
           </div>
 
-          <div class="pagination">
-            <span class="pagination-info">
-              Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{
-                pageable.total_elements
-              }}
-              templates)
-            </span>
-            <div class="pagination-buttons">
-              <button
-                class="btn btn-secondary btn-sm"
-                :disabled="pageable.current_page === 0"
-                @click="loadTemplates(pageable.current_page - 1)"
-              >
-                Previous
-              </button>
-              <button
-                class="btn btn-secondary btn-sm"
-                :disabled="pageable.current_page >= pageable.total_pages - 1"
-                @click="loadTemplates(pageable.current_page + 1)"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+<Pagination :pageable="pageable" @page="goToPage" />
+  
         </template>
       </div>
     </div>

@@ -33,20 +33,21 @@ const importing = ref(false)
 const csvFileInput = ref<HTMLInputElement | null>(null)
 const importingCsv = ref(false)
 
-const { pageable, goToPage } = usePagination(loadSubscribers)
 
-async function loadSubscribers(page = 0) {
+
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await subscribersApi.list(page, pageable.value.size, search.value, statusFilter.value || undefined)
     subscribers.value = res.data.data ?? []
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load subscribers')
+  } catch (e) {
+    console.error('Failed to load subscribers', e)
   } finally {
     loading.value = false
   }
-}
+})
+
 
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout)
@@ -77,7 +78,7 @@ async function createSubscriber() {
     })
     notify.success('Subscriber created')
     showCreateModal.value = false
-    await loadSubscribers(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     if (e instanceof SyntaxError) {
       notify.error('Invalid JSON in custom fields')
@@ -104,7 +105,7 @@ async function importJson() {
     const result = res.data.data
     notify.success(`Import complete: ${result.created} created, ${result.skipped} skipped out of ${result.total}`)
     showImportJsonModal.value = false
-    await loadSubscribers(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     if (e instanceof SyntaxError) {
       notify.error('Invalid JSON format')
@@ -129,7 +130,7 @@ async function onCsvFileSelected(event: Event) {
     const res = await subscribersApi.bulkImportCSV(file)
     const result = res.data.data
     notify.success(`CSV import complete: ${result.created} created, ${result.skipped} skipped out of ${result.total}`)
-    await loadSubscribers(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     notify.error(e?.response?.data?.error?.message || 'Failed to import CSV')
   } finally {

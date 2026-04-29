@@ -7,13 +7,14 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
 import { useWorkspaceStore } from '../../stores/workspace'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '../../components/Pagination.vue'
 
 const notify = useNotificationStore()
 const wsStore = useWorkspaceStore()
 const { confirm } = useConfirm()
 
 const keys = ref<ApiKey[]>([])
-const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, total_elements: 0, empty: true })
 const loading = ref(true)
 
 const showCreateModal = ref(false)
@@ -46,18 +47,20 @@ async function loadSettings() {
   }
 }
 
-async function loadKeys(page = 0) {
+
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    const res = await apiKeysApi.list(page, pageable.value.size)
+     const res = await apiKeysApi.list(page, pageable.value.size)
     keys.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load API keys')
+  } catch (e) {
+    console.error('Failed to load API keys', e)
   } finally {
     loading.value = false
   }
-}
+})
+
 
 function resolveExpiryDays(): number | undefined {
   if (newKeyExpiry.value === 'never') return 0
@@ -86,7 +89,7 @@ async function createKey() {
     newKeyExpiry.value = 'default'
     showKeyModal.value = true
     notify.success('API key created')
-    await loadKeys(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to create API key')
   } finally {
@@ -105,7 +108,7 @@ async function revokeKey(key: ApiKey) {
   try {
     await apiKeysApi.revoke(key.id)
     notify.success('API key revoked')
-    await loadKeys(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to revoke API key')
   }
@@ -122,7 +125,7 @@ async function deleteKey(key: ApiKey) {
   try {
     await apiKeysApi.delete(key.id)
     notify.success('API key deleted')
-    await loadKeys(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete API key')
   }
@@ -164,7 +167,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 onMounted(() => {
   loadSettings()
-  loadKeys()
 })
 </script>
 
@@ -239,28 +241,8 @@ onMounted(() => {
             </tbody>
           </table>
         </div>
+        <Pagination :pageable="pageable" @page="goToPage" />
 
-        <div class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{ pageable.total_elements }} keys)
-          </span>
-          <div class="pagination-buttons">
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page === 0"
-              @click="loadKeys(pageable.current_page - 1)"
-            >
-              Previous
-            </button>
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page >= pageable.total_pages - 1"
-              @click="loadKeys(pageable.current_page + 1)"
-            >
-              Next
-            </button>
-          </div>
-        </div>
       </template>
     </div>
 
@@ -283,7 +265,7 @@ onMounted(() => {
           </div>
           <div class="form-group">
             <label class="form-label">Expiration</label>
-            <select v-model="newKeyExpiry" class="form-input">
+            <select v-model="newKeyExpiry" class="form-select">
               <option v-for="opt in expiryOptions" :key="opt.value" :value="opt.value">
                 {{ opt.value === 'default' ? `${opt.label} (${defaultExpiryDays} days)` : opt.label }}
               </option>

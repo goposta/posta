@@ -8,6 +8,8 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { useWorkspaceStore } from '../../stores/workspace'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -15,7 +17,6 @@ const wsStore = useWorkspaceStore()
 const { confirm } = useConfirm()
 
 const campaigns = ref<Campaign[]>([])
-const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, total_elements: 0, empty: true })
 const loading = ref(true)
 const statusFilter = ref<string>('')
 
@@ -44,22 +45,23 @@ const saving = ref(false)
 const lists = ref<SubscriberListItem[]>([])
 const templates = ref<{ id: number; name: string }[]>([])
 
-async function loadCampaigns(page = 0) {
+
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await campaignsApi.list(page, pageable.value.size, statusFilter.value || undefined)
     campaigns.value = res.data.data ?? []
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load campaigns')
+  } catch (e) {
+    console.error('Failed to load campaigns', e)
   } finally {
     loading.value = false
   }
-}
+})
 
 function switchStatus(status: string) {
   statusFilter.value = status
-  loadCampaigns(0)
+  goToPage(0)
 }
 
 async function loadFormData() {
@@ -110,7 +112,7 @@ async function saveCampaign() {
     })
     notify.success('Campaign created')
     showModal.value = false
-    await loadCampaigns(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     notify.error(e?.response?.data?.error?.message || 'Failed to create campaign')
   } finally {
@@ -132,7 +134,7 @@ async function deleteCampaign(campaign: Campaign) {
   try {
     await campaignsApi.delete(campaign.id)
     notify.success('Campaign deleted')
-    await loadCampaigns(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     notify.error(e?.response?.data?.error?.message || 'Failed to delete campaign')
   }
@@ -169,7 +171,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   showModal.value = false
 })
 
-onMounted(() => loadCampaigns())
 </script>
 
 <template>
@@ -181,14 +182,9 @@ onMounted(() => loadCampaigns())
 
     <!-- Status filter tabs -->
     <div class="tabs" style="margin-bottom: 16px;">
-      <button
-        v-for="tab in statusTabs"
-        :key="tab.value"
-        class="btn btn-sm"
-        :class="statusFilter === tab.value ? 'btn-primary' : 'btn-secondary'"
-        @click="switchStatus(tab.value)"
-        style="margin-right: 4px;"
-      >
+      <button v-for="tab in statusTabs" :key="tab.value" class="btn btn-sm"
+        :class="statusFilter === tab.value ? 'btn-primary' : 'btn-secondary'" @click="switchStatus(tab.value)"
+        style="margin-right: 4px;">
         {{ tab.label }}
       </button>
     </div>
@@ -226,12 +222,10 @@ onMounted(() => loadCampaigns())
                 <td>{{ formatDate(campaign.created_at) }}</td>
                 <td>
                   <div style="display: flex; gap: 6px">
-                    <button class="btn btn-secondary btn-sm" @click="router.push(`/campaigns/${campaign.id}`)">View</button>
-                    <button
-                      v-if="wsStore.canEdit && canDeleteStatus(campaign.status)"
-                      class="btn btn-danger btn-sm"
-                      @click="deleteCampaign(campaign)"
-                    >Delete</button>
+                    <button class="btn btn-secondary btn-sm"
+                      @click="router.push(`/campaigns/${campaign.id}`)">View</button>
+                    <button v-if="wsStore.canEdit && canDeleteStatus(campaign.status)" class="btn btn-danger btn-sm"
+                      @click="deleteCampaign(campaign)">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -239,15 +233,8 @@ onMounted(() => loadCampaigns())
           </table>
         </div>
 
-        <div class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{ pageable.total_elements }} campaigns)
-          </span>
-          <div class="pagination-buttons">
-            <button class="btn btn-secondary btn-sm" :disabled="pageable.current_page === 0" @click="loadCampaigns(pageable.current_page - 1)">Previous</button>
-            <button class="btn btn-secondary btn-sm" :disabled="pageable.current_page >= pageable.total_pages - 1" @click="loadCampaigns(pageable.current_page + 1)">Next</button>
-          </div>
-        </div>
+        <Pagination :pageable="pageable" @page="goToPage" />
+    
       </template>
     </div>
 
@@ -310,6 +297,7 @@ onMounted(() => loadCampaigns())
   cursor: pointer;
   font-weight: 500;
 }
+
 .link:hover {
   text-decoration: underline;
 }
