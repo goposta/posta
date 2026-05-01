@@ -6,13 +6,15 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
 import { useWorkspaceStore } from '../../stores/workspace'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
 
 const notify = useNotificationStore()
 const wsStore = useWorkspaceStore()
 const { confirm } = useConfirm()
 
 const languages = ref<Language[]>([])
-const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, total_elements: 0, empty: true })
 const loading = ref(true)
 
 const showModal = ref(false)
@@ -49,19 +51,19 @@ function closeModal() {
   showModal.value = false
   resetForm()
 }
-
-async function loadLanguages(page = 0) {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await languagesApi.list(page, pageable.value.size)
     languages.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load languages')
+  } catch (e) {
+    console.error('Failed to load languages', e)
   } finally {
     loading.value = false
   }
-}
+})
+
 
 async function saveLanguage() {
   if (!form.value.code.trim() || !form.value.name.trim()) return
@@ -75,7 +77,7 @@ async function saveLanguage() {
       notify.success('Language created')
     }
     closeModal()
-    await loadLanguages(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error(editing.value ? 'Failed to update language' : 'Language code already exists')
   } finally {
@@ -94,7 +96,7 @@ async function deleteLanguage(lang: Language) {
   try {
     await languagesApi.delete(lang.id)
     notify.success('Language deleted')
-    await loadLanguages(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete language')
   }
@@ -106,7 +108,6 @@ function formatDate(dateStr: string): string {
 const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   closeModal()
 }); 
-onMounted(() => loadLanguages())
 </script>
 
 <template>
@@ -155,27 +156,8 @@ onMounted(() => loadLanguages())
           </table>
         </div>
 
-        <div class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{ pageable.total_elements }} languages)
-          </span>
-          <div class="pagination-buttons">
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page === 0"
-              @click="loadLanguages(pageable.current_page - 1)"
-            >
-              Previous
-            </button>
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page >= pageable.total_pages - 1"
-              @click="loadLanguages(pageable.current_page + 1)"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+  <Pagination :pageable="pageable" @page="goToPage" />
+        
       </template>
     </div>
 

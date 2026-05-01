@@ -30,20 +30,19 @@ const contactLists = ref<ContactListWithCount[]>([])
 const selectedListId = ref<number | null>(null)
 const addingToList = ref(false)
 
-const { pageable, goToPage } = usePagination(loadContacts)
-
-async function loadContacts(page = 0) {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await contactsApi.list(page, pageable.value.size, search.value)
     contacts.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load contacts')
+  } catch (e) {
+    console.error('Failed to load contacts', e)
   } finally {
     loading.value = false
   }
-}
+})
+
 
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout)
@@ -62,7 +61,7 @@ async function suppressContact(contact: Contact) {
   try {
     await suppressionsApi.create({ email: contact.email, reason: 'Manually suppressed from contacts' })
     notify.success(`${contact.email} has been suppressed.`)
-    await loadContacts(pageable.value.current_page)
+    await goToPage(pageable.value.current_page)
   } catch (err: any) {
     const message = err?.response?.data?.error?.message || err?.response?.data?.error || 'Failed to suppress contact.'
     notify.error(message)

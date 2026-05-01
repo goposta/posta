@@ -14,6 +14,10 @@ import { useNotificationStore } from "../../stores/notification";
 import { useConfirm } from "../../composables/useConfirm";
 import { useModalSafeClose } from "../../composables/useModalSafeClose";
 import { useWorkspaceStore } from "../../stores/workspace";
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
+
 
 const router = useRouter();
 const notify = useNotificationStore();
@@ -21,19 +25,12 @@ const wsStore = useWorkspaceStore();
 const { confirm } = useConfirm();
 
 const templates = ref<Template[]>([]);
-const pageable = ref<Pageable>({
-  current_page: 0,
-  size: 20,
-  total_pages: 0,
-  total_elements: 0,
-  empty: true,
-});
 const loading = ref(true);
-const search = ref('');
+const search = ref("");
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-
-const showModal = ref(false);
-const editing = ref<Template | null>(null);
+  
+  const showModal = ref(false);
+  const editing = ref<Template | null>(null);
 const saving = ref(false);
 
 const languages = ref<Language[]>([]);
@@ -80,22 +77,21 @@ function closeModal() {
   resetForm();
 }
 
-async function loadTemplates(page = 0) {
-  loading.value = true;
+const { pageable, goToPage } = usePagination(async (page) => {
+  loading.value = true
   try {
     const res = await templatesApi.list(page, pageable.value.size, search.value);
     templates.value = res.data.data;
     pageable.value = res.data.pageable;
-  } catch {
-    notify.error("Failed to load templates");
+  } catch (e) {
+    console.error('Failed to load templates', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-}
-
+})
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => loadTemplates(0), 300);
+  searchTimeout = setTimeout(() => goToPage(0), 300);
 }
 
 async function saveTemplate() {
@@ -110,7 +106,7 @@ async function saveTemplate() {
       notify.success("Template created");
     }
     closeModal();
-    await loadTemplates(pageable.value.current_page);
+    await goToPage(pageable.value.current_page);
   } catch {
     notify.error(
       editing.value ? "Failed to update template" : "Failed to create template"
@@ -131,7 +127,7 @@ async function deleteTemplate(template: Template) {
   try {
     await templatesApi.delete(template.id);
     notify.success("Template deleted");
-    await loadTemplates(pageable.value.current_page);
+    await goToPage(pageable.value.current_page);
   } catch {
     notify.error("Failed to delete template");
   }
@@ -155,7 +151,7 @@ async function exportTemplate(template: Template) {
 }
 
 const importInput = ref<HTMLInputElement | null>(null);
-const importing = ref(false);
+  const importing = ref(false);
 
 function triggerImport() {
   importInput.value?.click();
@@ -165,7 +161,7 @@ async function handleImportFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
-
+  
   importing.value = true;
   try {
     const name = file.name.toLowerCase();
@@ -178,9 +174,11 @@ async function handleImportFile(event: Event) {
       await templatesApi.importTemplate(data);
       notify.success("Template imported");
     }
-    await loadTemplates(pageable.value.current_page);
+    await goToPage(pageable.value.current_page);
   } catch (e: any) {
-    const msg = e?.response?.data?.message || "Failed to import template. Please check the file format.";
+    const msg =
+      e?.response?.data?.message ||
+      "Failed to import template. Please check the file format.";
     notify.error(msg);
   } finally {
     importing.value = false;
@@ -196,11 +194,10 @@ function formatDate(dateStr: string): string {
   });
 }
 const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
-  closeModal()
+  closeModal();
 });
 
 onMounted(() => {
-  loadTemplates();
   loadLanguages();
 });
 </script>
@@ -217,16 +214,25 @@ onMounted(() => {
           style="display: none"
           @change="handleImportFile"
         />
-        <button class="btn btn-secondary" @click="router.push('/templates/preview')">Preview Template</button>
-        <button v-if="wsStore.canEdit" class="btn btn-secondary" :disabled="importing" @click="triggerImport">
+        <button class="btn btn-secondary" @click="router.push('/templates/preview')">
+          Preview Template
+        </button>
+        <button
+          v-if="wsStore.canEdit"
+          class="btn btn-secondary"
+          :disabled="importing"
+          @click="triggerImport"
+        >
           {{ importing ? "Importing..." : "Import" }}
         </button>
-        <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Create Template</button>
+        <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">
+          Create Template
+        </button>
       </div>
     </div>
 
     <div class="card">
-      <div class="flex gap-2 mb-4">
+      <div class="card-header">
         <input
           v-model="search"
           class="form-input"
@@ -236,118 +242,114 @@ onMounted(() => {
         />
       </div>
 
-    <div v-if="loading" class="loading-page">
-      <div class="spinner"></div>
-    </div>
-
-    <div v-else>
-      <div v-if="templates.length === 0" class="empty-state">
-        <h3>{{ search ? 'No Results' : 'No Templates' }}</h3>
-        <p>{{ search ? 'No templates match your search.' : 'Create your first template to reuse email layouts.' }}</p>
+      <div v-if="loading" class="loading-page">
+        <div class="spinner"></div>
       </div>
 
-      <template v-else>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Language</th>
-                <th>Active Version</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="tmpl in templates"
-                :key="tmpl.id"
-                class="cursor-pointer"
-                @click="router.push({ name: 'template-detail', params: { id: tmpl.id } })"
-              >
-                <td>
-                  <div>{{ tmpl.name }}</div>
-                  <div v-if="tmpl.description" class="text-muted text-sm">
-                    {{ tmpl.description }}
-                  </div>
-                </td>
-                <td>
-                  <span class="badge badge-neutral">{{ tmpl.default_language }}</span>
-                </td>
-                <td>
-                  <span v-if="tmpl.active_version_id" class="badge badge-success"
-                    >v{{ tmpl.active_version?.version || "?" }}</span
-                  >
-                  <span v-else class="text-muted">&mdash;</span>
-                </td>
-                <td>{{ formatDate(tmpl.created_at) }}</td>
-                <td>
-                  <div class="flex gap-2">
-                    <button
-                      class="btn btn-primary btn-sm"
-                      @click.stop="
-                        router.push({ name: 'template-detail', params: { id: tmpl.id } })
-                      "
-                    >
-                      Versions
-                    </button>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      @click.stop="
-                        router.push({ name: 'template-preview', params: { id: tmpl.id } })
-                      "
-                    >
-                      Preview
-                    </button>
-                    <button v-if="wsStore.canEdit" class="btn btn-secondary btn-sm" @click.stop="openEdit(tmpl)">
-                      Edit
-                    </button>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      @click.stop="exportTemplate(tmpl)"
-                    >
-                      Export
-                    </button>
-                    <button
-                      v-if="wsStore.canEdit"
-                      class="btn btn-danger btn-sm"
-                      @click.stop="deleteTemplate(tmpl)"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <div v-else>
+        <div v-if="templates.length === 0" class="empty-state">
+          <h3>{{ search ? "No Results" : "No Templates" }}</h3>
+          <p>
+            {{
+              search
+                ? "No templates match your search."
+                : "Create your first template to reuse email layouts."
+            }}
+          </p>
         </div>
 
-        <div class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }} ({{
-              pageable.total_elements
-            }}
-            templates)
-          </span>
-          <div class="pagination-buttons">
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page === 0"
-              @click="loadTemplates(pageable.current_page - 1)"
-            >
-              Previous
-            </button>
-            <button
-              class="btn btn-secondary btn-sm"
-              :disabled="pageable.current_page >= pageable.total_pages - 1"
-              @click="loadTemplates(pageable.current_page + 1)"
-            >
-              Next
-            </button>
+        <template v-else>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Language</th>
+                  <th>Active Version</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="tmpl in templates"
+                  :key="tmpl.id"
+                  class="cursor-pointer"
+                  @click="
+                    router.push({ name: 'template-detail', params: { id: tmpl.id } })
+                  "
+                >
+                  <td>
+                    <div>{{ tmpl.name }}</div>
+                    <div v-if="tmpl.description" class="text-muted text-sm">
+                      {{ tmpl.description }}
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge badge-neutral">{{ tmpl.default_language }}</span>
+                  </td>
+                  <td>
+                    <span v-if="tmpl.active_version_id" class="badge badge-success"
+                      >v{{ tmpl.active_version?.version || "?" }}</span
+                    >
+                    <span v-else class="text-muted">&mdash;</span>
+                  </td>
+                  <td>{{ formatDate(tmpl.created_at) }}</td>
+                  <td>
+                    <div class="flex gap-2">
+                      <button
+                        class="btn btn-primary btn-sm"
+                        @click.stop="
+                          router.push({
+                            name: 'template-detail',
+                            params: { id: tmpl.id },
+                          })
+                        "
+                      >
+                        Versions
+                      </button>
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        @click.stop="
+                          router.push({
+                            name: 'template-preview',
+                            params: { id: tmpl.id },
+                          })
+                        "
+                      >
+                        Preview
+                      </button>
+                      <button
+                        v-if="wsStore.canEdit"
+                        class="btn btn-secondary btn-sm"
+                        @click.stop="openEdit(tmpl)"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        @click.stop="exportTemplate(tmpl)"
+                      >
+                        Export
+                      </button>
+                      <button
+                        v-if="wsStore.canEdit"
+                        class="btn btn-danger btn-sm"
+                        @click.stop="deleteTemplate(tmpl)"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        </div>
-      </template>
-    </div>
+
+<Pagination :pageable="pageable" @page="goToPage" />
+  
+        </template>
+      </div>
     </div>
 
     <!-- Create/Edit Template Modal -->

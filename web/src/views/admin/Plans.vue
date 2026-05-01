@@ -6,13 +6,15 @@ import type { Plan, PlanInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
+import { usePagination } from '@/composables/usePagination'
+import Pagination from '@/components/Pagination.vue'
+
 
 const router = useRouter()
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
 
 const plans = ref<Plan[]>([])
-const pageable = ref<Pageable | null>(null)
 const loading = ref(true)
 const currentPage = ref(0)
 
@@ -36,19 +38,18 @@ const defaultForm = (): PlanInput => ({
 })
 
 const form = ref<PlanInput>(defaultForm())
-
-async function fetchPlans() {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await plansApi.list(currentPage.value)
     plans.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load plans')
+  } catch (e) {
+    console.error('Failed to load plans', e)
   } finally {
     loading.value = false
   }
-}
+})
 
 function openCreate() {
   editing.value = null
@@ -86,7 +87,7 @@ async function save() {
       notify.success('Plan created')
     }
     showModal.value = false
-    await fetchPlans()
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     const message = e?.response?.data?.error?.message || 'Failed to save plan'
     notify.error(message)
@@ -106,7 +107,7 @@ async function deletePlan(plan: Plan) {
   try {
     await plansApi.delete(plan.id, true)
     notify.success('Plan deleted')
-    await fetchPlans()
+    await goToPage(pageable.value.current_page)
   } catch (e: any) {
     const message = e?.response?.data?.error?.message || 'Failed to delete plan'
     notify.error(message)
@@ -117,7 +118,7 @@ async function setDefault(plan: Plan) {
   try {
     await plansApi.setDefault(plan.id)
     notify.success(`"${plan.name}" set as default`)
-    await fetchPlans()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to set default plan')
   }
@@ -127,25 +128,10 @@ function formatLimit(value: number): string {
   return value === 0 ? 'Unlimited' : value.toLocaleString()
 }
 
-function prevPage() {
-  if (currentPage.value > 0) {
-    currentPage.value--
-    fetchPlans()
-  }
-}
-
-function nextPage() {
-  if (pageable.value && currentPage.value < pageable.value.total_pages - 1) {
-    currentPage.value++
-    fetchPlans()
-  }
-}
-
 const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
   showModal.value = false
 })
 
-onMounted(fetchPlans)
 </script>
 
 <template>
@@ -218,17 +204,7 @@ onMounted(fetchPlans)
           <h3>No plans</h3>
           <p>Create a plan to define usage limits and resource quotas for workspaces.</p>
         </div>
-
-        <div v-if="pageable && !pageable.empty" class="pagination">
-          <span class="pagination-info">
-            Page {{ pageable.current_page + 1 }} of {{ pageable.total_pages }}
-            ({{ pageable.total_elements }} total)
-          </span>
-          <div class="pagination-buttons">
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage === 0" @click="prevPage">Previous</button>
-            <button class="btn btn-secondary btn-sm" :disabled="currentPage >= pageable.total_pages - 1" @click="nextPage">Next</button>
-          </div>
-        </div>
+<Pagination :pageable="pageable" @page="goToPage" />
       </div>
     </template>
 

@@ -16,8 +16,6 @@ const { confirm } = useConfirm()
 const webhooks = ref<Webhook[]>([])
 const loading = ref(true)
 
-const { pageable, goToPage } = usePagination(fetchWebhooks)
-
 const showModal = ref(false)
 const form = ref<WebhookInput>({
   url: '',
@@ -33,18 +31,18 @@ const copied = ref(false)
 
 const availableEvents = ['email.sent', 'email.failed', 'email.inbound']
 
-async function fetchWebhooks(page = 0) {
+const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
     const res = await webhooksApi.list(page)
     webhooks.value = res.data.data
     pageable.value = res.data.pageable
-  } catch {
-    notify.error('Failed to load webhooks')
+  } catch (e) {
+    console.error('Failed to load webhooks', e)
   } finally {
     loading.value = false
   }
-}
+})
 
 function openCreate() {
   form.value = { url: '', events: [], filters: [] }
@@ -82,7 +80,7 @@ async function createWebhook() {
     showModal.value = false
     showSecretModal.value = true
     notify.success('Webhook created')
-    await fetchWebhooks()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to create webhook')
   } finally {
@@ -114,7 +112,7 @@ async function deleteWebhook(webhook: Webhook) {
   try {
     await webhooksApi.delete(webhook.id)
     notify.success('Webhook deleted')
-    await fetchWebhooks()
+    await goToPage(pageable.value.current_page)
   } catch {
     notify.error('Failed to delete webhook')
   }
