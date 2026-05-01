@@ -75,6 +75,7 @@ Response:
 * Raw message, headers & attachment storage
 * Forwarding with status tracking
 * Spam scoring & retry on failure
+* Real-time SSE stream for inbound notifications
 
 ### Templates
 
