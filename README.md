@@ -70,13 +70,11 @@ Response:
 
 ### Inbound Email
 
-* Built-in SMTP receiver for incoming messages (default port `2525`, STARTTLS supported)
-* HTTP ingestion endpoint for third-party providers (SendGrid, Mailgun, etc.) with HMAC-signed webhooks
-* Full RFC 5322 parsing with attachment extraction and blob storage (S3 or filesystem)
-* Domain verification enforcement — only verified/owned domains accept mail (SMTP 550 otherwise)
-* Suppression list checks, Message-ID deduplication, and per-IP rate limiting
-* `email.inbound` webhook dispatch with retries and delivery tracking
-* Real-time SSE stream for inbound notifications and `.eml` / attachment downloads
+* Built-in SMTP receiver with TLS
+* HTTP webhook ingest with HMAC verification
+* Raw message, headers & attachment storage
+* Forwarding with status tracking
+* Spam scoring & retry on failure
 
 ### Templates
 
