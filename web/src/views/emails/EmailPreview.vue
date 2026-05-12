@@ -4,8 +4,9 @@ import { useRouter } from 'vue-router'
 import { emailsApi } from '../../api/emails'
 import type { EmailPreviewResponse } from '../../api/emails'
 import { templatesApi } from '../../api/templates'
-import type { Template } from '../../api/types'
+import type { Language, Template } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
+import { languagesApi } from '@/api/languages'
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -19,6 +20,16 @@ const loading = ref(true)
 const previewLoading = ref(false)
 const previewError = ref('')
 const activeTab = ref<'html' | 'text'>('html')
+const languages = ref<Language[]>([]);
+
+async function loadLanguages() {
+  try {
+    const res = await languagesApi.list(0, 100);
+    languages.value = res.data.data;
+  } catch {
+    // Non-critical
+  }
+}
 
 onMounted(async () => {
   try {
@@ -29,6 +40,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  loadLanguages()
 })
 
 watch(selectedTemplate, (name) => {
@@ -111,7 +123,11 @@ async function renderPreview() {
             </div>
             <div class="form-group">
               <label class="form-label">Language</label>
-              <input v-model="language" type="text" class="form-input" placeholder="e.g. en, fr, de" />
+              <select v-model="language" class="form-select">
+                <option v-for="lang in languages" :key="lang.id" :value="lang.code">
+                  {{ lang.name }} ({{ lang.code }})
+                </option>
+              </select>
               <span class="form-hint">Leave empty to use the template default.</span>
             </div>
           </div>
