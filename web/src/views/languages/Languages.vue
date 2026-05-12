@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { languagesApi } from '../../api/languages'
 import type { Language, LanguageInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
@@ -84,6 +84,27 @@ async function saveLanguage() {
     saving.value = false
   }
 }
+async function makeDefault(lang: Language) {
+  if (lang.is_default) return
+
+  loading.value = true
+  try {
+    await languagesApi.update(lang.id, {
+      code: lang.code,
+      name: lang.name,
+      is_default: true
+    })
+
+    notify.success(`${lang.name} is now the default language`)
+
+    await goToPage(pageable.value.current_page)
+  } catch (e) {
+    notify.error('Failed to set default language')
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
+}
 
 async function deleteLanguage(lang: Language) {
   const confirmed = await confirm({
@@ -149,6 +170,10 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
                   <div class="flex gap-2">
                     <button v-if="wsStore.canEdit" class="btn btn-secondary btn-sm" @click="openEdit(lang)">Edit</button>
                     <button v-if="wsStore.canEdit" class="btn btn-danger btn-sm" @click="deleteLanguage(lang)">Delete</button>
+                    <button v-if="wsStore.canEdit && !lang.is_default" class="btn btn-secondary btn-sm"
+                      @click="makeDefault(lang)" :disabled="loading">
+                      Set Default
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -179,10 +204,12 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
             <input v-model="form.name" class="form-input" placeholder="e.g. English, French" />
           </div>
           <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox" v-model="form.is_default" />
-              <span>Set as default language</span>
-            </label>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.is_default" />
+                Set as default language
+              </label>
+            </div>
             <span class="form-hint">The default language is used for new subscribers and as the fallback for campaigns.</span>
           </div>
         </div>

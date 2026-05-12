@@ -52,7 +52,7 @@ async function loadLanguages() {
 }
 
 function resetForm() {
-  form.value = { name: "", sample_data: "", default_language: "en", description: "" };
+  form.value = { name: "", sample_data: "", default_language : languages.value.find(l => l.is_default)?.code || 'en', description: "" };
   editing.value = null;
 }
 
