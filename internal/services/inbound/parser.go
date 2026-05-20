@@ -28,6 +28,9 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/net/html/charset"
 )
 
 const contentTypeTextPlain = "text/plain"
@@ -69,7 +72,7 @@ func ParseRawEmail(raw []byte) (*ParsedEmail, error) {
 		Raw:     raw,
 	}
 
-	dec := &mime.WordDecoder{}
+	dec := newWordDecoder()
 	for k, vs := range msg.Header {
 		if len(vs) == 0 {
 			continue
@@ -78,7 +81,7 @@ func ParseRawEmail(raw []byte) (*ParsedEmail, error) {
 		if decoded, derr := dec.DecodeHeader(v); derr == nil {
 			v = decoded
 		}
-		p.Headers[k] = v
+		p.Headers[k] = ensureUTF8(v)
 	}
 
 	p.MessageID = strings.Trim(p.Headers["Message-Id"], "<>")
@@ -209,7 +212,7 @@ func assignBody(p *ParsedEmail, mediaType, body string) {
 	}
 }
 
-func readBody(r io.Reader, encoding, _ string) (string, error) {
+func readBody(r io.Reader, encoding, charsetName string) (string, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
 		return "", fmt.Errorf("read body: %w", err)
@@ -218,7 +221,42 @@ func readBody(r io.Reader, encoding, _ string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(decoded), nil
+	return decodeCharset(decoded, charsetName), nil
+}
+
+func decodeCharset(b []byte, charsetName string) string {
+	if charsetName != "" {
+		if enc, _ := charset.Lookup(charsetName); enc != nil {
+			if out, err := enc.NewDecoder().Bytes(b); err == nil && utf8.Valid(out) {
+				return string(out)
+			}
+		}
+	}
+	return ensureUTF8(string(b))
+}
+
+func ensureUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	var sb strings.Builder
+	sb.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		sb.WriteRune(rune(s[i]))
+	}
+	return sb.String()
+}
+
+func newWordDecoder() *mime.WordDecoder {
+	return &mime.WordDecoder{
+		CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
+			enc, _ := charset.Lookup(label)
+			if enc == nil {
+				return input, nil
+			}
+			return enc.NewDecoder().Reader(input), nil
+		},
+	}
 }
 
 func decodeTransfer(raw []byte, encoding string) ([]byte, error) {
@@ -244,11 +282,11 @@ func decodeHeaderValue(v string) string {
 	if v == "" {
 		return ""
 	}
-	dec := &mime.WordDecoder{}
+	dec := newWordDecoder()
 	if out, err := dec.DecodeHeader(v); err == nil {
-		return out
+		return ensureUTF8(out)
 	}
-	return v
+	return ensureUTF8(v)
 }
 
 func headerAddress(v string) string {

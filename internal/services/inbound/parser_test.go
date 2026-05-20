@@ -13,6 +13,7 @@ package inbound
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestParsePlainText(t *testing.T) {
@@ -97,6 +98,62 @@ func TestParseMultipartWithAttachment(t *testing.T) {
 	}
 	if string(att.Content) != "hello" {
 		t.Errorf("decoded content = %q, want hello", string(att.Content))
+	}
+}
+
+func TestParseISO88591Body(t *testing.T) {
+	body := []byte{'G', 'r', 0xfc, 0xdf, 'e', '\r', '\n'}
+	raw := append([]byte(
+		"From: a@x.com\r\n"+
+			"To: b@x.com\r\n"+
+			"Subject: Hi\r\n"+
+			"Content-Type: text/plain; charset=iso-8859-1\r\n"+
+			"\r\n"), body...)
+
+	p, err := ParseRawEmail(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !utf8.ValidString(p.TextBody) {
+		t.Errorf("TextBody is not valid UTF-8: %q", p.TextBody)
+	}
+	if !strings.Contains(p.TextBody, "Grüße") {
+		t.Errorf("TextBody = %q, want to contain Grüße", p.TextBody)
+	}
+}
+
+func TestParseISO88591EncodedHeader(t *testing.T) {
+	raw := "From: a@x.com\r\n" +
+		"To: b@x.com\r\n" +
+		"Subject: =?iso-8859-1?Q?Gr=FC=DFe?=\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"\r\n" +
+		"hi\r\n"
+
+	p, err := ParseRawEmail([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if p.Subject != "Grüße" {
+		t.Errorf("Subject = %q, want Grüße", p.Subject)
+	}
+}
+
+func TestParseUndeclaredNonUTF8BodyFallsBackToLatin1(t *testing.T) {
+	body := []byte{0xdf, 0x65, '\r', '\n'}
+	raw := append([]byte(
+		"From: a@x.com\r\n"+
+			"To: b@x.com\r\n"+
+			"Subject: Hi\r\n"+
+			"Content-Type: text/plain\r\n"+
+			"\r\n"), body...)
+
+	p, err := ParseRawEmail(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !utf8.ValidString(p.TextBody) {
+		t.Errorf("TextBody is not valid UTF-8: %q", p.TextBody)
 	}
 }
 
