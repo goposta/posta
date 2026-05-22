@@ -152,8 +152,8 @@ func (s *Service) SetEnqueuer(eq EmailEnqueuer) {
 }
 
 // SetTxUnsubscribeGenerator wires the one-click unsubscribe URL generator.
-// When set, transactional sends that use a subscriber list but don't supply an
-// explicit list_unsubscribe_url will get an auto-generated RFC 8058 URL.
+// When set, transactional sends that have list_unsubscribe enabled but don't
+// supply an explicit list_unsubscribe_url will get an auto-generated RFC 8058 URL.
 func (s *Service) SetTxUnsubscribeGenerator(gen TxUnsubscribeGenerator) {
 	s.txUnsubGen = gen
 }
@@ -239,6 +239,7 @@ type SendRequest struct {
 	Headers             map[string]string   `json:"headers,omitempty"`
 	ListUnsubscribeURL  string              `json:"list_unsubscribe_url,omitempty"`
 	ListUnsubscribePost bool                `json:"list_unsubscribe_post,omitempty"`
+	ListUnsubscribe     bool                `json:"list_unsubscribe,omitempty"`
 	SendAt              *time.Time          `json:"send_at,omitempty"`
 	// TemplateName is populated by internal template-send paths
 	TemplateName string `json:"-"`
@@ -615,6 +616,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		HeadersJSON:         headersJSON,
 		ListUnsubscribeURL:  req.ListUnsubscribeURL,
 		ListUnsubscribePost: req.ListUnsubscribePost,
+		ListUnsubscribe:     req.ListUnsubscribe,
 		Status:              models.EmailStatusPending,
 		Provider:            ClassifyRecipients(req.To),
 	}
@@ -624,10 +626,9 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 	}
 
 	// Auto-attach an RFC 8058 one-click unsubscribe URL for transactional sends
-	// when the caller did not supply their own.
-	if em.ListUnsubscribeURL == "" && s.txUnsubGen != nil {
+	// when the caller opted in via list_unsubscribe but did not supply their own URL.
+	if em.ListUnsubscribeURL == "" && s.txUnsubGen != nil && em.ListUnsubscribe {
 		em.ListUnsubscribeURL = s.txUnsubGen.TxUnsubscribeURL(em.ID)
-		em.ListUnsubscribePost = true
 		_ = s.emailRepo.Update(em)
 	}
 

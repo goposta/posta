@@ -27,6 +27,7 @@ curl -X POST http://localhost:9000/api/v1/emails/send \
     "headers": {
       "X-Campaign-ID": "report-2026-01"
     },
+    "list_unsubscribe": true,
     "list_unsubscribe_url": "https://example.com/unsubscribe"
   }'
 ```
@@ -47,7 +48,7 @@ Response:
 
 - **HTML and plain text** — Send both for maximum client compatibility
 - **Custom headers** — Add arbitrary headers like `X-Campaign-ID`
-- **List-Unsubscribe** — Include unsubscribe URL and one-click POST support
+- **List-Unsubscribe** — Opt-in via `list_unsubscribe: true`. When enabled, an RFC 8058 one-click unsubscribe URL is auto-generated if you don't supply your own `list_unsubscribe_url`. Set `list_unsubscribe_post: true` to additionally advertise the `List-Unsubscribe-Post` header
 - **Scheduled delivery** — Set `send_at` to deliver at a specific time (see [Scheduled Email](/docs/email-sending/scheduled-email))
 - **Attachments** — Attach base64-encoded files (see [Attachments](/docs/email-sending/attachments))
 - **Dry run** — Add `?dry_run=true` to validate the request without sending

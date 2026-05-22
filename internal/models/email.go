@@ -51,6 +51,7 @@ type Email struct {
 	HeadersJSON         string         `json:"headers_json,omitempty" gorm:"type:text"`
 	ListUnsubscribeURL  string         `json:"list_unsubscribe_url,omitempty" gorm:"type:text"`
 	ListUnsubscribePost bool           `json:"list_unsubscribe_post,omitempty"`
+	ListUnsubscribe     bool           `json:"list_unsubscribe,omitempty"`
 	Status              EmailStatus    `json:"status" gorm:"default:pending;not null"`
 	ErrorMessage        string         `json:"error_message"`
 	RetryCount          int            `json:"retry_count" gorm:"default:0;not null"`
