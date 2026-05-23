@@ -206,7 +206,11 @@ func newWebhookDispatcher(db *gorm.DB, cfg *config.Config) *webhook.Dispatcher {
 	return dispatcher
 }
 
-func newInboundServiceForWorker(db *gorm.DB, cfg *config.Config, blobStore blob.Store, producer *worker.Producer, bus *eventbus.EventBus) *inbound.Service {
+func newInboundServiceForWorker(db *gorm.DB,
+	cfg *config.Config,
+	blobStore blob.Store,
+	producer *worker.Producer,
+	bus *eventbus.EventBus) *inbound.Service {
 	svc := inbound.NewService(
 		repositories.NewInboundEmailRepository(db),
 		repositories.NewDomainRepository(db),
@@ -293,7 +297,11 @@ func startInboundSMTPServer(
 // startEmbeddedWorker starts an in-process asynq worker for email delivery.
 // The bus argument is used by the inbound parse handler to publish
 // email.inbound.received events; it may be nil when inbound is disabled.
-func startEmbeddedWorker(db *gorm.DB, cfg *config.Config, blobStore blob.Store, notifier *notification.Service, bus *eventbus.EventBus) {
+func startEmbeddedWorker(db *gorm.DB,
+	cfg *config.Config,
+	blobStore blob.Store,
+	notifier *notification.Service,
+	bus *eventbus.EventBus) {
 	dispatcher := newWebhookDispatcher(db, cfg)
 
 	handler := worker.NewEmailSendHandler(

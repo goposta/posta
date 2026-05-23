@@ -454,7 +454,7 @@ func (s *Service) LoadRaw(ctx context.Context, rec *models.InboundEmail) ([]byte
 	if err != nil {
 		return nil, fmt.Errorf("fetch raw blob: %w", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	raw, err := io.ReadAll(rc)
 	if err != nil {
 		return nil, fmt.Errorf("read raw blob: %w", err)
