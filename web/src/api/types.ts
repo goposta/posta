@@ -71,7 +71,7 @@ export interface Email {
   provider?: string
 }
 
-export type InboundEmailStatus = 'received' | 'forwarded' | 'failed' | 'rejected'
+export type InboundEmailStatus = 'received' | 'forwarded' | 'failed' | 'rejected' | 'quarantined'
 export type InboundSource = 'smtp' | 'webhook'
 
 export interface InboundAttachmentMeta {

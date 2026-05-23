@@ -118,16 +118,22 @@ func runServer(cli *okapicli.CLI) {
 				logger.Info("system notification service enabled")
 			}
 
+			// Bus is shared between the embedded worker (parse handler) and the
+			// SMTP server so a single PublishSimple reaches both sets of
+			// in-process subscribers.
+			var inboundBus *eventbus.EventBus
+			if cfg.InboundEnabled && !cfg.DevMode {
+				inboundBus = eventbus.New(repositories.NewEventRepository(res.db))
+			}
+
 			if !cfg.DevMode {
 				res.producer = worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
 				if cfg.EmbeddedWorker {
-					startEmbeddedWorker(res.db, cfg, res.blobStore, notifier)
+					startEmbeddedWorker(res.db, cfg, res.blobStore, notifier, inboundBus)
 				}
 			}
 
 			if cfg.InboundEnabled && !cfg.DevMode {
-				eventRepo := repositories.NewEventRepository(res.db)
-				inboundBus := eventbus.New(eventRepo)
 				if srv, err := startInboundSMTPServer(res.db, cfg, res.blobStore, res.producer, inboundBus); err != nil {
 					logger.Error("failed to start inbound SMTP server", "error", err)
 				} else {
@@ -200,6 +206,28 @@ func newWebhookDispatcher(db *gorm.DB, cfg *config.Config) *webhook.Dispatcher {
 	return dispatcher
 }
 
+func newInboundServiceForWorker(db *gorm.DB, cfg *config.Config, blobStore blob.Store, producer *worker.Producer, bus *eventbus.EventBus) *inbound.Service {
+	svc := inbound.NewService(
+		repositories.NewInboundEmailRepository(db),
+		repositories.NewDomainRepository(db),
+		repositories.NewSuppressionRepository(db),
+		inbound.Config{
+			MaxMessageSize:    cfg.InboundMaxMessageSize,
+			MaxAttachmentSize: cfg.InboundMaxAttachSize,
+		},
+	)
+	if blobStore != nil {
+		svc.SetBlobStore(blobStore)
+	}
+	if producer != nil {
+		svc.SetEnqueuer(producer)
+	}
+	if bus != nil {
+		svc.SetEventBus(bus)
+	}
+	return svc
+}
+
 // startInboundSMTPServer configures and launches the built-in SMTP receiver.
 // Returns the server so it can be gracefully shut down on exit.
 func startInboundSMTPServer(
@@ -263,7 +291,9 @@ func startInboundSMTPServer(
 }
 
 // startEmbeddedWorker starts an in-process asynq worker for email delivery.
-func startEmbeddedWorker(db *gorm.DB, cfg *config.Config, blobStore blob.Store, notifier *notification.Service) {
+// The bus argument is used by the inbound parse handler to publish
+// email.inbound.received events; it may be nil when inbound is disabled.
+func startEmbeddedWorker(db *gorm.DB, cfg *config.Config, blobStore blob.Store, notifier *notification.Service, bus *eventbus.EventBus) {
 	dispatcher := newWebhookDispatcher(db, cfg)
 
 	handler := worker.NewEmailSendHandler(
@@ -359,6 +389,15 @@ func startEmbeddedWorker(db *gorm.DB, cfg *config.Config, blobStore blob.Store, 
 		inboundHandler.OnForwarded(metrics.IncrementInboundForwarded)
 		inboundHandler.OnFailed(metrics.IncrementInboundFailed)
 		mux.HandleFunc(worker.TypeInboundProcess, inboundHandler.ProcessTask)
+
+		parseProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+		parseSvc := newInboundServiceForWorker(db, cfg, blobStore, parseProducer, bus)
+		parseHandler := worker.NewInboundParseHandler(
+			repositories.NewInboundEmailRepository(db),
+			parseSvc,
+			parseProducer,
+		)
+		mux.HandleFunc(worker.TypeInboundParse, parseHandler.ProcessTask)
 	}
 
 	go func() {

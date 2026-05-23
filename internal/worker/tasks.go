@@ -27,6 +27,7 @@ const (
 	TypeEmailSend      = "email:send"
 	TypeCampaignStart  = "campaign:start"
 	TypeCampaignBatch  = "campaign:batch"
+	TypeInboundParse   = "inbound:parse"
 	TypeInboundProcess = "inbound:process"
 
 	QueueTransactional = "transactional"
@@ -79,4 +80,18 @@ func NewInboundProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeInboundProcess, payload, opts...), nil
+}
+
+type InboundParsePayload struct {
+	InboundEmailID uint `json:"inbound_email_id"`
+}
+
+// NewInboundParseTask creates an Asynq task that parses a previously-received
+// raw inbound message into its structured form.
+func NewInboundParseTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(InboundParsePayload{InboundEmailID: id})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeInboundParse, payload, opts...), nil
 }

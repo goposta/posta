@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -56,6 +57,7 @@ var (
 // Enqueuer enqueues inbound-processing tasks. Satisfied by worker.Producer.
 type Enqueuer interface {
 	EnqueueInboundProcess(inboundEmailID uint) error
+	EnqueueInboundParse(inboundEmailID uint) error
 }
 
 type Service struct {
@@ -272,6 +274,214 @@ func (s *Service) Ingest(ctx context.Context, p *ParsedEmail, source models.Inbo
 		s.onBytes(rec.Size)
 	}
 	return rec, nil
+}
+
+func (s *Service) IngestRaw(ctx context.Context, raw []byte, envelopeFrom string, envelopeTo []string, source models.InboundSource) (*models.InboundEmail, error) {
+	start := time.Now()
+	defer func() {
+		if s.onIngestMs != nil {
+			s.onIngestMs(time.Since(start).Seconds())
+		}
+	}()
+
+	if s.maxMsgSize > 0 && int64(len(raw)) > s.maxMsgSize {
+		s.rejected("size_exceeded")
+		return nil, ErrSizeExceeded
+	}
+
+	domain, _, err := s.resolveDomain(envelopeTo)
+	if err != nil {
+		s.rejected("unverified_domain")
+		return nil, err
+	}
+
+	sender := strings.ToLower(strings.TrimSpace(envelopeFrom))
+	if s.suppressionRepo != nil && sender != "" {
+		scope := repositories.ResourceScope{UserID: domain.UserID, WorkspaceID: domain.WorkspaceID}
+		if yes, _ := s.suppressionRepo.IsSuppressed(scope, sender); yes {
+			s.rejected("sender_suppressed")
+			return s.persistRejectedRaw(raw, sender, envelopeTo, domain, source, "sender is on suppression list"), ErrSenderSuppressed
+		}
+	}
+
+	rec := &models.InboundEmail{
+		UserID:      domain.UserID,
+		WorkspaceID: domain.WorkspaceID,
+		DomainID:    domain.ID,
+		Sender:      sender,
+		Recipients:  envelopeTo,
+		Size:        int64(len(raw)),
+		Status:      models.InboundStatusReceived,
+		Source:      source,
+		ReceivedAt:  time.Now().UTC(),
+		RawContent:  raw,
+	}
+	if err := s.repo.Create(rec); err != nil {
+		return nil, fmt.Errorf("persist inbound email: %w", err)
+	}
+
+	if s.blobStore != nil {
+		rawKey := fmt.Sprintf("inbound/%s/raw.eml", rec.UUID)
+		if err := s.blobStore.Put(ctx, rawKey, bytes.NewReader(raw), "message/rfc822"); err == nil {
+			rec.RawStorageKey = rawKey
+			rec.RawContent = nil
+			if uerr := s.repo.Update(rec); uerr != nil {
+				logger.Warn("failed to clear inline raw after blob upload", "uuid", rec.UUID, "error", uerr)
+				rec.RawContent = raw
+			}
+		} else {
+			logger.Warn("failed to store raw inbound eml", "uuid", rec.UUID, "error", err)
+		}
+	}
+
+	if s.producer != nil {
+		if err := s.producer.EnqueueInboundParse(rec.ID); err != nil {
+			logger.Error("failed to enqueue inbound:parse", "inbound_id", rec.ID, "error", err)
+		}
+	}
+
+	if s.onReceived != nil {
+		s.onReceived(source)
+	}
+	if s.onBytes != nil {
+		s.onBytes(rec.Size)
+	}
+	return rec, nil
+}
+
+func (s *Service) ApplyParsed(ctx context.Context, rec *models.InboundEmail, p *ParsedEmail) error {
+	if p.MessageID != "" {
+		if existing, err := s.repo.FindByMessageID(rec.UserID, p.MessageID); err == nil && existing != nil && existing.ID != rec.ID {
+			rec.MessageID = p.MessageID
+			rec.Status = models.InboundStatusRejected
+			rec.ErrorMessage = "duplicate message-id"
+			_ = s.repo.Update(rec)
+			return ErrDuplicate
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.Warn("failed to check message-id dedup", "error", err)
+		}
+	}
+
+	recipients := rec.Recipients
+	if len(p.To) > 0 {
+		recipients = p.To
+	}
+
+	var dedupHash string
+	if p.MessageID == "" {
+		dedupHash = computeDedupHash(p.From, recipients, p.Subject, rec.Size)
+		if existing, err := s.repo.FindByDedupHash(rec.UserID, dedupHash); err == nil && existing != nil && existing.ID != rec.ID {
+			rec.DedupHash = dedupHash
+			rec.Status = models.InboundStatusRejected
+			rec.ErrorMessage = "duplicate content"
+			_ = s.repo.Update(rec)
+			return ErrDuplicate
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.Warn("failed to check dedup hash", "error", err)
+		}
+	}
+
+	headersJSON, _ := json.Marshal(p.Headers)
+
+	rec.MessageID = p.MessageID
+	rec.DedupHash = dedupHash
+	if p.From != "" {
+		rec.Sender = p.From
+	}
+	if len(p.To) > 0 {
+		rec.Recipients = p.To
+	}
+	rec.Subject = p.Subject
+	rec.TextBody = p.TextBody
+	rec.HTMLBody = p.HTMLBody
+	rec.HeadersJSON = string(headersJSON)
+	rec.Status = models.InboundStatusReceived
+	rec.ErrorMessage = ""
+
+	attachments, uploadedKeys, err := s.persistAttachments(ctx, rec.UUID, p.Attachments)
+	if err != nil {
+		if s.blobStore != nil {
+			for _, k := range uploadedKeys {
+				_ = s.blobStore.Delete(ctx, k)
+			}
+		}
+		return fmt.Errorf("persist attachments: %w", err)
+	}
+	if len(attachments) > 0 {
+		if data, mErr := json.Marshal(attachments); mErr == nil {
+			rec.AttachmentsJSON = string(data)
+		}
+	}
+
+	if err := s.repo.Update(rec); err != nil {
+		return fmt.Errorf("update inbound email: %w", err)
+	}
+
+	if s.bus != nil {
+		actor := rec.UserID
+		s.bus.PublishSimple(
+			models.EventCategoryEmail,
+			"email.inbound.received",
+			&actor,
+			"",
+			"",
+			fmt.Sprintf("Inbound email received from %s", rec.Sender),
+			map[string]any{
+				"inbound_id":   rec.UUID,
+				"sender":       rec.Sender,
+				"recipients":   []string(rec.Recipients),
+				"subject":      rec.Subject,
+				"source":       string(rec.Source),
+				"size":         rec.Size,
+				"workspace_id": rec.WorkspaceID,
+			},
+		)
+	}
+	return nil
+}
+
+// LoadRaw returns the raw RFC 5322 bytes for a stored inbound record, reading
+// from the inline RawContent column first and falling back to the blob store
+// when the row has already been promoted.
+func (s *Service) LoadRaw(ctx context.Context, rec *models.InboundEmail) ([]byte, error) {
+	if len(rec.RawContent) > 0 {
+		return rec.RawContent, nil
+	}
+	if rec.RawStorageKey == "" || s.blobStore == nil {
+		return nil, fmt.Errorf("raw content unavailable for inbound %s", rec.UUID)
+	}
+	rc, err := s.blobStore.Get(ctx, rec.RawStorageKey)
+	if err != nil {
+		return nil, fmt.Errorf("fetch raw blob: %w", err)
+	}
+	defer rc.Close()
+	raw, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("read raw blob: %w", err)
+	}
+	return raw, nil
+}
+
+// persistRejectedRaw records a synchronous-time rejection from IngestRaw where
+// only envelope information is known — no parsed headers, no subject.
+func (s *Service) persistRejectedRaw(raw []byte, sender string, recipients []string, domain *models.Domain, source models.InboundSource, reason string) *models.InboundEmail {
+	rec := &models.InboundEmail{
+		UserID:       domain.UserID,
+		WorkspaceID:  domain.WorkspaceID,
+		DomainID:     domain.ID,
+		Sender:       sender,
+		Recipients:   recipients,
+		Size:         int64(len(raw)),
+		Status:       models.InboundStatusRejected,
+		Source:       source,
+		ReceivedAt:   time.Now().UTC(),
+		ErrorMessage: reason,
+	}
+	if err := s.repo.Create(rec); err != nil {
+		logger.Error("failed to persist rejected inbound email", "error", err)
+		return nil
+	}
+	return rec
 }
 
 // resolveDomain walks the recipient list and returns the first ownership-verified

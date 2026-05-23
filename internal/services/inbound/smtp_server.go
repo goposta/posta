@@ -121,8 +121,11 @@ func (s *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	return nil
 }
 
-// Data reads the raw message (bounded by MaxMessageSize), parses it, and delegates
-// to the service. Maps typed service errors back to SMTP status codes.
+// Data reads the raw message (bounded by MaxMessageSize) and hands the bytes
+// to the store-first ingest path. Parsing is deferred to the async worker,
+// so a malformed MIME body or a Postgres encoding error during structured
+// persistence no longer maps to 451 — once IngestRaw succeeds, the message
+// is durably stored and the MTA gets 250.
 func (s *session) Data(r io.Reader) error {
 	limit := s.backend.maxMessageSize
 	if limit <= 0 {
@@ -138,28 +141,17 @@ func (s *session) Data(r io.Reader) error {
 		return &smtp.SMTPError{Code: 552, EnhancedCode: smtp.EnhancedCode{5, 3, 4}, Message: "message size exceeds limit"}
 	}
 
-	parsed, err := ParseRawEmail(raw)
-	if err != nil {
-		logger.Warn("smtp parse error", "remote", s.remote, "error", err)
-		return &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 6, 0}, Message: "malformed message"}
-	}
-	if parsed.From == "" && s.from != "" {
-		parsed.From = s.from
-	}
-	if len(parsed.To) == 0 {
-		parsed.To = append([]string(nil), s.to...)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, ierr := s.backend.svc.Ingest(ctx, parsed, models.InboundSourceSMTP)
+	recipients := append([]string(nil), s.to...)
+	_, ierr := s.backend.svc.IngestRaw(ctx, raw, s.from, recipients, models.InboundSourceSMTP)
 	switch {
-	case ierr == nil, errors.Is(ierr, ErrDuplicate):
+	case ierr == nil:
 		return nil
 	case errors.Is(ierr, ErrUnverifiedDomain):
 		return &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 1, 1}, Message: "relay not permitted"}
-	case errors.Is(ierr, ErrSizeExceeded), errors.Is(ierr, ErrAttachmentTooLarge):
+	case errors.Is(ierr, ErrSizeExceeded):
 		return &smtp.SMTPError{Code: 552, EnhancedCode: smtp.EnhancedCode{5, 3, 4}, Message: "message too large"}
 	case errors.Is(ierr, ErrSenderSuppressed):
 		return &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 7, 1}, Message: "sender suppressed"}

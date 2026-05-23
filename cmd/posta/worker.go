@@ -23,6 +23,8 @@ import (
 	"github.com/goposta/posta/internal/metrics"
 	"github.com/goposta/posta/internal/services/crypto"
 	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/services/eventbus"
+	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/services/tracking"
 	"github.com/goposta/posta/internal/storage/blob"
@@ -168,6 +170,29 @@ func runWorker() error {
 		inboundHandler.OnForwarded(metrics.IncrementInboundForwarded)
 		inboundHandler.OnFailed(metrics.IncrementInboundFailed)
 		mux.HandleFunc(worker.TypeInboundProcess, inboundHandler.ProcessTask)
+
+		parseProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+		parseBus := eventbus.New(repositories.NewEventRepository(db))
+		parseSvc := inbound.NewService(
+			repositories.NewInboundEmailRepository(db),
+			repositories.NewDomainRepository(db),
+			repositories.NewSuppressionRepository(db),
+			inbound.Config{
+				MaxMessageSize:    cfg.InboundMaxMessageSize,
+				MaxAttachmentSize: cfg.InboundMaxAttachSize,
+			},
+		)
+		if blobStore != nil {
+			parseSvc.SetBlobStore(blobStore)
+		}
+		parseSvc.SetEnqueuer(parseProducer)
+		parseSvc.SetEventBus(parseBus)
+		parseHandler := worker.NewInboundParseHandler(
+			repositories.NewInboundEmailRepository(db),
+			parseSvc,
+			parseProducer,
+		)
+		mux.HandleFunc(worker.TypeInboundParse, parseHandler.ProcessTask)
 	}
 
 	logger.Info("Posta worker started",

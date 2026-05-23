@@ -77,6 +77,8 @@ function statusBadgeClass(status: string) {
       return "badge badge-success";
     case "failed":
       return "badge badge-danger";
+    case "quarantined":
+      return "badge badge-danger";
     case "received":
       return "badge badge-info";
     case "rejected":
@@ -136,6 +138,7 @@ function formatBytes(n: number) {
               <option value="received">Received</option>
               <option value="forwarded">Forwarded</option>
               <option value="failed">Failed</option>
+              <option value="quarantined">Quarantined</option>
               <option value="rejected">Rejected</option>
             </select>
           </div>

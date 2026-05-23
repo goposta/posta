@@ -141,6 +141,24 @@ func (p *Producer) EnqueueInboundProcess(inboundEmailID uint) error {
 	return nil
 }
 
+// EnqueueInboundParse enqueues a parse task for a raw inbound message that
+// was just persisted by the SMTP receiver. The parse step is intentionally
+// separate from EnqueueInboundProcess so a permanent parse failure does not
+// block the SMTP 250 OK reply.
+func (p *Producer) EnqueueInboundParse(inboundEmailID uint) error {
+	task, err := NewInboundParseTask(inboundEmailID,
+		asynq.Queue(QueueTransactional),
+		asynq.MaxRetry(p.maxRetries),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create inbound parse task: %w", err)
+	}
+	if _, err := p.client.Enqueue(task); err != nil {
+		return fmt.Errorf("failed to enqueue inbound parse task: %w", err)
+	}
+	return nil
+}
+
 // Close closes the underlying Asynq client.
 func (p *Producer) Close() error {
 	return p.client.Close()

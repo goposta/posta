@@ -337,7 +337,11 @@ func (h *InboundHandler) Delete(c *okapi.Context, req *GetEmailRequest) error {
 	return noContent(c)
 }
 
-// Retry re-enqueues a failed inbound email for another webhook-dispatch attempt.
+// Retry re-enqueues an inbound email for another attempt. Quarantined records
+// (those that failed during parsing) are routed back through inbound:parse so
+// the operator can re-run the MIME pipeline after a fix is deployed; failed
+// or stuck records (parsed but webhook delivery exhausted) go back through
+// inbound:process for re-dispatch.
 func (h *InboundHandler) Retry(c *okapi.Context, req *GetEmailRequest) error {
 	if h.producer == nil {
 		return c.AbortForbidden("inbound retry requires an async worker")
@@ -349,16 +353,27 @@ func (h *InboundHandler) Retry(c *okapi.Context, req *GetEmailRequest) error {
 	if !ownsResource(c, rec.UserID, rec.WorkspaceID) {
 		return c.AbortNotFound("inbound email not found")
 	}
-	if rec.Status != models.InboundStatusFailed && rec.Status != models.InboundStatusReceived {
-		return c.AbortBadRequest("only failed or stuck received messages can be retried")
-	}
-	rec.Status = models.InboundStatusReceived
-	rec.ErrorMessage = ""
-	if err := h.repo.Update(rec); err != nil {
-		return c.AbortInternalServerError("failed to update inbound email", err)
-	}
-	if err := h.producer.EnqueueInboundProcess(rec.ID); err != nil {
-		return c.AbortInternalServerError("failed to enqueue inbound task", err)
+	switch rec.Status {
+	case models.InboundStatusQuarantined:
+		rec.Status = models.InboundStatusReceived
+		rec.ErrorMessage = ""
+		if err := h.repo.Update(rec); err != nil {
+			return c.AbortInternalServerError("failed to update inbound email", err)
+		}
+		if err := h.producer.EnqueueInboundParse(rec.ID); err != nil {
+			return c.AbortInternalServerError("failed to enqueue inbound parse task", err)
+		}
+	case models.InboundStatusFailed, models.InboundStatusReceived:
+		rec.Status = models.InboundStatusReceived
+		rec.ErrorMessage = ""
+		if err := h.repo.Update(rec); err != nil {
+			return c.AbortInternalServerError("failed to update inbound email", err)
+		}
+		if err := h.producer.EnqueueInboundProcess(rec.ID); err != nil {
+			return c.AbortInternalServerError("failed to enqueue inbound task", err)
+		}
+	default:
+		return c.AbortBadRequest("only failed, quarantined, or stuck received messages can be retried")
 	}
 	return ok(c, map[string]string{"id": rec.UUID, "status": string(rec.Status)})
 }

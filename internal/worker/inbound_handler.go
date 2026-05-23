@@ -23,12 +23,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/hibiken/asynq"
@@ -60,6 +62,71 @@ type InboundWebhookPayload struct {
 	MessageID   string                  `json:"message_id,omitempty"`
 	Source      string                  `json:"source"`
 	ReceivedAt  string                  `json:"received_at"`
+}
+
+type InboundParseHandler struct {
+	repo     *repositories.InboundEmailRepository
+	svc      *inbound.Service
+	producer *Producer
+	onParsed func()
+}
+
+func NewInboundParseHandler(repo *repositories.InboundEmailRepository, svc *inbound.Service, producer *Producer) *InboundParseHandler {
+	return &InboundParseHandler{repo: repo, svc: svc, producer: producer}
+}
+
+// OnParsed sets a callback invoked after each successfully parsed record.
+func (h *InboundParseHandler) OnParsed(fn func()) { h.onParsed = fn }
+
+func (h *InboundParseHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
+	var payload InboundParsePayload
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+		return fmt.Errorf("unmarshal inbound parse payload: %w: %w", err, asynq.SkipRetry)
+	}
+
+	rec, err := h.repo.FindByID(payload.InboundEmailID)
+	if err != nil {
+		return fmt.Errorf("inbound email not found: %w", err)
+	}
+
+	// Defensive: another retry already parsed and moved this record on. Skip.
+	if rec.Status != models.InboundStatusReceived {
+		return nil
+	}
+
+	raw, err := h.svc.LoadRaw(ctx, rec)
+	if err != nil {
+		return fmt.Errorf("load raw inbound bytes: %w", err)
+	}
+
+	parsed, perr := inbound.ParseRawEmail(raw)
+	if perr != nil {
+		rec.Status = models.InboundStatusQuarantined
+		rec.ErrorMessage = fmt.Sprintf("parse failed: %v", perr)
+		if uerr := h.repo.Update(rec); uerr != nil {
+			logger.Error("failed to mark inbound quarantined after parse error", "id", rec.ID, "error", uerr)
+		}
+		logger.Warn("inbound parse error, record quarantined", "id", rec.ID, "uuid", rec.UUID, "error", perr)
+		return nil
+	}
+
+	if aerr := h.svc.ApplyParsed(ctx, rec, parsed); aerr != nil {
+		if errors.Is(aerr, inbound.ErrDuplicate) {
+			return nil
+		}
+		return fmt.Errorf("apply parsed inbound: %w", aerr)
+	}
+
+	if h.producer != nil {
+		if err := h.producer.EnqueueInboundProcess(rec.ID); err != nil {
+			logger.Error("failed to enqueue inbound:process", "inbound_id", rec.ID, "error", err)
+		}
+	}
+
+	if h.onParsed != nil {
+		h.onParsed()
+	}
+	return nil
 }
 
 // InboundProcessHandler processes inbound:process tasks — builds the inbound
@@ -210,23 +277,46 @@ func ChainErrorHandlers(handlers ...asynq.ErrorHandler) asynq.ErrorHandler {
 }
 
 func (e *InboundExhaustedErrorHandler) HandleError(_ context.Context, t *asynq.Task, err error) {
-	if t.Type() != TypeInboundProcess {
+	var (
+		id          uint
+		finalStatus models.InboundEmailStatus
+		logMsg      string
+	)
+	switch t.Type() {
+	case TypeInboundProcess:
+		var payload InboundProcessPayload
+		if jerr := json.Unmarshal(t.Payload(), &payload); jerr != nil {
+			logger.Error("inbound exhausted: unmarshal", "error", jerr)
+			return
+		}
+		id = payload.InboundEmailID
+		finalStatus = models.InboundStatusFailed
+		logMsg = "worker: inbound forward permanently failed"
+	case TypeInboundParse:
+		var payload InboundParsePayload
+		if jerr := json.Unmarshal(t.Payload(), &payload); jerr != nil {
+			logger.Error("inbound parse exhausted: unmarshal", "error", jerr)
+			return
+		}
+		id = payload.InboundEmailID
+		// Parse-time exhaustion lands in quarantine, not failed: the raw bytes
+		// are still durable and an operator can retry once the underlying
+		// cause (DB outage, blob fetch, malformed message) is resolved.
+		finalStatus = models.InboundStatusQuarantined
+		logMsg = "worker: inbound parse permanently failed, quarantined"
+	default:
 		return
 	}
-	var payload InboundProcessPayload
-	if jerr := json.Unmarshal(t.Payload(), &payload); jerr != nil {
-		logger.Error("inbound exhausted: unmarshal", "error", jerr)
-		return
-	}
-	rec, ferr := e.repo.FindByID(payload.InboundEmailID)
+
+	rec, ferr := e.repo.FindByID(id)
 	if ferr != nil {
 		return
 	}
-	rec.Status = models.InboundStatusFailed
+	rec.Status = finalStatus
 	rec.ErrorMessage = fmt.Sprintf("permanently failed after retries: %v", err)
 	_ = e.repo.Update(rec)
 	if e.onFailed != nil {
 		e.onFailed()
 	}
-	logger.Error("worker: inbound forward permanently failed", "id", rec.ID, "error", err)
+	logger.Error(logMsg, "id", rec.ID, "error", err)
 }

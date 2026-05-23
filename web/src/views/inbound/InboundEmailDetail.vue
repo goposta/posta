@@ -36,12 +36,17 @@ async function load() {
 
 async function retryEmail() {
   if (!email.value || retrying.value) return
+  const wasQuarantined = email.value.status === 'quarantined'
   retrying.value = true
   try {
     const res = await inboundApi.retry(email.value.uuid)
     email.value.status = res.data.data.status as InboundEmail['status']
     email.value.error_message = ''
-    notify.success('Inbound email re-queued for webhook dispatch')
+    notify.success(
+      wasQuarantined
+        ? 'Inbound email re-queued for parsing'
+        : 'Inbound email re-queued for webhook dispatch'
+    )
   } catch (e: any) {
     const msg = e.response?.data?.error?.message || 'Failed to retry inbound email'
     notify.error(msg)
@@ -86,6 +91,7 @@ function statusBadgeClass(status: string) {
   switch (status) {
     case 'forwarded': return 'badge badge-success'
     case 'failed': return 'badge badge-danger'
+    case 'quarantined': return 'badge badge-danger'
     case 'received': return 'badge badge-info'
     case 'rejected': return 'badge badge-warning'
     default: return 'badge'
@@ -115,12 +121,12 @@ function formatBytes(n: number) {
       <h1>Inbound Email</h1>
       <div style="display: flex; gap: 8px">
         <button
-          v-if="email && (email.status === 'failed' || email.status === 'received')"
+          v-if="email && (email.status === 'failed' || email.status === 'received' || email.status === 'quarantined')"
           class="btn btn-primary"
           :disabled="retrying"
           @click="retryEmail"
         >
-          {{ retrying ? 'Retrying...' : 'Retry dispatch' }}
+          {{ retrying ? 'Retrying...' : (email.status === 'quarantined' ? 'Retry parse' : 'Retry dispatch') }}
         </button>
         <a
           v-if="hasRawEml && email"
