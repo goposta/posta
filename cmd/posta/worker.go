@@ -85,6 +85,9 @@ func runWorker() error {
 	}
 	handler.SetCampaignMessageRepo(repositories.NewCampaignMessageRepository(db))
 	handler.SetCampaignRepo(repositories.NewCampaignRepository(db))
+	handler.SetSuppressionRepo(repositories.NewSuppressionRepository(db))
+	handler.SetBounceRepo(repositories.NewBounceRepository(db))
+	handler.SetAutoSuppress(cfg.AutoSuppressOnReject)
 	handler.SetStamper(email.NewStamper("Posta", config.Version, []byte(cfg.JWTSecret)))
 	handler.OnSent(func() {
 		metrics.IncrementEmailSent()

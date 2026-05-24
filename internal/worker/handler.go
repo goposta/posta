@@ -21,12 +21,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/mail"
 	"strings"
 	"time"
 
+	"github.com/goposta/posta/internal/metrics"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/email"
 	"github.com/goposta/posta/internal/services/webhook"
@@ -38,19 +40,22 @@ import (
 
 // EmailSendHandler processes email:send tasks from the Asynq queue.
 type EmailSendHandler struct {
-	emailRepo    *repositories.EmailRepository
-	smtpRepo     *repositories.SMTPRepository
-	serverRepo   *repositories.ServerRepository
-	domainRepo   *repositories.DomainRepository
-	contactRepo  *repositories.ContactRepository
-	messageRepo  *repositories.CampaignMessageRepository
-	campaignRepo *repositories.CampaignRepository
-	sender       *email.SMTPSender
-	stamper      *email.Stamper
-	dispatcher   *webhook.Dispatcher
-	blobStore    blob.Store
-	onSent       func()
-	onFailed     func()
+	emailRepo       *repositories.EmailRepository
+	smtpRepo        *repositories.SMTPRepository
+	serverRepo      *repositories.ServerRepository
+	domainRepo      *repositories.DomainRepository
+	contactRepo     *repositories.ContactRepository
+	messageRepo     *repositories.CampaignMessageRepository
+	campaignRepo    *repositories.CampaignRepository
+	suppressionRepo *repositories.SuppressionRepository
+	bounceRepo      *repositories.BounceRepository
+	autoSuppress    bool
+	sender          *email.SMTPSender
+	stamper         *email.Stamper
+	dispatcher      *webhook.Dispatcher
+	blobStore       blob.Store
+	onSent          func()
+	onFailed        func()
 }
 
 func NewEmailSendHandler(
@@ -92,6 +97,24 @@ func (h *EmailSendHandler) SetCampaignRepo(r *repositories.CampaignRepository) {
 // X-Posta-Signature HMAC. Nil disables stamping.
 func (h *EmailSendHandler) SetStamper(s *email.Stamper) {
 	h.stamper = s
+}
+
+// SetSuppressionRepo enables auto-suppression of recipients permanently
+// rejected by the receiving server.
+func (h *EmailSendHandler) SetSuppressionRepo(r *repositories.SuppressionRepository) {
+	h.suppressionRepo = r
+}
+
+// SetBounceRepo lets the handler record a hard bounce when a recipient is
+// permanently rejected.
+func (h *EmailSendHandler) SetBounceRepo(r *repositories.BounceRepository) {
+	h.bounceRepo = r
+}
+
+// SetAutoSuppress toggles auto-suppression on permanent (5xx) recipient
+// rejection. When false, such failures fall back to the normal retry path.
+func (h *EmailSendHandler) SetAutoSuppress(enabled bool) {
+	h.autoSuppress = enabled
 }
 
 // OnSent sets a callback invoked after each successful email send.
@@ -243,6 +266,27 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		headers = make(map[string]string)
 	}
 
+	// Drop recipients that became suppressed since this email was enqueued
+	recipients := []string(em.Recipients)
+	if h.suppressionRepo != nil {
+		scope := repositories.ResourceScope{UserID: em.UserID, WorkspaceID: em.WorkspaceID}
+		if filtered, fErr := h.suppressionRepo.FilterSuppressed(scope, recipients); fErr == nil {
+			if len(filtered) == 0 {
+				em.Status = models.EmailStatusSuppressed
+				em.ErrorMessage = "all recipients are suppressed"
+				_ = h.emailRepo.Update(em)
+				if h.messageRepo != nil {
+					if msg, mErr := h.messageRepo.FindByEmailID(em.ID); mErr == nil {
+						_ = h.messageRepo.UpdateStatus(msg.ID, models.CampaignMsgSkipped, "recipient suppressed")
+					}
+				}
+				logger.Info("worker: skipping email, all recipients suppressed", "id", em.ID)
+				return nil
+			}
+			recipients = filtered
+		}
+	}
+
 	// Stamp Posta headers. Campaign mail gets campaign-aware headers; everything
 	// else gets transactional headers. A final HMAC signs the message identity.
 	if h.stamper != nil {
@@ -263,18 +307,28 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		} else {
 			h.stamper.StampTransactional(headers, em)
 		}
-		h.stamper.Sign(headers, em, em.Recipients, em.Subject)
+		h.stamper.Sign(headers, em, recipients, em.Subject)
 	}
 
-	if err := h.sender.Send(smtpServer, em.Sender, em.Recipients, em.Subject, em.HTMLBody, em.TextBody, attachments, headers, em.ListUnsubscribeURL, em.ListUnsubscribePost); err != nil {
+	if err := h.sender.Send(smtpServer, em.Sender, recipients, em.Subject, em.HTMLBody, em.TextBody, attachments, headers, em.ListUnsubscribeURL, em.ListUnsubscribePost); err != nil {
+		// Increment the shared server's failure counter regardless of outcome.
+		if sharedServerID != 0 && h.serverRepo != nil {
+			go h.serverRepo.IncrementFailedCount(sharedServerID)
+		}
+
+		// A permanent rejection at RCPT TO (5xx, e.g. 550 user unknown) is a
+		// hard bounce: suppress the recipient and stop retrying — retrying a
+		// 5xx is pointless.
+		if se, ok := permanentRejection(err); ok && h.autoSuppress {
+			h.handlePermanentRejection(em, se)
+			logger.Info("worker: recipient permanently rejected, suppressed", "id", em.ID, "recipient", se.Recipient, "code", se.Code)
+			return nil
+		}
+
 		em.RetryCount++
 		em.Status = models.EmailStatusFailed
 		em.ErrorMessage = err.Error()
 		_ = h.emailRepo.Update(em)
-		// Increment the shared server's failure counter
-		if sharedServerID != 0 && h.serverRepo != nil {
-			go h.serverRepo.IncrementFailedCount(sharedServerID)
-		}
 		logger.Debug("worker: email send failed, will retry", "id", em.ID, "attempt", em.RetryCount, "error", err)
 		// Return error so Asynq retries the task
 		return fmt.Errorf("SMTP send failed: %w", err)
@@ -295,7 +349,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		h.onSent()
 	}
 	if h.contactRepo != nil {
-		go h.contactRepo.RecordSent(em.UserID, em.WorkspaceID, em.Recipients)
+		go h.contactRepo.RecordSent(em.UserID, em.WorkspaceID, recipients)
 	}
 	if h.messageRepo != nil {
 		if msg, err := h.messageRepo.FindByEmailID(em.ID); err == nil {
@@ -311,6 +365,74 @@ func (h *EmailSendHandler) markFailed(em *models.Email, reason string) {
 	em.Status = models.EmailStatusFailed
 	em.ErrorMessage = reason
 	_ = h.emailRepo.Update(em)
+	h.dispatcher.Dispatch(em.UserID, "email.failed", em.UUID, em.Sender)
+	if h.onFailed != nil {
+		h.onFailed()
+	}
+	if h.contactRepo != nil {
+		go h.contactRepo.RecordFailed(em.UserID, em.WorkspaceID, em.Recipients)
+	}
+	if h.messageRepo != nil {
+		if msg, err := h.messageRepo.FindByEmailID(em.ID); err == nil {
+			_ = h.messageRepo.UpdateStatus(msg.ID, models.CampaignMsgFailed, reason)
+		}
+	}
+}
+
+// permanentRejection reports whether err represents a permanent recipient
+// rejection (a 5xx reply at RCPT TO, e.g. 550 user unknown) that should trigger
+// auto-suppression. Transient errors (4xx), connection failures, and failures
+// at other SMTP stages (MAIL FROM, DATA) return false so they keep retrying.
+func permanentRejection(err error) (*email.SendError, bool) {
+	var se *email.SendError
+	if errors.As(err, &se) && se.Permanent() && se.Stage == "RCPT TO" && se.Recipient != "" {
+		return se, true
+	}
+	return nil, false
+}
+
+// handlePermanentRejection records a hard bounce, adds the recipient to the
+// suppression list (idempotently) and marks the email failed without retrying.
+// Called when the receiving server permanently rejects a recipient (5xx at
+// RCPT TO, e.g. 550 user unknown).
+func (h *EmailSendHandler) handlePermanentRejection(em *models.Email, se *email.SendError) {
+	reason := se.Msg
+	if reason == "" {
+		reason = se.Error()
+	}
+
+	// Record a hard bounce for audit/metrics.
+	if h.bounceRepo != nil {
+		bounce := &models.Bounce{
+			UserID:      em.UserID,
+			WorkspaceID: em.WorkspaceID,
+			EmailID:     em.ID,
+			Recipient:   se.Recipient,
+			Type:        models.BounceTypeHard,
+			Reason:      reason,
+		}
+		if err := h.bounceRepo.Create(bounce); err == nil {
+			metrics.IncrementBounce(string(models.BounceTypeHard))
+		}
+	}
+
+	// Add to the suppression list (idempotent — ignore "already suppressed").
+	if h.suppressionRepo != nil {
+		suppression := &models.Suppression{
+			UserID:      em.UserID,
+			WorkspaceID: em.WorkspaceID,
+			Email:       se.Recipient,
+			Reason:      fmt.Sprintf("auto-suppressed: SMTP %d %s", se.Code, reason),
+		}
+		if err := h.suppressionRepo.Upsert(suppression); err == nil {
+			metrics.IncrementSuppression()
+		}
+	}
+
+	em.Status = models.EmailStatusFailed
+	em.ErrorMessage = se.Error()
+	_ = h.emailRepo.Update(em)
+
 	h.dispatcher.Dispatch(em.UserID, "email.failed", em.UUID, em.Sender)
 	if h.onFailed != nil {
 		h.onFailed()

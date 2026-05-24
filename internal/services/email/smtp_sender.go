@@ -20,14 +20,44 @@ package email
 import (
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"mime"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 
 	"github.com/goposta/posta/internal/models"
 )
+
+// SendError carries structured information about an SMTP failure so callers can
+// distinguish a permanent recipient rejection (5xx at RCPT TO) from a transient
+// error worth retrying. Error() preserves the original human-readable string.
+type SendError struct {
+	Stage     string // "RCPT TO", "MAIL FROM", "DATA", ...
+	Recipient string // bare recipient address, set for RCPT TO failures
+	Code      int    // SMTP reply code (e.g. 550); 0 when not an SMTP reply
+	Msg       string // server reply text, incl. enhanced status code (5.1.1 ...)
+	Err       error
+}
+
+// Permanent reports whether the failure is a permanent (5xx) SMTP rejection.
+func (e *SendError) Permanent() bool { return e.Code >= 500 && e.Code < 600 }
+
+func (e *SendError) Error() string { return e.Err.Error() }
+func (e *SendError) Unwrap() error { return e.Err }
+
+// smtpReply extracts the SMTP reply code and message from an error returned by
+// the net/smtp client. It returns (0, "") when err does not wrap a
+// *textproto.Error (e.g. a connection-level failure).
+func smtpReply(err error) (int, string) {
+	var t *textproto.Error
+	if errors.As(err, &t) {
+		return t.Code, t.Msg
+	}
+	return 0, ""
+}
 
 type SMTPSender struct{}
 
@@ -101,7 +131,7 @@ func (s *SMTPSender) Send(server *models.SMTPServer, from string, to []string, s
 	case models.EncryptionSTARTTLS:
 		return sendWithSTARTTLS(addr, auth, server.Host, envelopeFrom, to, msg)
 	default:
-		return smtp.SendMail(addr, auth, envelopeFrom, to, msg)
+		return sendPlain(addr, auth, server.Host, envelopeFrom, to, msg)
 	}
 }
 
@@ -148,6 +178,16 @@ func sendWithSTARTTLS(addr string, auth smtp.Auth, host string, from string, to 
 	return sendViaClient(client, auth, from, to, msg)
 }
 
+func sendPlain(addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("SMTP dial failed, host: %s, error: %w", host, err)
+	}
+	defer func() { _ = client.Close() }()
+
+	return sendViaClient(client, auth, from, to, msg)
+}
+
 func sendViaClient(client *smtp.Client, auth smtp.Auth, from string, to []string, msg []byte) error {
 	if auth != nil {
 		if err := client.Auth(auth); err != nil {
@@ -156,26 +196,34 @@ func sendViaClient(client *smtp.Client, auth smtp.Auth, from string, to []string
 	}
 
 	if err := client.Mail(from); err != nil {
-		return fmt.Errorf("SMTP MAIL FROM failed: %w", err)
+		return wrapSendError("MAIL FROM", from, fmt.Errorf("SMTP MAIL FROM failed: %w", err))
 	}
 	for _, addr := range to {
-		if err := client.Rcpt(envelopeAddress(addr)); err != nil {
-			return fmt.Errorf("SMTP RCPT TO failed: %w", err)
+		rcpt := envelopeAddress(addr)
+		if err := client.Rcpt(rcpt); err != nil {
+			return wrapSendError("RCPT TO", rcpt, fmt.Errorf("SMTP RCPT TO failed: %w", err))
 		}
 	}
 
 	w, err := client.Data()
 	if err != nil {
-		return fmt.Errorf("SMTP DATA failed: %w", err)
+		return wrapSendError("DATA", "", fmt.Errorf("SMTP DATA failed: %w", err))
 	}
 	if _, err := w.Write(msg); err != nil {
 		return fmt.Errorf("SMTP write failed: %w", err)
 	}
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("SMTP close failed: %w", err)
+		return wrapSendError("DATA", "", fmt.Errorf("SMTP close failed: %w", err))
 	}
 
 	return client.Quit()
+}
+
+// wrapSendError turns a stage failure into a *SendError carrying the SMTP reply
+// code and recipient, while preserving the original error string.
+func wrapSendError(stage, recipient string, err error) error {
+	code, msg := smtpReply(err)
+	return &SendError{Stage: stage, Recipient: recipient, Code: code, Msg: msg, Err: err}
 }
 
 func buildMessage(from string, to []string, subject, htmlBody, textBody string, attachments []models.Attachment, headers map[string]string, listUnsubscribeURL string, listUnsubscribePost bool) []byte {
