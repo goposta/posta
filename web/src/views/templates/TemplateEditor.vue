@@ -108,7 +108,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 function schedulePreview() {
   if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => renderPreview(), 600)
+  debounceTimer = setTimeout(() => renderPreview(), 300)
 }
 
 async function renderPreview() {
