@@ -27,9 +27,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/goposta/posta/internal/storage/repositories"
 )
+
+// defaultWebViewTTL bounds how long a hosted "view in browser" link stays valid.
+// A web-view link exposes full message content, so unlike unsubscribe tokens it
+// carries an expiry.
+const defaultWebViewTTL = 90 * 24 * time.Hour
 
 // Service handles link rewriting and pixel injection for campaign emails.
 type Service struct {
@@ -210,6 +216,65 @@ func (s *Service) VerifyTxUnsubscribeToken(token string) (uint, error) {
 // transactional email. Suitable for RFC 8058 List-Unsubscribe-Post headers.
 func (s *Service) TxUnsubscribeURL(emailID uint) string {
 	return fmt.Sprintf("%s/t/u/tx/%s", s.baseURL, s.SignTxUnsubscribeToken(emailID))
+}
+
+// SignWebViewToken creates an HMAC-signed token for the hosted "view in browser"
+// page. The payload encodes the opaque Email UUID (non-enumerable) plus an expiry,
+// and a "view:" prefix binds the token kind so it can't be replayed against the
+// unsubscribe handlers.
+func (s *Service) SignWebViewToken(emailUUID string, ttl time.Duration) string {
+	exp := time.Now().Add(ttl).Unix()
+	payload := fmt.Sprintf("view:%s:%d", emailUUID, exp)
+	mac := hmac.New(sha256.New, s.hmacKey)
+	mac.Write([]byte(payload))
+	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + sig
+}
+
+// VerifyWebViewToken verifies the HMAC token, checks the expiry, and returns the
+// Email UUID it encodes.
+func (s *Service) VerifyWebViewToken(token string) (string, error) {
+	parts := strings.SplitN(token, ".", 2)
+	if len(parts) != 2 {
+		return "", errors.New("invalid token format")
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", errors.New("invalid token encoding")
+	}
+	mac := hmac.New(sha256.New, s.hmacKey)
+	mac.Write(payloadBytes)
+	expectedSig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(parts[1]), []byte(expectedSig)) {
+		return "", errors.New("invalid token signature")
+	}
+	payload := string(payloadBytes)
+	if !strings.HasPrefix(payload, "view:") {
+		return "", errors.New("wrong token kind")
+	}
+	rest := payload[len("view:"):]
+	sep := strings.LastIndex(rest, ":")
+	if sep <= 0 {
+		return "", errors.New("invalid token payload")
+	}
+	emailUUID := rest[:sep]
+	exp, err := strconv.ParseInt(rest[sep+1:], 10, 64)
+	if err != nil {
+		return "", errors.New("invalid token expiry")
+	}
+	if time.Now().Unix() > exp {
+		return "", errors.New("token expired")
+	}
+	return emailUUID, nil
+}
+
+// WebViewURL returns the public "view in browser" URL for a transactional or
+// campaign email, keyed by its opaque UUID. Returns "" for an empty UUID.
+func (s *Service) WebViewURL(emailUUID string) string {
+	if emailUUID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/t/v/%s", s.baseURL, s.SignWebViewToken(emailUUID, defaultWebViewTTL))
 }
 
 // hashLink generates a deterministic hash for a campaign + URL combination.

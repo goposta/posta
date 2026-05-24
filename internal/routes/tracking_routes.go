@@ -75,6 +75,14 @@ func (r *Router) trackingRoutes() []okapi.RouteDefinition {
 			Summary: "Transactional one-click unsubscribe (RFC 8058)",
 			Options: []okapi.RouteOption{okapi.DocHide()},
 		},
+		{
+			Method:  http.MethodGet,
+			Path:    "/t/v/{token}",
+			Handler: okapi.H(r.h.tracking.WebView),
+			Tags:    []string{"Tracking"},
+			Summary: "View email in browser",
+			Options: []okapi.RouteOption{okapi.DocHide()},
+		},
 	}
 }
 

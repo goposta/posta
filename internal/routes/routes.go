@@ -325,10 +325,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
 	r.h.tracking = handlers.NewTrackingHandler(trackingRepo, campaignMessageRepo, campaignRepo, subscriberRepo, subscriberListRepo, emailRepo, suppressionRepo, trackingService)
 
-	// Auto-attach RFC 8058 one-click unsubscribe URLs on transactional sends
-	// that target a subscriber list (so Gmail/Yahoo bulk-sender requirements
-	// are met without the caller having to build the header themselves).
-	emailService.SetTxUnsubscribeGenerator(trackingService)
+	// Wire the generator for Posta-injected public links (one-click unsubscribe +
+	// hosted "view in browser"), used to resolve reserved {{ posta_* }} template
+	// variables once an email's identity is known.
+	emailService.SetLinkGenerator(trackingService)
 
 	// Bounce webhook
 	r.h.bounceWebhook = handlers.NewBounceWebhookHandler(subscriberRepo, emailRepo, campaignMessageRepo)

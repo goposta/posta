@@ -199,6 +199,10 @@ func (h *TemplateHandler) Preview(c *okapi.Context, req *PreviewTemplateRequest)
 	if data == nil {
 		data = map[string]any{}
 	}
+	// Expose reserved {{ posta_* }} variables by name so previews of templates that
+	// use them render without missing-key errors. No real message exists here, so
+	// they resolve to their own names rather than generated links.
+	data = email.WithSystemVarNames(data)
 
 	input := &email.RenderInput{
 		SubjectTemplate: req.Body.SubjectTemplate,
