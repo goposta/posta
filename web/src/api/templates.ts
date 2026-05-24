@@ -61,6 +61,17 @@ export const templatesApi = {
   previewLocalization(templateId: number, versionId: number, data: { language: string; template_data: Record<string, any> }) {
     return api.post<ApiResponse<TemplatePreview>>(`/users/me/templates/${templateId}/versions/${versionId}/preview`, data)
   },
+  // Renders raw, unsaved template content so the editor can show a live preview
+  // without persisting first.
+  previewTemplate(data: {
+    subject_template: string
+    html_template?: string
+    text_template?: string
+    stylesheet_id?: number | null
+    template_data?: Record<string, any>
+  }) {
+    return api.post<ApiResponse<TemplatePreview>>('/users/me/templates/preview', data)
+  },
 
   sendTest(templateId: number, data: SendTestInput) {
     return api.post<ApiResponse<SendTestResponse>>(`/users/me/templates/${templateId}/send-test`, data)

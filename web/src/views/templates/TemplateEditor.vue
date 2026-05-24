@@ -126,8 +126,11 @@ async function renderPreview() {
   }
 
   try {
-    const res = await templatesApi.previewLocalization(templateId, versionId, {
-      language: localization.value?.language || template.value.default_language,
+    const res = await templatesApi.previewTemplate({
+      subject_template: subjectValue.value || ' ',
+      html_template: htmlValue.value,
+      text_template: textValue.value,
+      stylesheet_id: version.value?.stylesheet_id ?? null,
       template_data: data,
     })
     preview.value = res.data.data
