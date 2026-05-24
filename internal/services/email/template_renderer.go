@@ -146,17 +146,20 @@ func dotPrefix(token string) string {
 	return token
 }
 
+// Missing-key behaviors for template rendering (Go template "missingkey" option).
+const (
+	missingKeyError   = "error"   // return an error on a missing data key (default)
+	missingKeyZero    = "zero"    // silently use the zero value
+	missingKeyInvalid = "invalid" // render "<no value>"
+)
+
 type TemplateRenderer struct {
-	// MissingKeyBehavior controls how missing data keys are handled.
-	// "error" (default): return an error on missing key
-	// "zero": silently use zero value
-	// "invalid": render "<no value>"
 	MissingKeyBehavior string
 }
 
 func NewTemplateRenderer() *TemplateRenderer {
 	return &TemplateRenderer{
-		MissingKeyBehavior: "error",
+		MissingKeyBehavior: missingKeyError,
 	}
 }
 
@@ -209,10 +212,10 @@ func (r *TemplateRenderer) Render(input *RenderInput, data okapi.M) (*RenderedTe
 
 func (r *TemplateRenderer) missingKeyOption() string {
 	switch r.MissingKeyBehavior {
-	case "zero", "invalid":
+	case missingKeyZero, missingKeyInvalid:
 		return r.MissingKeyBehavior
 	default:
-		return "error"
+		return missingKeyError
 	}
 }
 
