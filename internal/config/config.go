@@ -57,6 +57,11 @@ type Config struct {
 	WorkerConcurrency int
 	WorkerMaxRetries  int
 
+	// AutoSuppressOnReject adds a recipient to the suppression list when an
+	// outbound send is permanently rejected (5xx at RCPT TO, e.g. 550 user
+	// unknown), and stops retrying that message.
+	AutoSuppressOnReject bool
+
 	// Webhook settings
 	WebhookMaxRetries  int
 	WebhookTimeoutSecs int
@@ -175,9 +180,10 @@ func New() *Config {
 
 		CORSOrigins: goutils.Env("POSTA_CORS_ORIGINS", "*"),
 
-		EmbeddedWorker:    goutils.EnvBool("POSTA_EMBEDDED_WORKER", false),
-		WorkerConcurrency: goutils.EnvInt("POSTA_WORKER_CONCURRENCY", 10),
-		WorkerMaxRetries:  goutils.EnvInt("POSTA_WORKER_MAX_RETRIES", 5),
+		EmbeddedWorker:       goutils.EnvBool("POSTA_EMBEDDED_WORKER", false),
+		WorkerConcurrency:    goutils.EnvInt("POSTA_WORKER_CONCURRENCY", 10),
+		WorkerMaxRetries:     goutils.EnvInt("POSTA_WORKER_MAX_RETRIES", 5),
+		AutoSuppressOnReject: goutils.EnvBool("POSTA_AUTO_SUPPRESS_ON_REJECT", true),
 
 		WebhookMaxRetries:  goutils.EnvInt("POSTA_WEBHOOK_MAX_RETRIES", 3),
 		WebhookTimeoutSecs: goutils.EnvInt("POSTA_WEBHOOK_TIMEOUT_SECS", 10),
@@ -290,7 +296,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 		})
 		app.WithOpenAPIDocs(okapi.OpenAPI{
 			Title:   "Posta API",
-			Version: "v1",
+			Version: "1",
 			License: okapi.License{
 				Name: "Apache-2.0",
 				URL:  "http://www.apache.org/licenses/LICENSE-2.0",
@@ -298,7 +304,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 			Contact: okapi.Contact{
 				Name:  "Posta",
 				URL:   "https://github.com/goposta/posta",
-				Email: "hello@goposta.dev",
+				Email: "jonas@goposta.dev",
 			},
 			Servers:         apiServers,
 			SecuritySchemes: c.securitySchemes,
