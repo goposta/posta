@@ -1,7 +1,7 @@
 ---
-sidebar_position: 3
+sidebar_position: 8
 title: System Variables
-description: Built-in {{ posta_* }} template variables for unsubscribe and web-view links
+description: Built-in template variables for unsubscribe and web-view links
 ---
 
 # System Variables

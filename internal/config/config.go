@@ -307,8 +307,10 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 			BearerFormat: "Posta API Key",
 		})
 		app.WithOpenAPIDocs(okapi.OpenAPI{
-			Title:   "Posta API",
-			Version: "1",
+			Title:       "Posta API",
+			Version:     Version,
+			Description: "Self-hosted email delivery platform for developers and teams.",
+			Favicon:     "/favicon.png",
 			License: okapi.License{
 				Name: "Apache-2.0",
 				URL:  "http://www.apache.org/licenses/LICENSE-2.0",
