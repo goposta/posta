@@ -181,7 +181,7 @@ func sendWithSTARTTLS(addr string, auth smtp.Auth, host string, from string, to 
 func sendPlain(addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
 	client, err := smtp.Dial(addr)
 	if err != nil {
-		return fmt.Errorf("SMTP dial failed: %w", err)
+		return fmt.Errorf("SMTP dial failed, host: %s, error: %w", host, err)
 	}
 	defer func() { _ = client.Close() }()
 
