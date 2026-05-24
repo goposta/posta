@@ -41,10 +41,17 @@ type Config struct {
 	RateLimitHourly      int
 	RateLimitDaily       int
 	AuthRateLimitEnabled bool
-	AdminEmail           string
-	AdminPassword        string
-	OpenAPIDocs          bool
-	securitySchemes      okapi.SecuritySchemes
+
+	// Email verification (POST /api/v1/emails/verify). Results are cached in
+	// Redis to avoid re-checking the same address/domain on every call.
+	EmailVerifyEnabled         bool
+	EmailVerifyCacheTTLHours   int
+	EmailVerifyMXCacheTTLHours int
+	EmailVerifyRateHourly      int // per-user hourly cap; 0 disables
+	AdminEmail                 string
+	AdminPassword              string
+	OpenAPIDocs                bool
+	securitySchemes            okapi.SecuritySchemes
 
 	MetricsEnabled bool
 	WebDir         string
@@ -168,10 +175,15 @@ func New() *Config {
 		RateLimitHourly:      goutils.EnvInt("POSTA_RATE_LIMIT_HOURLY", 100),
 		RateLimitDaily:       goutils.EnvInt("POSTA_RATE_LIMIT_DAILY", 1000),
 		AuthRateLimitEnabled: goutils.EnvBool("POSTA_AUTH_RATE_LIMIT_ENABLED", true),
-		AdminEmail:           goutils.Env("POSTA_ADMIN_EMAIL", "admin@example.com"),
-		AdminPassword:        goutils.Env("POSTA_ADMIN_PASSWORD", "admin1234"),
-		OpenAPIDocs:          goutils.EnvBool("POSTA_OPENAPI_DOCS", true),
-		securitySchemes:      okapi.SecuritySchemes{},
+
+		EmailVerifyEnabled:         goutils.EnvBool("POSTA_EMAIL_VERIFY_ENABLED", true),
+		EmailVerifyCacheTTLHours:   goutils.EnvInt("POSTA_EMAIL_VERIFY_CACHE_TTL_HOURS", 168),
+		EmailVerifyMXCacheTTLHours: goutils.EnvInt("POSTA_EMAIL_VERIFY_MX_CACHE_TTL_HOURS", 24),
+		EmailVerifyRateHourly:      goutils.EnvInt("POSTA_EMAIL_VERIFY_RATE_HOURLY", 1000),
+		AdminEmail:                 goutils.Env("POSTA_ADMIN_EMAIL", "admin@example.com"),
+		AdminPassword:              goutils.Env("POSTA_ADMIN_PASSWORD", "admin1234"),
+		OpenAPIDocs:                goutils.EnvBool("POSTA_OPENAPI_DOCS", true),
+		securitySchemes:            okapi.SecuritySchemes{},
 
 		MetricsEnabled: goutils.EnvBool("POSTA_METRICS_ENABLED", false),
 		WebDir:         goutils.Env("POSTA_WEB_DIR", "web/dist"),

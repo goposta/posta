@@ -45,6 +45,7 @@ import (
 	sessionpkg "github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/services/verifier"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/services/workermon"
 	"github.com/goposta/posta/internal/storage/blob"
@@ -114,6 +115,7 @@ type routerHandlers struct {
 	workspaceData   *handlers.WorkspaceDataHandler
 	plan            *handlers.PlanHandler
 	inbound         *handlers.InboundHandler
+	verify          *handlers.VerifyHandler
 }
 
 func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) {
@@ -182,6 +184,14 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	// Cache
 	statsCache := cache.New(redisClient)
 
+	// Email verification service (Redis-cached)
+	verifierSvc := verifier.NewService(redisClient, suppressionRepo, bounceRepo, verifier.Options{
+		Enabled:    cfg.EmailVerifyEnabled,
+		AddrTTL:    time.Duration(cfg.EmailVerifyCacheTTLHours) * time.Hour,
+		MXTTL:      time.Duration(cfg.EmailVerifyMXCacheTTLHours) * time.Hour,
+		RateHourly: cfg.EmailVerifyRateHourly,
+	})
+
 	// Handlers
 	userSeeder := seeder.New(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo)
 	userHandler := handlers.NewUserHandler(userRepo, cfg.JWTSecret, userSeeder, bus)
@@ -240,6 +250,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			userSetting:     handlers.NewUserSettingHandler(userSettingRepo),
 			userData:        handlers.NewUserDataHandler(db, templateRepo, versionRepo, localizationRepo, stylesheetRepo, languageRepo, contactRepo, webhookRepo, suppressionRepo, userSettingRepo),
 			session:         handlers.NewSessionHandler(sessionRepo, sessionStore),
+			verify:          handlers.NewVerifyHandler(verifierSvc),
 		},
 	}
 

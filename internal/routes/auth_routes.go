@@ -23,6 +23,7 @@ import (
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/handlers"
 	"github.com/goposta/posta/internal/services/email"
+	"github.com/goposta/posta/internal/services/verifier"
 	"github.com/jkaninda/okapi"
 )
 
@@ -145,6 +146,21 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/emails/verify",
+			Handler:     okapi.H(r.h.verify.Verify),
+			Group:       apiAuth,
+			Summary:     "Verify an email address",
+			Description: "Check whether an email address is valid/deliverable (syntax, disposable/role detection, MX records, and the caller's suppression/bounce history). Results are cached to avoid repeated lookups.",
+			Request:     &handlers.VerifyAddressRequest{},
+			Response:    &dto.Response[verifier.Result]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
 				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
