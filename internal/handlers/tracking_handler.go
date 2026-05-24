@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -29,6 +30,11 @@ import (
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
+
+// openPixelRe matches the open-tracking pixel injected by tracking.ProcessHTML so
+// it can be stripped from the hosted "view in browser" page — rendering a stored
+// campaign body in a browser would otherwise re-fire the open and inflate metrics.
+var openPixelRe = regexp.MustCompile(`(?i)<img[^>]+src=["'][^"']*/t/o/[^"']*["'][^>]*>`)
 
 type TrackingHandler struct {
 	trackingRepo    *repositories.TrackingRepository
@@ -75,6 +81,10 @@ type TrackingClickRequest struct {
 }
 
 type TrackingUnsubscribeRequest struct {
+	Token string `param:"token"`
+}
+
+type TrackingWebViewRequest struct {
 	Token string `param:"token"`
 }
 
@@ -214,6 +224,42 @@ h1{font-size:20px;color:#16a34a}p{color:#6b7280;font-size:14px}</style></head><b
 <div class="card"><h1>Unsubscribed</h1><p>You will no longer receive emails of this type from the sender.</p></div></body></html>`
 
 	return c.HTMLView(http.StatusOK, confirmHTML, okapi.M{})
+}
+
+// WebView renders a hosted copy of a sent email ("view in browser"). The token is
+// an HMAC-signed, expiring capability bound to the email's opaque UUID. Because the
+// page renders arbitrary customer HTML, it is served with a restrictive CSP, no
+// cookies, and noindex, and the open-tracking pixel is stripped so a web view does
+// not inflate open metrics.
+func (h *TrackingHandler) WebView(c *okapi.Context, req *TrackingWebViewRequest) error {
+	emailUUID, err := h.trackingService.VerifyWebViewToken(req.Token)
+	if err != nil {
+		return c.HTMLView(http.StatusNotFound, "This link is invalid or has expired.", okapi.M{})
+	}
+	em, err := h.emailRepo.FindByUUID(emailUUID)
+	if err != nil || em == nil {
+		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
+	}
+
+	body := em.HTMLBody
+	if strings.TrimSpace(body) == "" {
+		body = "<pre style=\"white-space:pre-wrap;font-family:sans-serif\">" + html.EscapeString(em.TextBody) + "</pre>"
+	}
+	body = openPixelRe.ReplaceAllString(body, "")
+
+	hdr := c.ResponseWriter().Header()
+	hdr.Set("Content-Security-Policy", "default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline' https:; font-src https: data:; base-uri 'none'; form-action 'none'")
+	hdr.Set("X-Robots-Tag", "noindex, nofollow")
+	hdr.Set("Referrer-Policy", "no-referrer")
+
+	page := fmt.Sprintf(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow">
+<title>%s</title>
+<style>body{margin:0;background:#f3f4f6}.posta-wv-bar{font-family:sans-serif;font-size:12px;color:#6b7280;text-align:center;padding:10px;background:#fff;border-bottom:1px solid #e5e7eb}.posta-wv-body{max-width:680px;margin:0 auto;padding:16px}</style>
+</head><body><div class="posta-wv-bar">You are viewing a copy of an email.</div><div class="posta-wv-body">%s</div></body></html>`,
+		html.EscapeString(em.Subject), body)
+
+	return c.HTMLView(http.StatusOK, page, okapi.M{})
 }
 
 // UnsubscribeConfirm processes the unsubscribe action.

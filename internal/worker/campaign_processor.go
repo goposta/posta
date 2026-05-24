@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/email"
 	"github.com/goposta/posta/internal/services/tracking"
@@ -307,8 +308,10 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 			sender = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
 		}
 
-		// Create email record
+		// Create email record. Assign the UUID up front so the per-recipient web
+		// view link can be built before persisting.
 		em := &models.Email{
+			UUID:         uuid.NewString(),
 			UserID:       campaign.UserID,
 			WorkspaceID:  campaign.WorkspaceID,
 			Sender:       sender,
@@ -326,10 +329,21 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 			continue
 		}
 
-		// Rewrite links for click tracking and inject open pixel
-		if p.trackingService != nil && em.HTMLBody != "" {
-			em.HTMLBody = p.trackingService.ProcessHTML(em.HTMLBody, campaign.ID, msg.ID)
-			em.ListUnsubscribeURL = p.trackingService.UnsubscribeURL(msg.ID)
+		if p.trackingService != nil {
+			// Resolve reserved {{ posta_* }} system links for this recipient. The
+			// generated /t/ URLs are skipped by ProcessHTML's click rewriter, so
+			// substitute before it runs.
+			webViewURL := p.trackingService.WebViewURL(em.UUID)
+			unsubscribeURL := p.trackingService.UnsubscribeURL(msg.ID)
+			em.HTMLBody = email.SubstituteSystemLinks(em.HTMLBody, webViewURL, unsubscribeURL)
+			em.TextBody = email.SubstituteSystemLinks(em.TextBody, webViewURL, unsubscribeURL)
+			em.Subject = email.SubstituteSystemLinks(em.Subject, webViewURL, unsubscribeURL)
+
+			// Rewrite links for click tracking and inject open pixel
+			if em.HTMLBody != "" {
+				em.HTMLBody = p.trackingService.ProcessHTML(em.HTMLBody, campaign.ID, msg.ID)
+			}
+			em.ListUnsubscribeURL = unsubscribeURL
 			em.ListUnsubscribePost = true
 			_ = p.emailRepo.Update(em)
 		}
@@ -435,6 +449,10 @@ func (p *CampaignProcessor) resolveTemplateContent(campaign *models.Campaign, la
 	if campaign.TemplateData != nil {
 		data = okapi.M(campaign.TemplateData)
 	}
+	// Inject reserved {{ posta_* }} variables as sentinels. The campaign render is
+	// shared across recipients, so the real per-recipient URLs are substituted
+	// later in the per-message loop.
+	data = okapi.M(email.WithSystemVars(data))
 
 	rendered, err := renderer.Render(&email.RenderInput{
 		SubjectTemplate: loc.SubjectTemplate,

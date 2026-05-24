@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/ratelimit"
 	"github.com/goposta/posta/internal/services/settings"
@@ -64,11 +65,13 @@ type PlanLimits struct {
 	MaxBatchSize        int
 }
 
-// TxUnsubscribeGenerator produces a signed one-click (RFC 8058) unsubscribe
-// URL for a transactional email. Kept as a narrow interface so the email
-// service does not depend directly on the tracking package.
-type TxUnsubscribeGenerator interface {
+// LinkGenerator produces the signed public links Posta injects into messages:
+// the one-click (RFC 8058) unsubscribe URL and the hosted "view in browser" URL.
+// Kept as a narrow interface so the email service does not depend directly on the
+// tracking package.
+type LinkGenerator interface {
 	TxUnsubscribeURL(emailID uint) string
+	WebViewURL(emailUUID string) string
 }
 
 type Service struct {
@@ -89,7 +92,7 @@ type Service struct {
 	settings         *settings.Provider
 	blobStore        blob.Store
 	planLimits       PlanLimitsProvider
-	txUnsubGen       TxUnsubscribeGenerator
+	linkGen          LinkGenerator
 	devMode          bool
 	onSent           func()
 	onFailed         func()
@@ -151,11 +154,11 @@ func (s *Service) SetEnqueuer(eq EmailEnqueuer) {
 	s.enqueuer = eq
 }
 
-// SetTxUnsubscribeGenerator wires the one-click unsubscribe URL generator.
-// When set, transactional sends that use a subscriber list but don't supply an
-// explicit list_unsubscribe_url will get an auto-generated RFC 8058 URL.
-func (s *Service) SetTxUnsubscribeGenerator(gen TxUnsubscribeGenerator) {
-	s.txUnsubGen = gen
+// SetLinkGenerator wires the generator for Posta-injected public links — the
+// one-click unsubscribe URL and the hosted "view in browser" URL used to resolve
+// reserved {{ posta_* }} template variables.
+func (s *Service) SetLinkGenerator(gen LinkGenerator) {
+	s.linkGen = gen
 }
 
 // SetBlobStore sets the blob storage backend for persisting email attachments.
@@ -602,6 +605,10 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 	}
 
 	em := &models.Email{
+		// Assign the UUID up front so reserved {{ posta_* }} links (which key the
+		// web view off the UUID) can be built without depending on the DB reading
+		// the gen_random_uuid() default back after insert.
+		UUID:                uuid.NewString(),
 		UserID:              userID,
 		WorkspaceID:         workspaceID,
 		APIKeyID:            apiKeyPtr,
@@ -621,6 +628,23 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 
 	if err := s.emailRepo.Create(em); err != nil {
 		return nil, fmt.Errorf("failed to store email: %w", err)
+	}
+
+	// Resolve reserved {{ posta_* }} system links now that the email identity is
+	// known. Rendering left sentinels in the body; replace them with the real
+	// per-message URLs. Only touches the DB when the template actually used one.
+	if s.linkGen != nil && (HasSystemSentinels(em.HTMLBody) || HasSystemSentinels(em.TextBody) || HasSystemSentinels(em.Subject)) {
+		webViewURL := s.linkGen.WebViewURL(em.UUID)
+		unsubscribeURL := s.linkGen.TxUnsubscribeURL(em.ID)
+		em.HTMLBody = SubstituteSystemLinks(em.HTMLBody, webViewURL, unsubscribeURL)
+		em.TextBody = SubstituteSystemLinks(em.TextBody, webViewURL, unsubscribeURL)
+		em.Subject = SubstituteSystemLinks(em.Subject, webViewURL, unsubscribeURL)
+		// Keep req in sync so the synchronous fallback (sendSync) sends the
+		// resolved body/subject too.
+		req.HTML = em.HTMLBody
+		req.Text = em.TextBody
+		req.Subject = em.Subject
+		_ = s.emailRepo.Update(em)
 	}
 
 	if s.devMode {
@@ -1003,7 +1027,17 @@ func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uin
 	if err != nil {
 		return nil, fmt.Errorf("template not found: %w", err)
 	}
-	return s.resolveAndRender(tmpl, language, data)
+	rendered, err := s.resolveAndRender(tmpl, language, data)
+	if err != nil {
+		return nil, err
+	}
+	// This is a preview (editor / dry-run): there is no real message yet, so show
+	// the reserved {{ posta_* }} variables by name rather than leaking the internal
+	// sentinels or generating throwaway links.
+	rendered.HTML = SubstituteSystemLinks(rendered.HTML, VarWebView, VarUnsubscribe)
+	rendered.Text = SubstituteSystemLinks(rendered.Text, VarWebView, VarUnsubscribe)
+	rendered.Subject = SubstituteSystemLinks(rendered.Subject, VarWebView, VarUnsubscribe)
+	return rendered, nil
 }
 
 // findTemplate looks up a template by ID or name. When templateID is provided
@@ -1067,7 +1101,9 @@ func (s *Service) resolveAndRender(tmpl *models.Template, language string, data 
 		TextTemplate:    l.TextTemplate,
 		CSS:             css,
 	}
-	return s.renderer.Render(input, data)
+	// Inject reserved {{ posta_* }} variables as sentinels; the real per-message
+	// URLs are substituted later in Send once the email identity is known.
+	return s.renderer.Render(input, WithSystemVars(data))
 }
 
 // resolveLocalization implements the language fallback strategy:
