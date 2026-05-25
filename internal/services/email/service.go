@@ -710,7 +710,7 @@ func (s *Service) sendSync(em *models.Email, userID uint, workspaceID *uint, req
 		em.Status = models.EmailStatusFailed
 		em.ErrorMessage = "no SMTP server configured"
 		_ = s.emailRepo.Update(em)
-		s.dispatcher.Dispatch(userID, "email.failed", em.UUID, req.From)
+		s.dispatcher.Dispatch(userID, workspaceID, "email.failed", em.UUID, req.From)
 		if s.onFailed != nil {
 			s.onFailed()
 		}
@@ -730,7 +730,7 @@ func (s *Service) sendSync(em *models.Email, userID uint, workspaceID *uint, req
 			em.Status = models.EmailStatusFailed
 			em.ErrorMessage = fmt.Sprintf("sender %q is not in the allowed emails list", req.From)
 			_ = s.emailRepo.Update(em)
-			s.dispatcher.Dispatch(userID, "email.failed", em.UUID, req.From)
+			s.dispatcher.Dispatch(userID, workspaceID, "email.failed", em.UUID, req.From)
 			if s.onFailed != nil {
 				s.onFailed()
 			}
@@ -745,7 +745,7 @@ func (s *Service) sendSync(em *models.Email, userID uint, workspaceID *uint, req
 		em.Status = models.EmailStatusFailed
 		em.ErrorMessage = err.Error()
 		_ = s.emailRepo.Update(em)
-		s.dispatcher.Dispatch(userID, "email.failed", em.UUID, req.From)
+		s.dispatcher.Dispatch(userID, workspaceID, "email.failed", em.UUID, req.From)
 		if s.onFailed != nil {
 			s.onFailed()
 		}
@@ -759,7 +759,7 @@ func (s *Service) sendSync(em *models.Email, userID uint, workspaceID *uint, req
 	em.Status = models.EmailStatusSent
 	em.SentAt = &now
 	_ = s.emailRepo.Update(em)
-	s.dispatcher.Dispatch(userID, "email.sent", em.UUID, req.From)
+	s.dispatcher.Dispatch(userID, workspaceID, "email.sent", em.UUID, req.From)
 	if s.onSent != nil {
 		s.onSent()
 	}

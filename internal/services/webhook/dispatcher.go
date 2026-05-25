@@ -157,7 +157,9 @@ type Payload struct {
 
 // Dispatch sends webhook notifications for the given event using the default
 // outbound payload shape ({event, email_id, timestamp}). Runs asynchronously.
-func (d *Dispatcher) Dispatch(userID uint, event string, emailID string, from string) {
+// workspaceID scopes which webhooks fire: nil targets the user's personal
+// webhooks, a value targets that workspace's webhooks.
+func (d *Dispatcher) Dispatch(userID uint, workspaceID *uint, event string, emailID string, from string) {
 	payload := Payload{
 		Event:     event,
 		EmailID:   emailID,
@@ -170,16 +172,18 @@ func (d *Dispatcher) Dispatch(userID uint, event string, emailID string, from st
 		return
 	}
 
-	d.DispatchJSON(userID, event, body, from)
+	d.DispatchJSON(userID, workspaceID, event, body, from)
 }
 
 // DispatchJSON sends a pre-serialized JSON body to all webhooks subscribed to event
-// for the given user that pass the sender-address filter. Runs asynchronously.
+// within the given scope (personal when workspaceID is nil, otherwise the
+// workspace) that pass the sender-address filter. Runs asynchronously.
 // Callers own the payload shape — this is the escape hatch used by the inbound
 // pipeline (which has a richer payload than the outbound Payload struct).
-func (d *Dispatcher) DispatchJSON(userID uint, event string, body []byte, fromAddr string) {
+func (d *Dispatcher) DispatchJSON(userID uint, workspaceID *uint, event string, body []byte, fromAddr string) {
 	go func() {
-		webhooks, err := d.repo.FindByUserIDAndEvent(userID, event)
+		scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
+		webhooks, err := d.repo.FindByScopeAndEvent(scope, event)
 		if err != nil {
 			logger.Error("failed to find webhooks", "error", err)
 			return

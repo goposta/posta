@@ -170,7 +170,7 @@ func (w *Worker) retryEmail(em *models.Email, server *models.SMTPServer) {
 	em.SentAt = &now
 	em.ErrorMessage = ""
 	_ = w.emailRepo.Update(em)
-	w.dispatcher.Dispatch(em.UserID, "email.sent", em.UUID, em.Sender)
+	w.dispatcher.Dispatch(em.UserID, em.WorkspaceID, "email.sent", em.UUID, em.Sender)
 	logger.Info("retry worker: email sent successfully", "id", em.ID, "attempt", em.RetryCount)
 	if w.onSent != nil {
 		w.onSent()

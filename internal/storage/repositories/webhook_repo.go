@@ -96,9 +96,11 @@ func (r *WebhookRepository) FindByScope(scope ResourceScope, limit, offset int) 
 	return items, total, nil
 }
 
-func (r *WebhookRepository) FindByUserIDAndEvent(userID uint, event string) ([]models.Webhook, error) {
+func (r *WebhookRepository) FindByScopeAndEvent(scope ResourceScope, event string) ([]models.Webhook, error) {
 	var webhooks []models.Webhook
-	if err := r.db.Where("user_id = ? AND ? = ANY(events)", userID, event).Find(&webhooks).Error; err != nil {
+	if err := ApplyScope(r.db.Model(&models.Webhook{}), scope).
+		Where("? = ANY(events)", event).
+		Find(&webhooks).Error; err != nil {
 		return nil, err
 	}
 	return webhooks, nil

@@ -216,7 +216,7 @@ func (h *InboundProcessHandler) ProcessTask(_ context.Context, t *asynq.Task) er
 		return fmt.Errorf("marshal inbound webhook body: %w", err)
 	}
 
-	h.dispatcher.DispatchJSON(rec.UserID, "email.inbound", encoded, rec.Sender)
+	h.dispatcher.DispatchJSON(rec.UserID, rec.WorkspaceID, "email.inbound", encoded, rec.Sender)
 
 	now := time.Now().UTC()
 	rec.Status = models.InboundStatusForwarded

@@ -344,7 +344,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 	if sharedServerID != 0 && h.serverRepo != nil {
 		go h.serverRepo.IncrementSentCount(sharedServerID)
 	}
-	h.dispatcher.Dispatch(em.UserID, "email.sent", em.UUID, em.Sender)
+	h.dispatcher.Dispatch(em.UserID, em.WorkspaceID, "email.sent", em.UUID, em.Sender)
 	if h.onSent != nil {
 		h.onSent()
 	}
@@ -365,7 +365,7 @@ func (h *EmailSendHandler) markFailed(em *models.Email, reason string) {
 	em.Status = models.EmailStatusFailed
 	em.ErrorMessage = reason
 	_ = h.emailRepo.Update(em)
-	h.dispatcher.Dispatch(em.UserID, "email.failed", em.UUID, em.Sender)
+	h.dispatcher.Dispatch(em.UserID, em.WorkspaceID, "email.failed", em.UUID, em.Sender)
 	if h.onFailed != nil {
 		h.onFailed()
 	}
@@ -433,7 +433,7 @@ func (h *EmailSendHandler) handlePermanentRejection(em *models.Email, se *email.
 	em.ErrorMessage = se.Error()
 	_ = h.emailRepo.Update(em)
 
-	h.dispatcher.Dispatch(em.UserID, "email.failed", em.UUID, em.Sender)
+	h.dispatcher.Dispatch(em.UserID, em.WorkspaceID, "email.failed", em.UUID, em.Sender)
 	if h.onFailed != nil {
 		h.onFailed()
 	}
@@ -488,7 +488,7 @@ func (e *ExhaustedErrorHandler) HandleError(_ context.Context, t *asynq.Task, er
 	em.Status = models.EmailStatusFailed
 	em.ErrorMessage = fmt.Sprintf("permanently failed after retries: %v", err)
 	_ = e.emailRepo.Update(em)
-	e.dispatcher.Dispatch(em.UserID, "email.failed", em.UUID, em.Sender)
+	e.dispatcher.Dispatch(em.UserID, em.WorkspaceID, "email.failed", em.UUID, em.Sender)
 	if e.onFailed != nil {
 		e.onFailed()
 	}

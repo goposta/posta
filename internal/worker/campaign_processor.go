@@ -206,7 +206,7 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 		return err
 	}
 	if p.dispatcher != nil {
-		p.dispatcher.Dispatch(campaign.UserID, "campaign.started", fmt.Sprint(campaign.ID), campaign.FromEmail)
+		p.dispatcher.Dispatch(campaign.UserID, campaign.WorkspaceID, "campaign.started", fmt.Sprint(campaign.ID), campaign.FromEmail)
 	}
 	return nil
 }
@@ -242,7 +242,7 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 			return err
 		}
 		if p.dispatcher != nil {
-			p.dispatcher.Dispatch(campaign.UserID, "campaign.completed", fmt.Sprint(campaign.ID), campaign.FromEmail)
+			p.dispatcher.Dispatch(campaign.UserID, campaign.WorkspaceID, "campaign.completed", fmt.Sprint(campaign.ID), campaign.FromEmail)
 		}
 		return nil
 	}
@@ -379,7 +379,7 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 		return err
 	}
 	if p.dispatcher != nil {
-		p.dispatcher.Dispatch(campaign.UserID, "campaign.completed", fmt.Sprint(campaign.ID), campaign.FromEmail)
+		p.dispatcher.Dispatch(campaign.UserID, campaign.WorkspaceID, "campaign.completed", fmt.Sprint(campaign.ID), campaign.FromEmail)
 	}
 	return nil
 }
