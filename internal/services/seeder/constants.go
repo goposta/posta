@@ -148,6 +148,7 @@ const defaultHTMLTemplate = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}} — Licensed under Apache 2.0</p>
+      <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
     </div>
   </div>
 </div>`
@@ -172,6 +173,8 @@ Best regards,
 The {{company}} Team
 
 © {{year}} {{company}} — Licensed under Apache 2.0
+
+View this email in your browser: {{ posta_web_view_url }}
 `
 
 const defaultHTMLTemplateFr = `<div class="email-wrapper">
@@ -202,6 +205,7 @@ const defaultHTMLTemplateFr = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}} — Licence Apache 2.0</p>
+      <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
     </div>
   </div>
 </div>`
@@ -226,6 +230,8 @@ Cordialement,
 L'équipe {{company}}
 
 © {{year}} {{company}} — Licence Apache 2.0
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}
 `
 
 // ======== Password Reset Templates ========
@@ -247,6 +253,7 @@ const passwordResetHTMLTemplate = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}}</p>
+      <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
     </div>
   </div>
 </div>`
@@ -265,6 +272,8 @@ Best regards,
 The {{company}} Team
 
 © {{year}} {{company}}
+
+View this email in your browser: {{ posta_web_view_url }}
 `
 
 const passwordResetHTMLTemplateFr = `<div class="email-wrapper">
@@ -284,6 +293,7 @@ const passwordResetHTMLTemplateFr = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}}</p>
+      <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
     </div>
   </div>
 </div>`
@@ -302,6 +312,8 @@ Cordialement,
 L'équipe {{company}}
 
 © {{year}} {{company}}
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}
 `
 
 // ======== Order Confirmation Templates ========
@@ -338,6 +350,7 @@ const orderConfirmationHTMLTemplate = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}}</p>
+      <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
     </div>
   </div>
 </div>`
@@ -358,6 +371,8 @@ Best regards,
 The {{company}} Team
 
 © {{year}} {{company}}
+
+View this email in your browser: {{ posta_web_view_url }}
 `
 
 const orderConfirmationHTMLTemplateFr = `<div class="email-wrapper">
@@ -392,6 +407,7 @@ const orderConfirmationHTMLTemplateFr = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}}</p>
+      <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
     </div>
   </div>
 </div>`
@@ -412,6 +428,8 @@ Cordialement,
 L'équipe {{company}}
 
 © {{year}} {{company}}
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}
 `
 
 // ======== Newsletter Templates ========
@@ -436,6 +454,7 @@ const newsletterHTMLTemplate = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}}</p>
+      <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
       <p><a href="{{unsubscribeUrl}}">Unsubscribe</a></p>
     </div>
   </div>
@@ -456,6 +475,8 @@ Best regards,
 The {{company}} Team
 
 © {{year}} {{company}}
+
+View this email in your browser: {{ posta_web_view_url }}
 
 Unsubscribe: {{unsubscribeUrl}}
 `
@@ -480,6 +501,7 @@ const newsletterHTMLTemplateFr = `<div class="email-wrapper">
     </div>
     <div class="email-footer">
       <p>© {{year}} {{company}}</p>
+      <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
       <p><a href="{{unsubscribeUrl}}">Se désabonner</a></p>
     </div>
   </div>
@@ -500,6 +522,8 @@ Cordialement,
 L'équipe {{company}}
 
 © {{year}} {{company}}
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}
 
 Se désabonner : {{unsubscribeUrl}}
 `
