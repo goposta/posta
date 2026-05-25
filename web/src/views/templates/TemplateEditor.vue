@@ -392,7 +392,7 @@ function switchToVisualBuilder() {
 
         <!-- Preview content -->
         <div class="preview-content">
-          <div v-if="previewTab === 'html'">
+          <div v-if="previewTab === 'html'" class="preview-html">
             <iframe
               v-if="preview?.html"
               :srcdoc="preview.html"
@@ -600,7 +600,12 @@ function switchToVisualBuilder() {
   overflow: auto;
 }
 
+.preview-html {
+  height: 100%;
+}
+
 .preview-iframe {
+  display: block;
   width: 100%;
   height: 100%;
   min-height: 400px;
