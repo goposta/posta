@@ -1,0 +1,39 @@
+<div class="preheader">Ihr {{company}}-Anmeldecode lautet {{code}} (läuft in {{expiry}} ab).</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Ihr Anmeldecode</h1>
+            <p>Verwenden Sie diesen Code, um die Anmeldung abzuschließen</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Hallo {{name}},</h2>
+            <p>Verwenden Sie den folgenden Code, um sich bei Ihrem {{company}}-Konto anzumelden:</p>
+            <p style="text-align:center; margin: 8px 0 24px;"><span class="code-pill">{{code}}</span></p>
+            <p class="muted" style="text-align:center;">Lieber mit einem Klick? Nutzen Sie die Schaltfläche unten:</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{loginLink}}" class="btn" target="_blank">Bei {{company}} anmelden</a>
+                </td>
+              </tr>
+            </table>
+            <div class="info-box">Dieser Code läuft in <strong>{{expiry}}</strong> ab und kann einmal verwendet werden. Geben Sie ihn aus Sicherheitsgründen niemals weiter.</div>
+            <p>Wenn Sie nicht versucht haben, sich anzumelden, können Sie diese E-Mail ignorieren.</p>
+            <p>Mit freundlichen Grüßen,<br/>Das {{company}}-Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">Diese E-Mail im Browser anzeigen</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

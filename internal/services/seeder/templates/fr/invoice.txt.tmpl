@@ -1,0 +1,20 @@
+Bonjour {{name}},
+
+Merci pour votre paiement. Voici votre reçu pour la facture {{invoiceNumber}}, émise le {{invoiceDate}}.
+
+{{range items}}
+- {{.name}} (x{{.qty}}) : {{.price}}
+{{end}}
+
+Sous-total : {{subtotal}}
+TVA : {{tax}}
+Total payé : {{total}}
+
+Télécharger la facture (PDF) : {{invoiceUrl}}
+
+Cordialement,
+L'équipe {{company}}
+
+© {{year}} {{company}}
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}

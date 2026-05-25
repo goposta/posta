@@ -1,0 +1,19 @@
+Hello {{name}},
+
+{{month}} Newsletter — The latest updates from {{company}}
+
+{{range articles}}
+## {{.title}}
+{{.summary}}
+Read more: {{.url}}
+
+{{end}}
+
+Best regards,
+The {{company}} Team
+
+© {{year}} {{company}}
+
+View this email in your browser: {{ posta_web_view_url }}
+
+Unsubscribe: {{unsubscribeUrl}}

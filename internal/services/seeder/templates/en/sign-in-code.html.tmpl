@@ -1,0 +1,39 @@
+<div class="preheader">Your {{company}} sign-in code is {{code}} (expires in {{expiry}}).</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Your sign-in code</h1>
+            <p>Use this code to finish signing in</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Hello {{name}},</h2>
+            <p>Use the code below to sign in to your {{company}} account:</p>
+            <p style="text-align:center; margin: 8px 0 24px;"><span class="code-pill">{{code}}</span></p>
+            <p class="muted" style="text-align:center;">Prefer one click? Use the button below:</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{loginLink}}" class="btn" target="_blank">Sign in to {{company}}</a>
+                </td>
+              </tr>
+            </table>
+            <div class="info-box">This code expires in <strong>{{expiry}}</strong> and can be used once. For your security, never share it with anyone.</div>
+            <p>If you didn't try to sign in, you can safely ignore this email.</p>
+            <p>Best regards,<br/>The {{company}} Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

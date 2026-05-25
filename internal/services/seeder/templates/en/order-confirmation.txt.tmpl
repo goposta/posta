@@ -1,0 +1,18 @@
+Hello {{name}},
+
+Your order #{{orderNumber}} placed on {{orderDate}} has been confirmed. Here is a summary of your purchase:
+
+{{range items}}
+- {{.name}} (x{{.qty}}): {{.price}}
+{{end}}
+
+Total: {{total}}
+
+We'll send you another email once your order has shipped.
+
+Best regards,
+The {{company}} Team
+
+© {{year}} {{company}}
+
+View this email in your browser: {{ posta_web_view_url }}

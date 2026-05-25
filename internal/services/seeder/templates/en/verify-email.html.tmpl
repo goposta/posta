@@ -1,0 +1,39 @@
+<div class="preheader">Confirm your email address to activate your {{company}} account.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Verify your email</h1>
+            <p>One quick step to get started</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Hello {{name}},</h2>
+            <p>Thanks for signing up for {{company}}. Please confirm your email address to activate your account.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{verifyLink}}" class="btn" target="_blank">Verify Email Address</a>
+                </td>
+              </tr>
+            </table>
+            <p class="muted" style="text-align:center;">Or enter this verification code:</p>
+            <p style="text-align:center; margin: 0 0 24px;"><span class="code-pill">{{code}}</span></p>
+            <div class="info-box">This link and code expire in <strong>{{expiry}}</strong>. If the button doesn't work, copy and paste this URL into your browser:<br/><a href="{{verifyLink}}">{{verifyLink}}</a></div>
+            <p>If you didn't create an account, you can safely ignore this email.</p>
+            <p>Best regards,<br/>The {{company}} Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

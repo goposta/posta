@@ -1,0 +1,47 @@
+<div class="preheader">Votre compte {{product}} est prêt — commencez à envoyer des e-mails en quelques minutes.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Bienvenue sur Posta</h1>
+            <p>Votre plateforme d'envoi d'e-mails auto-hébergée</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Bonjour {{name}},</h2>
+            <p>Bienvenue sur <strong>{{product}}</strong>. Votre compte est prêt et vous pouvez commencer à envoyer des emails immédiatement.</p>
+            <p>{{product}} offre les fonctionnalités suivantes :</p>
+            <ul class="feature-list">
+              {{range features}}
+              <li>{{.}}</li>
+              {{end}}
+            </ul>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{docs}}" class="btn" target="_blank">Voir la documentation</a>
+                </td>
+              </tr>
+            </table>
+            <p class="muted">Ressources utiles :</p>
+            <ul>
+              {{range links}}
+              <li><a href="{{.url}}">{{.title}}</a></li>
+              {{end}}
+            </ul>
+            <p>Cordialement,<br/>L'équipe {{company}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}} — Licence Apache 2.0</p>
+            <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

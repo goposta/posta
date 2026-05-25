@@ -1,0 +1,36 @@
+<div class="preheader">Les temps forts de {{month}} chez {{company}}.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Newsletter de {{month}}</h1>
+            <p>Les dernières nouvelles de {{company}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Bonjour {{name}},</h2>
+            <p>Voici les points forts de ce mois-ci :</p>
+            {{range articles}}
+            <div style="margin: 24px 0; padding-bottom: 20px; border-bottom: 1px solid #e5e7eb;">
+              <h3 style="margin: 0 0 8px; color: #111827; font-size: 18px;">{{.title}}</h3>
+              <p style="margin: 0 0 12px; color: #4b5563;">{{.summary}}</p>
+              <a href="{{.url}}" style="color: #7c3aed; font-weight: 600; text-decoration: none;">Lire la suite →</a>
+            </div>
+            {{end}}
+            <p>Cordialement,<br/>L'équipe {{company}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
+            <p><a href="{{unsubscribeUrl}}">Se désabonner</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

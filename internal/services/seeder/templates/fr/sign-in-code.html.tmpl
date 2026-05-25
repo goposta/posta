@@ -1,0 +1,39 @@
+<div class="preheader">Votre code de connexion {{company}} est {{code}} (expire dans {{expiry}}).</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Votre code de connexion</h1>
+            <p>Utilisez ce code pour terminer la connexion</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Bonjour {{name}},</h2>
+            <p>Utilisez le code ci-dessous pour vous connecter à votre compte {{company}} :</p>
+            <p style="text-align:center; margin: 8px 0 24px;"><span class="code-pill">{{code}}</span></p>
+            <p class="muted" style="text-align:center;">Vous préférez un seul clic ? Utilisez le bouton ci-dessous :</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{loginLink}}" class="btn" target="_blank">Se connecter à {{company}}</a>
+                </td>
+              </tr>
+            </table>
+            <div class="info-box">Ce code expire dans <strong>{{expiry}}</strong> et ne peut être utilisé qu'une seule fois. Pour votre sécurité, ne le partagez avec personne.</div>
+            <p>Si vous n'avez pas tenté de vous connecter, vous pouvez ignorer cet email en toute sécurité.</p>
+            <p>Cordialement,<br/>L'équipe {{company}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

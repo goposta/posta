@@ -1,0 +1,61 @@
+<div class="preheader">Reçu pour la facture {{invoiceNumber}} — {{total}}.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Reçu de paiement</h1>
+            <p>Facture {{invoiceNumber}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Bonjour {{name}},</h2>
+            <p>Merci pour votre paiement. Voici votre reçu pour la facture <strong>{{invoiceNumber}}</strong>, émise le {{invoiceDate}}.</p>
+            <table class="data-table" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <th>Description</th>
+                <th style="text-align:center;">Qté</th>
+                <th style="text-align:right;">Montant</th>
+              </tr>
+              {{range items}}
+              <tr>
+                <td>{{.name}}</td>
+                <td style="text-align:center;">{{.qty}}</td>
+                <td style="text-align:right;">{{.price}}</td>
+              </tr>
+              {{end}}
+              <tr>
+                <td colspan="2" style="text-align:right;">Sous-total</td>
+                <td style="text-align:right;">{{subtotal}}</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="text-align:right;">TVA</td>
+                <td style="text-align:right;">{{tax}}</td>
+              </tr>
+              <tr>
+                <td class="total-label" colspan="2" style="text-align:right;">Total payé</td>
+                <td class="total-value">{{total}}</td>
+              </tr>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" style="border-radius: 8px;">
+                  <a href="{{invoiceUrl}}" class="btn-secondary" target="_blank">Télécharger la facture (PDF)</a>
+                </td>
+              </tr>
+            </table>
+            <p>Cordialement,<br/>L'équipe {{company}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

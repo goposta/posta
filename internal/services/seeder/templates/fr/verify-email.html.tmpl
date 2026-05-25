@@ -1,0 +1,39 @@
+<div class="preheader">Confirmez votre adresse e-mail pour activer votre compte {{company}}.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Vérifiez votre e-mail</h1>
+            <p>Une étape rapide pour commencer</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Bonjour {{name}},</h2>
+            <p>Merci de votre inscription à {{company}}. Veuillez confirmer votre adresse e-mail pour activer votre compte.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{verifyLink}}" class="btn" target="_blank">Vérifier l'adresse e-mail</a>
+                </td>
+              </tr>
+            </table>
+            <p class="muted" style="text-align:center;">Ou saisissez ce code de vérification :</p>
+            <p style="text-align:center; margin: 0 0 24px;"><span class="code-pill">{{code}}</span></p>
+            <div class="info-box">Ce lien et ce code expirent dans <strong>{{expiry}}</strong>. Si le bouton ne fonctionne pas, copiez et collez cette URL dans votre navigateur :<br/><a href="{{verifyLink}}">{{verifyLink}}</a></div>
+            <p>Si vous n'avez pas créé de compte, vous pouvez ignorer cet email en toute sécurité.</p>
+            <p>Cordialement,<br/>L'équipe {{company}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">Afficher cet e-mail dans votre navigateur</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

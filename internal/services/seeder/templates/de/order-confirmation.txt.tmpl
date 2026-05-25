@@ -1,0 +1,18 @@
+Hallo {{name}},
+
+Ihre Bestellung #{{orderNumber}} vom {{orderDate}} wurde bestätigt. Hier ist eine Zusammenfassung Ihres Einkaufs:
+
+{{range items}}
+- {{.name}} (x{{.qty}}): {{.price}}
+{{end}}
+
+Gesamt: {{total}}
+
+Wir senden Ihnen eine weitere E-Mail, sobald Ihre Bestellung versandt wurde.
+
+Mit freundlichen Grüßen,
+Das {{company}}-Team
+
+© {{year}} {{company}}
+
+Diese E-Mail im Browser anzeigen: {{ posta_web_view_url }}

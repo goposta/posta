@@ -1,0 +1,19 @@
+Bonjour {{name}},
+
+Newsletter de {{month}} — Les dernières nouvelles de {{company}}
+
+{{range articles}}
+## {{.title}}
+{{.summary}}
+Lire la suite : {{.url}}
+
+{{end}}
+
+Cordialement,
+L'équipe {{company}}
+
+© {{year}} {{company}}
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}
+
+Se désabonner : {{unsubscribeUrl}}

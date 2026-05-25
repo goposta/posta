@@ -1,0 +1,47 @@
+<div class="preheader">Your order #{{orderNumber}} is confirmed — total {{total}}.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Order Confirmed</h1>
+            <p>Thank you for your purchase</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Hello {{name}},</h2>
+            <p>Your order <strong>#{{orderNumber}}</strong> placed on {{orderDate}} has been confirmed. Here is a summary of your purchase:</p>
+            <table class="data-table" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <th>Item</th>
+                <th style="text-align:center;">Qty</th>
+                <th style="text-align:right;">Price</th>
+              </tr>
+              {{range items}}
+              <tr>
+                <td>{{.name}}</td>
+                <td style="text-align:center;">{{.qty}}</td>
+                <td style="text-align:right;">{{.price}}</td>
+              </tr>
+              {{end}}
+              <tr>
+                <td class="total-label" colspan="2">Total</td>
+                <td class="total-value">{{total}}</td>
+              </tr>
+            </table>
+            <p>We'll send you another email once your order has shipped.</p>
+            <p>Best regards,<br/>The {{company}} Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

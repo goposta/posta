@@ -1,0 +1,20 @@
+Hello {{name}},
+
+Thank you for your payment. This is your receipt for invoice {{invoiceNumber}}, issued on {{invoiceDate}}.
+
+{{range items}}
+- {{.name}} (x{{.qty}}): {{.price}}
+{{end}}
+
+Subtotal: {{subtotal}}
+Tax: {{tax}}
+Total paid: {{total}}
+
+Download invoice (PDF): {{invoiceUrl}}
+
+Best regards,
+The {{company}} Team
+
+© {{year}} {{company}}
+
+View this email in your browser: {{ posta_web_view_url }}

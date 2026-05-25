@@ -1,0 +1,24 @@
+Hallo {{name}},
+
+Willkommen bei {{product}}.
+
+Ihr Konto ist bereit und Sie können sofort E-Mails versenden.
+
+Wichtigste Funktionen:
+{{range features}}
+- {{.}}
+{{end}}
+
+API-Dokumentation ansehen: {{docs}}
+
+Hilfreiche Ressourcen:
+{{range links}}
+- {{.title}}: {{.url}}
+{{end}}
+
+Mit freundlichen Grüßen,
+Das {{company}}-Team
+
+© {{year}} {{company}} — Lizenziert unter Apache 2.0
+
+Diese E-Mail im Browser anzeigen: {{ posta_web_view_url }}

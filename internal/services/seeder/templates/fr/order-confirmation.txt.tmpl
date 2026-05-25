@@ -1,0 +1,18 @@
+Bonjour {{name}},
+
+Votre commande #{{orderNumber}} passée le {{orderDate}} a été confirmée. Voici un récapitulatif de votre achat :
+
+{{range items}}
+- {{.name}} (x{{.qty}}) : {{.price}}
+{{end}}
+
+Total : {{total}}
+
+Nous vous enverrons un autre e-mail dès que votre commande aura été expédiée.
+
+Cordialement,
+L'équipe {{company}}
+
+© {{year}} {{company}}
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}

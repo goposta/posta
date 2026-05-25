@@ -1,0 +1,20 @@
+Hallo {{name}},
+
+Vielen Dank für Ihre Zahlung. Dies ist Ihr Beleg für die Rechnung {{invoiceNumber}}, ausgestellt am {{invoiceDate}}.
+
+{{range items}}
+- {{.name}} (x{{.qty}}): {{.price}}
+{{end}}
+
+Zwischensumme: {{subtotal}}
+Steuer: {{tax}}
+Gesamt bezahlt: {{total}}
+
+Rechnung herunterladen (PDF): {{invoiceUrl}}
+
+Mit freundlichen Grüßen,
+Das {{company}}-Team
+
+© {{year}} {{company}}
+
+Diese E-Mail im Browser anzeigen: {{ posta_web_view_url }}

@@ -1,0 +1,37 @@
+<div class="preheader">{{inviterName}} invited you to join {{workspaceName}} on {{company}}.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>You're invited</h1>
+            <p>Join your team on {{company}}</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Hello {{name}},</h2>
+            <p><strong>{{inviterName}}</strong> has invited you to join the <strong>{{workspaceName}}</strong> workspace on {{company}} as a <strong>{{role}}</strong>.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{acceptLink}}" class="btn" target="_blank">Accept Invitation</a>
+                </td>
+              </tr>
+            </table>
+            <div class="info-box">This invitation expires in <strong>{{expiry}}</strong>. If the button doesn't work, copy and paste this URL into your browser:<br/><a href="{{acceptLink}}">{{acceptLink}}</a></div>
+            <p>If you weren't expecting this invitation, you can safely ignore this email.</p>
+            <p>Best regards,<br/>The {{company}} Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">View this email in your browser</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

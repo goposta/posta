@@ -1,0 +1,24 @@
+Bonjour {{name}},
+
+Bienvenue sur {{product}}.
+
+Votre compte est prêt et vous pouvez commencer à envoyer des emails immédiatement.
+
+Fonctionnalités principales :
+{{range features}}
+- {{.}}
+{{end}}
+
+Voir la documentation : {{docs}}
+
+Ressources utiles :
+{{range links}}
+- {{.title}} : {{.url}}
+{{end}}
+
+Cordialement,
+L'équipe {{company}}
+
+© {{year}} {{company}} — Licence Apache 2.0
+
+Afficher cet e-mail dans votre navigateur : {{ posta_web_view_url }}

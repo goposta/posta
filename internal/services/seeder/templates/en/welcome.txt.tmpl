@@ -1,0 +1,24 @@
+Hello {{name}},
+
+Welcome to {{product}}.
+
+Your account is ready and you can begin sending emails immediately.
+
+Key capabilities:
+{{range features}}
+- {{.}}
+{{end}}
+
+View API documentation: {{docs}}
+
+Helpful resources:
+{{range links}}
+- {{.title}}: {{.url}}
+{{end}}
+
+Best regards,
+The {{company}} Team
+
+© {{year}} {{company}} — Licensed under Apache 2.0
+
+View this email in your browser: {{ posta_web_view_url }}

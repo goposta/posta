@@ -1,0 +1,39 @@
+<div class="preheader">Bestätigen Sie Ihre E-Mail-Adresse, um Ihr {{company}}-Konto zu aktivieren.</div>
+<table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="email-header">
+            <h1>Bestätigen Sie Ihre E-Mail</h1>
+            <p>Ein schneller Schritt zum Loslegen</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-body">
+            <h2>Hallo {{name}},</h2>
+            <p>Vielen Dank für Ihre Anmeldung bei {{company}}. Bitte bestätigen Sie Ihre E-Mail-Adresse, um Ihr Konto zu aktivieren.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 8px auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#7e22ce" style="border-radius: 8px;">
+                  <a href="{{verifyLink}}" class="btn" target="_blank">E-Mail-Adresse bestätigen</a>
+                </td>
+              </tr>
+            </table>
+            <p class="muted" style="text-align:center;">Oder geben Sie diesen Bestätigungscode ein:</p>
+            <p style="text-align:center; margin: 0 0 24px;"><span class="code-pill">{{code}}</span></p>
+            <div class="info-box">Dieser Link und Code laufen in <strong>{{expiry}}</strong> ab. Falls die Schaltfläche nicht funktioniert, kopieren Sie diese URL in Ihren Browser:<br/><a href="{{verifyLink}}">{{verifyLink}}</a></div>
+            <p>Wenn Sie kein Konto erstellt haben, können Sie diese E-Mail ignorieren.</p>
+            <p>Mit freundlichen Grüßen,<br/>Das {{company}}-Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="email-footer">
+            <p>© {{year}} {{company}}</p>
+            <p><a href="{{ posta_web_view_url }}">Diese E-Mail im Browser anzeigen</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
