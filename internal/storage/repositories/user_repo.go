@@ -145,6 +145,12 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 		if err := tx.Exec("DELETE FROM contact_lists WHERE user_id = ?", userID).Error; err != nil {
 			return err
 		}
+
+		// Delete webhook_deliveries that reference the user's webhooks
+		if err := tx.Exec("DELETE FROM webhook_deliveries WHERE webhook_id IN (SELECT id FROM webhooks WHERE user_id = ?)", userID).Error; err != nil {
+			return err
+		}
+
 		for _, table := range tables {
 			if err := tx.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID).Error; err != nil {
 				return err
