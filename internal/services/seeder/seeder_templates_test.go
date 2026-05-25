@@ -37,7 +37,6 @@ func TestDefaultTemplatesRender(t *testing.T) {
 	renderer := email.NewTemplateRenderer() // defaults to missingkey=error
 
 	for _, def := range defs {
-		def := def
 		t.Run(def.Name, func(t *testing.T) {
 			for _, lang := range seedLanguages {
 				subject, ok := def.Subjects[lang]
