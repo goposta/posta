@@ -316,9 +316,9 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 				URL:  "http://www.apache.org/licenses/LICENSE-2.0",
 			},
 			Contact: okapi.Contact{
-				Name:  "Posta",
+				Name:  "Support",
 				URL:   "https://github.com/goposta/posta",
-				Email: "jonas@goposta.dev",
+				Email: "me@jkaninda.dev",
 			},
 			Servers:         apiServers,
 			SecuritySchemes: c.securitySchemes,

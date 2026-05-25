@@ -40,18 +40,21 @@ curl -X POST http://localhost:9000/api/v1/emails/send \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "from": "hello@example.com",
+    "from": "Acme <hello@example.com>",
     "to": ["user@example.com"],
     "subject": "Hello from Posta",
     "html": "<h1>Hello!</h1>"
   }'
 ```
 
+> The `from`, `to`, and other address fields accept a plain address (`hello@example.com`)
+> or RFC 5322 display-name format (`Acme <hello@example.com>`).
+
 Response:
 
 ```json
 {
-  "id": "email_01J8C8E5W3",
+  "id": "0ae4b04e-5c64-4b2f-bad6-460f8d5d98b3",
   "status": "queued"
 }
 ```
@@ -64,6 +67,7 @@ Response:
 
 * REST API for transactional, batch, and templated emails
 * Attachments, custom headers, and unsubscribe support
+* Web view ("view in browser") with signed, expiring links
 * Scheduled sending and preview mode
 * Async processing with Redis and Asynq
 * Automatic retries and priority queues
@@ -81,6 +85,7 @@ Response:
 
 * Versioned and multi-language templates
 * Variable substitution and stylesheet inlining
+* System variables for web view and one-click unsubscribe links
 * Import/export and preview support
 
 ### Campaigns

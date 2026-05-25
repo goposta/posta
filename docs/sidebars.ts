@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
         'templates/stylesheets',
         'templates/preview-and-test',
         'templates/import-export',
+        'templates/system-variables',
       ],
     },
     {
