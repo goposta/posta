@@ -317,8 +317,8 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 			},
 			Contact: okapi.Contact{
 				Name:  "Support",
-				URL:   "https://github.com/goposta/posta",
-				Email: "me@jkaninda.dev",
+				URL:   "https://goposta.dev/",
+				Email: "jonas@goposta.dev",
 			},
 			Servers:         apiServers,
 			SecuritySchemes: c.securitySchemes,
