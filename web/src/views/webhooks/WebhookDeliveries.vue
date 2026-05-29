@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { webhookDeliveriesApi } from '../../api/webhooks'
 import type { WebhookDelivery } from '../../api/types'
 import Pagination from '../../components/Pagination.vue'
-import SectionHeader from '../../components/SectionHeader.vue'
 import { usePagination } from '../../composables/usePagination'
 
 const loading = ref(true)
@@ -33,13 +32,9 @@ function formatDate(date: string) {
 
 <template>
   <div>
-    <SectionHeader
-      title="Webhooks"
-      :tabs="[
-        { label: 'Webhooks', to: '/webhooks' },
-        { label: 'Deliveries', to: '/webhook-deliveries' },
-      ]"
-    />
+    <div class="page-header">
+      <h1>Webhook Deliveries</h1>
+    </div>
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>

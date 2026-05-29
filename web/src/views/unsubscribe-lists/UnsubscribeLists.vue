@@ -7,7 +7,6 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { useWorkspaceStore } from '../../stores/workspace'
-import SectionHeader from '@/components/SectionHeader.vue'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
 
@@ -127,14 +126,9 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 <template>
   <div>
-    <SectionHeader
-      title="Subscribers"
-      :tabs="[
-        { label: 'Subscribers', to: '/subscribers' },
-        { label: 'Lists', to: '/subscriber-lists' },
-        { label: 'Unsubscribe', to: '/unsubscribe-lists' },
-      ]"
-    />
+    <div class="page-header">
+      <h1>Unsubscribe Lists</h1>
+    </div>
 
     <div v-if="showInfo" class="card help-card">
       <div class="card-body">

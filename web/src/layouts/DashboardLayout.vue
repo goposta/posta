@@ -60,10 +60,12 @@ interface NavItem {
   external?: boolean
   /** Only show when a real workspace (not Personal) is selected. */
   requiresWorkspace?: boolean
+  /** Only show when the user is an owner or admin of the current workspace. */
+  requiresWorkspaceAdmin?: boolean
   /** Only show when the backend exposes the OpenAPI docs. */
   requiresOpenapiDocs?: boolean
   /** Deep-link into a WorkspaceSettings tab of the current workspace. */
-  workspaceTab?: 'members' | 'plan'
+  workspaceTab?: 'members' | 'plan' | 'settings'
   /** Additional route path prefixes that should keep this item highlighted (grouped tab pages). */
   matchPaths?: string[]
   /** Nested items shown indented under this entry. */
@@ -76,6 +78,8 @@ interface NavSection {
   items: NavItem[]
   /** Only rendered for platform admins. */
   admin?: boolean
+  /** Hidden in Personal mode; only shown when a real workspace is selected. */
+  requiresWorkspace?: boolean
   /** Whether the section starts expanded. Defaults to true. */
   defaultOpen?: boolean
 }
@@ -95,7 +99,15 @@ const navSections: NavSection[] = [
     items: [
       { name: 'Emails', path: '/emails', icon: 'mail' },
       { name: 'Campaigns', path: '/campaigns', icon: 'send' },
-      { name: 'Templates', path: '/templates', icon: 'file-text', matchPaths: ['/stylesheets', '/languages'] },
+      {
+        name: 'Templates',
+        path: '/templates',
+        icon: 'file-text',
+        children: [
+          { name: 'Stylesheets', path: '/stylesheets', icon: 'type' },
+          { name: 'Languages', path: '/languages', icon: 'globe' },
+        ],
+      },
     ],
   },
   {
@@ -110,7 +122,9 @@ const navSections: NavSection[] = [
     title: 'Audience',
     items: [
       { name: 'Contacts', path: '/contacts', icon: 'users' },
-      { name: 'Subscribers', path: '/subscribers', icon: 'user-check', matchPaths: ['/subscriber-lists', '/unsubscribe-lists'] },
+      { name: 'Subscribers', path: '/subscribers', icon: 'user-check' },
+      { name: 'Subscriber Lists', path: '/subscriber-lists', icon: 'list' },
+      { name: 'Unsubscribe Lists', path: '/unsubscribe-lists', icon: 'mail-x' },
     ],
   },
   {
@@ -125,8 +139,11 @@ const navSections: NavSection[] = [
     title: 'Developers',
     defaultOpen: false,
     items: [
-      { name: 'API Keys & Docs', path: '/api-keys', icon: 'key' },
-      { name: 'Webhooks', path: '/webhooks', icon: 'link', matchPaths: ['/webhook-deliveries'] },
+      { name: 'API Keys', path: '/api-keys', icon: 'key' },
+      { name: 'Webhooks', path: '/webhooks', icon: 'link' },
+      { name: 'Webhook Deliveries', path: '/webhook-deliveries', icon: 'activity' },
+      { name: 'API Reference', path: '/docs', icon: 'book-open', external: true, requiresOpenapiDocs: true },
+      { name: 'OpenAPI (Swagger)', path: '/swagger', icon: 'code', external: true, requiresOpenapiDocs: true },
     ],
   },
   {
@@ -141,10 +158,12 @@ const navSections: NavSection[] = [
   {
     id: 'workspace',
     title: 'Workspace',
+    requiresWorkspace: true,
     defaultOpen: false,
     items: [
-      { name: 'Settings', path: '/settings', icon: 'settings' },
-      { name: 'Audit Log', path: '/audit-log', icon: 'history' },
+      { name: 'Members', path: '', icon: 'users', workspaceTab: 'members' },
+      { name: 'Plan & Billing', path: '', icon: 'credit-card', workspaceTab: 'plan' },
+      { name: 'Settings', path: '', icon: 'settings', workspaceTab: 'settings', requiresWorkspaceAdmin: true },
     ],
   },
   {
@@ -189,12 +208,17 @@ function toggleSection(id: string) {
 }
 
 const visibleSections = computed(() =>
-  navSections.filter((s) => !s.admin || auth.isAdmin)
+  navSections.filter((s) => {
+    if (s.admin && !auth.isAdmin) return false
+    if (s.requiresWorkspace && !wsStore.isWorkspaceContext) return false
+    return true
+  })
 )
 
 function sectionItems(section: NavSection): NavItem[] {
   return section.items.filter((item) => {
     if (item.requiresWorkspace && !wsStore.isWorkspaceContext) return false
+    if (item.requiresWorkspaceAdmin && !wsStore.isWorkspaceAdmin) return false
     if (item.requiresOpenapiDocs && !appInfo.value?.openapi_docs) return false
     return true
   })
@@ -418,6 +442,25 @@ function getIcon(name: string): string {
                   <circle cx="8" cy="5.33" r="2.67" stroke="currentColor" stroke-width="1.5" />
                 </svg>
                 My Profile
+              </a>
+              <a class="user-dropdown-item" @click.stop="navigate('/settings'); userMenuOpen = false">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M13 9.6a1.1 1.1 0 00.22 1.18l.04.04a1.3 1.3 0 11-1.84 1.84l-.04-.04a1.1 1.1 0 00-1.18-.22 1.1 1.1 0 00-.66.98v.12a1.3 1.3 0 11-2.6 0v-.06a1.1 1.1 0 00-.7-.98 1.1 1.1 0 00-1.18.22l-.04.04a1.3 1.3 0 11-1.84-1.84l.04-.04a1.1 1.1 0 00.22-1.18A1.1 1.1 0 002.28 9H2.2a1.3 1.3 0 110-2.6h.06a1.1 1.1 0 00.98-.7 1.1 1.1 0 00-.22-1.18l-.04-.04a1.3 1.3 0 111.84-1.84l.04.04a1.1 1.1 0 001.18.22h.06a1.1 1.1 0 00.66-.98V1.8a1.3 1.3 0 112.6 0v.06a1.1 1.1 0 00.66.98 1.1 1.1 0 001.18-.22l.04-.04a1.3 1.3 0 111.84 1.84l-.04.04a1.1 1.1 0 00-.22 1.18v.06a1.1 1.1 0 00.98.66h.12a1.3 1.3 0 110 2.6h-.06a1.1 1.1 0 00-.98.66z"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                Settings
+              </a>
+              <a class="user-dropdown-item" @click.stop="navigate('/audit-log'); userMenuOpen = false">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 8a6 6 0 102.7-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                  <path d="M2 12V8.7h3.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                  <path d="M8 4.7V8l2 1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                Audit Log
               </a>
               <div class="user-dropdown-divider"></div>
               <div class="user-dropdown-theme">

@@ -8,7 +8,6 @@ import { usePagination } from '../../composables/usePagination'
 import { useNotificationStore } from '../../stores/notification'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { useWorkspaceStore } from '../../stores/workspace'
-import SectionHeader from '../../components/SectionHeader.vue'
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -170,14 +169,9 @@ const { watchClickStart: watchImportStart, confirmClickEnd: confirmImportEnd } =
 
 <template>
   <div>
-    <SectionHeader
-      title="Subscribers"
-      :tabs="[
-        { label: 'Subscribers', to: '/subscribers' },
-        { label: 'Lists', to: '/subscriber-lists' },
-        { label: 'Unsubscribe', to: '/unsubscribe-lists' },
-      ]"
-    />
+    <div class="page-header">
+      <h1>Subscribers</h1>
+    </div>
 
     <div class="card">
       <div class="card-header" style="display: flex; gap: 12px; align-items: center">

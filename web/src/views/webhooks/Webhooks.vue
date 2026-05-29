@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { webhooksApi } from '../../api/webhooks'
 import type { Webhook, WebhookInput } from '../../api/types'
 import Pagination from '../../components/Pagination.vue'
-import SectionHeader from '../../components/SectionHeader.vue'
 import { usePagination } from '../../composables/usePagination'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
@@ -133,13 +132,9 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 <template>
   <div>
-    <SectionHeader
-      title="Webhooks"
-      :tabs="[
-        { label: 'Webhooks', to: '/webhooks' },
-        { label: 'Deliveries', to: '/webhook-deliveries' },
-      ]"
-    />
+    <div class="page-header">
+      <h1>Webhooks</h1>
+    </div>
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
