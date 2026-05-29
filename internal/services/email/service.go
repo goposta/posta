@@ -248,28 +248,26 @@ var (
 // Unsubscribe configures the List-Unsubscribe headers (RFC 2369 / 8058) and, for
 // the Posta-managed path, list-scoped suppression on a one-click opt-out.
 type Unsubscribe struct {
-	// ListID (Posta-managed): reference an existing UnsubscribeList by id. Posta
-	// generates the signed one-click URL + List-Unsubscribe-Post, and a click
-	// suppresses the recipient on that list only. Mutually exclusive with URL.
-	ListID *uint `json:"list_id,omitempty"`
+	// ListID (Posta-managed): reference an existing UnsubscribeList by id.
+	ListID *uint `json:"list_id,omitempty" doc:"Reference an existing UnsubscribeList by id (Posta-managed). Posta mints the signed one-click URL and a click suppresses the recipient on this list only. Mutually exclusive with url."`
 
 	// URL (caller-managed): you own the endpoint; Posta only emits the header.
 	// Also the RFC 8058 POST target when OneClick is set.
-	URL string `json:"url,omitempty"`
+	URL string `json:"url,omitempty" format:"url" doc:"Caller-managed unsubscribe endpoint. Posta only emits the List-Unsubscribe header; you own the endpoint. Also the RFC 8058 POST target when one_click is true (which requires https). Mutually exclusive with list_id."`
 	// Mailto is an optional mailto: unsubscribe (RFC 2369), emitted alongside URL.
-	Mailto string `json:"mailto,omitempty"`
+	Mailto string `json:"mailto,omitempty" doc:"Optional mailto: URI emitted alongside the URL in the List-Unsubscribe header (RFC 2369). A bare address is accepted; Posta prepends 'mailto:' if missing."`
 	// OneClick emits "List-Unsubscribe-Post: List-Unsubscribe=One-Click" (requires
 	// an https URL for the caller-managed path).
-	OneClick bool `json:"one_click,omitempty"`
+	OneClick bool `json:"one_click,omitempty" doc:"Emit 'List-Unsubscribe-Post: List-Unsubscribe=One-Click' (RFC 8058). Applies to the https URL target only; the caller-managed path requires an https url. Implied true on the Posta-managed (list_id) path."`
 }
 
 type SendRequest struct {
-	From        string              `json:"from" required:"true"`
-	To          []string            `json:"to" required:"true" minItems:"1"`
+	From        string              `json:"from" required:"true" doc:"Sender address. Accepts a plain address (hello@example.com) or RFC 5322 display-name format (Acme <hello@example.com>)."`
+	To          []string            `json:"to" required:"true" minItems:"1" doc:"Recipient addresses. Each accepts a plain address or RFC 5322 display-name format (e.g. Jonas <jonas@example.com>)."`
 	Subject     string              `json:"subject" required:"true"`
 	HTML        string              `json:"html"`
 	Text        string              `json:"text"`
-	Attachments []models.Attachment `json:"attachments,omitempty"`
+	Attachments []models.Attachment `json:"attachments,omitempty" doc:"Optional file attachments. Each must include filename, content_type, and base64-encoded content. Subject to per-attachment and total size limits set by your plan."`
 	Headers     map[string]string   `json:"headers,omitempty"`
 	Unsubscribe *Unsubscribe        `json:"unsubscribe,omitempty"`
 	// Deprecated: use Unsubscribe. Kept for one minor release; mapped onto
@@ -338,11 +336,11 @@ func (s *Service) resolveUnsubscribe(scope repositories.ResourceScope, req *Send
 type SendTemplateRequest struct {
 	TemplateID   *uint               `json:"template_id,omitempty" doc:"Template ID (preferred, uses primary key index)"`
 	Template     string              `json:"template" doc:"Template name (fallback when template_id is not provided)"`
-	Language     string              `json:"language"`
-	From         string              `json:"from"`
-	To           []string            `json:"to" required:"true" minItems:"1"`
-	TemplateData map[string]any      `json:"template_data"`
-	Attachments  []models.Attachment `json:"attachments,omitempty"`
+	Language     string              `json:"language" doc:"Language code for template localization (BCP 47 / ISO 639-1, e.g. en, fr, fr-CA). Falls back to base language, the template default, then en."`
+	From         string              `json:"from" doc:"Sender address. Accepts a plain address (hello@example.com) or RFC 5322 display-name format (Acme <hello@example.com>)."`
+	To           []string            `json:"to" required:"true" minItems:"1" doc:"Recipient addresses. Each accepts a plain address or RFC 5322 display-name format (e.g. Jonas <jonas@example.com>)."`
+	TemplateData map[string]any      `json:"template_data" doc:"Variables substituted into the template's {{ var_name }} placeholders. Reserved posta_* variables (e.g. posta_unsubscribe_url, posta_web_view_url) are injected automatically."`
+	Attachments  []models.Attachment `json:"attachments,omitempty" doc:"Optional file attachments. Each must include filename, content_type, and base64-encoded content. Subject to per-attachment and total size limits set by your plan."`
 	Unsubscribe  *Unsubscribe        `json:"unsubscribe,omitempty"`
 }
 
@@ -354,8 +352,8 @@ type SendResponse struct {
 type BatchRequest struct {
 	TemplateID *uint            `json:"template_id,omitempty" doc:"Template ID (preferred, uses primary key index)"`
 	Template   string           `json:"template" doc:"Template name (fallback when template_id is not provided)"`
-	Language   string           `json:"language"`
-	From       string           `json:"from"`
+	Language   string           `json:"language" doc:"Default language for the batch (BCP 47 / ISO 639-1, e.g. en, fr, fr-CA). Each recipient can override via recipients[].language."`
+	From       string           `json:"from" doc:"Sender address. Accepts a plain address (hello@example.com) or RFC 5322 display-name format (Acme <hello@example.com>)."`
 	Recipients []BatchRecipient `json:"recipients" required:"true" minItems:"1"`
 	// Unsubscribe applies to every recipient in the batch (same list / URL / mailto).
 	// Per-recipient unsubscribe is intentionally not supported.
@@ -363,9 +361,9 @@ type BatchRequest struct {
 }
 
 type BatchRecipient struct {
-	Email        string         `json:"email" required:"true" format:"email"`
-	Language     string         `json:"language"`
-	TemplateData map[string]any `json:"template_data"`
+	Email        string         `json:"email" required:"true" format:"email" doc:"Recipient address. Accepts a plain address or RFC 5322 display-name format (e.g. Jonas <jonas@example.com>)."`
+	Language     string         `json:"language" doc:"Per-recipient language override (BCP 47 / ISO 639-1). Falls back to the batch-level language, then the template default."`
+	TemplateData map[string]any `json:"template_data" doc:"Variables substituted into the template's {{ var_name }} placeholders. Reserved posta_* variables (e.g. posta_unsubscribe_url, posta_web_view_url) are injected automatically."`
 }
 
 type BatchResponse struct {
@@ -1100,10 +1098,10 @@ func (s *Service) SendTestByTemplateID(ctx context.Context, userID uint, workspa
 }
 
 type SendTestRequest struct {
-	To           []string       `json:"to" required:"true" minItems:"1"`
-	From         string         `json:"from"`
-	Language     string         `json:"language"`
-	TemplateData map[string]any `json:"template_data"`
+	To           []string       `json:"to" required:"true" minItems:"1" doc:"Recipient addresses. Each accepts a plain address or RFC 5322 display-name format (e.g. Jonas <jonas@example.com>)."`
+	From         string         `json:"from" doc:"Sender address. Accepts a plain address (hello@example.com) or RFC 5322 display-name format (Acme <hello@example.com>)."`
+	Language     string         `json:"language" doc:"Language code for template localization (BCP 47 / ISO 639-1, e.g. en, fr, fr-CA). Falls back to base language, the template default, then en."`
+	TemplateData map[string]any `json:"template_data" doc:"Variables substituted into the template's {{ var_name }} placeholders. Reserved posta_* variables (e.g. posta_unsubscribe_url, posta_web_view_url) are injected automatically."`
 }
 
 // defaultRetryLimit is the fallback maximum number of manual retries when
