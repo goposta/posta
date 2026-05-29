@@ -7,6 +7,7 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { useWorkspaceStore } from '../../stores/workspace'
+import SectionHeader from '@/components/SectionHeader.vue'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
 
@@ -119,16 +120,24 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 <template>
   <div>
-    <div class="page-header">
-      <h1>Subscriber Lists</h1>
-      <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Create List</button>
-    </div>
+    <SectionHeader
+      title="Subscribers"
+      :tabs="[
+        { label: 'Subscribers', to: '/subscribers' },
+        { label: 'Lists', to: '/subscriber-lists' },
+        { label: 'Unsubscribe', to: '/unsubscribe-lists' },
+      ]"
+    />
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
     </div>
 
     <div v-else class="card">
+      <div class="card-header">
+        <h2>Lists</h2>
+        <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Create List</button>
+      </div>
       <div v-if="lists.length === 0" class="empty-state">
         <h3>No Lists</h3>
         <p>Create a segment to organize your subscribers.</p>

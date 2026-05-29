@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { apiKeysApi } from '../../api/apikeys'
 import { settingsApi } from '../../api/settings'
+import { infoApi, type AppInfo } from '../../api/info'
 import type { ApiKey, ApiKeyCreateResponse, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
@@ -16,6 +17,7 @@ const { confirm } = useConfirm()
 
 const keys = ref<ApiKey[]>([])
 const loading = ref(true)
+const appInfo = ref<AppInfo | null>(null)
 
 const showCreateModal = ref(false)
 const newKeyName = ref('')
@@ -167,6 +169,7 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 onMounted(() => {
   loadSettings()
+  infoApi.get().then((res) => { appInfo.value = res.data.data }).catch(() => {})
 })
 </script>
 
@@ -175,6 +178,17 @@ onMounted(() => {
     <div class="page-header">
       <h1>API Keys</h1>
       <button v-if="wsStore.canEdit" class="btn btn-primary" @click="showCreateModal = true">Create Key</button>
+    </div>
+
+    <div v-if="appInfo?.openapi_docs" class="card api-docs-callout">
+      <div class="api-docs-text">
+        <strong>Developer resources</strong>
+        <span>Authenticate with your API key and explore the full HTTP API.</span>
+      </div>
+      <div class="api-docs-links">
+        <a class="btn btn-secondary btn-sm" href="/docs" target="_blank" rel="noopener noreferrer">API Reference</a>
+        <a class="btn btn-secondary btn-sm" href="/swagger" target="_blank" rel="noopener noreferrer">OpenAPI (Swagger)</a>
+      </div>
     </div>
 
     <div v-if="loading" class="loading-page">
@@ -324,3 +338,20 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.api-docs-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+.api-docs-text { display: flex; flex-direction: column; gap: 2px; }
+.api-docs-text strong { font-size: 14px; color: var(--text-primary); }
+.api-docs-text span { font-size: 13px; color: var(--text-secondary); }
+.api-docs-links { display: flex; gap: 8px; flex-shrink: 0; }
+.api-docs-links .btn { text-decoration: none; }
+</style>

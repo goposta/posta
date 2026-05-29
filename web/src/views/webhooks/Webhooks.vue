@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { webhooksApi } from '../../api/webhooks'
 import type { Webhook, WebhookInput } from '../../api/types'
 import Pagination from '../../components/Pagination.vue'
+import SectionHeader from '../../components/SectionHeader.vue'
 import { usePagination } from '../../composables/usePagination'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
@@ -132,10 +133,13 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 <template>
   <div>
-    <div class="page-header">
-      <h1>Webhooks</h1>
-      <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Add Webhook</button>
-    </div>
+    <SectionHeader
+      title="Webhooks"
+      :tabs="[
+        { label: 'Webhooks', to: '/webhooks' },
+        { label: 'Deliveries', to: '/webhook-deliveries' },
+      ]"
+    />
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
@@ -143,6 +147,10 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
     <template v-else>
       <div class="card">
+        <div class="card-header">
+          <h2>Webhooks</h2>
+          <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Add Webhook</button>
+        </div>
         <div class="table-wrapper" v-if="webhooks.length > 0">
           <table>
             <thead>

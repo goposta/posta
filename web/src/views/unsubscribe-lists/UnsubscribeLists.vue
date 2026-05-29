@@ -7,6 +7,7 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { useWorkspaceStore } from '../../stores/workspace'
+import SectionHeader from '@/components/SectionHeader.vue'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
 
@@ -126,39 +127,32 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 <template>
   <div>
-    <div class="page-header">
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <h1>Unsubscribe Lists</h1>
-        <button
-          type="button"
-          @click="showInfo = !showInfo"
-          :title="showInfo ? 'Hide help' : 'How to use unsubscribe lists'"
-          aria-label="Toggle help"
-          style="background:transparent;border:0;cursor:pointer;color:var(--text-secondary,#6b7280);display:inline-flex;align-items:center;justify-content:center;padding:6px;border-radius:6px;"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 12.75V9M9 5.25h.007" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-      <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Add List</button>
-    </div>
+    <SectionHeader
+      title="Subscribers"
+      :tabs="[
+        { label: 'Subscribers', to: '/subscribers' },
+        { label: 'Lists', to: '/subscriber-lists' },
+        { label: 'Unsubscribe', to: '/unsubscribe-lists' },
+      ]"
+    />
 
-    <div v-if="showInfo" class="card" style="margin-bottom:16px;display:flex;gap:12px;align-items:flex-start;">
-      <svg width="20" height="20" viewBox="0 0 18 18" fill="none" style="flex-shrink:0;color:#9333ea;margin-top:2px;"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 12.75V9M9 5.25h.007" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      <div style="flex:1;min-width:0;">
-        <h3 style="margin-top:0;margin-bottom:8px;">Where to use Unsubscribe Lists</h3>
-        <p style="margin:0 0 8px 0;">
-          Reference a list from a transactional send with <code>unsubscribe.list_id</code>.<br>
-          Posta mints the signed one-click URL and emits the <code>List-Unsubscribe</code> header.<br>
-          A click opts the recipient out of <strong>that list only</strong> and their receipts, password resets, and other transactional mail keep flowing.
+    <div v-if="showInfo" class="card help-card">
+      <div class="card-body">
+        <h2 class="help-title">Where to use Unsubscribe Lists</h2>
+        <p class="help-text">
+          Reference a list from a transactional send with <code>unsubscribe.list_id</code>.
+          Posta mints the signed one-click URL and emits the <code>List-Unsubscribe</code> header.
+          A click opts the recipient out of <strong>that list only</strong> &mdash; receipts, password
+          resets, and other transactional mail keep flowing.
         </p>
-        <pre class="code-block" style="margin:0;font-size:12px;line-height:1.5;"><code>POST /api/v1/emails/send
+        <pre class="code-block"><code>POST /api/v1/emails/send
 {
   "to": ["user@example.com"],
   "subject": "Product update",
   "html": "...",
   "unsubscribe": { "list_id": 42 }
 }</code></pre>
-        <p style="margin:10px 0 0 0;color:var(--text-secondary,#6b7280);font-size:13px;">
+        <p class="help-text help-text-muted">
           Click a list name below to see who opted out and to resubscribe individual addresses.
         </p>
       </div>
@@ -169,6 +163,19 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
     </div>
 
     <div v-else class="card">
+      <div class="card-header">
+        <h2>Unsubscribe Lists</h2>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            @click="showInfo = !showInfo"
+          >
+            {{ showInfo ? 'Hide help' : 'How to use' }}
+          </button>
+          <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Add List</button>
+        </div>
+      </div>
       <div v-if="lists.length === 0" class="empty-state">
         <h3>No Unsubscribe Lists</h3>
         <p>Create a list, then reference it from a send with <code>unsubscribe.list_id</code>. A one-click then opts the recipient out of that list only.</p>
@@ -260,3 +267,33 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.help-card {
+  margin-bottom: 16px;
+}
+.help-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+.help-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+.help-text code {
+  font-size: 12px;
+}
+.help-card .code-block {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.help-text-muted {
+  color: var(--text-muted);
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+</style>

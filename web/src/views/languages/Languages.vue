@@ -6,6 +6,7 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
 import { useWorkspaceStore } from '../../stores/workspace'
+import SectionHeader from '@/components/SectionHeader.vue'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
 
@@ -133,16 +134,24 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 <template>
   <div>
-    <div class="page-header">
-      <h1>Languages</h1>
-      <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Add Language</button>
-    </div>
+    <SectionHeader
+      title="Templates"
+      :tabs="[
+        { label: 'Templates', to: '/templates' },
+        { label: 'Stylesheets', to: '/stylesheets' },
+        { label: 'Languages', to: '/languages' },
+      ]"
+    />
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
     </div>
 
     <div v-else class="card">
+      <div class="card-header">
+        <h2>Languages</h2>
+        <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Add Language</button>
+      </div>
       <div v-if="languages.length === 0" class="empty-state">
         <h3>No Languages</h3>
         <p>Add languages to use for template localizations.</p>

@@ -24,6 +24,10 @@ function closeUserMenu(e: MouseEvent) {
   if (el && !el.contains(e.target as Node)) {
     userMenuOpen.value = false
   }
+  if (wsSwitcherOpen.value) {
+    const inSwitcher = (e.target as Element)?.closest?.('.ws-switcher')
+    if (!inSwitcher) wsSwitcherOpen.value = false
+  }
 }
 
 const toggleSidebar = () => {
@@ -48,46 +52,179 @@ onBeforeUnmount(() => {
 
 const user = computed(() => auth.user)
 
-const navItems = [
-  { name: 'Dashboard', path: '/', icon: 'grid' },
-  { name: 'Analytics', path: '/analytics', icon: 'bar-chart' },
-  { name: 'Emails', path: '/emails', icon: 'mail' },
-  { name: 'Inbound', path: '/inbound-emails', icon: 'inbox' },
-  { name: 'Templates', path: '/templates', icon: 'file-text' },
-  { name: 'Languages', path: '/languages', icon: 'type' },
-  { name: 'Stylesheets', path: '/stylesheets', icon: 'edit-3' },
+interface NavItem {
+  name: string
+  path: string
+  icon: string
+  /** Render as a plain external link instead of a router-link. */
+  external?: boolean
+  /** Only show when a real workspace (not Personal) is selected. */
+  requiresWorkspace?: boolean
+  /** Only show when the backend exposes the OpenAPI docs. */
+  requiresOpenapiDocs?: boolean
+  /** Deep-link into a WorkspaceSettings tab of the current workspace. */
+  workspaceTab?: 'members' | 'plan'
+  /** Additional route path prefixes that should keep this item highlighted (grouped tab pages). */
+  matchPaths?: string[]
+  /** Nested items shown indented under this entry. */
+  children?: NavItem[]
+}
 
-  { name: 'Webhooks', path: '/webhooks', icon: 'link' },
-  { name: 'Deliveries', path: '/webhook-deliveries', icon: 'activity' },
-  { name: 'Contacts', path: '/contacts', icon: 'users' },
-  { name: 'Subscribers', path: '/subscribers', icon: 'users' },
-  { name: 'Subscriber Lists', path: '/subscriber-lists', icon: 'list' },
-  { name: 'Campaigns', path: '/campaigns', icon: 'send' },
-  { name: 'Unsubscribe Lists', path: '/unsubscribe-lists', icon: 'mail-x' },
-  { name: 'Bounces', path: '/bounces', icon: 'alert-triangle' },
-  { name: 'API Keys', path: '/api-keys', icon: 'key' },
-  { name: 'Audit Log', path: '/audit-log', icon: 'activity' },
-  { name: 'Workspaces', path: '/workspaces', icon: 'briefcase' },
-  { name: 'Domains', path: '/domains', icon: 'globe' },
-  { name: 'SMTP Servers', path: '/smtp-servers', icon: 'server' },
-  { name: 'Settings', path: '/settings', icon: 'settings' },
+interface NavSection {
+  id: string
+  title: string
+  items: NavItem[]
+  /** Only rendered for platform admins. */
+  admin?: boolean
+  /** Whether the section starts expanded. Defaults to true. */
+  defaultOpen?: boolean
+}
+
+const navSections: NavSection[] = [
+  {
+    id: 'overview',
+    title: 'Overview',
+    items: [
+      { name: 'Dashboard', path: '/', icon: 'grid' },
+      { name: 'Analytics', path: '/analytics', icon: 'bar-chart' },
+    ],
+  },
+  {
+    id: 'sending',
+    title: 'Sending',
+    items: [
+      { name: 'Emails', path: '/emails', icon: 'mail' },
+      { name: 'Campaigns', path: '/campaigns', icon: 'send' },
+      { name: 'Templates', path: '/templates', icon: 'file-text', matchPaths: ['/stylesheets', '/languages'] },
+    ],
+  },
+  {
+    id: 'inbound',
+    title: 'Inbound',
+    items: [
+      { name: 'Inbound Emails', path: '/inbound-emails', icon: 'inbox' },
+    ],
+  },
+  {
+    id: 'audience',
+    title: 'Audience',
+    items: [
+      { name: 'Contacts', path: '/contacts', icon: 'users' },
+      { name: 'Subscribers', path: '/subscribers', icon: 'user-check', matchPaths: ['/subscriber-lists', '/unsubscribe-lists'] },
+    ],
+  },
+  {
+    id: 'deliverability',
+    title: 'Deliverability',
+    items: [
+      { name: 'Bounces & Suppressions', path: '/bounces', icon: 'alert-triangle' },
+    ],
+  },
+  {
+    id: 'developers',
+    title: 'Developers',
+    defaultOpen: false,
+    items: [
+      { name: 'API Keys & Docs', path: '/api-keys', icon: 'key' },
+      { name: 'Webhooks', path: '/webhooks', icon: 'link', matchPaths: ['/webhook-deliveries'] },
+    ],
+  },
+  {
+    id: 'infrastructure',
+    title: 'Infrastructure',
+    defaultOpen: false,
+    items: [
+      { name: 'Domains', path: '/domains', icon: 'globe' },
+      { name: 'SMTP Servers', path: '/smtp-servers', icon: 'server' },
+    ],
+  },
+  {
+    id: 'workspace',
+    title: 'Workspace',
+    defaultOpen: false,
+    items: [
+      { name: 'Settings', path: '/settings', icon: 'settings' },
+      { name: 'Audit Log', path: '/audit-log', icon: 'history' },
+    ],
+  },
+  {
+    id: 'admin',
+    title: 'Admin',
+    admin: true,
+    defaultOpen: false,
+    items: [
+      { name: 'Users', path: '/admin/users', icon: 'users' },
+      { name: 'Plans', path: '/admin/plans', icon: 'layers' },
+      { name: 'Shared Servers', path: '/admin/servers', icon: 'server' },
+      { name: 'OAuth', path: '/admin/oauth', icon: 'shield' },
+      { name: 'Jobs', path: '/admin/jobs', icon: 'clock' },
+      { name: 'Metrics', path: '/admin/metrics', icon: 'pie-chart' },
+      { name: 'Events', path: '/admin/events', icon: 'zap' },
+      { name: 'Platform Settings', path: '/admin/settings', icon: 'settings' },
+      { name: 'About', path: '/about', icon: 'info' },
+    ],
+  },
 ]
 
-const adminItems = [
-  { name: 'Users', path: '/admin/users', icon: 'users' },
-  { name: 'Plans', path: '/admin/plans', icon: 'layers' },
-  { name: 'Shared Servers', path: '/admin/servers', icon: 'server' },
-  { name: 'Jobs', path: '/admin/jobs', icon: 'clock' },
-  { name: 'Metrics', path: '/admin/metrics', icon: 'bar-chart' },
-  { name: 'Events', path: '/admin/events', icon: 'activity' },
-  { name: 'OAuth', path: '/admin/oauth', icon: 'key' },
-  { name: 'Settings', path: '/admin/settings', icon: 'settings' },
-  { name: 'About', path: '/about', icon: 'info' },
-]
+const SECTION_STATE_KEY = 'posta_nav_sections'
+
+function loadSectionState(): Record<string, boolean> {
+  const defaults: Record<string, boolean> = {}
+  navSections.forEach((s) => {
+    defaults[s.id] = s.defaultOpen !== false
+  })
+  try {
+    const saved = JSON.parse(localStorage.getItem(SECTION_STATE_KEY) || '{}')
+    return { ...defaults, ...saved }
+  } catch {
+    return defaults
+  }
+}
+
+const sectionOpen = ref<Record<string, boolean>>(loadSectionState())
+
+function toggleSection(id: string) {
+  sectionOpen.value[id] = !sectionOpen.value[id]
+  localStorage.setItem(SECTION_STATE_KEY, JSON.stringify(sectionOpen.value))
+}
+
+const visibleSections = computed(() =>
+  navSections.filter((s) => !s.admin || auth.isAdmin)
+)
+
+function sectionItems(section: NavSection): NavItem[] {
+  return section.items.filter((item) => {
+    if (item.requiresWorkspace && !wsStore.isWorkspaceContext) return false
+    if (item.requiresOpenapiDocs && !appInfo.value?.openapi_docs) return false
+    return true
+  })
+}
+
+/** Resolve the effective target of an item (handles workspace tab deep-links). */
+function itemTo(item: NavItem): string {
+  if (item.workspaceTab) {
+    return `/workspaces/${wsStore.currentWorkspaceId}?tab=${item.workspaceTab}`
+  }
+  return item.path
+}
 
 function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
   return route.path === path || route.path.startsWith(path + '/')
+}
+
+function isItemActive(item: NavItem): boolean {
+  if (item.workspaceTab) {
+    return (
+      route.path === `/workspaces/${wsStore.currentWorkspaceId}` &&
+      (route.query.tab || 'members') === item.workspaceTab
+    )
+  }
+  // "Manage Workspaces…" should only highlight on the list page itself,
+  // not on a workspace detail/tab page.
+  if (item.path === '/workspaces') return route.path === '/workspaces'
+  if (item.matchPaths?.some((p) => route.path === p || route.path.startsWith(p + '/'))) return true
+  return isActive(item.path)
 }
 
 function navigate(path: string) {
@@ -98,6 +235,18 @@ function switchContext(wsId: number | null) {
   wsStore.setWorkspace(wsId)
   wsSwitcherOpen.value = false
   router.push('/')
+}
+
+function manageWorkspaces() {
+  wsSwitcherOpen.value = false
+  mobileOpen.value = false
+  router.push('/workspaces')
+}
+
+function createWorkspace() {
+  wsSwitcherOpen.value = false
+  mobileOpen.value = false
+  router.push('/workspaces?create=1')
 }
 
 function logout() {
@@ -130,6 +279,13 @@ function getIcon(name: string): string {
     'layers': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1.5L1.5 6 9 10.5 16.5 6 9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 12L9 16.5 16.5 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 9L9 13.5 16.5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'info': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 12.75V9M9 5.25h.007" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
     'mail-x': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M16 8.5V4a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 4.5l7 5 7-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 12.5l3.5 3.5M16 12.5l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'user-check': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11.25 15.75v-1.5a3 3 0 00-3-3h-4.5a3 3 0 00-3 3v1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="5.25" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M12.75 9l1.5 1.5 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'credit-card': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="3.75" width="15" height="10.5" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M1.5 7.5h15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4.5 11.25h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'history': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2.25 9a6.75 6.75 0 113.02 5.62" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.25 13.5V9.75H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 5.25V9l2.25 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'shield': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1.5l6 2.25v4.5c0 3.6-2.55 6.6-6 7.5-3.45-.9-6-3.9-6-7.5v-4.5L9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.75 9l1.5 1.5 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'pie-chart': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M16.5 11.4A7.5 7.5 0 116.6 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.5 9A7.5 7.5 0 009 1.5V9h7.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'zap': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9.75 1.5L3 10.5h5.25L8.25 16.5 15 7.5H9.75l0-6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'code': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M12 4.5L16.5 9 12 13.5M6 4.5L1.5 9 6 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   }
   return icons[name] || ''
 }
@@ -152,7 +308,7 @@ function getIcon(name: string): string {
 
         </div>
         <!-- Workspace Switcher -->
-        <div v-if="wsStore.workspaces.length > 0" class="ws-switcher">
+        <div class="ws-switcher">
           <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
             <div class="ws-switcher-current">
               <div class="ws-avatar">{{ wsStore.currentWorkspace?.name?.charAt(0)?.toUpperCase() || 'P' }}</div>
@@ -174,49 +330,50 @@ function getIcon(name: string): string {
               <span>{{ ws.name }}</span>
               <span class="ws-role-badge">{{ ws.role }}</span>
             </div>
+            <div class="ws-switcher-divider"></div>
+            <div class="ws-switcher-action" @click="createWorkspace">
+              <span class="ws-switcher-action-icon">+</span>
+              <span>Create workspace</span>
+            </div>
+            <div class="ws-switcher-action" @click="manageWorkspaces">
+              <span class="nav-icon" v-html="getIcon('briefcase')"></span>
+              <span>Manage workspaces…</span>
+            </div>
           </div>
         </div>
 
         <nav class="sidebar-nav">
-          <div class="nav-section">
-            <router-link v-for="item in navItems" :key="item.path" class="nav-item"
-              :class="{ active: isActive(item.path) }" :title="sidebarCollapsed ? item.name : ''" :to="item.path">
-              <span class="nav-icon" v-html="getIcon(item.icon)"></span>
-              <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
-            </router-link>
-
-          </div>
-          <div v-if="auth.isAdmin" class="nav-section">
-            <div class="nav-section-title">Admin</div>
-            <router-link v-for="item in adminItems" :key="item.path" class="nav-item"
-              :class="{ active: isActive(item.path) }" :title="sidebarCollapsed ? item.name : ''" :to="item.path">
-              <span class="nav-icon" v-html="getIcon(item.icon)"></span>
-              <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
-            </router-link>
+          <div v-for="section in visibleSections" :key="section.id" class="nav-section">
+            <button v-if="!sidebarCollapsed" class="nav-section-title nav-section-toggle"
+              :aria-expanded="sectionOpen[section.id]" @click="toggleSection(section.id)">
+              <span>{{ section.title }}</span>
+              <svg class="nav-section-chevron" :class="{ collapsed: !sectionOpen[section.id] }" width="12" height="12"
+                viewBox="0 0 16 16" fill="none">
+                <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div v-show="sidebarCollapsed || sectionOpen[section.id]" class="nav-section-items">
+              <template v-for="item in sectionItems(section)" :key="item.name">
+                <a v-if="item.external" class="nav-item" :href="item.path" target="_blank" rel="noopener noreferrer"
+                  :title="sidebarCollapsed ? item.name : ''">
+                  <span class="nav-icon" v-html="getIcon(item.icon)"></span>
+                  <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
+                </a>
+                <router-link v-else class="nav-item" :class="{ active: isItemActive(item) }"
+                  :title="sidebarCollapsed ? item.name : ''" :to="itemTo(item)">
+                  <span class="nav-icon" v-html="getIcon(item.icon)"></span>
+                  <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
+                </router-link>
+                <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
+                  :class="{ active: isItemActive(child) }" :title="sidebarCollapsed ? child.name : ''" :to="child.path">
+                  <span class="nav-icon" v-html="getIcon(child.icon)"></span>
+                  <span v-if="!sidebarCollapsed" class="nav-label">{{ child.name }}</span>
+                </router-link>
+              </template>
+            </div>
           </div>
         </nav>
-
-      <div class="sidebar-footer">
-        <div class="nav-section">
-          <template v-if="appInfo?.openapi_docs">
-            <div class="nav-section-title">Docs</div>
-            <a class="nav-item" href="/docs" target="_blank" rel="noopener noreferrer"
-              :title="sidebarCollapsed ? 'Scalar UI' : ''">
-              <span class="nav-icon" v-html="getIcon('book-open')"></span>
-              <span class="nav-label">Scalar UI</span>
-            </a>
-            <a class="nav-item" href="/swagger" target="_blank" rel="noopener noreferrer"
-              :title="sidebarCollapsed ? 'Swagger UI' : ''">
-              <span class="nav-icon" v-html="getIcon('file-text')"></span>
-              <span class="nav-label">Swagger UI</span>
-            </a>
-          </template>
-
-          <div v-if="appInfo && !sidebarCollapsed" class="sidebar-version">
-            <span class="nav-label">v{{ appInfo.version }}</span>
-          </div>
-        </div>
-      </div>
     </aside>
 
     <div class="main-wrapper">
@@ -350,7 +507,7 @@ function getIcon(name: string): string {
         </div>
 
         <!-- ws Switcher (mobile) -->
-        <div v-if="wsStore.workspaces.length > 0" class="ws-switcher">
+        <div class="ws-switcher">
           <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
             <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
               <span class="ws-avatar">
@@ -381,29 +538,51 @@ function getIcon(name: string): string {
                   <small v-if="ws.role" style="font-size: 0.75rem; opacity: 0.7;">{{ ws.role }}</small>
                 </div>
               </div>
+
+              <div class="ws-switcher-divider"></div>
+              <div class="ws-option" @click="createWorkspace">
+                <span class="ws-switcher-action-icon">+</span>
+                <span>Create workspace</span>
+              </div>
+              <div class="ws-option" @click="manageWorkspaces">
+                <span class="nav-icon" v-html="getIcon('briefcase')"></span>
+                <span>Manage workspaces…</span>
+              </div>
             </div>
           </Transition>
         </div>
 
         <nav class="sidebar-nav">
-          <div class="nav-section">
-            <router-link v-for="item in navItems" :key="item.path" class="nav-item"
-              :class="{ active: isActive(item.path) }" @click="mobileOpen = false" :to="item.path">
-              <span class="nav-icon" v-html="getIcon(item.icon)"></span>
-              <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
-            </router-link>
+          <div v-for="section in visibleSections" :key="section.id" class="nav-section">
+            <button class="nav-section-title nav-section-toggle" :aria-expanded="sectionOpen[section.id]"
+              @click="toggleSection(section.id)">
+              <span>{{ section.title }}</span>
+              <svg class="nav-section-chevron" :class="{ collapsed: !sectionOpen[section.id] }" width="12" height="12"
+                viewBox="0 0 16 16" fill="none">
+                <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div v-show="sectionOpen[section.id]" class="nav-section-items">
+              <template v-for="item in sectionItems(section)" :key="item.name">
+                <a v-if="item.external" class="nav-item" :href="item.path" target="_blank" rel="noopener noreferrer"
+                  @click="mobileOpen = false">
+                  <span class="nav-icon" v-html="getIcon(item.icon)"></span>
+                  <span class="nav-label">{{ item.name }}</span>
+                </a>
+                <router-link v-else class="nav-item" :class="{ active: isItemActive(item) }"
+                  @click="mobileOpen = false" :to="itemTo(item)">
+                  <span class="nav-icon" v-html="getIcon(item.icon)"></span>
+                  <span class="nav-label">{{ item.name }}</span>
+                </router-link>
+                <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
+                  :class="{ active: isItemActive(child) }" @click="mobileOpen = false" :to="child.path">
+                  <span class="nav-icon" v-html="getIcon(child.icon)"></span>
+                  <span class="nav-label">{{ child.name }}</span>
+                </router-link>
+              </template>
+            </div>
           </div>
-
-          <!-- Admin section -->
-          <div v-if="auth.isAdmin" class="nav-section">
-            <div class="nav-section-title">Admin</div>
-            <router-link v-for="item in adminItems" :key="item.path" class="nav-item"
-              :class="{ active: isActive(item.path) }" @click="mobileOpen = false" :to="item.path">
-              <span class="nav-icon" v-html="getIcon(item.icon)"></span>
-              <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
-            </router-link>
-          </div>
-
         </nav>
       </aside>
     </Transition>
@@ -512,19 +691,23 @@ function getIcon(name: string): string {
 }
 
 .nav-section {
-  margin-bottom: 8px;
+  margin-bottom: 2px;
+}
+
+.nav-section + .nav-section {
+  margin-top: 18px;
 }
 
 .nav-section-title {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--sidebar-text);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 12px 12px 6px;
+  letter-spacing: 0.08em;
+  padding: 4px 12px 6px;
   white-space: nowrap;
   overflow: hidden;
-  opacity: 1;
+  opacity: 0.55;
   transition: opacity var(--transition-slow);
 }
 
@@ -535,15 +718,50 @@ function getIcon(name: string): string {
   margin: 0;
 }
 
+.nav-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: var(--radius-sm);
+}
+
+.nav-section-toggle:hover {
+  color: var(--sidebar-text-active);
+}
+
+.nav-section-chevron {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: transform var(--transition);
+}
+
+.nav-section-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.nav-subitem {
+  padding-left: 34px;
+  font-size: 13px;
+}
+
+.sidebar-collapsed .sidebar:not(.sidebar-mobile) .nav-subitem {
+  padding-left: 9px;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 6px 12px;
   border-radius: var(--radius);
   color: var(--sidebar-text);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
   text-decoration: none;
@@ -559,6 +777,7 @@ function getIcon(name: string): string {
 .nav-item.active {
   background: var(--sidebar-hover);
   color: var(--sidebar-text-active);
+  font-weight: 500;
 }
 
 .nav-item.active::before {
@@ -575,8 +794,13 @@ function getIcon(name: string): string {
 
 .nav-icon {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
+  opacity: 0.7;
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
 }
 
 .nav-label {
@@ -591,31 +815,6 @@ function getIcon(name: string): string {
 }
 
 .sidebar-collapsed .sidebar:not(.sidebar-mobile) .nav-item {
-  justify-content: center;
-  padding: 9px;
-}
-
-/* ─── Sidebar footer ─── */
-.sidebar-footer {
-  border-top: 1px solid var(--sidebar-border);
-  padding: 8px;
-  flex-shrink: 0;
-}
-
-.sidebar-version {
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--sidebar-text);
-  opacity: 0.6;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.sidebar-collapsed .sidebar:not(.sidebar-mobile) .sidebar-version {
-  opacity: 0;
-}
-
-.sidebar-collapsed .sidebar:not(.sidebar-mobile) .sidebar-footer .nav-item {
   justify-content: center;
   padding: 9px;
 }
@@ -795,6 +994,41 @@ function getIcon(name: string): string {
   text-transform: uppercase;
   color: var(--text-muted, #9ca3af);
   letter-spacing: 0.05em;
+}
+
+.ws-switcher-divider {
+  height: 1px;
+  background: var(--border-primary, #e5e7eb);
+  margin: 4px 6px;
+}
+
+.ws-switcher-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #4b5563);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all var(--transition, 150ms ease);
+}
+
+.ws-switcher-action:hover {
+  background: var(--bg-secondary, #f9fafb);
+  color: var(--text-primary, #111827);
+}
+
+.ws-switcher-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
 }
 
 /* ─── User menu ─── */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { workspaceApi } from '../../api/workspaces'
 import { oauthApi } from '../../api/oauth'
@@ -19,7 +19,18 @@ const ws = ref<Workspace | null>(null)
 const loading = ref(true)
 
 // Tabs
-const activeTab = ref<'members' | 'invitations' | 'plan' | 'sso' | 'transfer' | 'settings'>('members')
+type WorkspaceTab = 'members' | 'invitations' | 'plan' | 'sso' | 'transfer' | 'settings'
+const validTabs: WorkspaceTab[] = ['members', 'invitations', 'plan', 'sso', 'transfer', 'settings']
+function tabFromQuery(value: unknown): WorkspaceTab {
+  return validTabs.includes(value as WorkspaceTab) ? (value as WorkspaceTab) : 'members'
+}
+const activeTab = ref<WorkspaceTab>(tabFromQuery(route.query.tab))
+
+// Keep the active tab in sync when the sidebar deep-links into a different tab
+// of the workspace that is already open.
+watch(() => route.query.tab, (value) => {
+  if (value) activeTab.value = tabFromQuery(value)
+})
 
 // Members
 const members = ref<WorkspaceMember[]>([])

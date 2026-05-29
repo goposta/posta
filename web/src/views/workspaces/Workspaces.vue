@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { workspaceApi } from '../../api/workspaces'
 import type { Workspace, WorkspaceInvitation } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useWorkspaceStore } from '../../stores/workspace'
 
 const router = useRouter()
+const route = useRoute()
 const notify = useNotificationStore()
 const wsStore = useWorkspaceStore()
 
@@ -103,6 +104,11 @@ function formatDate(dateStr: string): string {
 }
 
 onMounted(fetchData)
+
+if (route.query.create !== undefined) {
+  showCreateModal.value = true
+  router.replace({ query: {} })
+}
 </script>
 
 <template>

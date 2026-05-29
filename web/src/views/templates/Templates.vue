@@ -16,6 +16,7 @@ import { useModalSafeClose } from "../../composables/useModalSafeClose";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
+import SectionHeader from '@/components/SectionHeader.vue'
 
 
 
@@ -204,32 +205,14 @@ onMounted(() => {
 
 <template>
   <div>
-    <div class="page-header">
-      <h1>Templates</h1>
-      <div class="flex gap-2">
-        <input
-          ref="importInput"
-          type="file"
-          accept=".json,.html,.htm"
-          style="display: none"
-          @change="handleImportFile"
-        />
-        <button class="btn btn-secondary" @click="router.push('/templates/preview')">
-          Preview Template
-        </button>
-        <button
-          v-if="wsStore.canEdit"
-          class="btn btn-secondary"
-          :disabled="importing"
-          @click="triggerImport"
-        >
-          {{ importing ? "Importing..." : "Import" }}
-        </button>
-        <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">
-          Create Template
-        </button>
-      </div>
-    </div>
+    <SectionHeader
+      title="Templates"
+      :tabs="[
+        { label: 'Templates', to: '/templates' },
+        { label: 'Stylesheets', to: '/stylesheets' },
+        { label: 'Languages', to: '/languages' },
+      ]"
+    />
 
     <div class="card">
       <div class="card-header">
@@ -240,6 +223,29 @@ onMounted(() => {
           style="max-width: 320px"
           @input="onSearchInput"
         />
+        <div class="flex gap-2">
+          <input
+            ref="importInput"
+            type="file"
+            accept=".json,.html,.htm"
+            style="display: none"
+            @change="handleImportFile"
+          />
+          <button class="btn btn-secondary" @click="router.push('/templates/preview')">
+            Preview Template
+          </button>
+          <button
+            v-if="wsStore.canEdit"
+            class="btn btn-secondary"
+            :disabled="importing"
+            @click="triggerImport"
+          >
+            {{ importing ? "Importing..." : "Import" }}
+          </button>
+          <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">
+            Create Template
+          </button>
+        </div>
       </div>
 
       <div v-if="loading" class="loading-page">

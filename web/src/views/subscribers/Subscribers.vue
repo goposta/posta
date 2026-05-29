@@ -8,6 +8,7 @@ import { usePagination } from '../../composables/usePagination'
 import { useNotificationStore } from '../../stores/notification'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { useWorkspaceStore } from '../../stores/workspace'
+import SectionHeader from '../../components/SectionHeader.vue'
 
 const router = useRouter()
 const notify = useNotificationStore()
@@ -169,17 +170,14 @@ const { watchClickStart: watchImportStart, confirmClickEnd: confirmImportEnd } =
 
 <template>
   <div>
-    <div class="page-header">
-      <h1>Subscribers</h1>
-      <div v-if="wsStore.canEdit" style="display: flex; gap: 8px">
-        <button class="btn btn-secondary" @click="openImportJson">Import JSON</button>
-        <button class="btn btn-secondary" :disabled="importingCsv" @click="triggerCsvUpload">
-          {{ importingCsv ? 'Importing...' : 'Import CSV' }}
-        </button>
-        <button class="btn btn-primary" @click="openCreate">Add Subscriber</button>
-        <input ref="csvFileInput" type="file" accept=".csv" style="display: none" @change="onCsvFileSelected" />
-      </div>
-    </div>
+    <SectionHeader
+      title="Subscribers"
+      :tabs="[
+        { label: 'Subscribers', to: '/subscribers' },
+        { label: 'Lists', to: '/subscriber-lists' },
+        { label: 'Unsubscribe', to: '/unsubscribe-lists' },
+      ]"
+    />
 
     <div class="card">
       <div class="card-header" style="display: flex; gap: 12px; align-items: center">
@@ -198,6 +196,14 @@ const { watchClickStart: watchImportStart, confirmClickEnd: confirmImportEnd } =
           <option value="bounced">Bounced</option>
           <option value="complained">Complained</option>
         </select>
+        <div v-if="wsStore.canEdit" class="flex gap-2" style="margin-left: auto">
+          <button class="btn btn-secondary" @click="openImportJson">Import JSON</button>
+          <button class="btn btn-secondary" :disabled="importingCsv" @click="triggerCsvUpload">
+            {{ importingCsv ? 'Importing...' : 'Import CSV' }}
+          </button>
+          <button class="btn btn-primary" @click="openCreate">Add Subscriber</button>
+          <input ref="csvFileInput" type="file" accept=".csv" style="display: none" @change="onCsvFileSelected" />
+        </div>
       </div>
 
       <div v-if="loading" class="loading-page">
