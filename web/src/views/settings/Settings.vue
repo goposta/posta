@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { settingsApi } from '../../api/settings'
 import { authApi } from '../../api/auth'
 import { userDataApi } from '../../api/userData'
@@ -17,7 +17,18 @@ const theme = useThemeStore()
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
 const loading = ref(true)
+
+// Auto-save state. saveStatus drives the header indicator; ready gates the
+// watcher so the initial load doesn't trigger a save.
+type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
+const saveStatus = ref<SaveStatus>('idle')
+const ready = ref(false)
+const dirty = ref(false)
 const saving = ref(false)
+const AUTOSAVE_DEBOUNCE_MS = 800
+const SAVED_INDICATOR_MS = 2000
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let savedClearTimer: ReturnType<typeof setTimeout> | null = null
 
 // Data management
 const exporting = ref(false)
@@ -81,30 +92,51 @@ onMounted(async () => {
     notify.error('Failed to load settings')
   } finally {
     loading.value = false
+    // Wait one tick so the watcher doesn't fire on the load-time assignment.
+    await nextTick()
+    ready.value = true
   }
 })
 
-async function save() {
+watch(
+  form,
+  () => {
+    if (!ready.value) return
+    dirty.value = true
+    saveStatus.value = 'unsaved'
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(autoSave, AUTOSAVE_DEBOUNCE_MS)
+  },
+  { deep: true },
+)
+
+async function autoSave() {
+  if (saving.value) return
+  if (!dirty.value) return
+
   saving.value = true
+  saveStatus.value = 'saving'
+  dirty.value = false
+  if (savedClearTimer) {
+    clearTimeout(savedClearTimer)
+    savedClearTimer = null
+  }
   try {
-    const res = await settingsApi.updateUserSettings(form.value)
-    const s = res.data.data
-    form.value = {
-      timezone: s.timezone,
-      default_sender_name: s.default_sender_name,
-      default_sender_email: s.default_sender_email,
-      email_notifications: s.email_notifications,
-      notification_email: s.notification_email,
-      webhook_retry_count: s.webhook_retry_count,
-      api_key_expiry_days: s.api_key_expiry_days,
-      bounce_auto_suppress: s.bounce_auto_suppress,
-      daily_report: s.daily_report,
-    }
-    notify.success('Settings saved')
+    await settingsApi.updateUserSettings(form.value)
+    saveStatus.value = 'saved'
+    savedClearTimer = setTimeout(() => {
+      if (saveStatus.value === 'saved') saveStatus.value = 'idle'
+    }, SAVED_INDICATOR_MS)
   } catch {
+    saveStatus.value = 'error'
+    dirty.value = true
     notify.error('Failed to save settings')
   } finally {
     saving.value = false
+    if (dirty.value) {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(autoSave, AUTOSAVE_DEBOUNCE_MS)
+    }
   }
 }
 
@@ -250,6 +282,19 @@ async function toggleDomainSecurity() {
   <div>
     <div class="page-header">
       <h1>Settings</h1>
+      <span
+        v-if="saveStatus !== 'idle'"
+        class="save-status"
+        :class="saveStatus"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="save-status-dot" aria-hidden="true"></span>
+        <template v-if="saveStatus === 'saving'">Saving…</template>
+        <template v-else-if="saveStatus === 'saved'">Saved</template>
+        <template v-else-if="saveStatus === 'unsaved'">Unsaved changes</template>
+        <template v-else-if="saveStatus === 'error'">Save failed</template>
+      </span>
     </div>
 
     <div v-if="loading" class="loading-page">
@@ -261,7 +306,7 @@ async function toggleDomainSecurity() {
       <div class="card">
         <div class="card-header"><h2>General</h2></div>
         <div class="card-body">
-          <form @submit.prevent="save" class="settings-form">
+          <div class="settings-form">
             <div class="form-group">
               <label class="form-label">Timezone</label>
               <select v-model="form.timezone" class="form-select">
@@ -279,10 +324,7 @@ async function toggleDomainSecurity() {
               <input v-model="form.default_sender_email" type="email" class="form-input" placeholder="e.g. noreply@example.com" />
               <span class="form-hint">Pre-filled sender address when sending emails.</span>
             </div>
-            <button type="submit" class="btn btn-primary" :disabled="saving">
-              {{ saving ? 'Saving...' : 'Save Changes' }}
-            </button>
-          </form>
+          </div>
         </div>
       </div>
 
@@ -614,5 +656,51 @@ async function toggleDomainSecurity() {
   font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 16px;
+}
+
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+
+.save-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.save-status.saving {
+  color: var(--primary-600);
+}
+
+.save-status.saving .save-status-dot {
+  animation: save-status-pulse 1s ease-in-out infinite;
+}
+
+.save-status.saved {
+  color: var(--success-600, #16a34a);
+}
+
+.save-status.unsaved {
+  color: var(--text-secondary);
+}
+
+.save-status.error {
+  color: var(--danger-600);
+  background: var(--danger-50, rgba(220, 38, 38, 0.08));
+}
+
+@keyframes save-status-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 </style>
