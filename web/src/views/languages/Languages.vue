@@ -6,7 +6,6 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose';
 import { useWorkspaceStore } from '../../stores/workspace'
-import SectionHeader from '@/components/SectionHeader.vue'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
 
@@ -134,14 +133,9 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
 <template>
   <div>
-    <SectionHeader
-      title="Templates"
-      :tabs="[
-        { label: 'Templates', to: '/templates' },
-        { label: 'Stylesheets', to: '/stylesheets' },
-        { label: 'Languages', to: '/languages' },
-      ]"
-    />
+    <div class="page-header">
+      <h1>Languages</h1>
+    </div>
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>

@@ -19,9 +19,11 @@ const ws = ref<Workspace | null>(null)
 const loading = ref(true)
 
 // Tabs
-type WorkspaceTab = 'members' | 'invitations' | 'plan' | 'sso' | 'transfer' | 'settings'
-const validTabs: WorkspaceTab[] = ['members', 'invitations', 'plan', 'sso', 'transfer', 'settings']
+type WorkspaceTab = 'members' | 'invitations' | 'plan' | 'settings'
+const validTabs: WorkspaceTab[] = ['members', 'invitations', 'plan', 'settings']
 function tabFromQuery(value: unknown): WorkspaceTab {
+  // Legacy tabs that were folded into Settings.
+  if (value === 'sso' || value === 'transfer') return 'settings'
   return validTabs.includes(value as WorkspaceTab) ? (value as WorkspaceTab) : 'members'
 }
 const activeTab = ref<WorkspaceTab>(tabFromQuery(route.query.tab))
@@ -454,6 +456,10 @@ onMounted(async () => {
   await fetchWorkspace()
   await Promise.all([fetchMembers(), fetchInvitations(), fetchPlan()])
 })
+
+watch(activeTab, (value) => {
+  if (value === 'settings' && isOwner.value) fetchSSO()
+}, { immediate: true })
 </script>
 
 <template>
@@ -483,12 +489,6 @@ onMounted(async () => {
         </button>
         <button :class="['tab', { active: activeTab === 'plan' }]" @click="activeTab = 'plan'">
           Plan
-        </button>
-        <button v-if="isOwner" :class="['tab', { active: activeTab === 'sso' }]" @click="activeTab = 'sso'; fetchSSO()">
-          SSO
-        </button>
-        <button v-if="isAdminOrOwner" :class="['tab', { active: activeTab === 'transfer' }]" @click="activeTab = 'transfer'">
-          Data Transfer
         </button>
         <button v-if="isAdminOrOwner" :class="['tab', { active: activeTab === 'settings' }]" @click="activeTab = 'settings'">
           Settings
@@ -681,69 +681,86 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- SSO Tab -->
-      <div v-if="activeTab === 'sso' && isOwner">
-        <div v-if="ssoLoading" class="loading-page"><div class="spinner"></div></div>
-        <template v-else>
-          <div class="card">
-            <div class="card-header">
-              <h3 style="margin: 0">Single Sign-On (SSO)</h3>
-              <button v-if="ssoConfig" class="btn btn-danger btn-sm" @click="removeSSO">Remove SSO</button>
-            </div>
-            <div class="card-body">
-              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-                Configure SSO to allow workspace members to authenticate using an OAuth provider.
-              </p>
+      <!-- Settings Tab -->
+      <div v-if="activeTab === 'settings' && isAdminOrOwner" class="card">
+        <div class="card-header"><span>Workspace Settings</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input v-model="editName" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <input v-model="editDescription" class="form-input" placeholder="Optional description" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Slug</label>
+            <input :value="ws?.slug" class="form-input" disabled />
+            <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Slug cannot be changed after creation.</small>
+          </div>
+          <button class="btn btn-primary" :disabled="saving" @click="saveSettings">
+            {{ saving ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
 
-              <div v-if="ssoProviders.length === 0" class="empty-state" style="padding: 24px 0">
-                <h3>No OAuth providers available</h3>
-                <p>An administrator must configure OAuth providers before SSO can be enabled.</p>
+        <!-- Single Sign-On (SSO) — owners only -->
+        <div v-if="isOwner" class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h4 style="font-size: 14px; font-weight: 600; margin: 0;">Single Sign-On (SSO)</h4>
+            <button v-if="ssoConfig" class="btn btn-danger btn-sm" @click="removeSSO">Remove SSO</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+            Configure SSO to allow workspace members to authenticate using an OAuth provider.
+          </p>
+
+          <div v-if="ssoLoading" class="loading-page" style="padding: 24px 0;"><div class="spinner"></div></div>
+          <template v-else>
+            <div v-if="ssoProviders.length === 0" class="empty-state" style="padding: 24px 0">
+              <h3>No OAuth providers available</h3>
+              <p>An administrator must configure OAuth providers before SSO can be enabled.</p>
+            </div>
+
+            <form v-else @submit.prevent="saveSSO" style="display: grid; gap: 16px; max-width: 480px;">
+              <div class="form-group">
+                <label class="form-label">OAuth Provider</label>
+                <select v-model.number="ssoForm.provider_id" class="form-select" required>
+                  <option :value="0" disabled>Select a provider</option>
+                  <option v-for="p in ssoProviders" :key="p.slug" :value="p.id">{{ p.name }} ({{ p.type }})</option>
+                </select>
               </div>
 
-              <form v-else @submit.prevent="saveSSO" style="display: grid; gap: 16px; max-width: 480px;">
-                <div class="form-group">
-                  <label class="form-label">OAuth Provider</label>
-                  <select v-model.number="ssoForm.provider_id" class="form-select" required>
-                    <option :value="0" disabled>Select a provider</option>
-                    <option v-for="p in ssoProviders" :key="p.slug" :value="p.id">{{ p.name }} ({{ p.type }})</option>
-                  </select>
-                </div>
+              <div class="form-group">
+                <label class="form-label">Allowed Domains</label>
+                <input v-model="ssoForm.allowed_domains" type="text" class="form-input" placeholder="example.com, company.org" />
+                <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Comma-separated email domains. Leave empty to allow all domains.</small>
+              </div>
 
-                <div class="form-group">
-                  <label class="form-label">Allowed Domains</label>
-                  <input v-model="ssoForm.allowed_domains" type="text" class="form-input" placeholder="example.com, company.org" />
-                  <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Comma-separated email domains. Leave empty to allow all domains.</small>
-                </div>
+              <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" v-model="ssoForm.enforce_sso" />
+                  <span>Enforce SSO</span>
+                </label>
+                <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Require all workspace members to authenticate via SSO.</small>
+              </div>
 
-                <div class="form-group">
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="checkbox" v-model="ssoForm.enforce_sso" />
-                    <span>Enforce SSO</span>
-                  </label>
-                  <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Require all workspace members to authenticate via SSO.</small>
-                </div>
+              <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" v-model="ssoForm.auto_provision" />
+                  <span>Auto-provision users</span>
+                </label>
+                <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Automatically create accounts for new users who authenticate via SSO.</small>
+              </div>
 
-                <div class="form-group">
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="checkbox" v-model="ssoForm.auto_provision" />
-                    <span>Auto-provision users</span>
-                  </label>
-                  <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Automatically create accounts for new users who authenticate via SSO.</small>
-                </div>
+              <button type="submit" class="btn btn-primary" :disabled="ssoSaving" style="justify-self: start;">
+                {{ ssoSaving ? 'Saving...' : (ssoConfig ? 'Update SSO' : 'Enable SSO') }}
+              </button>
+            </form>
+          </template>
+        </div>
 
-                <button type="submit" class="btn btn-primary" :disabled="ssoSaving" style="justify-self: start;">
-                  {{ ssoSaving ? 'Saving...' : (ssoConfig ? 'Update SSO' : 'Enable SSO') }}
-                </button>
-              </form>
-            </div>
-          </div>
-        </template>
-      </div>
-
-      <!-- Data Transfer Tab -->
-      <div v-if="activeTab === 'transfer' && isAdminOrOwner" class="card">
-        <div class="card-header"><span>Transfer Personal Data to Workspace</span></div>
-        <div class="card-body">
+        <!-- Transfer Personal Data to Workspace -->
+        <div class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Transfer Personal Data to Workspace</h4>
           <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
             Move your personal resources into this workspace. Transferred data will no longer appear in your personal account.
           </p>
@@ -810,29 +827,6 @@ onMounted(async () => {
               </table>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Settings Tab -->
-      <div v-if="activeTab === 'settings' && isAdminOrOwner" class="card">
-        <div class="card-header"><span>Workspace Settings</span></div>
-        <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">Name</label>
-            <input v-model="editName" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <input v-model="editDescription" class="form-input" placeholder="Optional description" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Slug</label>
-            <input :value="ws?.slug" class="form-input" disabled />
-            <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Slug cannot be changed after creation.</small>
-          </div>
-          <button class="btn btn-primary" :disabled="saving" @click="saveSettings">
-            {{ saving ? 'Saving...' : 'Save Changes' }}
-          </button>
         </div>
 
         <div class="card-body" style="border-top: 1px solid var(--border-primary);">

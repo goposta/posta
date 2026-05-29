@@ -16,7 +16,6 @@ import { useModalSafeClose } from "../../composables/useModalSafeClose";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
-import SectionHeader from '@/components/SectionHeader.vue'
 
 
 
@@ -205,14 +204,9 @@ onMounted(() => {
 
 <template>
   <div>
-    <SectionHeader
-      title="Templates"
-      :tabs="[
-        { label: 'Templates', to: '/templates' },
-        { label: 'Stylesheets', to: '/stylesheets' },
-        { label: 'Languages', to: '/languages' },
-      ]"
-    />
+    <div class="page-header">
+      <h1>Templates</h1>
+    </div>
 
     <div class="card">
       <div class="card-header">
