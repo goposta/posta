@@ -270,7 +270,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 	recipients := []string(em.Recipients)
 	if h.suppressionRepo != nil {
 		scope := repositories.ResourceScope{UserID: em.UserID, WorkspaceID: em.WorkspaceID}
-		if filtered, fErr := h.suppressionRepo.FilterSuppressed(scope, recipients); fErr == nil {
+		if filtered, fErr := h.suppressionRepo.FilterSuppressedForList(scope, recipients, em.UnsubscribeListID); fErr == nil {
 			if len(filtered) == 0 {
 				em.Status = models.EmailStatusSuppressed
 				em.ErrorMessage = "all recipients are suppressed"
@@ -310,7 +310,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		h.stamper.Sign(headers, em, recipients, em.Subject)
 	}
 
-	if err := h.sender.Send(smtpServer, em.Sender, recipients, em.Subject, em.HTMLBody, em.TextBody, attachments, headers, em.ListUnsubscribeURL, em.ListUnsubscribePost); err != nil {
+	if err := h.sender.Send(smtpServer, em.Sender, recipients, em.Subject, em.HTMLBody, em.TextBody, attachments, headers, em.ListUnsubscribeURL, em.ListUnsubscribeMailto, em.ListUnsubscribePost); err != nil {
 		// Increment the shared server's failure counter regardless of outcome.
 		if sharedServerID != 0 && h.serverRepo != nil {
 			go h.serverRepo.IncrementFailedCount(sharedServerID)

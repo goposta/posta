@@ -41,7 +41,7 @@ curl -X POST http://localhost:9000/api/v1/emails/send \
   -H "Content-Type: application/json" \
   -d '{
     "from": "Acme <hello@example.com>",
-    "to": ["user@example.com"],
+    "to": ["Jonas Kaninda <jonas@example.com>","bob@example.com"],
     "subject": "Hello from Posta",
     "html": "<h1>Hello!</h1>"
   }'
@@ -115,6 +115,15 @@ Response:
 * Subscriber lifecycle (active, bounced, unsubscribed)
 * Hard/soft bounce and complaint handling
 * Automatic suppression lists
+
+### Unsubscribe Lists
+
+* RFC 8058 one-click unsubscribe scoped per list
+* Posta-minted signed URLs and `List-Unsubscribe` header
+* Scoped opt-outs so receipts and password resets keep flowing
+* Management API and dashboard for CRUD and opt-out browsing
+* `email.unsubscribed` webhook event
+* Resubscribe individual addresses without lifting a global block
 
 ### Tracking
 

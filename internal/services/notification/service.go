@@ -123,7 +123,7 @@ func (s *Service) Send(to, subject, templateName string, data map[string]any) er
 	}
 
 	server := s.systemServer()
-	if err := s.sender.Send(server, s.smtpCfg.From, []string{to}, subject, html, "", nil, nil, "", false); err != nil {
+	if err := s.sender.Send(server, s.smtpCfg.From, []string{to}, subject, html, "", nil, nil, "", "", false); err != nil {
 		return fmt.Errorf("notification send to %s: %w", to, err)
 	}
 

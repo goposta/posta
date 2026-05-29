@@ -120,7 +120,7 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 <template>
   <div>
     <div class="page-header">
-      <h1>Lists</h1>
+      <h1>Subscriber Lists</h1>
       <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Create List</button>
     </div>
 

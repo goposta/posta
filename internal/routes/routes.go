@@ -94,6 +94,7 @@ type routerHandlers struct {
 	domain          *handlers.DomainHandler
 	bounce          *handlers.BounceHandler
 	suppression     *handlers.SuppressionHandler
+	unsubscribeList *handlers.UnsubscribeListHandler
 	contact         *handlers.ContactHandler
 	admin           *handlers.AdminHandler
 	workspace       *handlers.WorkspaceHandler
@@ -130,6 +131,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	domainRepo := repositories.NewDomainRepository(db)
 	bounceRepo := repositories.NewBounceRepository(db)
 	suppressionRepo := repositories.NewSuppressionRepository(db)
+	unsubListRepo := repositories.NewUnsubscribeListRepository(db)
 	stylesheetRepo := repositories.NewStyleSheetRepository(db)
 	versionRepo := repositories.NewTemplateVersionRepository(db)
 	localizationRepo := repositories.NewTemplateLocalizationRepository(db)
@@ -170,6 +172,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	emailService.SetPlanLimits(&emailPlanAdapter{planService})
 	emailService.SetVersionRepos(versionRepo, localizationRepo)
 	emailService.SetContactRepo(contactRepo)
+	emailService.SetUnsubscribeListRepo(unsubListRepo)
 	emailService.SetDomainVerification(domainRepo, userRepo)
 	if producer != nil {
 		emailService.SetEnqueuer(producer)
@@ -238,8 +241,9 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			webhookDelivery: handlers.NewWebhookDeliveryHandler(webhookDeliveryRepo),
 			dashboard:       handlers.NewDashboardHandler(db, statsCache, webhookDeliveryRepo),
 			domain:          handlers.NewDomainHandler(domainRepo),
-			bounce:          handlers.NewBounceHandler(bounceRepo, suppressionRepo, emailRepo),
-			suppression:     handlers.NewSuppressionHandler(suppressionRepo),
+			bounce:          handlers.NewBounceHandler(bounceRepo, suppressionRepo, emailRepo, dispatcher),
+			suppression:     handlers.NewSuppressionHandler(suppressionRepo, unsubListRepo),
+			unsubscribeList: handlers.NewUnsubscribeListHandler(unsubListRepo),
 			contact:         handlers.NewContactHandler(contactRepo, suppressionRepo),
 			admin:           handlers.NewAdminHandler(db, statsCache, userRepo, apiKeyRepo, emailRepo, webhookDeliveryRepo, inspector, bus, userSeeder, cfg.EmbeddedWorker),
 			workspace:       handlers.NewWorkspaceHandler(workspaceRepo, userRepo, db),
@@ -323,7 +327,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	// Tracking
 	trackingRepo := repositories.NewTrackingRepository(db)
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
-	r.h.tracking = handlers.NewTrackingHandler(trackingRepo, campaignMessageRepo, campaignRepo, subscriberRepo, subscriberListRepo, emailRepo, suppressionRepo, trackingService)
+	r.h.tracking = handlers.NewTrackingHandler(trackingRepo, campaignMessageRepo, campaignRepo, subscriberRepo, subscriberListRepo, emailRepo, suppressionRepo, trackingService, dispatcher)
 
 	// Wire the generator for Posta-injected public links (one-click unsubscribe +
 	// hosted "view in browser"), used to resolve reserved {{ posta_* }} template

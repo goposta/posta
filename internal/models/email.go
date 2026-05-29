@@ -36,28 +36,32 @@ const (
 )
 
 type Email struct {
-	ID                  uint           `json:"id" gorm:"primaryKey"`
-	UUID                string         `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
-	UserID              uint           `json:"user_id" gorm:"index;not null"`
-	WorkspaceID         *uint          `json:"workspace_id,omitempty" gorm:"index"`
-	APIKeyID            *uint          `json:"api_key_id" gorm:"index"`
-	Sender              string         `json:"sender" gorm:"not null"`
-	Recipients          pq.StringArray `json:"recipients" gorm:"type:text[];not null"`
-	Subject             string         `json:"subject" gorm:"not null"`
-	TemplateName        string         `json:"template_name,omitempty"`
-	HTMLBody            string         `json:"html_body"`
-	TextBody            string         `json:"text_body"`
-	AttachmentsJSON     string         `json:"attachments_json,omitempty" gorm:"type:text"`
-	HeadersJSON         string         `json:"headers_json,omitempty" gorm:"type:text"`
-	ListUnsubscribeURL  string         `json:"list_unsubscribe_url,omitempty" gorm:"type:text"`
-	ListUnsubscribePost bool           `json:"list_unsubscribe_post,omitempty"`
-	Status              EmailStatus    `json:"status" gorm:"default:pending;not null"`
-	ErrorMessage        string         `json:"error_message"`
-	RetryCount          int            `json:"retry_count" gorm:"default:0;not null"`
-	CreatedAt           time.Time      `json:"created_at"`
-	SentAt              *time.Time     `json:"sent_at"`
-	ScheduledAt         *time.Time     `json:"scheduled_at"`
-	Provider            string         `json:"provider,omitempty" gorm:"index;size:32"`
+	ID                    uint           `json:"id" gorm:"primaryKey"`
+	UUID                  string         `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
+	UserID                uint           `json:"user_id" gorm:"index;not null"`
+	WorkspaceID           *uint          `json:"workspace_id,omitempty" gorm:"index"`
+	APIKeyID              *uint          `json:"api_key_id" gorm:"index"`
+	Sender                string         `json:"sender" gorm:"not null"`
+	Recipients            pq.StringArray `json:"recipients" gorm:"type:text[];not null"`
+	Subject               string         `json:"subject" gorm:"not null"`
+	TemplateName          string         `json:"template_name,omitempty"`
+	HTMLBody              string         `json:"html_body"`
+	TextBody              string         `json:"text_body"`
+	AttachmentsJSON       string         `json:"attachments_json,omitempty" gorm:"type:text"`
+	HeadersJSON           string         `json:"headers_json,omitempty" gorm:"type:text"`
+	ListUnsubscribeURL    string         `json:"list_unsubscribe_url,omitempty" gorm:"type:text"`
+	ListUnsubscribeMailto string         `json:"list_unsubscribe_mailto,omitempty" gorm:"type:text"`
+	ListUnsubscribePost   bool           `json:"list_unsubscribe_post,omitempty"`
+	// UnsubscribeListID scopes a one-click unsubscribe to a single UnsubscribeList.
+	// nil ⇒ a click suppresses globally (legacy links only).
+	UnsubscribeListID *uint       `json:"unsubscribe_list_id,omitempty" gorm:"index"`
+	Status            EmailStatus `json:"status" gorm:"default:pending;not null"`
+	ErrorMessage      string      `json:"error_message"`
+	RetryCount        int         `json:"retry_count" gorm:"default:0;not null"`
+	CreatedAt         time.Time   `json:"created_at"`
+	SentAt            *time.Time  `json:"sent_at"`
+	ScheduledAt       *time.Time  `json:"scheduled_at"`
+	Provider          string      `json:"provider,omitempty" gorm:"index;size:32"`
 
 	SMTPHostname string `json:"smtp_hostname,omitempty"`
 

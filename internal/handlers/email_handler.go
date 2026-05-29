@@ -18,6 +18,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -137,6 +138,10 @@ func (h *EmailHandler) Send(c *okapi.Context, req *SendEmailRequest) error {
 	apiKeyID := c.GetInt("api_key_id")
 	resp, err := h.service.Send(c.Request().Context(), uint(userID), uint(apiKeyID), scope.WorkspaceID, userEmail, &req.Body)
 	if err != nil {
+		if resp := mapUnsubscribeError(c, err); resp != nil {
+			// Call abort here
+			return resp
+		}
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
 		}
@@ -162,6 +167,9 @@ func (h *EmailHandler) Send(c *okapi.Context, req *SendEmailRequest) error {
 func (h *EmailHandler) handleDryRun(c *okapi.Context, userID int, workspaceID *uint, userEmail string, req *SendEmailRequest) error {
 	resp, err := h.service.ValidateSend(c.Request().Context(), uint(userID), workspaceID, userEmail, &req.Body)
 	if err != nil {
+		if resp := mapUnsubscribeError(c, err); resp != nil {
+			return resp
+		}
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
 		}
@@ -184,6 +192,9 @@ func (h *EmailHandler) SendWithTemplate(c *okapi.Context, req *SendTemplateEmail
 	if req.DryRun {
 		resp, err := h.service.ValidateSendWithTemplate(c.Request().Context(), uint(userID), scope.WorkspaceID, userEmail, &req.Body)
 		if err != nil {
+			if resp := mapUnsubscribeError(c, err); resp != nil {
+				return resp
+			}
 			if isRateLimitError(err) {
 				return c.AbortTooManyRequests(err.Error())
 			}
@@ -198,6 +209,9 @@ func (h *EmailHandler) SendWithTemplate(c *okapi.Context, req *SendTemplateEmail
 	apiKeyID := c.GetInt("api_key_id")
 	resp, err := h.service.SendWithTemplate(c.Request().Context(), uint(userID), uint(apiKeyID), scope.WorkspaceID, userEmail, &req.Body)
 	if err != nil {
+		if resp := mapUnsubscribeError(c, err); resp != nil {
+			return resp
+		}
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
 		}
@@ -230,6 +244,9 @@ func (h *EmailHandler) SendBatch(c *okapi.Context, req *SendBatchEmailRequest) e
 	if req.DryRun {
 		resp, err := h.service.ValidateSendBatch(c.Request().Context(), uint(userID), scope.WorkspaceID, userEmail, &req.Body)
 		if err != nil {
+			if resp := mapUnsubscribeError(c, err); resp != nil {
+				return resp
+			}
 			if isRateLimitError(err) {
 				return c.AbortTooManyRequests(err.Error())
 			}
@@ -241,6 +258,9 @@ func (h *EmailHandler) SendBatch(c *okapi.Context, req *SendBatchEmailRequest) e
 	apiKeyID := c.GetInt("api_key_id")
 	resp, err := h.service.SendBatch(c.Request().Context(), uint(userID), uint(apiKeyID), scope.WorkspaceID, userEmail, &req.Body)
 	if err != nil {
+		if resp := mapUnsubscribeError(c, err); resp != nil {
+			return resp
+		}
 		if isRateLimitError(err) {
 			return c.AbortTooManyRequests(err.Error())
 		}
@@ -379,4 +399,14 @@ func isRateLimitError(err error) bool {
 
 func isDomainVerificationError(err error) bool {
 	return err != nil && strings.HasPrefix(err.Error(), "domain_verification:")
+}
+
+func mapUnsubscribeError(c *okapi.Context, err error) error {
+	if errors.Is(err, email.ErrUnsubscribeListNotFound) {
+		return c.AbortNotFound(err.Error())
+	}
+	if errors.Is(err, email.ErrUnsubscribeInvalid) {
+		return c.AbortBadRequest(err.Error())
+	}
+	return nil
 }

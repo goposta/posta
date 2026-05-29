@@ -18,6 +18,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
@@ -45,6 +47,7 @@ type TrackingHandler struct {
 	emailRepo       *repositories.EmailRepository
 	suppressionRepo *repositories.SuppressionRepository
 	trackingService *tracking.Service
+	dispatcher      *webhook.Dispatcher
 }
 
 func NewTrackingHandler(
@@ -56,6 +59,7 @@ func NewTrackingHandler(
 	emailRepo *repositories.EmailRepository,
 	suppressionRepo *repositories.SuppressionRepository,
 	trackingService *tracking.Service,
+	dispatcher *webhook.Dispatcher,
 ) *TrackingHandler {
 	return &TrackingHandler{
 		trackingRepo:    trackingRepo,
@@ -66,6 +70,7 @@ func NewTrackingHandler(
 		emailRepo:       emailRepo,
 		suppressionRepo: suppressionRepo,
 		trackingService: trackingService,
+		dispatcher:      dispatcher,
 	}
 }
 
@@ -204,6 +209,12 @@ func (h *TrackingHandler) TxUnsubscribeConfirm(c *okapi.Context, req *TrackingUn
 	}
 
 	if h.suppressionRepo != nil {
+		// A Posta-minted link carries a list ⇒ scoped opt-out. A nil list means a
+		// legacy link, which keeps the old global behavior.
+		kind := models.SuppressionKindHard
+		if em.UnsubscribeListID != nil {
+			kind = models.SuppressionKindListUnsubscribe
+		}
 		for _, addr := range em.Recipients {
 			if addr == "" {
 				continue
@@ -212,8 +223,11 @@ func (h *TrackingHandler) TxUnsubscribeConfirm(c *okapi.Context, req *TrackingUn
 				UserID:      em.UserID,
 				WorkspaceID: em.WorkspaceID,
 				Email:       addr,
+				ListID:      em.UnsubscribeListID,
+				Kind:        kind,
 				Reason:      "one_click_unsubscribe",
 			})
+			h.emitUnsubscribed(em, addr)
 		}
 	}
 
@@ -224,6 +238,33 @@ h1{font-size:20px;color:#16a34a}p{color:#6b7280;font-size:14px}</style></head><b
 <div class="card"><h1>Unsubscribed</h1><p>You will no longer receive emails of this type from the sender.</p></div></body></html>`
 
 	return c.HTMLView(http.StatusOK, confirmHTML, okapi.M{})
+}
+
+// emitUnsubscribed fires the email.unsubscribed webhook for a one-click opt-out.
+// It uses DispatchJSON because the payload is richer than the standard outbound
+// {event, email_id} shape — it carries the recipient and the scoped list.
+func (h *TrackingHandler) emitUnsubscribed(em *models.Email, addr string) {
+	if h.dispatcher == nil {
+		return
+	}
+	payload := struct {
+		Event     string `json:"event"`
+		EmailUUID string `json:"email_uuid"`
+		Email     string `json:"email"`
+		ListID    *uint  `json:"list_id,omitempty"`
+		Timestamp string `json:"timestamp"`
+	}{
+		Event:     "email.unsubscribed",
+		EmailUUID: em.UUID,
+		Email:     addr,
+		ListID:    em.UnsubscribeListID,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	h.dispatcher.DispatchJSON(em.UserID, em.WorkspaceID, "email.unsubscribed", body, em.Sender)
 }
 
 // WebView renders a hosted copy of a sent email ("view in browser"). The token is

@@ -24,22 +24,31 @@ import (
 )
 
 type SuppressionHandler struct {
-	repo *repositories.SuppressionRepository
+	repo      *repositories.SuppressionRepository
+	unsubRepo *repositories.UnsubscribeListRepository
 }
 type CreateSuppressionRequest struct {
 	Body struct {
 		Email  string `json:"email" required:"true" format:"email"`
 		Reason string `json:"reason"`
+		// ListID scopes the suppression to one UnsubscribeList. Omit for a global block.
+		ListID *uint `json:"list_id,omitempty"`
 	} `json:"body"`
+}
+type ListSuppressionsRequest struct {
+	Page   int  `query:"page" default:"0"`
+	Size   int  `query:"size" default:"20"`
+	ListID uint `query:"list_id" default:"0"`
 }
 type DeleteSuppressionRequest struct {
 	Body struct {
-		Email string `json:"email" required:"true" format:"email"`
+		Email  string `json:"email" required:"true" format:"email"`
+		ListID *uint  `json:"list_id,omitempty"`
 	} `json:"body"`
 }
 
-func NewSuppressionHandler(repo *repositories.SuppressionRepository) *SuppressionHandler {
-	return &SuppressionHandler{repo: repo}
+func NewSuppressionHandler(repo *repositories.SuppressionRepository, unsubRepo *repositories.UnsubscribeListRepository) *SuppressionHandler {
+	return &SuppressionHandler{repo: repo, unsubRepo: unsubRepo}
 }
 
 func (h *SuppressionHandler) Create(c *okapi.Context, req *CreateSuppressionRequest) error {
@@ -48,10 +57,22 @@ func (h *SuppressionHandler) Create(c *okapi.Context, req *CreateSuppressionRequ
 	}
 	scope := getScope(c)
 
+	// A list-scoped suppression must reference a list the caller owns.
+	if req.Body.ListID != nil {
+		if h.unsubRepo == nil {
+			return c.AbortBadRequest("list-scoped suppression is not available")
+		}
+		if _, err := h.unsubRepo.FindByIDForScope(*req.Body.ListID, scope); err != nil {
+			return c.AbortNotFound("unsubscribe list not found")
+		}
+	}
+
 	suppression := &models.Suppression{
 		UserID:      scope.UserID,
 		WorkspaceID: scope.WorkspaceID,
 		Email:       req.Body.Email,
+		ListID:      req.Body.ListID,
+		Kind:        models.SuppressionKindManual,
 		Reason:      req.Body.Reason,
 	}
 
@@ -62,10 +83,15 @@ func (h *SuppressionHandler) Create(c *okapi.Context, req *CreateSuppressionRequ
 	return created(c, suppression)
 }
 
-func (h *SuppressionHandler) List(c *okapi.Context, req *ListRequest) error {
+func (h *SuppressionHandler) List(c *okapi.Context, req *ListSuppressionsRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	suppressions, total, err := h.repo.FindByScope(getScope(c), size, offset)
+	var listID *uint
+	if req.ListID > 0 {
+		listID = &req.ListID
+	}
+
+	suppressions, total, err := h.repo.FindByScopeFiltered(getScope(c), listID, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list suppressions")
 	}
@@ -79,7 +105,7 @@ func (h *SuppressionHandler) Delete(c *okapi.Context, req *DeleteSuppressionRequ
 	}
 	scope := getScope(c)
 
-	if err := h.repo.Delete(scope, req.Body.Email); err != nil {
+	if err := h.repo.Delete(scope, req.Body.Email, req.Body.ListID); err != nil {
 		return c.AbortInternalServerError("failed to remove from suppression list")
 	}
 

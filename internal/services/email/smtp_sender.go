@@ -112,7 +112,7 @@ func (s *SMTPSender) TestConnection(server *models.SMTPServer) error {
 	return client.Quit()
 }
 
-func (s *SMTPSender) Send(server *models.SMTPServer, from string, to []string, subject, htmlBody, textBody string, attachments []models.Attachment, headers map[string]string, listUnsubscribeURL string, listUnsubscribePost bool) error {
+func (s *SMTPSender) Send(server *models.SMTPServer, from string, to []string, subject, htmlBody, textBody string, attachments []models.Attachment, headers map[string]string, listUnsubscribeURL, listUnsubscribeMailto string, listUnsubscribePost bool) error {
 	addr := fmt.Sprintf("%s:%d", server.Host, server.Port)
 
 	var auth smtp.Auth
@@ -120,7 +120,7 @@ func (s *SMTPSender) Send(server *models.SMTPServer, from string, to []string, s
 		auth = smtp.PlainAuth("", server.Username, server.Password, server.Host)
 	}
 
-	msg := buildMessage(from, to, subject, htmlBody, textBody, attachments, headers, listUnsubscribeURL, listUnsubscribePost)
+	msg := buildMessage(from, to, subject, htmlBody, textBody, attachments, headers, listUnsubscribeURL, listUnsubscribeMailto, listUnsubscribePost)
 
 	// Extract bare email for SMTP envelope (MAIL FROM), keep full format for headers
 	envelopeFrom := envelopeAddress(from)
@@ -226,7 +226,7 @@ func wrapSendError(stage, recipient string, err error) error {
 	return &SendError{Stage: stage, Recipient: recipient, Code: code, Msg: msg, Err: err}
 }
 
-func buildMessage(from string, to []string, subject, htmlBody, textBody string, attachments []models.Attachment, headers map[string]string, listUnsubscribeURL string, listUnsubscribePost bool) []byte {
+func buildMessage(from string, to []string, subject, htmlBody, textBody string, attachments []models.Attachment, headers map[string]string, listUnsubscribeURL, listUnsubscribeMailto string, listUnsubscribePost bool) []byte {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "From: %s\r\n", from)
@@ -234,10 +234,18 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject))
 	b.WriteString("MIME-Version: 1.0\r\n")
 
-	// RFC 8058: List-Unsubscribe headers
+	// RFC 2369 / 8058 List-Unsubscribe. Emit mailto first, then the https URL.
+	var luParts []string
+	if listUnsubscribeMailto != "" {
+		luParts = append(luParts, "<"+listUnsubscribeMailto+">")
+	}
 	if listUnsubscribeURL != "" {
-		fmt.Fprintf(&b, "List-Unsubscribe: <%s>\r\n", listUnsubscribeURL)
-		if listUnsubscribePost {
+		luParts = append(luParts, "<"+listUnsubscribeURL+">")
+	}
+	if len(luParts) > 0 {
+		fmt.Fprintf(&b, "List-Unsubscribe: %s\r\n", strings.Join(luParts, ", "))
+		// RFC 8058 one-click applies to the https POST target only.
+		if listUnsubscribePost && listUnsubscribeURL != "" {
 			b.WriteString("List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n")
 		}
 	}

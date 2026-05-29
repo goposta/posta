@@ -50,6 +50,7 @@ func Run(db *gorm.DB) error {
 		&models.Domain{},
 		&models.Bounce{},
 		&models.Suppression{},
+		&models.UnsubscribeList{},
 		&models.Contact{},
 		&models.Event{},
 		&models.Setting{},

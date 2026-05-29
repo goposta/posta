@@ -254,6 +254,26 @@ export interface LanguageInput {
   is_default?: boolean
 }
 
+export interface UnsubscribeListItem {
+  id: number
+  uuid: string
+  user_id: number
+  workspace_id?: number | null
+  name: string
+  public_name?: string
+  description?: string
+  active: boolean
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface UnsubscribeListInput {
+  name: string
+  public_name?: string
+  description?: string
+  active?: boolean
+}
+
 export interface StyleSheet {
   id: number
   user_id: number
@@ -385,6 +405,8 @@ export interface Suppression {
   id: number
   user_id: number
   email: string
+  list_id?: number | null
+  kind?: string
   reason: string
   created_at: string
 }

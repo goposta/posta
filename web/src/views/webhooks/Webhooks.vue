@@ -29,7 +29,7 @@ const createdWebhook = ref<Webhook | null>(null)
 const showSecretModal = ref(false)
 const copied = ref(false)
 
-const availableEvents = ['email.sent', 'email.failed', 'email.inbound', 'campaign.started', 'campaign.completed']
+const availableEvents = ['email.sent', 'email.failed', 'email.inbound', 'email.unsubscribed', 'email.complained', 'campaign.started', 'campaign.completed']
 
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true

@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/mail"
@@ -79,6 +80,7 @@ type Service struct {
 	smtpRepo         *repositories.SMTPRepository
 	templateRepo     *repositories.TemplateRepository
 	suppressionRepo  *repositories.SuppressionRepository
+	unsubRepo        *repositories.UnsubscribeListRepository
 	versionRepo      *repositories.TemplateVersionRepository
 	localizationRepo *repositories.TemplateLocalizationRepository
 	contactRepo      *repositories.ContactRepository
@@ -130,6 +132,12 @@ func (s *Service) SetVersionRepos(vr *repositories.TemplateVersionRepository, lr
 // SetContactRepo sets the contact repository for tracking recipient stats.
 func (s *Service) SetContactRepo(cr *repositories.ContactRepository) {
 	s.contactRepo = cr
+}
+
+// SetUnsubscribeListRepo wires the repository used to validate Posta-managed
+// unsubscribe-list references at send time.
+func (s *Service) SetUnsubscribeListRepo(r *repositories.UnsubscribeListRepository) {
+	s.unsubRepo = r
 }
 
 // SetDomainVerification sets the domain and user repositories for enforcing verified domain sending.
@@ -232,19 +240,99 @@ func (s *Service) OnFailed(fn func()) { s.onFailed = fn }
 // OnQueued sets a callback invoked after each email is enqueued for delivery.
 func (s *Service) OnQueued(fn func()) { s.onQueued = fn }
 
+var (
+	ErrUnsubscribeListNotFound = errors.New("unsubscribe list not found in scope")
+	ErrUnsubscribeInvalid      = errors.New("invalid unsubscribe configuration")
+)
+
+// Unsubscribe configures the List-Unsubscribe headers (RFC 2369 / 8058) and, for
+// the Posta-managed path, list-scoped suppression on a one-click opt-out.
+type Unsubscribe struct {
+	// ListID (Posta-managed): reference an existing UnsubscribeList by id. Posta
+	// generates the signed one-click URL + List-Unsubscribe-Post, and a click
+	// suppresses the recipient on that list only. Mutually exclusive with URL.
+	ListID *uint `json:"list_id,omitempty"`
+
+	// URL (caller-managed): you own the endpoint; Posta only emits the header.
+	// Also the RFC 8058 POST target when OneClick is set.
+	URL string `json:"url,omitempty"`
+	// Mailto is an optional mailto: unsubscribe (RFC 2369), emitted alongside URL.
+	Mailto string `json:"mailto,omitempty"`
+	// OneClick emits "List-Unsubscribe-Post: List-Unsubscribe=One-Click" (requires
+	// an https URL for the caller-managed path).
+	OneClick bool `json:"one_click,omitempty"`
+}
+
 type SendRequest struct {
-	From                string              `json:"from" required:"true"`
-	To                  []string            `json:"to" required:"true" minItems:"1"`
-	Subject             string              `json:"subject" required:"true"`
-	HTML                string              `json:"html"`
-	Text                string              `json:"text"`
-	Attachments         []models.Attachment `json:"attachments,omitempty"`
-	Headers             map[string]string   `json:"headers,omitempty"`
-	ListUnsubscribeURL  string              `json:"list_unsubscribe_url,omitempty"`
-	ListUnsubscribePost bool                `json:"list_unsubscribe_post,omitempty"`
-	SendAt              *time.Time          `json:"send_at,omitempty"`
+	From        string              `json:"from" required:"true"`
+	To          []string            `json:"to" required:"true" minItems:"1"`
+	Subject     string              `json:"subject" required:"true"`
+	HTML        string              `json:"html"`
+	Text        string              `json:"text"`
+	Attachments []models.Attachment `json:"attachments,omitempty"`
+	Headers     map[string]string   `json:"headers,omitempty"`
+	Unsubscribe *Unsubscribe        `json:"unsubscribe,omitempty"`
+	// Deprecated: use Unsubscribe. Kept for one minor release; mapped onto
+	// Unsubscribe{URL, OneClick} in resolveUnsubscribe.
+	ListUnsubscribeURL  string     `json:"list_unsubscribe_url,omitempty" deprecated:"true"`
+	ListUnsubscribePost bool       `json:"list_unsubscribe_post,omitempty" deprecated:"true"`
+	SendAt              *time.Time `json:"send_at,omitempty"`
 	// TemplateName is populated by internal template-send paths
 	TemplateName string `json:"-"`
+}
+
+// resolvedUnsub is the normalized, validated unsubscribe config used internally.
+type resolvedUnsub struct {
+	listID   *uint  // Posta-managed list (validated + owned)
+	url      string // caller-managed https URL
+	mailto   string // normalized mailto: URI
+	oneClick bool   // emit List-Unsubscribe-Post
+}
+
+// resolveUnsubscribe normalizes the request's unsubscribe config
+func (s *Service) resolveUnsubscribe(scope repositories.ResourceScope, req *SendRequest) (*resolvedUnsub, error) {
+	u := req.Unsubscribe
+	// Map legacy fields onto the object when the new one is absent.
+	if u == nil {
+		if req.ListUnsubscribeURL == "" && !req.ListUnsubscribePost {
+			return nil, nil
+		}
+		logger.Warn("list_unsubscribe_url/list_unsubscribe_post are deprecated; use the unsubscribe object")
+		u = &Unsubscribe{URL: req.ListUnsubscribeURL, OneClick: req.ListUnsubscribePost}
+	}
+
+	if u.ListID != nil && u.URL != "" {
+		return nil, fmt.Errorf("%w: list_id and url are mutually exclusive", ErrUnsubscribeInvalid)
+	}
+
+	mailto := strings.TrimSpace(u.Mailto)
+	if mailto != "" && !strings.HasPrefix(strings.ToLower(mailto), "mailto:") {
+		mailto = "mailto:" + mailto
+	}
+
+	// Posta-managed: validate + own the list. The one-click URL is minted later
+	// (it needs the email id); OneClick is implied.
+	if u.ListID != nil {
+		if s.unsubRepo == nil {
+			return nil, fmt.Errorf("%w: list-managed unsubscribe is not configured", ErrUnsubscribeInvalid)
+		}
+		if _, err := s.unsubRepo.FindByIDForScope(*u.ListID, scope); err != nil {
+			return nil, fmt.Errorf("%w: list_id %d", ErrUnsubscribeListNotFound, *u.ListID)
+		}
+		return &resolvedUnsub{listID: u.ListID, mailto: mailto, oneClick: true}, nil
+	}
+
+	// Caller-managed.
+	if u.URL == "" {
+		if mailto == "" {
+			return nil, nil
+		}
+		return &resolvedUnsub{mailto: mailto}, nil
+	}
+	if u.OneClick && !strings.HasPrefix(strings.ToLower(u.URL), "https://") {
+		return nil, fmt.Errorf("%w: one_click requires an https url", ErrUnsubscribeInvalid)
+	}
+	return &resolvedUnsub{url: u.URL, mailto: mailto, oneClick: u.OneClick}, nil
 }
 
 type SendTemplateRequest struct {
@@ -255,6 +343,7 @@ type SendTemplateRequest struct {
 	To           []string            `json:"to" required:"true" minItems:"1"`
 	TemplateData map[string]any      `json:"template_data"`
 	Attachments  []models.Attachment `json:"attachments,omitempty"`
+	Unsubscribe  *Unsubscribe        `json:"unsubscribe,omitempty"`
 }
 
 type SendResponse struct {
@@ -268,6 +357,9 @@ type BatchRequest struct {
 	Language   string           `json:"language"`
 	From       string           `json:"from"`
 	Recipients []BatchRecipient `json:"recipients" required:"true" minItems:"1"`
+	// Unsubscribe applies to every recipient in the batch (same list / URL / mailto).
+	// Per-recipient unsubscribe is intentionally not supported.
+	Unsubscribe *Unsubscribe `json:"unsubscribe,omitempty"`
 }
 
 type BatchRecipient struct {
@@ -339,10 +431,18 @@ func (s *Service) ValidateSend(ctx context.Context, userID uint, workspaceID *ui
 	}
 
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
+	unsub, err := s.resolveUnsubscribe(scope, req)
+	if err != nil {
+		return nil, err
+	}
+	var unsubListID *uint
+	if unsub != nil {
+		unsubListID = unsub.listID
+	}
 	activeRecipients := req.To
 	suppressedCount := 0
 	if s.suppressionRepo != nil {
-		filtered, err := s.suppressionRepo.FilterSuppressed(scope, req.To)
+		filtered, err := s.suppressionRepo.FilterSuppressedForList(scope, req.To, unsubListID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check suppression list: %w", err)
 		}
@@ -387,6 +487,7 @@ func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, wor
 		HTML:        rendered.HTML,
 		Text:        rendered.Text,
 		Attachments: req.Attachments,
+		Unsubscribe: req.Unsubscribe,
 	})
 	if err != nil {
 		return nil, err
@@ -431,10 +532,18 @@ func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceI
 	}
 
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
+	unsub, err := s.resolveUnsubscribe(scope, &SendRequest{Unsubscribe: req.Unsubscribe})
+	if err != nil {
+		return nil, err
+	}
+	var unsubListID *uint
+	if unsub != nil {
+		unsubListID = unsub.listID
+	}
 	activeRecipients := emails
 	suppressedCount := 0
 	if s.suppressionRepo != nil {
-		filtered, err := s.suppressionRepo.FilterSuppressed(scope, emails)
+		filtered, err := s.suppressionRepo.FilterSuppressedForList(scope, emails, unsubListID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check suppression list: %w", err)
 		}
@@ -499,10 +608,21 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		}
 	}
 
-	// Filter out suppressed recipients
+	// Resolve + validate the unsubscribe config (Posta-managed list, or caller-managed
+	// url/mailto). nil ⇒ no headers, no suppression — the transactional default.
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
+	unsub, err := s.resolveUnsubscribe(scope, req)
+	if err != nil {
+		return nil, err
+	}
+	var unsubListID *uint
+	if unsub != nil {
+		unsubListID = unsub.listID
+	}
+
+	// Filter out suppressed recipients (list-scoped when a list is named)
 	if s.suppressionRepo != nil {
-		filtered, err := s.suppressionRepo.FilterSuppressed(scope, req.To)
+		filtered, err := s.suppressionRepo.FilterSuppressedForList(scope, req.To, unsubListID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check suppression list: %w", err)
 		}
@@ -562,7 +682,6 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 	if len(req.Attachments) > 0 {
 		if s.blobStore != nil {
 			// Generate a temporary UUID for the blob key prefix.
-			// The real email UUID is assigned by the DB, so we use a timestamp-based key.
 			tempKey := fmt.Sprintf("%d", time.Now().UnixNano())
 			uploaded, err := s.uploadAttachments(ctx, tempKey, req.Attachments)
 			if err != nil {
@@ -604,46 +723,69 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		apiKeyPtr = &apiKeyID
 	}
 
+	// Posta-managed (list) URL is minted in the post-Create block (it needs em.ID),
+	// which also sets ListUnsubscribePost for that path.
+	var luURL, luMailto string
+	var luPost bool
+	if unsub != nil {
+		luMailto = unsub.mailto
+		if unsub.url != "" {
+			luURL = unsub.url
+			luPost = unsub.oneClick
+		}
+	}
+
 	em := &models.Email{
 		// Assign the UUID up front so reserved {{ posta_* }} links (which key the
 		// web view off the UUID) can be built without depending on the DB reading
 		// the gen_random_uuid() default back after insert.
-		UUID:                uuid.NewString(),
-		UserID:              userID,
-		WorkspaceID:         workspaceID,
-		APIKeyID:            apiKeyPtr,
-		Sender:              req.From,
-		Recipients:          req.To,
-		Subject:             req.Subject,
-		TemplateName:        req.TemplateName,
-		HTMLBody:            req.HTML,
-		TextBody:            req.Text,
-		AttachmentsJSON:     attachmentsJSON,
-		HeadersJSON:         headersJSON,
-		ListUnsubscribeURL:  req.ListUnsubscribeURL,
-		ListUnsubscribePost: req.ListUnsubscribePost,
-		Status:              models.EmailStatusPending,
-		Provider:            ClassifyRecipients(req.To),
+		UUID:                  uuid.NewString(),
+		UserID:                userID,
+		WorkspaceID:           workspaceID,
+		APIKeyID:              apiKeyPtr,
+		Sender:                req.From,
+		Recipients:            req.To,
+		Subject:               req.Subject,
+		TemplateName:          req.TemplateName,
+		HTMLBody:              req.HTML,
+		TextBody:              req.Text,
+		AttachmentsJSON:       attachmentsJSON,
+		HeadersJSON:           headersJSON,
+		ListUnsubscribeURL:    luURL,
+		ListUnsubscribeMailto: luMailto,
+		ListUnsubscribePost:   luPost,
+		UnsubscribeListID:     unsubListID,
+		Status:                models.EmailStatusPending,
+		Provider:              ClassifyRecipients(req.To),
 	}
 
 	if err := s.emailRepo.Create(em); err != nil {
 		return nil, fmt.Errorf("failed to store email: %w", err)
 	}
 
-	// Resolve reserved {{ posta_* }} system links now that the email identity is
-	// known. Rendering left sentinels in the body; replace them with the real
-	// per-message URLs. Only touches the DB when the template actually used one.
-	if s.linkGen != nil && (HasSystemSentinels(em.HTMLBody) || HasSystemSentinels(em.TextBody) || HasSystemSentinels(em.Subject)) {
+	// Resolve reserved {{ posta_* }} system links and/or mint the Posta-managed
+	// one-click unsubscribe URL now that the email identity (id/UUID) is known.
+	// Both need em.ID/UUID, so they happen post-Create. Only touches the DB when a
+	// template used a sentinel or a list was named.
+	needsLinks := HasSystemSentinels(em.HTMLBody) || HasSystemSentinels(em.TextBody) || HasSystemSentinels(em.Subject)
+	if s.linkGen != nil && (needsLinks || em.UnsubscribeListID != nil) {
 		webViewURL := s.linkGen.WebViewURL(em.UUID)
 		unsubscribeURL := s.linkGen.TxUnsubscribeURL(em.ID)
-		em.HTMLBody = SubstituteSystemLinks(em.HTMLBody, webViewURL, unsubscribeURL)
-		em.TextBody = SubstituteSystemLinks(em.TextBody, webViewURL, unsubscribeURL)
-		em.Subject = SubstituteSystemLinks(em.Subject, webViewURL, unsubscribeURL)
-		// Keep req in sync so the synchronous fallback (sendSync) sends the
-		// resolved body/subject too.
-		req.HTML = em.HTMLBody
-		req.Text = em.TextBody
-		req.Subject = em.Subject
+		if needsLinks {
+			em.HTMLBody = SubstituteSystemLinks(em.HTMLBody, webViewURL, unsubscribeURL)
+			em.TextBody = SubstituteSystemLinks(em.TextBody, webViewURL, unsubscribeURL)
+			em.Subject = SubstituteSystemLinks(em.Subject, webViewURL, unsubscribeURL)
+			// Keep req in sync so the synchronous fallback (sendSync) sends the
+			// resolved body/subject too.
+			req.HTML = em.HTMLBody
+			req.Text = em.TextBody
+			req.Subject = em.Subject
+		}
+		// Posta-managed list: emit the RFC 8058 one-click List-Unsubscribe header.
+		if em.UnsubscribeListID != nil {
+			em.ListUnsubscribeURL = unsubscribeURL
+			em.ListUnsubscribePost = true
+		}
 		_ = s.emailRepo.Update(em)
 	}
 
@@ -741,7 +883,7 @@ func (s *Service) sendSync(em *models.Email, userID uint, workspaceID *uint, req
 	em.SMTPHostname = smtpServer.Host
 	_ = s.emailRepo.Update(em)
 
-	if err := s.sender.Send(smtpServer, req.From, req.To, req.Subject, req.HTML, req.Text, req.Attachments, req.Headers, req.ListUnsubscribeURL, req.ListUnsubscribePost); err != nil {
+	if err := s.sender.Send(smtpServer, req.From, req.To, req.Subject, req.HTML, req.Text, req.Attachments, req.Headers, em.ListUnsubscribeURL, em.ListUnsubscribeMailto, em.ListUnsubscribePost); err != nil {
 		em.Status = models.EmailStatusFailed
 		em.ErrorMessage = err.Error()
 		_ = s.emailRepo.Update(em)
@@ -794,6 +936,7 @@ func (s *Service) SendWithTemplate(ctx context.Context, userID, apiKeyID uint, w
 		Text:         rendered.Text,
 		Attachments:  req.Attachments,
 		TemplateName: tmpl.Name,
+		Unsubscribe:  req.Unsubscribe,
 	})
 }
 
@@ -829,15 +972,27 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 		return nil, fmt.Errorf("template not found: %w", err)
 	}
 
+	// Resolve + validate the batch's unsubscribe config once upfront so a bad
+	// list_id fails the batch immediately instead of replicating the error per row.
+	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
+	unsub, err := s.resolveUnsubscribe(scope, &SendRequest{Unsubscribe: req.Unsubscribe})
+	if err != nil {
+		return nil, err
+	}
+	var unsubListID *uint
+	if unsub != nil {
+		unsubListID = unsub.listID
+	}
+
 	resp := &BatchResponse{
 		Total:   len(req.Recipients),
 		Results: make([]BatchResult, 0, len(req.Recipients)),
 	}
 
 	for _, recipient := range req.Recipients {
-		// Check suppression
+		// Check suppression (list-scoped when a list is named)
 		if s.suppressionRepo != nil {
-			suppressed, err := s.suppressionRepo.IsSuppressed(repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}, recipient.Email)
+			suppressed, err := s.suppressionRepo.IsSuppressedForList(scope, recipient.Email, unsubListID)
 			if err == nil && suppressed {
 				// Log the suppressed email
 				var apiKeyPtr *uint
@@ -893,6 +1048,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 			HTML:         rendered.HTML,
 			Text:         rendered.Text,
 			TemplateName: tmpl.Name,
+			Unsubscribe:  req.Unsubscribe,
 		})
 		if err != nil {
 			resp.Failed++

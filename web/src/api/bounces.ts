@@ -11,13 +11,17 @@ export const bouncesApi = {
 }
 
 export const suppressionsApi = {
-  list(page = 0, size = 20) {
-    return api.get<PaginatedResponse<Suppression>>('/users/me/suppressions', { params: { page, size } })
+  list(page = 0, size = 20, listId?: number) {
+    const params: Record<string, number> = { page, size }
+    if (listId) params.list_id = listId
+    return api.get<PaginatedResponse<Suppression>>('/users/me/suppressions', { params })
   },
-  create(data: { email: string; reason: string }) {
+  create(data: { email: string; reason: string; list_id?: number }) {
     return api.post<ApiResponse<Suppression>>('/users/me/suppressions', data)
   },
-  delete(email: string) {
-    return api.delete('/users/me/suppressions', { data: { email } })
+  delete(email: string, listId?: number) {
+    const body: Record<string, string | number> = { email }
+    if (listId) body.list_id = listId
+    return api.delete('/users/me/suppressions', { data: body })
   },
 }

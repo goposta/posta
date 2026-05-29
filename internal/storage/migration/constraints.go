@@ -76,7 +76,9 @@ func rebuildUniqueIndexes(db *gorm.DB) {
 		{"contacts", "idx_user_email", "email"},
 		{"domains", "idx_user_domain", "domain"},
 		{"languages", "idx_user_language", "code"},
-		{"suppressions", "idx_user_suppression", "email"},
+
+		{"suppressions", "idx_user_suppression", "email, COALESCE(list_id, 0)"},
+		{"unsubscribe_lists", "idx_user_unsub_list", "name"},
 	}
 
 	for _, idx := range indexes {

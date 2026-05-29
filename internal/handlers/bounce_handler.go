@@ -18,8 +18,12 @@
 package handlers
 
 import (
+	"encoding/json"
+	"time"
+
 	"github.com/goposta/posta/internal/metrics"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
@@ -34,6 +38,7 @@ type BounceHandler struct {
 	bounceRepo      *repositories.BounceRepository
 	suppressionRepo *repositories.SuppressionRepository
 	emailRepo       *repositories.EmailRepository
+	dispatcher      *webhook.Dispatcher
 }
 type RecordBounceRequest struct {
 	Body struct {
@@ -44,8 +49,8 @@ type RecordBounceRequest struct {
 	} `json:"body"`
 }
 
-func NewBounceHandler(bounceRepo *repositories.BounceRepository, suppressionRepo *repositories.SuppressionRepository, emailRepo *repositories.EmailRepository) *BounceHandler {
-	return &BounceHandler{bounceRepo: bounceRepo, suppressionRepo: suppressionRepo, emailRepo: emailRepo}
+func NewBounceHandler(bounceRepo *repositories.BounceRepository, suppressionRepo *repositories.SuppressionRepository, emailRepo *repositories.EmailRepository, dispatcher *webhook.Dispatcher) *BounceHandler {
+	return &BounceHandler{bounceRepo: bounceRepo, suppressionRepo: suppressionRepo, emailRepo: emailRepo, dispatcher: dispatcher}
 }
 
 func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error {
@@ -79,12 +84,18 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 
 	metrics.IncrementBounce(req.Body.Type)
 
-	// Auto-suppress on hard bounce or complaint
+	// Auto-suppress on hard bounce or complaint. Kind is set explicitly so the
+	// row is distinguishable from a manual block in the suppression table.
 	if req.Body.Type == bounceTypeHard || req.Body.Type == bounceTypeComplaint {
+		kind := models.SuppressionKindBounce
+		if req.Body.Type == bounceTypeComplaint {
+			kind = models.SuppressionKindComplaint
+		}
 		suppression := &models.Suppression{
 			UserID:      scope.UserID,
 			WorkspaceID: scope.WorkspaceID,
 			Email:       req.Body.Recipient,
+			Kind:        kind,
 			Reason:      "auto-suppressed: " + req.Body.Type + " bounce",
 		}
 		// Ignore error if already suppressed
@@ -93,7 +104,36 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 		}
 	}
 
+	// Complaint webhook: high-value signal for senders to mirror into their own
+	// CRM. Mirrors the email.unsubscribed payload shape.
+	if req.Body.Type == bounceTypeComplaint {
+		h.emitComplained(em, req.Body.Recipient)
+	}
+
 	return created(c, bounce)
+}
+
+// emitComplained fires the email.complained webhook for a recorded complaint.
+func (h *BounceHandler) emitComplained(em *models.Email, addr string) {
+	if h.dispatcher == nil {
+		return
+	}
+	payload := struct {
+		Event     string `json:"event"`
+		EmailUUID string `json:"email_uuid"`
+		Email     string `json:"email"`
+		Timestamp string `json:"timestamp"`
+	}{
+		Event:     "email.complained",
+		EmailUUID: em.UUID,
+		Email:     addr,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	h.dispatcher.DispatchJSON(em.UserID, em.WorkspaceID, "email.complained", body, em.Sender)
 }
 
 func (h *BounceHandler) List(c *okapi.Context, req *ListRequest) error {

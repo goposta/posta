@@ -929,7 +929,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Handler:  okapi.H(r.h.suppression.List),
 			Group:    userGroup,
 			Summary:  "List suppressed emails",
-			Request:  &handlers.ListRequest{},
+			Request:  &handlers.ListSuppressionsRequest{},
 			Response: &dto.PageableResponse[models.Suppression]{},
 		},
 		{
@@ -943,6 +943,61 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(204, nil),
 			},
+		},
+
+		// ==================== Unsubscribe Lists ====================
+		{
+			Method:  http.MethodPost,
+			Path:    "/unsubscribe-lists",
+			Handler: okapi.H(r.h.unsubscribeList.Create),
+			Group:   userGroup,
+			Tags:    []string{"Unsubscribe Lists"},
+			Summary: "Create unsubscribe list",
+			Request: &handlers.CreateUnsubscribeListRequest{},
+			Options: []okapi.RouteOption{
+				okapi.DocResponse(201, &dto.Response[models.UnsubscribeList]{}),
+				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/unsubscribe-lists",
+			Handler:  okapi.H(r.h.unsubscribeList.List),
+			Group:    userGroup,
+			Tags:     []string{"Unsubscribe Lists"},
+			Summary:  "List unsubscribe lists",
+			Request:  &handlers.ListRequest{},
+			Response: &dto.PageableResponse[models.UnsubscribeList]{},
+		},
+		{
+			Method:   http.MethodGet,
+			Path:     "/unsubscribe-lists/{id:int}",
+			Handler:  okapi.H(r.h.unsubscribeList.Get),
+			Group:    userGroup,
+			Tags:     []string{"Unsubscribe Lists"},
+			Summary:  "Get unsubscribe list",
+			Response: &dto.Response[models.UnsubscribeList]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:   http.MethodPut,
+			Path:     "/unsubscribe-lists/{id:int}",
+			Handler:  okapi.H(r.h.unsubscribeList.Update),
+			Group:    userGroup,
+			Tags:     []string{"Unsubscribe Lists"},
+			Summary:  "Update unsubscribe list",
+			Request:  &handlers.UpdateUnsubscribeListRequest{},
+			Response: &dto.Response[models.UnsubscribeList]{},
+			Options:  []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID")},
+		},
+		{
+			Method:  http.MethodDelete,
+			Path:    "/unsubscribe-lists/{id:int}",
+			Handler: okapi.H(r.h.unsubscribeList.Delete),
+			Group:   userGroup,
+			Tags:    []string{"Unsubscribe Lists"},
+			Summary: "Delete unsubscribe list",
+			Options: []okapi.RouteOption{okapi.DocPathParam("id", "integer", "List ID"), okapi.DocResponse(204, nil)},
 		},
 
 		// ==================== Audit Log ====================

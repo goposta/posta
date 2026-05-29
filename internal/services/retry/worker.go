@@ -155,7 +155,7 @@ func (w *Worker) retryEmail(em *models.Email, server *models.SMTPServer) {
 	// Synchronous fallback
 	em.RetryCount++
 
-	if err := w.sender.Send(server, em.Sender, em.Recipients, em.Subject, em.HTMLBody, em.TextBody, nil, nil, em.ListUnsubscribeURL, em.ListUnsubscribePost); err != nil {
+	if err := w.sender.Send(server, em.Sender, em.Recipients, em.Subject, em.HTMLBody, em.TextBody, nil, nil, em.ListUnsubscribeURL, em.ListUnsubscribeMailto, em.ListUnsubscribePost); err != nil {
 		em.ErrorMessage = err.Error()
 		_ = w.emailRepo.Update(em)
 		logger.Debug("retry worker: email retry failed", "id", em.ID, "attempt", em.RetryCount, "error", err)
