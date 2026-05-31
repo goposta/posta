@@ -19,6 +19,23 @@ const userMenuOpen = ref(false)
 const wsSwitcherOpen = ref(false)
 const themeModes = ['light', 'dark', 'system'] as const
 
+// One-time banner introducing the personal workspace after the workspace-only
+// migration cutover. Dismissal is remembered in localStorage.
+const PERSONAL_BANNER_KEY = 'posta_personal_ws_banner_dismissed'
+const personalBannerDismissed = ref(localStorage.getItem(PERSONAL_BANNER_KEY) === 'true')
+const showPersonalBanner = computed(
+  () => wsStore.currentWorkspaceIsPersonal && !personalBannerDismissed.value
+)
+function dismissPersonalBanner() {
+  personalBannerDismissed.value = true
+  localStorage.setItem(PERSONAL_BANNER_KEY, 'true')
+}
+
+function goWorkspaceSettings() {
+  const id = wsStore.currentWorkspace?.id
+  if (id) router.push(`/workspaces/${id}`)
+}
+
 function closeUserMenu(e: MouseEvent) {
   const el = document.querySelector('.user-menu')
   if (el && !el.contains(e.target as Node)) {
@@ -62,10 +79,14 @@ interface NavItem {
   requiresWorkspace?: boolean
   /** Only show when the user is an owner or admin of the current workspace. */
   requiresWorkspaceAdmin?: boolean
+  /** Hidden when the active workspace is the user's personal one (no team). */
+  hideInPersonal?: boolean
   /** Only show when the backend exposes the OpenAPI docs. */
   requiresOpenapiDocs?: boolean
   /** Deep-link into a WorkspaceSettings tab of the current workspace. */
   workspaceTab?: 'members' | 'plan' | 'settings'
+  /** Link to a dedicated workspace sub-page (e.g. /workspaces/:id/members). */
+  workspaceSubpath?: string
   /** Additional route path prefixes that should keep this item highlighted (grouped tab pages). */
   matchPaths?: string[]
   /** Nested items shown indented under this entry. */
@@ -137,19 +158,18 @@ const navSections: NavSection[] = [
   {
     id: 'developers',
     title: 'Developers',
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { name: 'API Keys', path: '/api-keys', icon: 'key' },
       { name: 'Webhooks', path: '/webhooks', icon: 'link' },
       { name: 'Webhook Deliveries', path: '/webhook-deliveries', icon: 'activity' },
       { name: 'API Reference', path: '/docs', icon: 'book-open', external: true, requiresOpenapiDocs: true },
-      { name: 'OpenAPI (Swagger)', path: '/swagger', icon: 'code', external: true, requiresOpenapiDocs: true },
     ],
   },
   {
     id: 'infrastructure',
     title: 'Infrastructure',
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { name: 'Domains', path: '/domains', icon: 'globe' },
       { name: 'SMTP Servers', path: '/smtp-servers', icon: 'server' },
@@ -159,10 +179,11 @@ const navSections: NavSection[] = [
     id: 'workspace',
     title: 'Workspace',
     requiresWorkspace: true,
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
-      { name: 'Members', path: '', icon: 'users', workspaceTab: 'members' },
-      { name: 'Plan & Billing', path: '', icon: 'credit-card', workspaceTab: 'plan' },
+      { name: 'All Workspaces', path: '/workspaces', icon: 'layers' },
+      { name: 'Members', path: '', icon: 'users', workspaceSubpath: 'members', hideInPersonal: true },
+      { name: 'Plan & Billing', path: '', icon: 'credit-card', workspaceTab: 'plan', hideInPersonal: true },
       { name: 'Settings', path: '', icon: 'settings', workspaceTab: 'settings', requiresWorkspaceAdmin: true },
     ],
   },
@@ -219,6 +240,7 @@ function sectionItems(section: NavSection): NavItem[] {
   return section.items.filter((item) => {
     if (item.requiresWorkspace && !wsStore.isWorkspaceContext) return false
     if (item.requiresWorkspaceAdmin && !wsStore.isWorkspaceAdmin) return false
+    if (item.hideInPersonal && wsStore.currentWorkspaceIsPersonal) return false
     if (item.requiresOpenapiDocs && !appInfo.value?.openapi_docs) return false
     return true
   })
@@ -226,6 +248,9 @@ function sectionItems(section: NavSection): NavItem[] {
 
 /** Resolve the effective target of an item (handles workspace tab deep-links). */
 function itemTo(item: NavItem): string {
+  if (item.workspaceSubpath) {
+    return `/workspaces/${wsStore.currentWorkspaceId}/${item.workspaceSubpath}`
+  }
   if (item.workspaceTab) {
     return `/workspaces/${wsStore.currentWorkspaceId}?tab=${item.workspaceTab}`
   }
@@ -238,10 +263,13 @@ function isActive(path: string): boolean {
 }
 
 function isItemActive(item: NavItem): boolean {
+  if (item.workspaceSubpath) {
+    return route.path === `/workspaces/${wsStore.currentWorkspaceId}/${item.workspaceSubpath}`
+  }
   if (item.workspaceTab) {
     return (
       route.path === `/workspaces/${wsStore.currentWorkspaceId}` &&
-      (route.query.tab || 'members') === item.workspaceTab
+      (route.query.tab || 'settings') === item.workspaceTab
     )
   }
   // "Manage Workspaces…" should only highlight on the list page itself,
@@ -320,13 +348,16 @@ function getIcon(name: string): string {
     <aside class="sidebar">
         <div class="sidebar-header">
             <img src="/logo.png" alt="Posta" class="sidebar-logo" @click="navigate('/')" />
-            <span class="sidebar-brand-text" @click="navigate('/')">Posta</span>
+            <span class="sidebar-brand-text" @click="navigate('/')">Posta<span class="sidebar-brand-text-dot">.</span></span>
          
           <button class="sidebar-collapse-btn" @click="toggleSidebar"
-            :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path :d="sidebarCollapsed ? 'M6 3l5 5-5 5' : 'M10 3L5 8l5 5'" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" />
+            :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+            :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M9 3v18" />
+              <path :d="sidebarCollapsed ? 'm14 9 3 3-3 3' : 'm16 15-3-3 3-3'" />
             </svg>
           </button>
 
@@ -344,15 +375,11 @@ function getIcon(name: string): string {
             </svg>
           </div>
           <div v-if="wsSwitcherOpen" class="ws-switcher-dropdown">
-            <div class="ws-switcher-option" :class="{ active: wsStore.isPersonal }" @click="switchContext(null)">
-              <div class="ws-avatar-sm">P</div>
-              <span>Personal</span>
-            </div>
             <div v-for="ws in wsStore.workspaces" :key="ws.id" class="ws-switcher-option"
               :class="{ active: wsStore.currentWorkspaceId === ws.id }" @click="switchContext(ws.id)">
               <div class="ws-avatar-sm">{{ ws.name.charAt(0).toUpperCase() }}</div>
               <span>{{ ws.name }}</span>
-              <span class="ws-role-badge">{{ ws.role }}</span>
+              <span class="ws-role-badge">{{ ws.is_personal ? 'personal' : ws.role }}</span>
             </div>
             <div class="ws-switcher-divider"></div>
             <div class="ws-switcher-action" @click="createWorkspace">
@@ -508,6 +535,25 @@ function getIcon(name: string): string {
       </header>
       <main class="main-content">
         <EmailVerificationBanner />
+        <div v-if="showPersonalBanner" class="app-banner app-banner--info personal-ws-banner">
+          <svg class="app-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <div class="app-banner-content">
+            <p class="app-banner-title">Your personal workspace is ready</p>
+            <p class="app-banner-text">
+              Your data now lives in <strong>{{ wsStore.currentWorkspace?.name }}</strong>.
+              Invite collaborators or rename it in workspace settings.
+            </p>
+          </div>
+          <div class="app-banner-actions">
+            <button class="app-banner-btn" @click="goWorkspaceSettings">Workspace settings</button>
+            <button class="app-banner-dismiss" @click="dismissPersonalBanner" aria-label="Dismiss banner">×</button>
+          </div>
+        </div>
         <router-view />
       </main>
       <footer class="main-footer">
@@ -539,7 +585,7 @@ function getIcon(name: string): string {
       <aside v-if="mobileOpen" class="sidebar sidebar-mobile">
         <div class="sidebar-header">
           <img src="/logo.png" alt="Posta" class="sidebar-logo" />
-          <span class="sidebar-brand-text">Posta </span>
+          <span class="sidebar-brand-text">Posta<span class="sidebar-brand-text-dot">.</span></span>
           <button class="sidebar-collapse-btn" @click="mobileOpen = false">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -566,19 +612,13 @@ function getIcon(name: string): string {
 
           <Transition name="dropdown">
             <div v-if="wsSwitcherOpen" class="ws-dropdown">
-              <div class="ws-option" :class="{ active: wsStore.isPersonal }"
-                @click="switchContext(null); mobileOpen = false">
-                <span class="ws-avatar">P</span>
-                <span>Personal</span>
-              </div>
-
               <div v-for="ws in wsStore.workspaces" :key="ws.id" class="ws-option"
                 :class="{ active: wsStore.currentWorkspaceId === ws.id }"
                 @click="switchContext(ws.id); mobileOpen = false">
                 <span class="ws-avatar">{{ ws.name?.charAt(0)?.toUpperCase() }}</span>
                 <div style="display: flex; flex-direction: column;">
                   <span>{{ ws.name }}</span>
-                  <small v-if="ws.role" style="font-size: 0.75rem; opacity: 0.7;">{{ ws.role }}</small>
+                  <small style="font-size: 0.75rem; opacity: 0.7;">{{ ws.is_personal ? 'personal' : ws.role }}</small>
                 </div>
               </div>
 
@@ -1253,6 +1293,12 @@ function getIcon(name: string): string {
 .main-content {
   flex: 1;
   padding: 28px;
+}
+
+/* ─── Personal workspace intro banner ─── */
+/* Visuals come from the shared .app-banner system; only spacing is local. */
+.personal-ws-banner {
+  margin-bottom: 20px;
 }
 
 /* ─── Footer ─── */

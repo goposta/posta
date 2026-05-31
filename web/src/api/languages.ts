@@ -3,15 +3,15 @@ import type { ApiResponse, PaginatedResponse, Language, LanguageInput } from './
 
 export const languagesApi = {
   list(page = 0, size = 100) {
-    return api.get<PaginatedResponse<Language>>('/users/me/languages', { params: { page, size } })
+    return api.get<PaginatedResponse<Language>>('/workspaces/current/languages', { params: { page, size } })
   },
   create(data: LanguageInput) {
-    return api.post<ApiResponse<Language>>('/users/me/languages', data)
+    return api.post<ApiResponse<Language>>('/workspaces/current/languages', data)
   },
   update(id: number, data: Partial<LanguageInput>) {
-    return api.put<ApiResponse<Language>>(`/users/me/languages/${id}`, data)
+    return api.put<ApiResponse<Language>>(`/workspaces/current/languages/${id}`, data)
   },
   delete(id: number) {
-    return api.delete(`/users/me/languages/${id}`)
+    return api.delete(`/workspaces/current/languages/${id}`)
   },
 }

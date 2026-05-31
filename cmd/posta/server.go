@@ -41,9 +41,11 @@ import (
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/tracking"
 	"github.com/goposta/posta/internal/services/webhook"
+	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/migration"
+	"github.com/goposta/posta/internal/storage/migration/upgrade"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/goposta/posta/internal/worker"
 	"github.com/hibiken/asynq"
@@ -80,6 +82,15 @@ func runServer(cli *okapicli.CLI) {
 				logger.Fatal("failed to run migrations", "error", err)
 			}
 
+			if err := upgrade.Run(context.Background(), res.db, config.Version, upgrade.Options{
+				AllowDowngrade:  cfg.AllowDowngrade,
+				PlanEnforcement: cfg.PlanEnforcement,
+			}); err != nil {
+				logger.Fatal("failed to run upgrade steps", "error", err)
+			}
+
+			checkDefaultPlan(res.db, cfg)
+
 			// Initialize SMTP password encryption
 			crypto.Init(cfg.EncryptionKey)
 
@@ -87,7 +98,7 @@ func runServer(cli *okapicli.CLI) {
 				logger.Fatal("failed to seed admin user", "error", err)
 			}
 
-			seedDefaults(res.db, cfg.AdminEmail)
+			seedDefaults(res.db, cfg)
 
 			// Initialize blob storage (S3 or filesystem) for attachments
 			if cfg.BlobProvider != "" {
@@ -113,7 +124,13 @@ func runServer(cli *okapicli.CLI) {
 			userRepo := repositories.NewUserRepository(res.db)
 			userSettingRepo := repositories.NewUserSettingRepository(res.db)
 			appName := "Posta"
-			notifier := notification.NewService(cfg.SystemSMTP, appName, cfg.AppWebURL, userRepo, userSettingRepo)
+			notifier := notification.NewService(
+				cfg.SystemSMTP,
+				appName,
+				cfg.AppWebURL,
+				userRepo,
+				userSettingRepo,
+				repositories.NewWorkspaceRepository(res.db))
 			if notifier.IsConfigured() {
 				logger.Info("system notification service enabled")
 			}
@@ -176,10 +193,19 @@ func runServer(cli *okapicli.CLI) {
 	}
 }
 
-// seedDefaults seeds default templates, stylesheets, and languages for the admin user.
-func seedDefaults(db *gorm.DB, adminEmail string) {
+func checkDefaultPlan(db *gorm.DB, cfg *config.Config) {
+	if !cfg.PlanEnforcement {
+		return
+	}
+	if _, err := repositories.NewPlanRepository(db).FindDefault(); err != nil {
+		logger.Warn("plan enforcement is enabled but no default plan is set — " +
+			"personal-workspace migration will fail until one is configured via PATCH /admin/plans/{id}/default")
+	}
+}
+
+func seedDefaults(db *gorm.DB, cfg *config.Config) {
 	userRepo := repositories.NewUserRepository(db)
-	admin, err := userRepo.FindByEmail(adminEmail)
+	admin, err := userRepo.FindByEmail(cfg.AdminEmail)
 	if err != nil || admin == nil {
 		return
 	}
@@ -190,7 +216,11 @@ func seedDefaults(db *gorm.DB, adminEmail string) {
 		repositories.NewTemplateLocalizationRepository(db),
 		repositories.NewLanguageRepository(db),
 	)
-	s.SeedUserDefaults(admin.ID, admin.Name)
+	migrator := workspacemigrate.New(cfg.PlanEnforcement)
+	migrator.SetSeeder(s)
+	if _, err := migrator.MigrateUser(db, admin.ID); err != nil {
+		logger.Error("failed to provision admin personal workspace", "error", err)
+	}
 }
 
 // newWebhookDispatcher creates a configured webhook dispatcher with metrics hooks.
@@ -449,7 +479,7 @@ func initCronManager(
 		retentionJob.SetBlobStore(blobStore)
 	}
 	manager.Register(retentionJob)
-	manager.Register(jobs.NewDailyReportJob(repositories.NewUserSettingRepository(db)))
+	manager.Register(jobs.NewDailyReportJob(repositories.NewWorkspaceRepository(db)))
 	manager.Register(jobs.NewAccountCleanupJob(repositories.NewUserRepository(db)))
 	manager.Register(jobs.NewAPIKeyExpiryJob(db, notifier))
 	manager.Register(jobs.NewBounceAlertJob(

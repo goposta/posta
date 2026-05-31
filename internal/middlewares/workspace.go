@@ -25,14 +25,24 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// OptionalWorkspaceMiddleware reads the X-Posta-Workspace-Id header if present.
-// If absent, the request operates in personal mode (workspace_id stays 0).
-// If present, validates membership and sets workspace_id + workspace_role.
-func OptionalWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository) okapi.Middleware {
+func OptionalWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		wsHeader := c.Header("X-Posta-Workspace-Id")
 		if wsHeader == "" {
-			// Personal mode — no workspace context
+			if c.GetInt("workspace_id") > 0 {
+				return c.Next()
+			}
+			userID := c.GetInt("user_id")
+			if userID == 0 || userRepo == nil {
+				return c.Next()
+			}
+			personalID, err := userRepo.PersonalWorkspaceID(uint(userID))
+			if err != nil || personalID == nil {
+				// Not migrated yet — legacy personal mode.
+				return c.Next()
+			}
+			c.Set("workspace_id", int(*personalID))
+			c.Set("workspace_role", string(models.WorkspaceRoleOwner))
 			return c.Next()
 		}
 
@@ -54,6 +64,42 @@ func OptionalWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository
 		c.Set("workspace_id", wsID)
 		c.Set("workspace_role", string(member.Role))
 
+		return c.Next()
+	}
+}
+
+func WorkspaceFromQueryOrHeader(workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository) okapi.Middleware {
+	return func(c *okapi.Context) error {
+		userID := c.GetInt("user_id")
+		if userID == 0 {
+			return c.AbortUnauthorized("authentication required")
+		}
+
+		raw := c.Header("X-Posta-Workspace-Id")
+		if raw == "" {
+			raw = c.Query("workspace_id")
+		}
+		if raw != "" {
+			wsID, err := strconv.Atoi(raw)
+			if err != nil || wsID <= 0 {
+				return c.AbortBadRequest("invalid workspace id")
+			}
+			member, err := workspaceRepo.FindMember(uint(wsID), uint(userID))
+			if err != nil {
+				return c.AbortForbidden("you are not a member of this workspace")
+			}
+			c.Set("workspace_id", wsID)
+			c.Set("workspace_role", string(member.Role))
+			return c.Next()
+		}
+
+		// Neither header nor query — fall back to the personal workspace.
+		if userRepo != nil {
+			if personalID, err := userRepo.PersonalWorkspaceID(uint(userID)); err == nil && personalID != nil {
+				c.Set("workspace_id", int(*personalID))
+				c.Set("workspace_role", string(models.WorkspaceRoleOwner))
+			}
+		}
 		return c.Next()
 	}
 }

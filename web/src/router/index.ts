@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useWorkspaceStore } from '../stores/workspace'
 
 const APP_NAME = 'Posta'
 const DEFAULT_TITLE = 'Posta — Self-Hosted Email Delivery & Inbound Platform'
@@ -75,6 +76,7 @@ const routes = [
       { path: 'settings', name: 'settings', component: () => import('../views/settings/Settings.vue'), meta: { title: 'Settings' } },
       { path: 'workspaces', name: 'workspaces', component: () => import('../views/workspaces/Workspaces.vue'), meta: { title: 'Workspaces' } },
       { path: 'workspaces/:id', name: 'workspace-detail', component: () => import('../views/workspaces/WorkspaceSettings.vue'), meta: { title: 'Workspace Settings' } },
+      { path: 'workspaces/:id/members', name: 'workspace-members', component: () => import('../views/workspaces/WorkspaceMembers.vue'), meta: { title: 'Workspace Members' } },
       { path: 'about', name: 'about', component: () => import('../views/about/About.vue'), meta: { title: 'About' } },
       { path: 'profile', name: 'profile', component: () => import('../views/auth/Profile.vue'), meta: { title: 'Profile' } },
       { path: 'change-password', redirect: '/profile' },
@@ -105,7 +107,7 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
   if (to.meta.auth && !auth.isAuthenticated) {
@@ -116,6 +118,18 @@ router.beforeEach((to) => {
   }
   if (to.meta.admin && !auth.isAdmin) {
     return { name: 'dashboard' }
+  }
+
+  // Resolve the active workspace before any authenticated view mounts, so the
+  // X-Posta-Workspace-Id header is set on its first scoped request. Without
+  // this, on a fresh login the dashboard's stats/emails calls race the
+  // (unawaited) fetchWorkspaces() and go out header-less. Runs once — later
+  // navigations reuse the already-loaded store.
+  if (to.meta.auth && auth.isAuthenticated) {
+    const ws = useWorkspaceStore()
+    if (ws.workspaces.length === 0) {
+      await ws.fetchWorkspaces()
+    }
   }
 })
 

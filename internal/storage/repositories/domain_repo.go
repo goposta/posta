@@ -124,3 +124,13 @@ func (r *DomainRepository) IsOwnershipVerified(userID uint, domainName string) b
 		Count(&count)
 	return count > 0
 }
+
+// IsOwnershipVerifiedInWorkspace checks whether the given domain is registered
+// and ownership-verified within the workspace (any member's verified domain).
+func (r *DomainRepository) IsOwnershipVerifiedInWorkspace(workspaceID uint, domainName string) bool {
+	var count int64
+	r.db.Model(&models.Domain{}).
+		Where("workspace_id = ? AND domain = ? AND ownership_verified = ?", workspaceID, domainName, true).
+		Count(&count)
+	return count > 0
+}

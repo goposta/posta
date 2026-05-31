@@ -35,10 +35,10 @@ const settingMeta: Record<string, { label: string; description: string; category
 const categories = ['General', 'Security', 'Privacy', 'Limits', 'Retention']
 
 function settingsByCategory(category: string) {
-  return settings.value.filter(s => {
-    const meta = settingMeta[s.key]
-    return meta ? meta.category === category : category === 'General'
-  })
+  // Only render known, documented settings. Unknown keys (e.g. the upgrade
+  // framework's internal app.* bookkeeping rows) are never editable platform
+  // settings and must not leak into the UI.
+  return settings.value.filter(s => settingMeta[s.key]?.category === category)
 }
 
 // Track edited values separately

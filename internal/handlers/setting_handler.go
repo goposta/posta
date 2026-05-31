@@ -18,11 +18,29 @@
 package handlers
 
 import (
+	"strings"
+
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
+
+func isReservedSettingKey(key string) bool {
+	return strings.HasPrefix(key, "app.")
+}
+
+// visibleSettings drops reserved internal rows from a settings list.
+func visibleSettings(settings []models.Setting) []models.Setting {
+	out := make([]models.Setting, 0, len(settings))
+	for _, s := range settings {
+		if isReservedSettingKey(s.Key) {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
 
 // SettingHandler handles admin management of platform settings.
 type SettingHandler struct {
@@ -51,7 +69,7 @@ func (h *SettingHandler) GetSettings(c *okapi.Context) error {
 	if err != nil {
 		return c.AbortInternalServerError("failed to load settings", err)
 	}
-	return ok(c, settings)
+	return ok(c, visibleSettings(settings))
 }
 
 func (h *SettingHandler) UpdateSettings(c *okapi.Context, req *UpdateSettingsRequest) error {
@@ -59,6 +77,10 @@ func (h *SettingHandler) UpdateSettings(c *okapi.Context, req *UpdateSettingsReq
 
 	settings := make([]models.Setting, 0, len(req.Body.Settings))
 	for _, s := range req.Body.Settings {
+
+		if isReservedSettingKey(s.Key) {
+			continue
+		}
 		typ := s.Type
 		if typ == "" {
 			typ = "string"
@@ -80,5 +102,5 @@ func (h *SettingHandler) UpdateSettings(c *okapi.Context, req *UpdateSettingsReq
 	if err != nil {
 		return c.AbortInternalServerError("failed to load settings", err)
 	}
-	return ok(c, updated)
+	return ok(c, visibleSettings(updated))
 }

@@ -32,7 +32,8 @@ import (
 
 const bounceRateThreshold = 5.0 // percent
 
-// BounceAlertJob checks for users with high bounce rates and sends alerts.
+// BounceAlertJob checks for workspaces with high bounce rates and alerts their
+// owners and admins.
 type BounceAlertJob struct {
 	db              *gorm.DB
 	notifier        *notification.Service
@@ -65,30 +66,30 @@ func (j *BounceAlertJob) Run(_ context.Context, _ *asynq.Client) error {
 	now := time.Now().UTC()
 	from := now.Add(-24 * time.Hour)
 
-	// Find users who sent emails in the last 24 hours
-	type userEmailCount struct {
-		UserID uint  `gorm:"column:user_id"`
-		Total  int64 `gorm:"column:total"`
+	// Find workspaces that sent emails in the last 24 hours
+	type workspaceEmailCount struct {
+		WorkspaceID uint  `gorm:"column:workspace_id"`
+		Total       int64 `gorm:"column:total"`
 	}
-	var counts []userEmailCount
+	var counts []workspaceEmailCount
 	if err := j.db.Model(&models.Email{}).
-		Select("user_id, COUNT(*) as total").
-		Where("created_at >= ? AND workspace_id IS NULL", from).
-		Group("user_id").
-		Having("COUNT(*) >= ?", 10). // Only alert for users with meaningful volume
+		Select("workspace_id, COUNT(*) as total").
+		Where("created_at >= ? AND workspace_id IS NOT NULL", from).
+		Group("workspace_id").
+		Having("COUNT(*) >= ?", 10).
 		Find(&counts).Error; err != nil {
 		logger.Error("bounce-alert: failed to query email counts", "error", err)
 		return err
 	}
 
 	sent := 0
-	for _, uc := range counts {
-		bounceCount, err := j.bounceRepo.CountByUserAndDateRange(uc.UserID, from, now)
+	for _, wc := range counts {
+		bounceCount, err := j.bounceRepo.CountByWorkspaceAndDateRange(wc.WorkspaceID, from, now)
 		if err != nil {
 			continue
 		}
 
-		bounceRate := float64(bounceCount) / float64(uc.Total) * 100
+		bounceRate := float64(bounceCount) / float64(wc.Total) * 100
 		if bounceRate < bounceRateThreshold {
 			continue
 		}
@@ -96,17 +97,17 @@ func (j *BounceAlertJob) Run(_ context.Context, _ *asynq.Client) error {
 		// Count new suppressions
 		var suppressionCount int64
 		j.db.Model(&models.Suppression{}).
-			Where("user_id = ? AND created_at >= ?", uc.UserID, from).
+			Where("workspace_id = ? AND created_at >= ?", wc.WorkspaceID, from).
 			Count(&suppressionCount)
 
-		if err := j.notifier.SendToUser(uc.UserID, "Bounce Rate Alert", notification.TemplateBounceAlert, map[string]any{
+		if err := j.notifier.SendToWorkspaceAdmins(wc.WorkspaceID, "Bounce Rate Alert", notification.TemplateBounceAlert, map[string]any{
 			"BounceRate":       fmt.Sprintf("%.1f", bounceRate),
 			"Threshold":        fmt.Sprintf("%.0f", bounceRateThreshold),
-			"TotalEmails":      uc.Total,
+			"TotalEmails":      wc.Total,
 			"BounceCount":      bounceCount,
 			"SuppressionCount": suppressionCount,
 		}); err != nil {
-			logger.Error("bounce-alert: failed to send", "user_id", uc.UserID, "error", err)
+			logger.Error("bounce-alert: failed to send", "workspace_id", wc.WorkspaceID, "error", err)
 			continue
 		}
 		sent++

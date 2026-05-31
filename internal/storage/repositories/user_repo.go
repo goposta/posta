@@ -52,6 +52,17 @@ func (r *UserRepository) FindByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
+func (r *UserRepository) PersonalWorkspaceID(userID uint) (*uint, error) {
+	var user models.User
+	if err := r.db.Model(&models.User{}).
+		Select("personal_workspace_id").
+		Where("id = ?", userID).
+		First(&user).Error; err != nil {
+		return nil, err
+	}
+	return user.PersonalWorkspaceID, nil
+}
+
 func (r *UserRepository) FindAll(limit, offset int) ([]models.User, int64, error) {
 	var users []models.User
 	var total int64
@@ -93,6 +104,10 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 		if err := tx.Exec("DELETE FROM subscriber_list_members WHERE list_id IN (SELECT id FROM subscriber_lists WHERE user_id = ?)", userID).Error; err != nil {
 			return err
 		}
+		// Delete subscriber_list_unsubscribes via subscriber_lists
+		if err := tx.Exec("DELETE FROM subscriber_list_unsubscribes WHERE list_id IN (SELECT id FROM subscriber_lists WHERE user_id = ?)", userID).Error; err != nil {
+			return err
+		}
 		// Clear active_version_id FK on templates before deleting versions
 		if err := tx.Exec("UPDATE templates SET active_version_id = NULL WHERE user_id = ?", userID).Error; err != nil {
 			return err
@@ -119,12 +134,15 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 			"style_sheets",
 			"languages",
 			"contacts",
+			"unsubscribe_lists",
 			"emails",
+			"inbound_emails",
 			"api_keys",
 			"webhooks",
 			"domains",
 			"smtp_servers",
 			"user_settings",
+			"user_email_verifications",
 			"o_auth_accounts",
 		}
 

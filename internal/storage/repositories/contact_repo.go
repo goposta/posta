@@ -42,7 +42,7 @@ func (r *ContactRepository) RecordSent(userID uint, workspaceID *uint, recipient
 		addr, name := parseRecipient(raw)
 		r.db.Exec(`INSERT INTO contacts (user_id, workspace_id, email, name, sent_count, fail_count, last_sent_at, created_at)
 			VALUES (?, ?, ?, ?, 1, 0, ?, ?)
-			ON CONFLICT (user_id, COALESCE(workspace_id, 0), email)
+			ON CONFLICT (workspace_id, email) WHERE workspace_id IS NOT NULL
 			DO UPDATE SET sent_count = contacts.sent_count + 1, last_sent_at = EXCLUDED.last_sent_at`+
 			nameUpdateClause(name),
 			userID, workspaceID, addr, name, now, now)
@@ -55,7 +55,7 @@ func (r *ContactRepository) RecordFailed(userID uint, workspaceID *uint, recipie
 		addr, name := parseRecipient(raw)
 		r.db.Exec(`INSERT INTO contacts (user_id, workspace_id, email, name, sent_count, fail_count, created_at)
 			VALUES (?, ?, ?, ?, 0, 1, ?)
-			ON CONFLICT (user_id, COALESCE(workspace_id, 0), email)
+			ON CONFLICT (workspace_id, email) WHERE workspace_id IS NOT NULL
 			DO UPDATE SET fail_count = contacts.fail_count + 1`+
 			nameUpdateClause(name),
 			userID, workspaceID, addr, name, time.Now())

@@ -29,7 +29,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// APIKeyExpiryJob checks for API keys expiring within 7 days and notifies users.
+// APIKeyExpiryJob checks for workspace API keys expiring within 7 days and
+// notifies the owning workspace's owners and admins.
 type APIKeyExpiryJob struct {
 	db       *gorm.DB
 	notifier *notification.Service
@@ -52,12 +53,13 @@ func (j *APIKeyExpiryJob) Run(_ context.Context, _ *asynq.Client) error {
 		return nil
 	}
 
-	// Find API keys expiring within the next 7 days
+	// Find workspace API keys expiring within the next 7 days. Personal
+	// (user-scoped) keys are excluded: scoping is workspace-only.
 	now := time.Now().UTC()
 	deadline := now.AddDate(0, 0, 7)
 
 	var keys []models.APIKey
-	if err := j.db.Where("expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ? AND revoked = ?", now, deadline, false).
+	if err := j.db.Where("expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ? AND revoked = ? AND workspace_id IS NOT NULL", now, deadline, false).
 		Find(&keys).Error; err != nil {
 		logger.Error("api-key-expiry: failed to query", "error", err)
 		return err
@@ -67,26 +69,29 @@ func (j *APIKeyExpiryJob) Run(_ context.Context, _ *asynq.Client) error {
 		return nil
 	}
 
-	// Group by user
-	userKeys := make(map[uint][]expiringKey)
+	// Group by workspace
+	workspaceKeys := make(map[uint][]expiringKey)
 	for _, k := range keys {
-		userKeys[k.UserID] = append(userKeys[k.UserID], expiringKey{
+		if k.WorkspaceID == nil {
+			continue
+		}
+		workspaceKeys[*k.WorkspaceID] = append(workspaceKeys[*k.WorkspaceID], expiringKey{
 			Name:      k.Name,
 			ExpiresAt: k.ExpiresAt.Format("January 2, 2006"),
 		})
 	}
 
 	sent := 0
-	for userID, ks := range userKeys {
+	for workspaceID, ks := range workspaceKeys {
 		subject := fmt.Sprintf("%d API key(s) expiring soon", len(ks))
 		if len(ks) == 1 {
 			subject = "API key expiring soon"
 		}
-		if err := j.notifier.SendToUser(userID, subject, notification.TemplateAPIKeyExpiry, map[string]any{
+		if err := j.notifier.SendToWorkspaceAdmins(workspaceID, subject, notification.TemplateAPIKeyExpiry, map[string]any{
 			"Keys":     ks,
 			"KeyCount": len(ks),
 		}); err != nil {
-			logger.Error("api-key-expiry: failed to send", "user_id", userID, "error", err)
+			logger.Error("api-key-expiry: failed to send", "workspace_id", workspaceID, "error", err)
 			continue
 		}
 		sent++

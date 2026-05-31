@@ -33,10 +33,12 @@ import (
 	"github.com/goposta/posta/internal/services/seeder"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/twofactor"
+	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type UserHandler struct {
@@ -48,6 +50,8 @@ type UserHandler struct {
 	settings      *settings.Provider
 	notifier      *notification.Service
 	emailVerifier *emailverify.Service
+	db            *gorm.DB
+	migrator      *workspacemigrate.Service
 }
 
 func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder *seeder.Seeder, bus *eventbus.EventBus) *UserHandler {
@@ -56,6 +60,20 @@ func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder 
 		jwtSecret: []byte(jwtSecret),
 		seeder:    seeder,
 		bus:       bus,
+	}
+}
+
+func (h *UserHandler) SetMigrator(db *gorm.DB, m *workspacemigrate.Service) {
+	h.db = db
+	h.migrator = m
+}
+
+func (h *UserHandler) ensurePersonalWorkspace(userID uint) {
+	if h.migrator == nil || h.db == nil {
+		return
+	}
+	if _, err := h.migrator.MigrateUser(h.db, userID); err != nil {
+		logger.Error("failed to provision personal workspace", "user_id", userID, "err", err)
 	}
 }
 
@@ -196,10 +214,9 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 		return c.AbortConflict("email already registered")
 	}
 
-	// Seed default data for the new user
-	if h.seeder != nil {
-		go h.seeder.SeedUserDefaults(user.ID, user.Name)
-	}
+	// Provision the user's personal workspace (and seed its default content)
+	// before issuing the JWT, so the first authenticated request lands in it.
+	h.ensurePersonalWorkspace(user.ID)
 
 	if h.bus != nil {
 		h.bus.PublishSimple(models.EventCategoryUser, "user.registered", &user.ID, user.Email, c.RealIP(),
@@ -391,8 +408,7 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 		}
 	}
 
-	// Seed default data on first login
-	go h.seeder.SeedUserDefaults(user.ID, user.Name)
+	h.ensurePersonalWorkspace(user.ID)
 
 	// Record last login time
 	now := time.Now()

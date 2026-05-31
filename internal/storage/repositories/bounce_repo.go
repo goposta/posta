@@ -105,3 +105,12 @@ func (r *BounceRepository) CountByUserAndDateRange(userID uint, from, to time.Ti
 		Count(&count).Error
 	return count, err
 }
+
+// CountByWorkspaceAndDateRange counts bounces for a workspace within a date range.
+func (r *BounceRepository) CountByWorkspaceAndDateRange(workspaceID uint, from, to time.Time) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Bounce{}).
+		Where("workspace_id = ? AND created_at >= ? AND created_at <= ?", workspaceID, from, to).
+		Count(&count).Error
+	return count, err
+}

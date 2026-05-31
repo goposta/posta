@@ -14,10 +14,12 @@ import (
 	"github.com/goposta/posta/internal/services/auth"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/seeder"
+	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 type OAuthHandler struct {
@@ -32,6 +34,15 @@ type OAuthHandler struct {
 	redisClient  *redis.Client
 	callbackBase string // e.g. "http://localhost:9000"
 	appWebURL    string // e.g. "http://localhost:9000"
+	db           *gorm.DB
+	migrator     *workspacemigrate.Service
+}
+
+// SetMigrator wires the personal-workspace migrator used to provision (and seed)
+// a personal workspace after OAuth user upsert. See §4.
+func (h *OAuthHandler) SetMigrator(db *gorm.DB, m *workspacemigrate.Service) {
+	h.db = db
+	h.migrator = m
 }
 
 func NewOAuthHandler(
@@ -230,9 +241,12 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 		return redirect("account_disabled")
 	}
 
-	// Seed defaults for new users
-	if isNew && h.seeder != nil {
-		go h.seeder.SeedUserDefaults(user.ID, user.Name)
+	// Provision the personal workspace (and seed defaults for new users) before
+	// issuing the JWT. Idempotent: a no-op for already-migrated returning users.
+	if h.migrator != nil && h.db != nil {
+		if _, err := h.migrator.MigrateUser(h.db, user.ID); err != nil {
+			logger.Error("failed to provision personal workspace", "user_id", user.ID, "err", err)
+		}
 	}
 
 	// Generate JWT

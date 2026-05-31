@@ -86,6 +86,7 @@ type Service struct {
 	contactRepo      *repositories.ContactRepository
 	domainRepo       *repositories.DomainRepository
 	userRepo         *repositories.UserRepository
+	wsSettingRepo    *repositories.WorkspaceSettingRepository
 	sender           *SMTPSender
 	renderer         *TemplateRenderer
 	limiter          *ratelimit.RedisLimiter
@@ -140,10 +141,13 @@ func (s *Service) SetUnsubscribeListRepo(r *repositories.UnsubscribeListReposito
 	s.unsubRepo = r
 }
 
-// SetDomainVerification sets the domain and user repositories for enforcing verified domain sending.
-func (s *Service) SetDomainVerification(dr *repositories.DomainRepository, ur *repositories.UserRepository) {
+// SetDomainVerification sets the repositories for enforcing verified-domain
+// sending. Strict mode is read from the workspace settings when a workspace is
+// active, falling back to the user's setting in legacy personal mode.
+func (s *Service) SetDomainVerification(dr *repositories.DomainRepository, ur *repositories.UserRepository, wsr *repositories.WorkspaceSettingRepository) {
 	s.domainRepo = dr
 	s.userRepo = ur
+	s.wsSettingRepo = wsr
 }
 
 // SetSettings sets the platform settings provider for dynamic configuration.
@@ -424,7 +428,7 @@ func (s *Service) ValidateSend(ctx context.Context, userID uint, workspaceID *ui
 		}
 	}
 
-	if err := s.checkDomainVerification(userID, req.From); err != nil {
+	if err := s.checkDomainVerification(userID, workspaceID, req.From); err != nil {
 		return nil, err
 	}
 
@@ -598,12 +602,10 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		}
 	}
 
-	// Enforce verified domain when user has strict mode enabled (personal mode only;
-	// workspace domain verification is handled at the workspace level).
-	if workspaceID == nil {
-		if err := s.checkDomainVerification(userID, req.From); err != nil {
-			return nil, err
-		}
+	// Enforce verified-domain sending. Strict mode is scoped to the active
+	// workspace (or the user in legacy personal mode).
+	if err := s.checkDomainVerification(userID, workspaceID, req.From); err != nil {
+		return nil, err
 	}
 
 	// Resolve + validate the unsubscribe config (Posta-managed list, or caller-managed
@@ -1359,20 +1361,31 @@ func filterCustomHeaders(headers map[string]string) map[string]string {
 	return filtered
 }
 
-// checkDomainVerification enforces domain ownership verification when the user
-// has RequireVerifiedDomain enabled. It extracts the sender domain and checks
-// that it is registered and ownership-verified via TXT record.
-func (s *Service) checkDomainVerification(userID uint, from string) error {
-	if s.domainRepo == nil || s.userRepo == nil {
+// checkDomainVerification enforces domain ownership verification when strict
+// domain mode is enabled. Strict mode and domain ownership are scoped to the
+// active workspace when present, falling back to the user in legacy personal
+// mode. It extracts the sender domain and checks that it is registered and
+// ownership-verified.
+func (s *Service) checkDomainVerification(userID uint, workspaceID *uint, from string) error {
+	if s.domainRepo == nil {
 		return nil
 	}
 
-	user, err := s.userRepo.FindByID(userID)
-	if err != nil {
-		return fmt.Errorf("failed to load user: %w", err)
+	// Resolve whether strict domain mode is on for this scope.
+	strict := false
+	if workspaceID != nil {
+		if s.wsSettingRepo != nil {
+			strict = s.wsSettingRepo.RequireVerifiedDomain(*workspaceID)
+		}
+	} else if s.userRepo != nil {
+		user, err := s.userRepo.FindByID(userID)
+		if err != nil {
+			return fmt.Errorf("failed to load user: %w", err)
+		}
+		strict = user.RequireVerifiedDomain
 	}
 
-	if !user.RequireVerifiedDomain {
+	if !strict {
 		return nil
 	}
 
@@ -1381,7 +1394,13 @@ func (s *Service) checkDomainVerification(userID uint, from string) error {
 		return fmt.Errorf("domain_verification: could not extract domain from sender %q", from)
 	}
 
-	if !s.domainRepo.IsOwnershipVerified(userID, senderDomain) {
+	verified := false
+	if workspaceID != nil {
+		verified = s.domainRepo.IsOwnershipVerifiedInWorkspace(*workspaceID, senderDomain)
+	} else {
+		verified = s.domainRepo.IsOwnershipVerified(userID, senderDomain)
+	}
+	if !verified {
 		return fmt.Errorf("domain_verification: domain %q is not verified. Add and verify the domain or disable strict domain mode", senderDomain)
 	}
 

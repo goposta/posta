@@ -60,7 +60,7 @@ func (cf *CustomFields) Scan(value interface{}) error {
 
 type Subscriber struct {
 	ID             uint             `json:"id" gorm:"primaryKey"`
-	UserID         uint             `json:"user_id" gorm:"uniqueIndex:idx_sub_scope_email;not null"`
+	UserID         uint             `json:"user_id" gorm:"index;not null"`
 	WorkspaceID    *uint            `json:"workspace_id,omitempty" gorm:"uniqueIndex:idx_sub_scope_email;index"`
 	Email          string           `json:"email" gorm:"uniqueIndex:idx_sub_scope_email;not null"`
 	Name           string           `json:"name" gorm:"default:''"`

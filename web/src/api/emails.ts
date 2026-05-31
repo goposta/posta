@@ -20,15 +20,15 @@ export interface EmailPreviewResponse {
 
 export const emailsApi = {
   list(page = 0, size = 20) {
-    return api.get<PaginatedResponse<Email>>('/users/me/emails', { params: { page, size } })
+    return api.get<PaginatedResponse<Email>>('/workspaces/current/emails', { params: { page, size } })
   },
   get(uuid: string) {
-    return api.get<ApiResponse<Email>>(`/users/me/emails/${uuid}`)
+    return api.get<ApiResponse<Email>>(`/workspaces/current/emails/${uuid}`)
   },
   retry(uuid: string) {
-    return api.post<ApiResponse<RetryResponse>>(`/users/me/emails/${uuid}/retry`)
+    return api.post<ApiResponse<RetryResponse>>(`/workspaces/current/emails/${uuid}/retry`)
   },
   preview(data: EmailPreviewRequest) {
-    return api.post<ApiResponse<EmailPreviewResponse>>('/users/me/emails/preview', data)
+    return api.post<ApiResponse<EmailPreviewResponse>>('/workspaces/current/emails/preview', data)
   },
 }

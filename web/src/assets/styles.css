@@ -366,6 +366,113 @@ tr:hover td { background: var(--bg-hover); }
 .badge-neutral { background: var(--bg-tertiary); color: var(--text-tertiary); }
 .badge-secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
 
+/* ─── Banners / Inline notices ─── */
+/* A cohesive inline banner. Set the accent with a variant class
+   (.app-banner--info / --warning / --success / --danger). All colors derive
+   from the accent vars so light/dark themes stay correct. */
+.app-banner {
+  --banner-accent: var(--primary-500);
+  --banner-accent-strong: var(--primary-600);
+  --banner-surface: var(--primary-50);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--banner-accent) 30%, transparent);
+  background: var(--banner-surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.app-banner--info {
+  --banner-accent: var(--primary-500);
+  --banner-accent-strong: var(--primary-600);
+  --banner-surface: var(--primary-50);
+}
+.app-banner--warning {
+  --banner-accent: var(--warning-500);
+  --banner-accent-strong: var(--warning-600);
+  --banner-surface: var(--warning-50);
+}
+.app-banner--success {
+  --banner-accent: var(--success-500);
+  --banner-accent-strong: var(--success-600);
+  --banner-surface: var(--success-50);
+}
+.app-banner--danger {
+  --banner-accent: var(--danger-500);
+  --banner-accent-strong: var(--danger-600);
+  --banner-surface: var(--danger-50);
+}
+.app-banner-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--banner-accent-strong);
+}
+.app-banner-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-banner-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.app-banner-text { margin: 0; color: var(--text-secondary); }
+.app-banner-text strong { color: var(--text-primary); font-weight: 600; }
+.app-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* Accent-tinted action button that reads on the banner surface in both themes. */
+.app-banner-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--banner-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--banner-accent) 12%, transparent);
+  color: var(--banner-accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition), border-color var(--transition);
+}
+.app-banner-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--banner-accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--banner-accent) 55%, transparent);
+}
+.app-banner-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.app-banner-dismiss {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.app-banner-dismiss:hover { background: color-mix(in srgb, var(--banner-accent) 14%, transparent); color: var(--text-primary); }
+@media (max-width: 640px) {
+  .app-banner { flex-wrap: wrap; }
+  .app-banner-actions { width: 100%; justify-content: flex-end; }
+}
+
 /* ─── Stats ─── */
 .stats-grid {
   display: grid;

@@ -17,22 +17,28 @@
 
 package repositories
 
-import "gorm.io/gorm"
+import (
+	"github.com/jkaninda/logger"
+	"gorm.io/gorm"
+)
 
-// ResourceScope defines the ownership context for a request.
-// If WorkspaceID is nil, the request is in personal mode.
-// If WorkspaceID is set, the request targets that workspace.
 type ResourceScope struct {
 	UserID      uint
 	WorkspaceID *uint
 }
 
-// ApplyScope adds the appropriate WHERE clause to a GORM query.
-// Personal: user_id = ? AND workspace_id IS NULL
-// Workspace: workspace_id = ?
+var workspaceOnlyMode bool
+
+// SetWorkspaceOnlyMode enables or disables the R6 personal-mode lock.
+func SetWorkspaceOnlyMode(enabled bool) { workspaceOnlyMode = enabled }
+
 func ApplyScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
 	if scope.WorkspaceID != nil {
 		return db.Where("workspace_id = ?", *scope.WorkspaceID)
+	}
+	if workspaceOnlyMode {
+		logger.Warn("ApplyScope: personal-mode scope rejected (workspace-only mode)", "user_id", scope.UserID)
+		return db.Where("1 = 0")
 	}
 	return db.Where("user_id = ? AND workspace_id IS NULL", scope.UserID)
 }

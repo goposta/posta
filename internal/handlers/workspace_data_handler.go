@@ -18,9 +18,11 @@
 package handlers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/goposta/posta/internal/config"
+	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 	"gorm.io/gorm"
@@ -234,4 +236,94 @@ func (h *WorkspaceDataHandler) Import(c *okapi.Context, req *ImportWorkspaceData
 		"message":        "Workspace data imported successfully",
 		"imported_count": total,
 	})
+}
+
+type GDPRDeleteContactsRequest struct {
+	Body struct {
+		Email string `json:"email"`
+	} `json:"body"`
+}
+
+type GDPRDeleteEmailLogsRequest struct {
+	Body struct {
+		OlderThanDays int `json:"older_than_days"`
+	} `json:"body"`
+}
+
+type GDPRDeleteResult struct {
+	Deleted int64  `json:"deleted"`
+	Message string `json:"message"`
+}
+
+// DeleteContacts (GDPR) removes contact data scoped to the active workspace.
+func (h *WorkspaceDataHandler) DeleteContacts(c *okapi.Context, req *GDPRDeleteContactsRequest) error {
+	wsID := uint(c.GetInt("workspace_id"))
+	if wsID == 0 {
+		return c.AbortBadRequest("workspace context required")
+	}
+	email := req.Body.Email
+
+	if email == "" {
+		result := h.db.Where("workspace_id = ?", wsID).Delete(&models.Contact{})
+		if result.Error != nil {
+			return c.AbortInternalServerError("failed to delete contacts")
+		}
+		return ok(c, GDPRDeleteResult{Deleted: result.RowsAffected, Message: "All contacts deleted"})
+	}
+
+	result := h.db.Where("workspace_id = ? AND email = ?", wsID, email).Delete(&models.Contact{})
+	if result.Error != nil {
+		return c.AbortInternalServerError("failed to delete contact")
+	}
+
+	h.db.Where("workspace_id = ? AND email = ?", wsID, email).Delete(&models.Suppression{})
+
+	var listIDs []uint
+	h.db.Model(&models.ContactList{}).Where("workspace_id = ?", wsID).Pluck("id", &listIDs)
+	if len(listIDs) > 0 {
+		h.db.Where("list_id IN ? AND email = ?", listIDs, email).Delete(&models.ContactListMember{})
+	}
+
+	return ok(c, GDPRDeleteResult{
+		Deleted: result.RowsAffected,
+		Message: fmt.Sprintf("Contact %s and associated data deleted", email),
+	})
+}
+
+// DeleteEmailLogs (GDPR) purges email logs scoped to the active workspace.
+// Mirrors UserDataHandler.DeleteEmailLogs but scopes by workspace_id.
+func (h *WorkspaceDataHandler) DeleteEmailLogs(c *okapi.Context, req *GDPRDeleteEmailLogsRequest) error {
+	wsID := uint(c.GetInt("workspace_id"))
+	if wsID == 0 {
+		return c.AbortBadRequest("workspace context required")
+	}
+
+	days := req.Body.OlderThanDays
+	if days < 0 {
+		days = 0
+	}
+
+	query := h.db.Where("workspace_id = ?", wsID)
+	if days > 0 {
+		before := time.Now().AddDate(0, 0, -days)
+		query = query.Where("created_at < ?", before)
+	}
+
+	var emailIDs []uint
+	query.Model(&models.Email{}).Pluck("id", &emailIDs)
+	if len(emailIDs) > 0 {
+		h.db.Where("email_id IN ?", emailIDs).Delete(&models.Bounce{})
+	}
+
+	result := query.Delete(&models.Email{})
+	if result.Error != nil {
+		return c.AbortInternalServerError("failed to delete email logs")
+	}
+
+	msg := "All email logs deleted"
+	if days > 0 {
+		msg = fmt.Sprintf("Email logs older than %d days deleted", days)
+	}
+
+	return ok(c, GDPRDeleteResult{Deleted: result.RowsAffected, Message: msg})
 }

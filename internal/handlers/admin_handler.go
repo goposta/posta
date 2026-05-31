@@ -29,8 +29,10 @@ import (
 	"github.com/goposta/posta/internal/services/seeder"
 	"github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/hibiken/asynq"
+	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -48,11 +50,19 @@ type AdminHandler struct {
 	inspector      *asynq.Inspector
 	bus            *eventbus.EventBus
 	seeder         *seeder.Seeder
+	migrator       *workspacemigrate.Service
 	embeddedWorker bool
 	emailSettings  *settings.Provider
 	sessionRepo    *repositories.SessionRepository
 	sessionStore   *session.Store
 }
+
+// SetMigrator wires the personal-workspace migrator used to provision (and seed)
+// a personal workspace for admin-created users. See §4.
+func (h *AdminHandler) SetMigrator(m *workspacemigrate.Service) {
+	h.migrator = m
+}
+
 type AdminCreateUserRequest struct {
 	Body struct {
 		Name     string `json:"name"`
@@ -106,6 +116,10 @@ type PlatformMetrics struct {
 	FailedLoginsLast24h   int64   `json:"failed_logins_last_24h"`
 	TwoFactorAdoptionRate float64 `json:"two_factor_adoption_rate"`
 	TwoFactorUsers        int64   `json:"two_factor_users"`
+
+	// Workspace-only migration progress
+	UsersUnmigrated      int64 `json:"users_unmigrated"`
+	UsersMigrationFailed int64 `json:"users_migration_failed"`
 }
 
 // processStartTime records when the process started, for uptime reporting.
@@ -183,9 +197,13 @@ func (h *AdminHandler) CreateUser(c *okapi.Context, req *AdminCreateUserRequest)
 		return c.AbortConflict("email already registered")
 	}
 
-	// Seed default templates, stylesheets, and languages for the new user
-	if h.seeder != nil {
-		go h.seeder.SeedUserDefaults(user.ID, user.Name)
+	// Provision the new user's personal workspace and seed its default content.
+	if h.migrator != nil {
+		go func(id uint) {
+			if _, err := h.migrator.MigrateUser(h.db, id); err != nil {
+				logger.Error("failed to provision personal workspace", "user_id", id, "err", err)
+			}
+		}(user.ID)
 	}
 
 	if h.bus != nil {
@@ -407,6 +425,10 @@ func (h *AdminHandler) Metrics(c *okapi.Context) error {
 	if m.TotalUsers > 0 {
 		m.TwoFactorAdoptionRate = float64(m.TwoFactorUsers) / float64(m.TotalUsers) * 100
 	}
+
+	// Workspace-only migration progress.
+	h.db.Model(&models.User{}).Where("personal_workspace_id IS NULL").Count(&m.UsersUnmigrated)
+	h.db.Model(&models.User{}).Where("migration_error IS NOT NULL AND migration_error <> ''").Count(&m.UsersMigrationFailed)
 
 	h.cache.Set(ctx, cacheKey, m, cache.AdminMetricsTTL)
 

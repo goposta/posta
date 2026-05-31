@@ -1,7 +1,7 @@
 {{ define "content" }}
 <h2>API Key Expiring Soon</h2>
 <p>Hi {{ .UserName }},</p>
-<p>The following API {{ if eq .KeyCount 1 }}key is{{ else }}keys are{{ end }} expiring within the next 7 days:</p>
+<p>The following API {{ if eq .KeyCount 1 }}key is{{ else }}keys are{{ end }} in {{ if .WorkspaceName }}<strong>{{ .WorkspaceName }}</strong>{{ else }}your workspace{{ end }} expiring within the next 7 days:</p>
 
 <table class="stats-table">
   <tr>

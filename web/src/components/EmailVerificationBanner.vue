@@ -35,44 +35,30 @@ async function resend() {
 </script>
 
 <template>
-  <div v-if="unverified" class="verify-banner">
-    <span class="verify-banner-text">
-      Your email is not verified. Some actions (inviting members, creating API keys) are blocked until you confirm your address.
-    </span>
-    <button class="verify-banner-btn" :disabled="sending" @click="resend">
-      {{ sending ? 'Sending…' : 'Resend email' }}
-    </button>
+  <div v-if="unverified" class="app-banner app-banner--warning verify-banner" role="alert">
+    <svg class="app-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+    <div class="app-banner-content">
+      <p class="app-banner-title">Verify your email address</p>
+      <p class="app-banner-text">
+        Some actions — inviting members, creating API keys — stay locked until you confirm your address.
+      </p>
+    </div>
+    <div class="app-banner-actions">
+      <button class="app-banner-btn" :disabled="sending" @click="resend">
+        {{ sending ? 'Sending…' : 'Resend email' }}
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
+/* Layout-only override; visual styling comes from the shared .app-banner system. */
 .verify-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 16px;
   margin: 12px 16px 0;
-  background: var(--warning-50, #fffbeb);
-  border: 1px solid var(--warning-200, #fde68a);
-  color: var(--warning-900, #78350f);
-  border-radius: 6px;
-  font-size: 13px;
-}
-.verify-banner-text { flex: 1; }
-.verify-banner-btn {
-  padding: 6px 12px;
-  border-radius: 4px;
-  border: 1px solid var(--warning-400, #fbbf24);
-  background: var(--warning-100, #fef3c7);
-  color: var(--warning-900, #78350f);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.verify-banner-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 </style>

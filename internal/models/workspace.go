@@ -44,6 +44,7 @@ type Workspace struct {
 	OwnerID         uint      `json:"owner_id" gorm:"index;not null"`
 	PlanID          *uint     `json:"plan_id" gorm:"index"`
 	DefaultLanguage string    `json:"default_language" gorm:"size:10;default:'en'"`
+	IsPersonal      bool      `json:"is_personal" gorm:"not null;default:false"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 

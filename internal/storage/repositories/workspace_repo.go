@@ -68,6 +68,17 @@ func (r *WorkspaceRepository) FindBySlug(slug string) (*models.Workspace, error)
 	return &ws, nil
 }
 
+// FindAll returns every workspace, oldest first. Used by platform cron jobs
+// (api-key-expiry, bounce-alert, daily-report) that operate across all
+// workspaces.
+func (r *WorkspaceRepository) FindAll() ([]models.Workspace, error) {
+	var workspaces []models.Workspace
+	if err := r.db.Order("id ASC").Find(&workspaces).Error; err != nil {
+		return nil, err
+	}
+	return workspaces, nil
+}
+
 // FindByUserID returns all workspaces the user is a member of.
 func (r *WorkspaceRepository) FindByUserID(userID uint) ([]models.Workspace, error) {
 	var workspaces []models.Workspace

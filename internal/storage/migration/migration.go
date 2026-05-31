@@ -52,9 +52,12 @@ func Run(db *gorm.DB) error {
 		&models.Suppression{},
 		&models.UnsubscribeList{},
 		&models.Contact{},
+		&models.ContactList{},
+		&models.ContactListMember{},
 		&models.Event{},
 		&models.Setting{},
 		&models.UserSetting{},
+		&models.WorkspaceSetting{},
 		&models.WebhookDelivery{},
 		&models.Session{},
 		&models.UserEmailVerification{},
@@ -66,6 +69,7 @@ func Run(db *gorm.DB) error {
 		&models.CampaignMessage{},
 		&models.TrackedLink{},
 		&models.TrackingEvent{},
+		&models.UpgradeStep{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}

@@ -48,6 +48,7 @@ import (
 	"github.com/goposta/posta/internal/services/verifier"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/services/workermon"
+	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/goposta/posta/internal/worker"
@@ -74,52 +75,56 @@ type routerMiddleware struct {
 	apiKey            okapi.Middleware
 	workspace         okapi.Middleware
 	optionalWorkspace okapi.Middleware
+	workspaceQuery    okapi.Middleware
 	verifiedEmail     okapi.Middleware
 }
 
 type routerHandlers struct {
-	health          *handlers.HealthHandler
-	user            *handlers.UserHandler
-	email           *handlers.EmailHandler
-	apiKey          *handlers.APIKeyHandler
-	template        *handlers.TemplateHandler
-	version         *handlers.TemplateVersionHandler
-	localization    *handlers.TemplateLocalizationHandler
-	language        *handlers.LanguageHandler
-	stylesheet      *handlers.StyleSheetHandler
-	smtp            *handlers.SMTPHandler
-	webhook         *handlers.WebhookHandler
-	webhookDelivery *handlers.WebhookDeliveryHandler
-	dashboard       *handlers.DashboardHandler
-	domain          *handlers.DomainHandler
-	bounce          *handlers.BounceHandler
-	suppression     *handlers.SuppressionHandler
-	unsubscribeList *handlers.UnsubscribeListHandler
-	contact         *handlers.ContactHandler
-	admin           *handlers.AdminHandler
-	workspace       *handlers.WorkspaceHandler
-	server          *handlers.ServerHandler
-	event           *handlers.EventHandler
-	analytics       *handlers.AnalyticsHandler
-	setting         *handlers.SettingHandler
-	userSetting     *handlers.UserSettingHandler
-	userData        *handlers.UserDataHandler
-	session         *handlers.SessionHandler
-	cron            *handlers.CronHandler
-	oauth           *handlers.OAuthHandler
-	oauthAdmin      *handlers.OAuthAdminHandler
-	subscriber      *handlers.SubscriberHandler
-	subscriberList  *handlers.SubscriberListHandler
-	campaign        *handlers.CampaignHandler
-	tracking        *handlers.TrackingHandler
-	bounceWebhook   *handlers.BounceWebhookHandler
-	workspaceData   *handlers.WorkspaceDataHandler
-	plan            *handlers.PlanHandler
-	inbound         *handlers.InboundHandler
-	verify          *handlers.VerifyHandler
+	health           *handlers.HealthHandler
+	user             *handlers.UserHandler
+	email            *handlers.EmailHandler
+	apiKey           *handlers.APIKeyHandler
+	template         *handlers.TemplateHandler
+	version          *handlers.TemplateVersionHandler
+	localization     *handlers.TemplateLocalizationHandler
+	language         *handlers.LanguageHandler
+	stylesheet       *handlers.StyleSheetHandler
+	smtp             *handlers.SMTPHandler
+	webhook          *handlers.WebhookHandler
+	webhookDelivery  *handlers.WebhookDeliveryHandler
+	dashboard        *handlers.DashboardHandler
+	domain           *handlers.DomainHandler
+	bounce           *handlers.BounceHandler
+	suppression      *handlers.SuppressionHandler
+	unsubscribeList  *handlers.UnsubscribeListHandler
+	contact          *handlers.ContactHandler
+	admin            *handlers.AdminHandler
+	workspace        *handlers.WorkspaceHandler
+	server           *handlers.ServerHandler
+	event            *handlers.EventHandler
+	analytics        *handlers.AnalyticsHandler
+	setting          *handlers.SettingHandler
+	userSetting      *handlers.UserSettingHandler
+	workspaceSetting *handlers.WorkspaceSettingHandler
+	session          *handlers.SessionHandler
+	cron             *handlers.CronHandler
+	oauth            *handlers.OAuthHandler
+	oauthAdmin       *handlers.OAuthAdminHandler
+	subscriber       *handlers.SubscriberHandler
+	subscriberList   *handlers.SubscriberListHandler
+	campaign         *handlers.CampaignHandler
+	tracking         *handlers.TrackingHandler
+	bounceWebhook    *handlers.BounceWebhookHandler
+	workspaceData    *handlers.WorkspaceDataHandler
+	plan             *handlers.PlanHandler
+	inbound          *handlers.InboundHandler
+	verify           *handlers.VerifyHandler
 }
 
 func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) {
+
+	repositories.SetWorkspaceOnlyMode(cfg.WorkspaceOnlyMode)
+
 	// Repositories
 	userRepo := repositories.NewUserRepository(db)
 	apiKeyRepo := repositories.NewAPIKeyRepository(db)
@@ -141,6 +146,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	eventRepo := repositories.NewEventRepository(db)
 	settingRepo := repositories.NewSettingRepository(db)
 	userSettingRepo := repositories.NewUserSettingRepository(db)
+	workspaceSettingRepo := repositories.NewWorkspaceSettingRepository(db)
 	sessionRepo := repositories.NewSessionRepository(db)
 	workspaceRepo := repositories.NewWorkspaceRepository(db)
 	emailVerifyRepo := repositories.NewUserEmailVerificationRepository(db)
@@ -173,7 +179,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	emailService.SetVersionRepos(versionRepo, localizationRepo)
 	emailService.SetContactRepo(contactRepo)
 	emailService.SetUnsubscribeListRepo(unsubListRepo)
-	emailService.SetDomainVerification(domainRepo, userRepo)
+	emailService.SetDomainVerification(domainRepo, userRepo, workspaceSettingRepo)
 	if producer != nil {
 		emailService.SetEnqueuer(producer)
 	}
@@ -197,8 +203,12 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 
 	// Handlers
 	userSeeder := seeder.New(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo)
+
+	migrator := workspacemigrate.New(cfg.PlanEnforcement)
+	migrator.SetSeeder(userSeeder)
 	userHandler := handlers.NewUserHandler(userRepo, cfg.JWTSecret, userSeeder, bus)
 	userHandler.SetSettings(settingsProvider)
+	userHandler.SetMigrator(db, migrator)
 	inspector := asynq.NewInspector(asynq.RedisClientOpt{
 		Addr:     cfg.Redis.Addr,
 		Password: cfg.Redis.Password,
@@ -224,43 +234,45 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			loginLimiter:      loginLimiterMiddleware(cfg, limiter),
 			apiKey:            middlewares.APIKeyAuthMiddleware(apiKeyService, userRepo, apiKeyRepo),
 			workspace:         middlewares.RequireWorkspaceMiddleware(workspaceRepo),
-			optionalWorkspace: middlewares.OptionalWorkspaceMiddleware(workspaceRepo),
+			optionalWorkspace: middlewares.OptionalWorkspaceMiddleware(workspaceRepo, userRepo),
+			workspaceQuery:    middlewares.WorkspaceFromQueryOrHeader(workspaceRepo, userRepo),
 		},
 		h: routerHandlers{
-			health:          handlers.NewHealthHandler(db, redisClient),
-			user:            userHandler,
-			email:           handlers.NewEmailHandler(emailService, emailRepo, bus, statsCache),
-			apiKey:          handlers.NewAPIKeyHandler(apiKeyService, apiKeyRepo, userSettingRepo, auditLogger),
-			template:        handlers.NewTemplateHandler(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo, emailService),
-			version:         handlers.NewTemplateVersionHandler(templateRepo, versionRepo),
-			localization:    handlers.NewTemplateLocalizationHandler(templateRepo, versionRepo, localizationRepo, stylesheetRepo),
-			language:        handlers.NewLanguageHandler(languageRepo),
-			stylesheet:      handlers.NewStyleSheetHandler(stylesheetRepo),
-			smtp:            handlers.NewSMTPHandler(smtpRepo, domainRepo, auditLogger),
-			webhook:         handlers.NewWebhookHandler(webhookRepo, auditLogger),
-			webhookDelivery: handlers.NewWebhookDeliveryHandler(webhookDeliveryRepo),
-			dashboard:       handlers.NewDashboardHandler(db, statsCache, webhookDeliveryRepo),
-			domain:          handlers.NewDomainHandler(domainRepo),
-			bounce:          handlers.NewBounceHandler(bounceRepo, suppressionRepo, emailRepo, dispatcher),
-			suppression:     handlers.NewSuppressionHandler(suppressionRepo, unsubListRepo),
-			unsubscribeList: handlers.NewUnsubscribeListHandler(unsubListRepo),
-			contact:         handlers.NewContactHandler(contactRepo, suppressionRepo),
-			admin:           handlers.NewAdminHandler(db, statsCache, userRepo, apiKeyRepo, emailRepo, webhookDeliveryRepo, inspector, bus, userSeeder, cfg.EmbeddedWorker),
-			workspace:       handlers.NewWorkspaceHandler(workspaceRepo, userRepo, db),
-			server:          handlers.NewServerHandler(serverRepo, auditLogger),
-			event:           handlers.NewEventHandler(eventRepo, bus),
-			analytics:       handlers.NewAnalyticsHandler(repositories.NewAnalyticsRepository(db), statsCache),
-			setting:         handlers.NewSettingHandler(settingRepo, auditLogger),
-			userSetting:     handlers.NewUserSettingHandler(userSettingRepo),
-			userData:        handlers.NewUserDataHandler(db, templateRepo, versionRepo, localizationRepo, stylesheetRepo, languageRepo, contactRepo, webhookRepo, suppressionRepo, userSettingRepo),
-			session:         handlers.NewSessionHandler(sessionRepo, sessionStore),
-			verify:          handlers.NewVerifyHandler(verifierSvc),
+			health:           handlers.NewHealthHandler(db, redisClient),
+			user:             userHandler,
+			email:            handlers.NewEmailHandler(emailService, emailRepo, bus, statsCache),
+			apiKey:           handlers.NewAPIKeyHandler(apiKeyService, apiKeyRepo, userSettingRepo, auditLogger),
+			template:         handlers.NewTemplateHandler(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo, emailService),
+			version:          handlers.NewTemplateVersionHandler(templateRepo, versionRepo),
+			localization:     handlers.NewTemplateLocalizationHandler(templateRepo, versionRepo, localizationRepo, stylesheetRepo),
+			language:         handlers.NewLanguageHandler(languageRepo),
+			stylesheet:       handlers.NewStyleSheetHandler(stylesheetRepo),
+			smtp:             handlers.NewSMTPHandler(smtpRepo, domainRepo, auditLogger),
+			webhook:          handlers.NewWebhookHandler(webhookRepo, auditLogger),
+			webhookDelivery:  handlers.NewWebhookDeliveryHandler(webhookDeliveryRepo),
+			dashboard:        handlers.NewDashboardHandler(db, statsCache, webhookDeliveryRepo),
+			domain:           handlers.NewDomainHandler(domainRepo),
+			bounce:           handlers.NewBounceHandler(bounceRepo, suppressionRepo, emailRepo, dispatcher),
+			suppression:      handlers.NewSuppressionHandler(suppressionRepo, unsubListRepo),
+			unsubscribeList:  handlers.NewUnsubscribeListHandler(unsubListRepo),
+			contact:          handlers.NewContactHandler(contactRepo, suppressionRepo),
+			admin:            handlers.NewAdminHandler(db, statsCache, userRepo, apiKeyRepo, emailRepo, webhookDeliveryRepo, inspector, bus, userSeeder, cfg.EmbeddedWorker),
+			workspace:        handlers.NewWorkspaceHandler(workspaceRepo, userRepo, db),
+			server:           handlers.NewServerHandler(serverRepo, auditLogger),
+			event:            handlers.NewEventHandler(eventRepo, bus),
+			analytics:        handlers.NewAnalyticsHandler(repositories.NewAnalyticsRepository(db), statsCache),
+			setting:          handlers.NewSettingHandler(settingRepo, auditLogger),
+			userSetting:      handlers.NewUserSettingHandler(userSettingRepo),
+			workspaceSetting: handlers.NewWorkspaceSettingHandler(workspaceSettingRepo),
+			session:          handlers.NewSessionHandler(sessionRepo, sessionStore),
+			verify:           handlers.NewVerifyHandler(verifierSvc),
 		},
 	}
 
 	// Session management
 	r.h.user.SetSessionRepo(sessionRepo)
 	r.h.admin.SetSessionRepo(sessionRepo, sessionStore)
+	r.h.admin.SetMigrator(migrator)
 
 	// Plans
 	r.h.plan = handlers.NewPlanHandler(planRepo, workspaceRepo, userRepo, planService, auditLogger)
@@ -308,6 +320,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		userRepo, sessionRepo, cfg.JWTSecret,
 		userSeeder, bus, redisClient, callbackBase, cfg.AppWebURL,
 	)
+	r.h.oauth.SetMigrator(db, migrator)
 	r.h.oauthAdmin = handlers.NewOAuthAdminHandler(oauthProviderRepo, ssoRepo)
 
 	// Subscribers
@@ -418,9 +431,6 @@ func (a *emailPlanAdapter) EffectiveLimits(workspaceID *uint) *email.PlanLimits 
 // workspaceHeaderRequired is a reusable route option documenting the required workspace header.
 var workspaceHeaderRequired = okapi.DocHeader("X-Posta-Workspace-Id", "integer", "Workspace ID (required for workspace-scoped endpoints)", true)
 
-// workspaceHeaderOptional is a reusable route option documenting the optional workspace header.
-var workspaceHeaderOptional = okapi.DocHeader("X-Posta-Workspace-Id", "integer", "Workspace ID (optional, omit for personal mode)", false)
-
 // loginLimiterMiddleware returns the login rate limit middleware when enabled,
 // or a pass-through middleware when disabled.
 func loginLimiterMiddleware(cfg *config.Config, limiter *ratelimit.RedisLimiter) okapi.Middleware {
@@ -449,13 +459,14 @@ func (r *Router) registerRoutes() {
 	r.app.Register(r.apiAuthRoutes()...)
 	r.app.Register(r.userRoutes()...)
 	r.app.Register(r.workspaceRoutes()...)
+	r.app.Register(r.workspaceResourceRoutes()...)
 	r.app.Register(r.oauthRoutes()...)
 	r.app.Register(r.trackingRoutes()...)
 	r.app.Register(r.trackingAnalyticsRoutes()...)
 	r.app.Register(r.bounceWebhookRoutes()...)
 	if r.cfg.InboundEnabled && r.h.inbound != nil {
 		r.app.Register(r.inboundWebhookRoutes()...)
-		r.app.Register(r.inboundUserRoutes()...)
+		r.app.Register(r.inboundWorkspaceRoutes()...)
 	}
 	r.app.Register(r.adminRoutes()...)
 	r.app.Register(r.adminSSERoutes()...)

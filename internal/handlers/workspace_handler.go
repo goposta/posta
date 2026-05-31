@@ -109,6 +109,7 @@ type WorkspaceResponse struct {
 	Description string    `json:"description"`
 	OwnerID     uint      `json:"owner_id"`
 	Role        string    `json:"role"`
+	IsPersonal  bool      `json:"is_personal"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -190,6 +191,7 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        string(models.WorkspaceRoleOwner),
+		IsPersonal:  ws.IsPersonal,
 		CreatedAt:   ws.CreatedAt,
 	})
 }
@@ -216,6 +218,7 @@ func (h *WorkspaceHandler) List(c *okapi.Context) error {
 			Description: ws.Description,
 			OwnerID:     ws.OwnerID,
 			Role:        role,
+			IsPersonal:  ws.IsPersonal,
 			CreatedAt:   ws.CreatedAt,
 		})
 	}
@@ -240,6 +243,7 @@ func (h *WorkspaceHandler) Get(c *okapi.Context) error {
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        role,
+		IsPersonal:  ws.IsPersonal,
 		CreatedAt:   ws.CreatedAt,
 	})
 }
@@ -276,6 +280,7 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        role,
+		IsPersonal:  ws.IsPersonal,
 		CreatedAt:   ws.CreatedAt,
 	})
 }
@@ -680,85 +685,6 @@ func (h *WorkspaceHandler) DeclineInvitation(c *okapi.Context, req *DeclineInvit
 	_ = h.workspaceRepo.UpdateInvitation(inv)
 
 	return ok(c, okapi.M{"message": "invitation declined"})
-}
-
-type TransferDataRequest struct {
-	Body struct {
-		Resources []string `json:"resources" required:"true"`
-	} `json:"body"`
-}
-
-type TransferResult struct {
-	Resource string `json:"resource"`
-	Count    int64  `json:"count"`
-}
-
-type TransferResponse struct {
-	Message string           `json:"message"`
-	Results []TransferResult `json:"results"`
-	Total   int64            `json:"total"`
-}
-
-// TransferData moves the current user's personal data into the workspace.
-func (h *WorkspaceHandler) TransferData(c *okapi.Context, req *TransferDataRequest) error {
-	userID := c.GetInt("user_id")
-	wsID := c.GetInt("workspace_id")
-	if wsID == 0 {
-		return c.AbortBadRequest("workspace context required")
-	}
-
-	allowedResources := map[string]string{
-		"templates":        "templates",
-		"stylesheets":      "style_sheets",
-		"languages":        "languages",
-		"smtp_servers":     "smtp_servers",
-		"domains":          "domains",
-		"webhooks":         "webhooks",
-		"contacts":         "contacts",
-		"subscribers":      "subscribers",
-		"subscriber_lists": "subscriber_lists",
-		"suppressions":     "suppressions",
-		"api_keys":         "api_keys",
-		"bounces":          "bounces",
-		"emails":           "emails",
-	}
-
-	var results []TransferResult
-	var totalMoved int64
-
-	wsIDVal := uint(wsID)
-
-	err := h.db.Transaction(func(tx *gorm.DB) error {
-		for _, res := range req.Body.Resources {
-			table, ok := allowedResources[res]
-			if !ok {
-				continue
-			}
-			result := tx.Exec(
-				fmt.Sprintf(`UPDATE %s SET workspace_id = ? WHERE user_id = ? AND workspace_id IS NULL`, table),
-				wsIDVal, userID,
-			)
-			if result.Error != nil {
-				return result.Error
-			}
-			results = append(results, TransferResult{
-				Resource: res,
-				Count:    result.RowsAffected,
-			})
-			totalMoved += result.RowsAffected
-		}
-		return nil
-	})
-
-	if err != nil {
-		return c.AbortInternalServerError("failed to transfer data: " + err.Error())
-	}
-
-	return ok(c, TransferResponse{
-		Message: fmt.Sprintf("transferred %d records to workspace", totalMoved),
-		Results: results,
-		Total:   totalMoved,
-	})
 }
 
 var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)

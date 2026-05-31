@@ -22,6 +22,7 @@ import (
 
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/middlewares"
 	"github.com/goposta/posta/internal/models"
 	"github.com/jkaninda/okapi"
 )
@@ -191,16 +192,41 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 
-		// Data Transfer
+		// Operational settings
 		{
-			Method:      http.MethodPost,
-			Path:        "/transfer",
-			Handler:     okapi.H(r.h.workspace.TransferData),
+			Method:      http.MethodGet,
+			Path:        "/settings",
+			Handler:     r.h.workspaceSetting.GetSettings,
 			Group:       wsGroup,
-			Summary:     "Transfer personal data to workspace",
-			Description: "Move the current user's personal resources into this workspace",
-			Request:     &handlers.TransferDataRequest{},
-			Response:    &dto.Response[handlers.TransferResponse]{},
+			Summary:     "Get workspace settings",
+			Description: "Get the operational settings for the current workspace (any member)",
+			Response:    &dto.Response[models.WorkspaceSetting]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
+		{
+			Method:      http.MethodPut,
+			Path:        "/settings",
+			Handler:     okapi.H(r.h.workspaceSetting.UpdateSettings),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Update workspace settings",
+			Description: "Update the operational settings for the current workspace (admin/owner only)",
+			Request:     &handlers.UpdateWorkspaceSettingsRequest{},
+			Response:    &dto.Response[models.WorkspaceSetting]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
+
+		// Audit log (workspace-scoped): events WHERE workspace_id = ? AND category = 'audit'.
+		{
+			Method:      http.MethodGet,
+			Path:        "/audit-log",
+			Handler:     okapi.H(r.h.event.WorkspaceAuditLog),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "List workspace audit log",
+			Description: "Returns the audit trail for the current workspace (admin/owner only)",
+			Request:     &handlers.ListEventsRequest{},
+			Response:    &dto.PageableResponse[models.Event]{},
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 
@@ -224,6 +250,32 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Description: "Import workspace data from a previously exported JSON payload. Duplicates are skipped. SMTP servers are imported as disabled (passwords excluded). Domains require re-verification.",
 			Request:     &handlers.ImportWorkspaceDataRequest{},
 			Response:    &dto.Response[any]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
+
+		// Data Management (GDPR) — destructive, admin/owner only.
+		{
+			Method:      http.MethodPost,
+			Path:        "/gdpr/delete-contacts",
+			Handler:     okapi.H(r.h.workspaceData.DeleteContacts),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Delete workspace contact data (GDPR)",
+			Description: "Delete a specific contact (by email) or all contacts in the workspace, with associated suppressions and list memberships.",
+			Request:     &handlers.GDPRDeleteContactsRequest{},
+			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/gdpr/delete-email-logs",
+			Handler:     okapi.H(r.h.workspaceData.DeleteEmailLogs),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Delete workspace email logs (GDPR)",
+			Description: "Purge the workspace's email logs (optionally only those older than a given number of days) and their bounce records.",
+			Request:     &handlers.GDPRDeleteEmailLogsRequest{},
+			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 	}...)

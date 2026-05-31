@@ -56,39 +56,60 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
-	// Composite index for fast Message-ID dedup lookups on inbound_emails.
+	// Composite index for fast Message-ID dedup lookups on inbound_emails, scoped
+	// to the workspace (workspace-only migration — replaces the legacy user_id one).
 	db.Exec(`DO $$ BEGIN
-		CREATE INDEX IF NOT EXISTS idx_inbound_user_message_id ON inbound_emails (user_id, message_id) WHERE message_id <> '';
+		DROP INDEX IF EXISTS idx_inbound_user_message_id;
+		CREATE INDEX IF NOT EXISTS idx_inbound_workspace_message_id ON inbound_emails (workspace_id, message_id) WHERE message_id <> '';
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
+	db.Exec(`DO $$ BEGIN
+		CREATE UNIQUE INDEX IF NOT EXISTS one_personal_per_user ON workspaces (owner_id) WHERE is_personal;
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 }
 
+// rebuildUniqueIndexes re-scopes the per-tenant uniqueness constraints to
+// workspace-only.
 func rebuildUniqueIndexes(db *gorm.DB) {
 	type indexDef struct {
-		table  string
-		name   string
-		column string
+		table   string
+		oldName string // legacy user-scoped index, dropped
+		newName string // workspace-scoped index, created
+		column  string
 	}
 
 	indexes := []indexDef{
-		{"templates", "idx_user_template", "name"},
-		{"style_sheets", "idx_user_stylesheet", "name"},
-		{"contacts", "idx_user_email", "email"},
-		{"domains", "idx_user_domain", "domain"},
-		{"languages", "idx_user_language", "code"},
+		{"templates", "idx_user_template", "idx_workspace_template", "name"},
+		{"style_sheets", "idx_user_stylesheet", "idx_workspace_stylesheet", "name"},
+		{"contacts", "idx_user_email", "idx_workspace_email", "email"},
+		{"domains", "idx_user_domain", "idx_workspace_domain", "domain"},
+		{"languages", "idx_user_language", "idx_workspace_language", "code"},
 
-		{"suppressions", "idx_user_suppression", "email, COALESCE(list_id, 0)"},
-		{"unsubscribe_lists", "idx_user_unsub_list", "name"},
+		{"suppressions", "idx_user_suppression", "idx_workspace_suppression", "email, COALESCE(list_id, 0)"},
+		{"unsubscribe_lists", "idx_user_unsub_list", "idx_workspace_unsub_list", "name"},
 	}
 
 	for _, idx := range indexes {
 		db.Exec(fmt.Sprintf(`
 			DO $$ BEGIN
 				DROP INDEX IF EXISTS %s;
-				CREATE UNIQUE INDEX %s ON %s (user_id, COALESCE(workspace_id, 0), %s);
+				DROP INDEX IF EXISTS %s;
+				CREATE UNIQUE INDEX %s ON %s (workspace_id, %s) WHERE workspace_id IS NOT NULL;
 			EXCEPTION WHEN others THEN NULL;
 			END $$`,
-			idx.name, idx.name, idx.table, idx.column,
+			idx.oldName, idx.newName, idx.newName, idx.table, idx.column,
 		))
 	}
+
+	// Subscribers carry their unique index from a GORM tag (idx_sub_scope_email,
+	// historically on user_id, workspace_id, email). Re-scope it to workspace-only
+	// here so both fresh and existing databases converge. Recreated under the same
+	// name so AutoMigrate won't re-add the legacy definition.
+	db.Exec(`DO $$ BEGIN
+		DROP INDEX IF EXISTS idx_sub_scope_email;
+		CREATE UNIQUE INDEX idx_sub_scope_email ON subscribers (workspace_id, email) WHERE workspace_id IS NOT NULL;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
 }

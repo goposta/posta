@@ -3,7 +3,7 @@
 <p>Hi {{ .UserName }},</p>
 
 <div class="alert-box alert-danger">
-  Your bounce rate in the last 24 hours is <strong>{{ .BounceRate }}%</strong>, which exceeds the {{ .Threshold }}% threshold.
+  The bounce rate {{ if .WorkspaceName }}for <strong>{{ .WorkspaceName }}</strong> {{ end }}in the last 24 hours is <strong>{{ .BounceRate }}%</strong>, which exceeds the {{ .Threshold }}% threshold.
 </div>
 
 <table class="stats-table">

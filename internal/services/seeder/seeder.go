@@ -68,12 +68,13 @@ type templateDef struct {
 
 // seedTemplate creates a single template with a version and one localization
 // per seedLanguages entry, loading each localized body from the embedded files.
-func (s *Seeder) seedTemplate(userID uint, ssID uint, def templateDef) {
+func (s *Seeder) seedTemplate(workspaceID, userID uint, ssID uint, def templateDef) {
 	b, _ := json.MarshalIndent(def.SampleData, "", "  ")
 	sampleData := string(b)
 
 	tmpl := &models.Template{
 		UserID:          userID,
+		WorkspaceID:     workspacePtr(workspaceID),
 		Name:            def.Name,
 		DefaultLanguage: seedLanguages[0],
 		Description:     def.Description,
@@ -115,8 +116,16 @@ func (s *Seeder) seedTemplate(userID uint, ssID uint, def templateDef) {
 	}
 }
 
-// SeedUserDefaults creates default stylesheet and templates for a user
-func (s *Seeder) SeedUserDefaults(userID uint, userName string) {
+// workspacePtr returns a pointer to workspaceID, or nil when zero (defensive:
+// seeding always runs against a real personal workspace post-migration).
+func workspacePtr(workspaceID uint) *uint {
+	if workspaceID == 0 {
+		return nil
+	}
+	return &workspaceID
+}
+
+func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string) {
 	if userName == "" {
 		userName = "Jonas"
 	}
@@ -125,11 +134,14 @@ func (s *Seeder) SeedUserDefaults(userID uint, userName string) {
 		return
 	}
 
+	wsID := workspacePtr(workspaceID)
+
 	// Create default stylesheet
 	ss := &models.StyleSheet{
-		UserID: userID,
-		Name:   "default",
-		CSS:    defaultCSS,
+		UserID:      userID,
+		WorkspaceID: wsID,
+		Name:        "default",
+		CSS:         defaultCSS,
 	}
 	if err := s.stylesheetRepo.Create(ss); err != nil {
 		logger.Error("failed to seed default stylesheet", "user_id", userID, "error", err)
@@ -140,7 +152,7 @@ func (s *Seeder) SeedUserDefaults(userID uint, userName string) {
 	docsURL := fmt.Sprintf("%s/docs", goutils.Env("POSTA_WEB_URL", ""))
 
 	for _, def := range defaultTemplateDefs(userName, year, docsURL) {
-		s.seedTemplate(userID, ss.ID, def)
+		s.seedTemplate(workspaceID, userID, ss.ID, def)
 	}
 
 	// Seed default languages
@@ -153,7 +165,7 @@ func (s *Seeder) SeedUserDefaults(userID uint, userName string) {
 		{"de", "German"},
 	}
 	for _, dl := range defaultLanguages {
-		lang := &models.Language{UserID: userID, Code: dl.Code, Name: dl.Name}
+		lang := &models.Language{UserID: userID, WorkspaceID: wsID, Code: dl.Code, Name: dl.Name}
 		if lang.Code == "en" {
 			lang.IsDefault = true
 		}
@@ -162,7 +174,8 @@ func (s *Seeder) SeedUserDefaults(userID uint, userName string) {
 		}
 	}
 
-	logger.Info("seeded default stylesheet, templates, versions, localizations, and languages", "user_id", userID)
+	logger.Info("seeded default stylesheet, templates, versions, localizations, and languages",
+		"user_id", userID, "workspace_id", workspaceID)
 }
 
 // defaultTemplateDefs returns the built-in templates seeded for every new user.

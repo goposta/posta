@@ -150,6 +150,7 @@ func runWorker() error {
 		cfg.SystemSMTP, "Posta", cfg.AppWebURL,
 		repositories.NewUserRepository(db),
 		repositories.NewUserSettingRepository(db),
+		repositories.NewWorkspaceRepository(db),
 	)
 	dailyReportHandler := worker.NewDailyReportHandler(
 		notifier,

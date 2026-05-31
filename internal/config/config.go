@@ -51,13 +51,20 @@ type Config struct {
 	AdminEmail                 string
 	AdminPassword              string
 	OpenAPIDocs                bool
-	securitySchemes            okapi.SecuritySchemes
+	// AllowDowngrade lets the server boot even when the binary's version is
+	// older than the version recorded in the database. Off by default.
+	AllowDowngrade  bool
+	securitySchemes okapi.SecuritySchemes
 
 	MetricsEnabled bool
-	WebDir         string
-	AppWebURL      string
-	ApiBaseURL     string
-	CORSOrigins    string
+
+	PlanEnforcement   bool
+	WorkspaceOnlyMode bool
+
+	WebDir      string
+	AppWebURL   string
+	ApiBaseURL  string
+	CORSOrigins string
 
 	// Worker settings
 	EmbeddedWorker    bool
@@ -183,12 +190,15 @@ func New() *Config {
 		AdminEmail:                 goutils.Env("POSTA_ADMIN_EMAIL", "admin@example.com"),
 		AdminPassword:              goutils.Env("POSTA_ADMIN_PASSWORD", "admin1234"),
 		OpenAPIDocs:                goutils.EnvBool("POSTA_OPENAPI_DOCS", true),
+		AllowDowngrade:             goutils.EnvBool("POSTA_ALLOW_DOWNGRADE", false),
 		securitySchemes:            okapi.SecuritySchemes{},
 
-		MetricsEnabled: goutils.EnvBool("POSTA_METRICS_ENABLED", false),
-		WebDir:         goutils.Env("POSTA_WEB_DIR", "web/dist"),
-		AppWebURL:      goutils.Env("POSTA_WEB_URL", ""),
-		ApiBaseURL:     goutils.Env("POSTA_API_URL", ""),
+		MetricsEnabled:    goutils.EnvBool("POSTA_METRICS_ENABLED", false),
+		PlanEnforcement:   goutils.EnvBool("POSTA_PLAN_ENFORCEMENT", false),
+		WorkspaceOnlyMode: goutils.EnvBool("POSTA_WORKSPACE_ONLY_MODE", false),
+		WebDir:            goutils.Env("POSTA_WEB_DIR", "web/dist"),
+		AppWebURL:         goutils.Env("POSTA_WEB_URL", ""),
+		ApiBaseURL:        goutils.Env("POSTA_API_URL", ""),
 
 		CORSOrigins: goutils.Env("POSTA_CORS_ORIGINS", "*"),
 
@@ -323,6 +333,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 			Servers:         apiServers,
 			SecuritySchemes: c.securitySchemes,
 			UI:              okapi.ScalarUI,
+			StrictDocUI:     true,
 		})
 	}
 	app.WithErrorHandler(errorhandlers.CustomErrorHandler())

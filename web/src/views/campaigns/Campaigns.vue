@@ -75,7 +75,7 @@ async function loadFormData() {
   }
   try {
     const { default: api } = await import('../../api/client')
-    const res = await api.get<any>('/users/me/templates', { params: { page: 0, size: 100 } })
+    const res = await api.get<any>('/workspaces/current/templates', { params: { page: 0, size: 100 } })
     templates.value = (res.data.data ?? []).map((t: any) => ({ id: t.id, name: t.name }))
   } catch {
     // non-critical

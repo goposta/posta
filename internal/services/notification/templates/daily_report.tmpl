@@ -1,6 +1,6 @@
 {{ define "content" }}
 <h2>Daily Email Report</h2>
-<p>Here's your email activity summary for <strong>{{ .ReportDate }}</strong>.</p>
+<p>Here's the email activity summary{{ if .WorkspaceName }} for <strong>{{ .WorkspaceName }}</strong>{{ end }} on <strong>{{ .ReportDate }}</strong>.</p>
 
 <table class="stats-table">
   <tr>
@@ -41,5 +41,5 @@
 </p>
 {{ end }}
 
-<p class="muted" style="margin-top: 24px;">You receive this report because you enabled daily reports in your notification settings.</p>
+<p class="muted" style="margin-top: 24px;">You receive this report as an owner or admin of this workspace.</p>
 {{ end }}

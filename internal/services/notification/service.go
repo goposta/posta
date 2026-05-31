@@ -54,6 +54,7 @@ type Service struct {
 	sender          *email.SMTPSender
 	userRepo        *repositories.UserRepository
 	userSettingRepo *repositories.UserSettingRepository
+	workspaceRepo   *repositories.WorkspaceRepository
 	templates       map[string]*template.Template
 }
 
@@ -63,6 +64,7 @@ func NewService(
 	appName, appURL string,
 	userRepo *repositories.UserRepository,
 	userSettingRepo *repositories.UserSettingRepository,
+	workspaceRepo *repositories.WorkspaceRepository,
 ) *Service {
 	s := &Service{
 		smtpCfg:         smtpCfg,
@@ -71,6 +73,7 @@ func NewService(
 		sender:          email.NewSMTPSender(),
 		userRepo:        userRepo,
 		userSettingRepo: userSettingRepo,
+		workspaceRepo:   workspaceRepo,
 		templates:       make(map[string]*template.Template),
 	}
 	s.loadTemplates()
@@ -170,6 +173,41 @@ func (s *Service) SendToUser(userID uint, subject, templateName string, data map
 	}
 
 	return s.Send(to, subject, templateName, data)
+}
+
+func (s *Service) SendToWorkspaceAdmins(workspaceID uint, subject, templateName string, data map[string]any) error {
+	if !s.IsConfigured() {
+		return nil
+	}
+
+	members, err := s.workspaceRepo.ListMembers(workspaceID)
+	if err != nil {
+		return fmt.Errorf("notification: members for workspace %d: %w", workspaceID, err)
+	}
+
+	if data == nil {
+		data = make(map[string]any)
+	}
+	if _, ok := data["WorkspaceName"]; !ok {
+		if ws, err := s.workspaceRepo.FindByID(workspaceID); err == nil {
+			data["WorkspaceName"] = ws.Name
+		}
+	}
+
+	var firstErr error
+	for _, m := range members {
+		if m.Role != models.WorkspaceRoleOwner && m.Role != models.WorkspaceRoleAdmin {
+			continue
+		}
+		if err := s.SendToUser(m.UserID, subject, templateName, data); err != nil {
+			logger.Error("notification: failed to send to workspace admin",
+				"workspace_id", workspaceID, "user_id", m.UserID, "error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 func (s *Service) render(templateName string, data map[string]any) (string, error) {

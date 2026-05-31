@@ -74,6 +74,18 @@ func (h *EventHandler) UserAuditLog(c *okapi.Context, req *ListEventsRequest) er
 	return paginated(c, events, total, page, size)
 }
 
+func (h *EventHandler) WorkspaceAuditLog(c *okapi.Context, req *ListEventsRequest) error {
+	wsID := c.GetInt("workspace_id")
+	page, size, offset := normalizePageParams(req.Page, req.Size)
+
+	events, total, err := h.repo.FindByWorkspaceAndCategory(uint(wsID), models.EventCategoryAudit, size, offset)
+	if err != nil {
+		return c.AbortInternalServerError("failed to list audit events")
+	}
+
+	return paginated(c, events, total, page, size)
+}
+
 // Stream sends real-time events to the admin via SSE.
 func (h *EventHandler) Stream(c *okapi.Context) error {
 	ctx := c.Request().Context()

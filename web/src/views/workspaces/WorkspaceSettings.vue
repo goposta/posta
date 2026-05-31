@@ -3,7 +3,8 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { workspaceApi } from '../../api/workspaces'
 import { oauthApi } from '../../api/oauth'
-import type { Workspace, WorkspaceMember, WorkspaceInvitation, WorkspaceRole, TransferResult, Plan, OAuthProviderInfo, WorkspaceSSOConfig } from '../../api/types'
+import { settingsApi } from '../../api/settings'
+import type { Workspace, Plan, OAuthProviderInfo, WorkspaceSSOConfig, WorkspaceSettings } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useConfirm } from '../../composables/useConfirm'
@@ -18,29 +19,26 @@ const wsId = Number(route.params.id)
 const ws = ref<Workspace | null>(null)
 const loading = ref(true)
 
-// Tabs
-type WorkspaceTab = 'members' | 'invitations' | 'plan' | 'settings'
-const validTabs: WorkspaceTab[] = ['members', 'invitations', 'plan', 'settings']
-function tabFromQuery(value: unknown): WorkspaceTab {
-  // Legacy tabs that were folded into Settings.
-  if (value === 'sso' || value === 'transfer') return 'settings'
-  return validTabs.includes(value as WorkspaceTab) ? (value as WorkspaceTab) : 'members'
+// Members and invitations now live on a dedicated page; redirect legacy deep-links.
+if (route.query.tab === 'members' || route.query.tab === 'invitations') {
+  router.replace(`/workspaces/${wsId}/members?tab=${route.query.tab}`)
 }
-const activeTab = ref<WorkspaceTab>(tabFromQuery(route.query.tab))
 
-// Keep the active tab in sync when the sidebar deep-links into a different tab
-// of the workspace that is already open.
+// Tabs
+type SettingsTab = 'settings' | 'data' | 'sso' | 'plan'
+const validTabs: SettingsTab[] = ['settings', 'data', 'sso', 'plan']
+function tabFromQuery(value: unknown): SettingsTab {
+  if (value === 'transfer') return 'settings'
+  return validTabs.includes(value as SettingsTab) ? (value as SettingsTab) : 'settings'
+}
+const activeTab = ref<SettingsTab>(tabFromQuery(route.query.tab))
 watch(() => route.query.tab, (value) => {
+  if (value === 'members' || value === 'invitations') {
+    router.replace(`/workspaces/${wsId}/members?tab=${value}`)
+    return
+  }
   if (value) activeTab.value = tabFromQuery(value)
 })
-
-// Members
-const members = ref<WorkspaceMember[]>([])
-const membersLoading = ref(false)
-
-// Invitations
-const invitations = ref<WorkspaceInvitation[]>([])
-const invitationsLoading = ref(false)
 
 // Plan
 const currentPlan = ref<Plan | null>(null)
@@ -54,58 +52,63 @@ const ssoLoading = ref(false)
 const ssoSaving = ref(false)
 const ssoForm = ref({ provider_id: 0, enforce_sso: false, auto_provision: true, allowed_domains: '' })
 
-// Invite modal
-const showInviteModal = ref(false)
-const inviteEmail = ref('')
-const inviteRole = ref<WorkspaceRole>('editor')
-const inviting = ref(false)
-
 // Data Export/Import
 const exporting = ref(false)
 const importing = ref(false)
 const importFileRef = ref<HTMLInputElement | null>(null)
 
-// Settings
+// Settings (workspace name/description)
 const editName = ref('')
 const editDescription = ref('')
 const saving = ref(false)
 
-// Data Transfer
-const availableResources = [
-  { key: 'templates', label: 'Templates' },
-  { key: 'stylesheets', label: 'Stylesheets' },
-  { key: 'languages', label: 'Languages' },
-  { key: 'smtp_servers', label: 'SMTP Servers' },
-  { key: 'domains', label: 'Domains' },
-  { key: 'webhooks', label: 'Webhooks' },
-  { key: 'contacts', label: 'Contacts' },
-  { key: 'subscribers', label: 'Subscribers' },
-  { key: 'subscriber_lists', label: 'Lists' },
-  { key: 'suppressions', label: 'Suppressions' },
-  { key: 'api_keys', label: 'API Keys' },
-  { key: 'bounces', label: 'Bounces' },
-  { key: 'emails', label: 'Emails' },
+// Operational workspace settings (timezone, sender defaults, webhook retries,
+// API-key expiry, bounce auto-suppress) — backed by /workspaces/current/settings.
+const timezones = [
+  'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
+  'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata', 'Asia/Dubai',
+  'Australia/Sydney', 'Pacific/Auckland', 'Africa/Kinshasa', 'Africa/Nairobi', 'Africa/Lagos', 'Africa/Lubumbashi',
 ]
-const selectedResources = ref<string[]>([])
-const transferring = ref(false)
-const transferResults = ref<TransferResult[] | null>(null)
-const transferTotal = ref(0)
+const wsSettings = ref<Partial<WorkspaceSettings>>({
+  timezone: 'UTC',
+  default_sender_name: '',
+  default_sender_email: '',
+  webhook_retry_count: 3,
+  api_key_expiry_days: 90,
+  bounce_auto_suppress: true,
+  require_verified_domain: false,
+})
+const wsSettingsLoading = ref(false)
+const wsSettingsSaving = ref(false)
+
+// Data Management (GDPR) — scoped to this workspace.
+const gdprEmail = ref('')
+const gdprDays = ref(90)
+const deletingContacts = ref(false)
+const deletingEmails = ref(false)
 
 const myRole = computed(() => {
   const membership = wsStore.workspaces.find(w => w.id === wsId)
   return membership?.role ?? 'viewer'
 })
-
 const isAdminOrOwner = computed(() => myRole.value === 'owner' || myRole.value === 'admin')
 const isOwner = computed(() => myRole.value === 'owner')
 
-async function fetchWorkspace() {
-  loading.value = true
-  // Temporarily set workspace context for API calls
+async function withWorkspace<T>(fn: () => Promise<T>): Promise<T> {
   const prevWs = wsStore.currentWorkspaceId
   wsStore.setWorkspace(wsId)
   try {
-    const res = await workspaceApi.getCurrent()
+    return await fn()
+  } finally {
+    wsStore.setWorkspace(prevWs)
+  }
+}
+
+async function fetchWorkspace() {
+  loading.value = true
+  try {
+    const res = await withWorkspace(() => workspaceApi.getCurrent())
     ws.value = res.data.data
     editName.value = ws.value.name
     editDescription.value = ws.value.description || ''
@@ -114,46 +117,13 @@ async function fetchWorkspace() {
     router.push('/workspaces')
   } finally {
     loading.value = false
-    wsStore.setWorkspace(prevWs)
-  }
-}
-
-async function fetchMembers() {
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
-  membersLoading.value = true
-  try {
-    const res = await workspaceApi.listMembers()
-    members.value = res.data.data ?? []
-  } catch {
-    notify.error('Failed to load members')
-  } finally {
-    membersLoading.value = false
-    wsStore.setWorkspace(prevWs)
-  }
-}
-
-async function fetchInvitations() {
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
-  invitationsLoading.value = true
-  try {
-    const res = await workspaceApi.listInvitations()
-    invitations.value = res.data.data ?? []
-  } catch {
-    notify.error('Failed to load invitations')
-  } finally {
-    invitationsLoading.value = false
-    wsStore.setWorkspace(prevWs)
   }
 }
 
 async function fetchPlan() {
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   planLoading.value = true
   try {
-    const res = await workspaceApi.getPlan()
+    const res = await withWorkspace(() => workspaceApi.getPlan())
     const data = res.data.data
     if (data && typeof data === 'object' && 'id' in data) {
       currentPlan.value = data as Plan
@@ -170,19 +140,86 @@ async function fetchPlan() {
     planSource.value = 'global_settings'
   } finally {
     planLoading.value = false
-    wsStore.setWorkspace(prevWs)
+  }
+}
+
+async function fetchWorkspaceSettings() {
+  wsSettingsLoading.value = true
+  try {
+    const res = await withWorkspace(() => settingsApi.getWorkspaceSettings())
+    const s = res.data.data
+    wsSettings.value = {
+      timezone: s.timezone || 'UTC',
+      default_sender_name: s.default_sender_name || '',
+      default_sender_email: s.default_sender_email || '',
+      webhook_retry_count: s.webhook_retry_count,
+      api_key_expiry_days: s.api_key_expiry_days,
+      bounce_auto_suppress: s.bounce_auto_suppress,
+      require_verified_domain: s.require_verified_domain,
+    }
+  } catch {
+    /* settings fall back to defaults */
+  } finally {
+    wsSettingsLoading.value = false
+  }
+}
+
+async function saveWorkspaceSettings() {
+  wsSettingsSaving.value = true
+  try {
+    await withWorkspace(() => settingsApi.updateWorkspaceSettings(wsSettings.value))
+    notify.success('Workspace settings saved')
+  } catch (err: any) {
+    notify.error(err.response?.data?.error?.message || 'Failed to save workspace settings')
+  } finally {
+    wsSettingsSaving.value = false
+  }
+}
+
+async function deleteWorkspaceContacts() {
+  const target = gdprEmail.value.trim()
+  const message = target
+    ? `Delete contact "${target}" and remove it from all lists and suppression in this workspace?`
+    : 'Delete ALL contacts in this workspace? This cannot be undone.'
+  const confirmed = await confirm({ title: 'Delete Contact Data', message, confirmText: 'Delete', variant: 'danger' })
+  if (!confirmed) return
+  deletingContacts.value = true
+  try {
+    const res = await withWorkspace(() => workspaceApi.deleteContacts(target || undefined))
+    notify.success(res.data.data.message)
+    gdprEmail.value = ''
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to delete contacts')
+  } finally {
+    deletingContacts.value = false
+  }
+}
+
+async function deleteWorkspaceEmailLogs() {
+  const days = gdprDays.value
+  const message = days > 0
+    ? `Delete all email logs older than ${days} days and their associated bounces in this workspace?`
+    : 'Delete ALL email logs and associated bounces in this workspace? This cannot be undone.'
+  const confirmed = await confirm({ title: 'Delete Email Logs', message, confirmText: 'Delete', variant: 'danger' })
+  if (!confirmed) return
+  deletingEmails.value = true
+  try {
+    const res = await withWorkspace(() => workspaceApi.deleteEmailLogs(days))
+    notify.success(res.data.data.message)
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to delete email logs')
+  } finally {
+    deletingEmails.value = false
   }
 }
 
 async function fetchSSO() {
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   ssoLoading.value = true
   try {
-    const [ssoRes, providersRes] = await Promise.all([
+    const [ssoRes, providersRes] = await withWorkspace(() => Promise.all([
       oauthApi.getSSO(),
       oauthApi.providers(),
-    ])
+    ]))
     ssoConfig.value = ssoRes.data.data
     ssoProviders.value = providersRes.data.data?.providers || []
     if (ssoConfig.value) {
@@ -196,7 +233,6 @@ async function fetchSSO() {
   } catch { /* ignore */ }
   finally {
     ssoLoading.value = false
-    wsStore.setWorkspace(prevWs)
   }
 }
 
@@ -205,35 +241,28 @@ async function saveSSO() {
     notify.error('Please select a provider')
     return
   }
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   ssoSaving.value = true
   try {
-    await oauthApi.setSSO(ssoForm.value)
+    await withWorkspace(() => oauthApi.setSSO(ssoForm.value))
     notify.success('SSO configuration saved')
     await fetchSSO()
   } catch (err: any) {
     notify.error(err.response?.data?.error?.message || 'Failed to save SSO config')
   } finally {
     ssoSaving.value = false
-    wsStore.setWorkspace(prevWs)
   }
 }
 
 async function removeSSO() {
   const ok = await confirm({ title: 'Remove SSO', message: 'Remove SSO configuration from this workspace? Members will no longer be required to use SSO.', confirmText: 'Remove SSO', variant: 'danger' })
   if (!ok) return
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   try {
-    await oauthApi.deleteSSO()
+    await withWorkspace(() => oauthApi.deleteSSO())
     ssoConfig.value = null
     ssoForm.value = { provider_id: 0, enforce_sso: false, auto_provision: true, allowed_domains: '' }
     notify.success('SSO configuration removed')
   } catch (err: any) {
     notify.error(err.response?.data?.error?.message || 'Failed to remove SSO config')
-  } finally {
-    wsStore.setWorkspace(prevWs)
   }
 }
 
@@ -241,151 +270,37 @@ function formatLimit(value: number): string {
   return value === 0 ? 'Unlimited' : value.toLocaleString()
 }
 
-async function inviteMember() {
-  if (!inviteEmail.value.trim()) return
-  inviting.value = true
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
-  try {
-    await workspaceApi.invite({ email: inviteEmail.value.trim(), role: inviteRole.value })
-    notify.success('Invitation sent')
-    showInviteModal.value = false
-    inviteEmail.value = ''
-    inviteRole.value = 'editor'
-    await fetchInvitations()
-  } catch (err: any) {
-    notify.error(err.response?.data?.error?.message || 'Failed to invite')
-  } finally {
-    inviting.value = false
-    wsStore.setWorkspace(prevWs)
-  }
-}
-
-async function updateRole(member: WorkspaceMember, newRole: WorkspaceRole) {
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
-  try {
-    await workspaceApi.updateMemberRole(member.user_id, newRole)
-    notify.success('Role updated')
-    await fetchMembers()
-  } catch (err: any) {
-    notify.error(err.response?.data?.error?.message || 'Failed to update role')
-  } finally {
-    wsStore.setWorkspace(prevWs)
-  }
-}
-
-async function removeMember(member: WorkspaceMember) {
-  const ok = await confirm({ title: 'Remove Member', message: `Remove ${member.name || member.email} from this workspace?`, confirmText: 'Remove', variant: 'danger' })
-  if (!ok) return
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
-  try {
-    await workspaceApi.removeMember(member.user_id)
-    notify.success('Member removed')
-    await fetchMembers()
-  } catch (err: any) {
-    notify.error(err.response?.data?.error?.message || 'Failed to remove')
-  } finally {
-    wsStore.setWorkspace(prevWs)
-  }
-}
-
-async function revokeInvitation(inv: WorkspaceInvitation) {
-  const ok = await confirm({ title: 'Revoke Invitation', message: `Revoke the invitation for ${inv.email}?`, confirmText: 'Revoke', variant: 'warning' })
-  if (!ok) return
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
-  try {
-    await workspaceApi.cancelInvitation(inv.id)
-    notify.success('Invitation revoked')
-    await fetchInvitations()
-  } catch (err: any) {
-    notify.error(err.response?.data?.error?.message || 'Failed to revoke')
-  } finally {
-    wsStore.setWorkspace(prevWs)
-  }
-}
-
 async function saveSettings() {
   saving.value = true
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   try {
-    await workspaceApi.update({ name: editName.value.trim(), description: editDescription.value.trim() })
+    await withWorkspace(() => workspaceApi.update({ name: editName.value.trim(), description: editDescription.value.trim() }))
     notify.success('Workspace updated')
     await wsStore.fetchWorkspaces()
   } catch (err: any) {
     notify.error(err.response?.data?.error?.message || 'Failed to update')
   } finally {
     saving.value = false
-    wsStore.setWorkspace(prevWs)
   }
 }
 
 async function deleteWorkspace() {
   const ok = await confirm({ title: 'Delete Workspace', message: 'Are you sure you want to delete this workspace? This cannot be undone.', confirmText: 'Delete', variant: 'danger' })
   if (!ok) return
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   try {
-    await workspaceApi.delete()
+    await withWorkspace(() => workspaceApi.delete())
     notify.success('Workspace deleted')
     wsStore.setWorkspace(null)
     await wsStore.fetchWorkspaces()
     router.push('/workspaces')
   } catch (err: any) {
     notify.error(err.response?.data?.error?.message || 'Failed to delete')
-    wsStore.setWorkspace(prevWs)
-  }
-}
-
-function toggleResource(key: string) {
-  const idx = selectedResources.value.indexOf(key)
-  if (idx >= 0) {
-    selectedResources.value.splice(idx, 1)
-  } else {
-    selectedResources.value.push(key)
-  }
-}
-
-function selectAllResources() {
-  if (selectedResources.value.length === availableResources.length) {
-    selectedResources.value = []
-  } else {
-    selectedResources.value = availableResources.map(r => r.key)
-  }
-}
-
-async function transferData() {
-  if (selectedResources.value.length === 0) return
-  const ok = await confirm({ title: 'Transfer Data', message: `Transfer ${selectedResources.value.length} resource type(s) from your personal account to this workspace? This cannot be undone.`, confirmText: 'Transfer', variant: 'warning' })
-  if (!ok) return
-
-  transferring.value = true
-  transferResults.value = null
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
-  try {
-    const res = await workspaceApi.transferData(selectedResources.value)
-    transferResults.value = res.data.data.results
-    transferTotal.value = res.data.data.total
-    notify.success(res.data.data.message)
-    selectedResources.value = []
-  } catch (err: any) {
-    notify.error(err.response?.data?.error?.message || 'Failed to transfer data')
-  } finally {
-    transferring.value = false
-    wsStore.setWorkspace(prevWs)
   }
 }
 
 async function exportWorkspaceData() {
   exporting.value = true
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   try {
-    const res = await workspaceApi.exportData()
+    const res = await withWorkspace(() => workspaceApi.exportData())
     const blob = new Blob([JSON.stringify(res.data.data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -398,7 +313,6 @@ async function exportWorkspaceData() {
     notify.error('Failed to export workspace data')
   } finally {
     exporting.value = false
-    wsStore.setWorkspace(prevWs)
   }
 }
 
@@ -422,12 +336,10 @@ async function handleWorkspaceImportFile(event: Event) {
   }
 
   importing.value = true
-  const prevWs = wsStore.currentWorkspaceId
-  wsStore.setWorkspace(wsId)
   try {
     const text = await file.text()
     const data = JSON.parse(text)
-    const res = await workspaceApi.importData(data)
+    const res = await withWorkspace(() => workspaceApi.importData(data))
     notify.success(res.data.data.message || 'Workspace data imported successfully')
   } catch (e: any) {
     if (e instanceof SyntaxError) {
@@ -438,27 +350,17 @@ async function handleWorkspaceImportFile(event: Event) {
   } finally {
     importing.value = false
     if (importFileRef.value) importFileRef.value.value = ''
-    wsStore.setWorkspace(prevWs)
   }
-}
-
-function roleBadgeClass(role: string): string {
-  if (role === 'owner') return 'badge-primary'
-  if (role === 'admin') return 'badge-warning'
-  return 'badge-neutral'
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 onMounted(async () => {
   await fetchWorkspace()
-  await Promise.all([fetchMembers(), fetchInvitations(), fetchPlan()])
+  await fetchPlan()
 })
 
 watch(activeTab, (value) => {
-  if (value === 'settings' && isOwner.value) fetchSSO()
+  if (value === 'settings' && isAdminOrOwner.value) fetchWorkspaceSettings()
+  if (value === 'sso' && isOwner.value) fetchSSO()
 }, { immediate: true })
 </script>
 
@@ -466,12 +368,15 @@ watch(activeTab, (value) => {
   <div>
     <div class="page-header">
       <div>
-        <h1>{{ ws?.name || 'Workspace' }}</h1>
+        <h1>{{ ws?.name || 'Workspace' }} — Settings</h1>
         <p v-if="ws?.slug" style="color: var(--text-muted); font-size: 13px; margin-top: 2px;">
           <code>{{ ws.slug }}</code>
         </p>
       </div>
-      <button class="btn btn-secondary" @click="router.push('/workspaces')">Back</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" @click="router.push(`/workspaces/${wsId}/members`)">Members</button>
+        <button class="btn btn-secondary" @click="router.push('/workspaces')">Back</button>
+      </div>
     </div>
 
     <div v-if="loading" class="loading-page">
@@ -481,97 +386,18 @@ watch(activeTab, (value) => {
     <template v-else>
       <!-- Tabs -->
       <div class="tabs">
-        <button :class="['tab', { active: activeTab === 'members' }]" @click="activeTab = 'members'">
-          Members ({{ members.length }})
+        <button v-if="isAdminOrOwner" :class="['tab', { active: activeTab === 'settings' }]" @click="activeTab = 'settings'">
+          Settings
         </button>
-        <button :class="['tab', { active: activeTab === 'invitations' }]" @click="activeTab = 'invitations'">
-          Invitations ({{ invitations.length }})
+        <button v-if="isAdminOrOwner" :class="['tab', { active: activeTab === 'data' }]" @click="activeTab = 'data'">
+          Data Management
+        </button>
+        <button v-if="isOwner" :class="['tab', { active: activeTab === 'sso' }]" @click="activeTab = 'sso'">
+          SSO
         </button>
         <button :class="['tab', { active: activeTab === 'plan' }]" @click="activeTab = 'plan'">
           Plan
         </button>
-        <button v-if="isAdminOrOwner" :class="['tab', { active: activeTab === 'settings' }]" @click="activeTab = 'settings'">
-          Settings
-        </button>
-      </div>
-
-      <!-- Members Tab -->
-      <div v-if="activeTab === 'members'" class="card">
-        <div class="card-header">
-          <span>Members</span>
-          <button v-if="isAdminOrOwner" class="btn btn-primary btn-sm" @click="showInviteModal = true">Invite</button>
-        </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Joined</th>
-                <th v-if="isAdminOrOwner">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="m in members" :key="m.id">
-                <td style="font-weight: 500;">{{ m.name }}</td>
-                <td>{{ m.email }}</td>
-                <td>
-                  <select
-                    v-if="isAdminOrOwner && m.role !== 'owner'"
-                    :value="m.role"
-                    class="form-select form-select-sm"
-                    @change="updateRole(m, ($event.target as HTMLSelectElement).value as WorkspaceRole)"
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="editor">Editor</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
-                  <span v-else class="badge" :class="roleBadgeClass(m.role)">{{ m.role }}</span>
-                </td>
-                <td>{{ formatDate(m.created_at) }}</td>
-                <td v-if="isAdminOrOwner">
-                  <button v-if="m.role !== 'owner'" class="btn btn-danger btn-sm" @click="removeMember(m)">Remove</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Invitations Tab -->
-      <div v-if="activeTab === 'invitations'" class="card">
-        <div class="card-header">
-          <span>Pending Invitations</span>
-          <button v-if="isAdminOrOwner" class="btn btn-primary btn-sm" @click="showInviteModal = true">Invite</button>
-        </div>
-        <div v-if="invitations.length === 0" class="empty-state">
-          <p>No pending invitations.</p>
-        </div>
-        <div v-else class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Expires</th>
-                <th>Sent</th>
-                <th v-if="isAdminOrOwner">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="inv in invitations" :key="inv.id">
-                <td>{{ inv.email }}</td>
-                <td><span class="badge" :class="roleBadgeClass(inv.role)">{{ inv.role }}</span></td>
-                <td>{{ formatDate(inv.expires_at) }}</td>
-                <td>{{ formatDate(inv.created_at) }}</td>
-                <td v-if="isAdminOrOwner">
-                  <button class="btn btn-danger btn-sm" @click="revokeInvitation(inv)">Revoke</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </div>
 
       <!-- Plan Tab -->
@@ -703,12 +529,146 @@ watch(activeTab, (value) => {
           </button>
         </div>
 
-        <!-- Single Sign-On (SSO) — owners only -->
-        <div v-if="isOwner" class="card-body" style="border-top: 1px solid var(--border-primary);">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <h4 style="font-size: 14px; font-weight: 600; margin: 0;">Single Sign-On (SSO)</h4>
-            <button v-if="ssoConfig" class="btn btn-danger btn-sm" @click="removeSSO">Remove SSO</button>
+        <!-- Sending & Operational Settings -->
+        <div class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Sending &amp; Operational Settings</h4>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+            Defaults applied to this workspace's emails, webhooks, and API keys.
+          </p>
+          <div v-if="wsSettingsLoading" class="loading-page" style="padding: 24px 0;"><div class="spinner"></div></div>
+          <template v-else>
+            <div class="form-group">
+              <label class="form-label">Timezone</label>
+              <select v-model="wsSettings.timezone" class="form-select">
+                <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Sender Name</label>
+              <input v-model="wsSettings.default_sender_name" class="form-input" placeholder="Acme Inc." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Sender Email</label>
+              <input v-model="wsSettings.default_sender_email" type="email" class="form-input" placeholder="no-reply@example.com" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Webhook Retry Count</label>
+              <input v-model.number="wsSettings.webhook_retry_count" type="number" min="0" max="10" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">API Key Expiry (days)</label>
+              <input v-model.number="wsSettings.api_key_expiry_days" type="number" min="0" class="form-input" />
+              <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">0 means keys never expire by default.</small>
+            </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" v-model="wsSettings.bounce_auto_suppress" />
+                <span>Auto-suppress on hard bounce</span>
+              </label>
+              <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Automatically add hard-bounced addresses to the suppression list.</small>
+            </div>
+            <button class="btn btn-primary" :disabled="wsSettingsSaving" @click="saveWorkspaceSettings">
+              {{ wsSettingsSaving ? 'Saving...' : 'Save Settings' }}
+            </button>
+          </template>
+        </div>
+
+        <!-- Domain Security -->
+        <div class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Domain Security</h4>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+            When strict domain mode is enabled, this workspace can only send from domains it has
+            added and ownership-verified. Disable it to send from any sender domain.
+          </p>
+          <div v-if="wsSettingsLoading" class="loading-page" style="padding: 24px 0;"><div class="spinner"></div></div>
+          <template v-else>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" v-model="wsSettings.require_verified_domain" />
+                <span>Require verified sender domain (strict mode)</span>
+              </label>
+            </div>
+            <button class="btn btn-primary" :disabled="wsSettingsSaving" @click="saveWorkspaceSettings">
+              {{ wsSettingsSaving ? 'Saving...' : 'Save' }}
+            </button>
+          </template>
+        </div>
+
+        <div class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Data Export / Import</h4>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            Export all workspace data (settings, templates, stylesheets, languages, contacts, contact lists, webhooks,
+            SMTP servers, domains, subscribers, subscriber lists, and suppressions) as a JSON file.
+          </p>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+            SMTP server passwords are not included in exports. Imported SMTP servers will be disabled until reconfigured.
+            Imported domains will require re-verification.
+          </p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-primary" :disabled="exporting" @click="exportWorkspaceData">
+              {{ exporting ? 'Exporting...' : 'Export Workspace Data' }}
+            </button>
+            <button class="btn btn-secondary" :disabled="importing" @click="triggerWorkspaceImport">
+              {{ importing ? 'Importing...' : 'Import Data' }}
+            </button>
+            <input ref="importFileRef" type="file" accept=".json" style="display: none" @change="handleWorkspaceImportFile" />
           </div>
+        </div>
+
+        <div v-if="isOwner" class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <h4 style="color: var(--danger-600); margin-bottom: 8px;">Danger Zone</h4>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+            Deleting this workspace will permanently remove all its resources. This cannot be undone.
+          </p>
+          <button class="btn btn-danger" @click="deleteWorkspace">Delete Workspace</button>
+        </div>
+      </div>
+
+      <!-- Data Management (GDPR) Tab — admin/owner only -->
+      <div v-if="activeTab === 'data' && isAdminOrOwner" class="card">
+        <div class="card-header"><span>Data Management (GDPR)</span></div>
+        <div class="card-body">
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
+            Manage this workspace's data for GDPR compliance. Delete specific contacts or purge old email logs.
+          </p>
+
+          <div>
+            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Delete Contact Data</h4>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+              Remove a specific contact by email (including suppression list and list memberships), or leave empty to delete all contacts in this workspace.
+            </p>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input v-model="gdprEmail" type="email" class="form-input" placeholder="email@example.com (or leave empty for all)" style="flex: 1" />
+              <button class="btn btn-danger" :disabled="deletingContacts" @click="deleteWorkspaceContacts">
+                {{ deletingContacts ? 'Deleting...' : 'Delete' }}
+              </button>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Delete Email Logs</h4>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+              Delete email logs and associated bounce records. Set days to 0 to delete all logs.
+            </p>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label class="form-label" style="margin: 0; white-space: nowrap">Older than</label>
+              <input v-model.number="gdprDays" type="number" class="form-input" min="0" style="width: 100px" />
+              <label class="form-label" style="margin: 0">days</label>
+              <button class="btn btn-danger" :disabled="deletingEmails" @click="deleteWorkspaceEmailLogs">
+                {{ deletingEmails ? 'Deleting...' : 'Delete Logs' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SSO Tab — owners only -->
+      <div v-if="activeTab === 'sso' && isOwner" class="card">
+        <div class="card-header">
+          <span>Single Sign-On (SSO)</span>
+          <button v-if="ssoConfig" class="btn btn-danger btn-sm" @click="removeSSO">Remove SSO</button>
+        </div>
+        <div class="card-body">
           <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
             Configure SSO to allow workspace members to authenticate using an OAuth provider.
           </p>
@@ -757,139 +717,8 @@ watch(activeTab, (value) => {
             </form>
           </template>
         </div>
-
-        <!-- Transfer Personal Data to Workspace -->
-        <div class="card-body" style="border-top: 1px solid var(--border-primary);">
-          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Transfer Personal Data to Workspace</h4>
-          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-            Move your personal resources into this workspace. Transferred data will no longer appear in your personal account.
-          </p>
-
-          <div style="margin-bottom: 16px;">
-            <label class="form-label" style="margin-bottom: 8px;">Select resources to transfer</label>
-            <div style="margin-bottom: 8px;">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-primary); padding: 6px 0;">
-                <input
-                  type="checkbox"
-                  :checked="selectedResources.length === availableResources.length"
-                  @change="selectAllResources"
-                />
-                Select All
-              </label>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px;">
-              <label
-                v-for="res in availableResources"
-                :key="res.key"
-                style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--text-secondary); padding: 6px 8px; border-radius: var(--radius-sm); transition: background var(--transition);"
-                :style="{ background: selectedResources.includes(res.key) ? 'var(--primary-50)' : 'transparent' }"
-              >
-                <input
-                  type="checkbox"
-                  :checked="selectedResources.includes(res.key)"
-                  @change="toggleResource(res.key)"
-                />
-                {{ res.label }}
-              </label>
-            </div>
-          </div>
-
-          <button
-            class="btn btn-primary"
-            :disabled="transferring || selectedResources.length === 0"
-            @click="transferData"
-          >
-            {{ transferring ? 'Transferring...' : `Transfer ${selectedResources.length} resource type(s)` }}
-          </button>
-
-          <!-- Transfer Results -->
-          <div v-if="transferResults" style="margin-top: 20px; border-top: 1px solid var(--border-primary); padding-top: 16px;">
-            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-              Transfer Complete — {{ transferTotal }} record(s) moved
-            </h4>
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Resource</th>
-                    <th>Records Transferred</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="r in transferResults" :key="r.resource">
-                    <td style="font-weight: 500; text-transform: capitalize;">{{ r.resource.replace(/_/g, ' ') }}</td>
-                    <td>
-                      <span v-if="r.count > 0" class="badge badge-primary">{{ r.count }}</span>
-                      <span v-else style="color: var(--text-muted);">0</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="card-body" style="border-top: 1px solid var(--border-primary);">
-          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Data Export / Import</h4>
-          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-            Export all workspace data (settings, templates, stylesheets, languages, contacts, contact lists, webhooks,
-            SMTP servers, domains, subscribers, subscriber lists, and suppressions) as a JSON file.
-          </p>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-            SMTP server passwords are not included in exports. Imported SMTP servers will be disabled until reconfigured.
-            Imported domains will require re-verification.
-          </p>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-primary" :disabled="exporting" @click="exportWorkspaceData">
-              {{ exporting ? 'Exporting...' : 'Export Workspace Data' }}
-            </button>
-            <button class="btn btn-secondary" :disabled="importing" @click="triggerWorkspaceImport">
-              {{ importing ? 'Importing...' : 'Import Data' }}
-            </button>
-            <input ref="importFileRef" type="file" accept=".json" style="display: none" @change="handleWorkspaceImportFile" />
-          </div>
-        </div>
-
-        <div v-if="isOwner" class="card-body" style="border-top: 1px solid var(--border-primary);">
-          <h4 style="color: var(--danger-600); margin-bottom: 8px;">Danger Zone</h4>
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
-            Deleting this workspace will permanently remove all its resources. This cannot be undone.
-          </p>
-          <button class="btn btn-danger" @click="deleteWorkspace">Delete Workspace</button>
-        </div>
       </div>
     </template>
-
-    <!-- Invite Modal -->
-    <div v-if="showInviteModal" class="modal-overlay" @click.self="showInviteModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Invite Member</h3>
-        </div>
-        <form @submit.prevent="inviteMember">
-          <div class="modal-body">
-            <div class="form-group">
-              <label class="form-label">Email Address</label>
-              <input v-model="inviteEmail" type="email" class="form-input" placeholder="user@example.com" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Role</label>
-              <select v-model="inviteRole" class="form-select">
-                <option value="admin">Admin</option>
-                <option value="editor">Editor</option>
-                <option value="viewer">Viewer</option>
-              </select>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="showInviteModal = false">Cancel</button>
-            <button type="submit" class="btn btn-primary" :disabled="inviting || !inviteEmail.trim()">
-              {{ inviting ? 'Sending...' : 'Send Invitation' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   </div>
 </template>
 

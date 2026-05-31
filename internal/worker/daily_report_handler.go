@@ -50,15 +50,15 @@ func NewDailyReportHandler(
 	}
 }
 
-// ProcessTask handles a daily report task for a single user.
+// ProcessTask handles a daily report task for a single workspace.
 func (h *DailyReportHandler) ProcessTask(_ context.Context, t *asynq.Task) error {
 	var payload jobs.DailyReportPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("daily report: invalid payload: %w", err)
 	}
 
-	userID := payload.UserID
-	logger.Info("daily report: processing", "user_id", userID)
+	workspaceID := payload.WorkspaceID
+	logger.Info("daily report: processing", "workspace_id", workspaceID)
 
 	// Yesterday's date range
 	now := time.Now().UTC()
@@ -67,9 +67,9 @@ func (h *DailyReportHandler) ProcessTask(_ context.Context, t *asynq.Task) error
 	to := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 0, time.UTC)
 
 	// Gather stats
-	breakdown, err := h.analyticsRepo.StatusBreakdown(userID, from, to)
+	breakdown, err := h.analyticsRepo.WorkspaceStatusBreakdown(workspaceID, from, to)
 	if err != nil {
-		logger.Error("daily report: failed to get stats", "user_id", userID, "error", err)
+		logger.Error("daily report: failed to get stats", "workspace_id", workspaceID, "error", err)
 		return err
 	}
 
@@ -89,7 +89,7 @@ func (h *DailyReportHandler) ProcessTask(_ context.Context, t *asynq.Task) error
 	// Count bounces for the period
 	var bounced int64
 	if h.bounceRepo != nil {
-		bounced, _ = h.bounceRepo.CountByUserAndDateRange(userID, from, to)
+		bounced, _ = h.bounceRepo.CountByWorkspaceAndDateRange(workspaceID, from, to)
 	}
 
 	var deliveryRate float64
@@ -108,11 +108,11 @@ func (h *DailyReportHandler) ProcessTask(_ context.Context, t *asynq.Task) error
 	}
 
 	subject := fmt.Sprintf("Daily Email Report — %s", yesterday.Format("Jan 2, 2006"))
-	if err := h.notifier.SendToUser(userID, subject, notification.TemplateDailyReport, data); err != nil {
-		logger.Error("daily report: failed to send", "user_id", userID, "error", err)
+	if err := h.notifier.SendToWorkspaceAdmins(workspaceID, subject, notification.TemplateDailyReport, data); err != nil {
+		logger.Error("daily report: failed to send", "workspace_id", workspaceID, "error", err)
 		return err
 	}
 
-	logger.Info("daily report: sent", "user_id", userID)
+	logger.Info("daily report: sent", "workspace_id", workspaceID)
 	return nil
 }

@@ -7,8 +7,8 @@ import type {
   WorkspaceInvitation,
   InviteMemberInput,
   WorkspaceRole,
-  TransferResponse,
   WorkspaceDataExport,
+  GDPRDeleteResult,
   Plan,
 } from './types'
 
@@ -73,16 +73,19 @@ export const workspaceApi = {
     return api.get<ApiResponse<Plan | null>>('/workspaces/current/plan')
   },
 
-  // Data Transfer
-  transferData(resources: string[]) {
-    return api.post<ApiResponse<TransferResponse>>('/workspaces/current/transfer', { resources })
-  },
-
   // Data Export/Import
   exportData() {
     return api.get<ApiResponse<WorkspaceDataExport>>('/workspaces/current/data/export')
   },
   importData(data: WorkspaceDataExport) {
     return api.post<ApiResponse<{ message: string; imported_count: number }>>('/workspaces/current/data/import', data)
+  },
+
+  // Data Management (GDPR)
+  deleteContacts(email?: string) {
+    return api.post<ApiResponse<GDPRDeleteResult>>('/workspaces/current/gdpr/delete-contacts', { email: email || '' })
+  },
+  deleteEmailLogs(olderThanDays: number) {
+    return api.post<ApiResponse<GDPRDeleteResult>>('/workspaces/current/gdpr/delete-email-logs', { older_than_days: olderThanDays })
   },
 }

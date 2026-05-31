@@ -29,6 +29,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return role === 'owner' || role === 'admin' || role === 'editor'
   })
 
+  // The user's auto-provisioned personal workspace (workspace-only migration).
+  const personalWorkspace = computed(() => workspaces.value.find((w) => w.is_personal) ?? null)
+  // True when the active workspace is the user's personal one — used to hide
+  // team-only affordances (Members, Plan & Billing).
+  const currentWorkspaceIsPersonal = computed(() => currentWorkspace.value?.is_personal ?? false)
+
   const contextLabel = computed(() => currentWorkspace.value?.name ?? 'Personal')
 
   function setWorkspace(wsId: number | null) {
@@ -44,9 +50,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       const res = await workspaceApi.list()
       workspaces.value = res.data.data ?? []
-      // If stored workspace no longer valid, clear it
-      if (currentWorkspaceId.value && !workspaces.value.find((w) => w.id === currentWorkspaceId.value)) {
-        setWorkspace(null)
+      const valid = currentWorkspaceId.value && workspaces.value.find((w) => w.id === currentWorkspaceId.value)
+      // After the workspace-only migration every user owns a personal workspace.
+      // Land there by default (instead of legacy header-less "personal mode") so
+      // the active context always maps to a real workspace.
+      if (!valid) {
+        setWorkspace(personalWorkspace.value?.id ?? null)
       }
     } catch {
       workspaces.value = []
@@ -67,6 +76,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     isWorkspaceContext,
     isWorkspaceAdmin,
     canEdit,
+    personalWorkspace,
+    currentWorkspaceIsPersonal,
     contextLabel,
     setWorkspace,
     fetchWorkspaces,

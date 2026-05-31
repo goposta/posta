@@ -29,43 +29,43 @@ import (
 
 const TypeDailyReport = "cron:daily-report"
 
-// DailyReportPayload is the Asynq task payload for a per-user daily report.
+// DailyReportPayload is the Asynq task payload for a per-workspace daily report.
 type DailyReportPayload struct {
-	UserID uint `json:"user_id"`
+	WorkspaceID uint `json:"workspace_id"`
 }
 
-// DailyReportJob is a daily report job that enqueues a report task for each user
-// that has daily_report enabled in their settings.
+// DailyReportJob enqueues a report task for each workspace. The processed report
+// is delivered to the workspace's owners and admins.
 type DailyReportJob struct {
-	userSettingRepo *repositories.UserSettingRepository
+	workspaceRepo *repositories.WorkspaceRepository
 }
 
-// dailyReportTask implements cron.Job for enqueueing a single user's report.
+// dailyReportTask implements cron.Job for enqueueing a single workspace's report.
 type dailyReportTask struct {
-	userID uint
+	workspaceID uint
 }
 
 func (t *dailyReportTask) Type() string { return TypeDailyReport }
-func (t *dailyReportTask) Payload() any { return DailyReportPayload{UserID: t.userID} }
+func (t *dailyReportTask) Payload() any { return DailyReportPayload{WorkspaceID: t.workspaceID} }
 
-func NewDailyReportJob(userSettingRepo *repositories.UserSettingRepository) *DailyReportJob {
-	return &DailyReportJob{userSettingRepo: userSettingRepo}
+func NewDailyReportJob(workspaceRepo *repositories.WorkspaceRepository) *DailyReportJob {
+	return &DailyReportJob{workspaceRepo: workspaceRepo}
 }
 
 func (j *DailyReportJob) Name() string     { return "daily-report" }
 func (j *DailyReportJob) Schedule() string { return "0 7 * * *" } // daily at 07:00 UTC
 
 func (j *DailyReportJob) Run(_ context.Context, client *asynq.Client) error {
-	users, err := j.userSettingRepo.FindUsersWithDailyReport()
+	workspaces, err := j.workspaceRepo.FindAll()
 	if err != nil {
-		logger.Error("daily report: failed to find users", "error", err)
+		logger.Error("daily report: failed to find workspaces", "error", err)
 		return err
 	}
 
 	enqueued := 0
-	for _, userID := range users {
-		if err := cron.EnqueueJob(client, &dailyReportTask{userID: userID}, asynq.Queue("low")); err != nil {
-			logger.Error("daily report: failed to enqueue", "user_id", userID, "error", err)
+	for _, ws := range workspaces {
+		if err := cron.EnqueueJob(client, &dailyReportTask{workspaceID: ws.ID}, asynq.Queue("low")); err != nil {
+			logger.Error("daily report: failed to enqueue", "workspace_id", ws.ID, "error", err)
 			continue
 		}
 		enqueued++
@@ -76,8 +76,8 @@ func (j *DailyReportJob) Run(_ context.Context, client *asynq.Client) error {
 }
 
 // NewDailyReportTask creates an Asynq task for processing a daily report.
-func NewDailyReportTask(userID uint, opts ...asynq.Option) (*asynq.Task, error) {
-	payload, err := json.Marshal(DailyReportPayload{UserID: userID})
+func NewDailyReportTask(workspaceID uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(DailyReportPayload{WorkspaceID: workspaceID})
 	if err != nil {
 		return nil, err
 	}

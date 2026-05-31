@@ -3,10 +3,10 @@ import type { ApiResponse, PaginatedResponse, Campaign, CampaignMessage, Campaig
 
 export const campaignsApi = {
   list(page = 0, size = 20, status?: string) {
-    return api.get<PaginatedResponse<Campaign>>('/users/me/campaigns', { params: { page, size, status } })
+    return api.get<PaginatedResponse<Campaign>>('/workspaces/current/campaigns', { params: { page, size, status } })
   },
   get(id: number) {
-    return api.get<ApiResponse<Campaign>>(`/users/me/campaigns/${id}`)
+    return api.get<ApiResponse<Campaign>>(`/workspaces/current/campaigns/${id}`)
   },
   create(data: {
     name: string
@@ -21,7 +21,7 @@ export const campaignsApi = {
     send_rate?: number
     scheduled_at?: string
   }) {
-    return api.post<ApiResponse<Campaign>>('/users/me/campaigns', data)
+    return api.post<ApiResponse<Campaign>>('/workspaces/current/campaigns', data)
   },
   update(id: number, data: Partial<{
     name: string
@@ -36,27 +36,27 @@ export const campaignsApi = {
     send_rate: number
     scheduled_at: string
   }>) {
-    return api.put<ApiResponse<Campaign>>(`/users/me/campaigns/${id}`, data)
+    return api.put<ApiResponse<Campaign>>(`/workspaces/current/campaigns/${id}`, data)
   },
   delete(id: number) {
-    return api.delete(`/users/me/campaigns/${id}`)
+    return api.delete(`/workspaces/current/campaigns/${id}`)
   },
   send(id: number) {
-    return api.post<ApiResponse<Campaign>>(`/users/me/campaigns/${id}/send`)
+    return api.post<ApiResponse<Campaign>>(`/workspaces/current/campaigns/${id}/send`)
   },
   pause(id: number) {
-    return api.post<ApiResponse<Campaign>>(`/users/me/campaigns/${id}/pause`)
+    return api.post<ApiResponse<Campaign>>(`/workspaces/current/campaigns/${id}/pause`)
   },
   resume(id: number) {
-    return api.post<ApiResponse<Campaign>>(`/users/me/campaigns/${id}/resume`)
+    return api.post<ApiResponse<Campaign>>(`/workspaces/current/campaigns/${id}/resume`)
   },
   cancel(id: number) {
-    return api.post<ApiResponse<Campaign>>(`/users/me/campaigns/${id}/cancel`)
+    return api.post<ApiResponse<Campaign>>(`/workspaces/current/campaigns/${id}/cancel`)
   },
   listMessages(id: number, page = 0, size = 20, status?: string) {
-    return api.get<PaginatedResponse<CampaignMessage>>(`/users/me/campaigns/${id}/messages`, { params: { page, size, status } })
+    return api.get<PaginatedResponse<CampaignMessage>>(`/workspaces/current/campaigns/${id}/messages`, { params: { page, size, status } })
   },
   analytics(id: number) {
-    return api.get<ApiResponse<CampaignAnalyticsData>>(`/users/me/campaigns/${id}/analytics`)
+    return api.get<ApiResponse<CampaignAnalyticsData>>(`/workspaces/current/campaigns/${id}/analytics`)
   },
 }

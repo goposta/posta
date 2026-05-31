@@ -127,9 +127,6 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 		return nil
 	}
 
-	// Pull list-scoped opt-outs once. Required for dynamic lists (where the
-	// filter rules can re-include a previously-unsubscribed subscriber on the
-	// next send) and a defense-in-depth check for static lists.
 	suppressed, sErr := p.listRepo.SuppressedSubscriberIDs(campaign.ListID)
 	if sErr != nil {
 		logger.Warn("campaign: failed to load list suppressions, proceeding without", "list_id", campaign.ListID, "error", sErr)

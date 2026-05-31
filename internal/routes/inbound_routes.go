@@ -26,8 +26,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// inboundWebhookRoutes returns public routes for the generic inbound-email webhook
-// and signed attachment downloads. Both are auth'd by opaque secret/token — no JWT.
+// Protected by opaque secret/token — no JWT.
 func (r *Router) inboundWebhookRoutes() []okapi.RouteDefinition {
 	inboundGroup := r.app.Group("/api/v1/inbound").WithTagInfo(okapi.GroupTag{
 		Name:        "Inbound",
@@ -54,17 +53,15 @@ func (r *Router) inboundWebhookRoutes() []okapi.RouteDefinition {
 	}
 }
 
-// inboundUserRoutes returns authenticated routes for browsing inbound email history.
-func (r *Router) inboundUserRoutes() []okapi.RouteDefinition {
-	userGroup := r.v1.Group("/users/me", r.mw.jwtAuth.Middleware, r.mw.optionalWorkspace).WithTagInfo(okapi.GroupTag{
+func (r *Router) inboundWorkspaceRoutes() []okapi.RouteDefinition {
+	userGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
 		Name:        "Inbound",
 		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events. Public ingest endpoints use opaque secrets; user endpoints use JWT.",
 	})
 	userGroup.WithBearerAuth()
 
-	// SSE endpoints use query-param auth because browsers cannot set custom
-	// Authorization headers on EventSource connections.
-	streamGroup := r.v1.Group("/users/me", r.mw.jwtQueryAuth.Middleware, r.mw.optionalWorkspace).WithTagInfo(okapi.GroupTag{
+	// SSE endpoints
+	streamGroup := r.v1.Group("/workspaces/current", r.mw.jwtQueryAuth.Middleware, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
 		Name:        "Inbound",
 		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events. Public ingest endpoints use opaque secrets; user endpoints use JWT.",
 	})

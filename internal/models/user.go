@@ -44,6 +44,10 @@ type User struct {
 	CreatedAt             time.Time  `json:"created_at"`
 	LastLoginAt           *time.Time `json:"last_login_at"`
 
+	PersonalWorkspaceID *uint      `json:"personal_workspace_id" gorm:"index"`
+	MigratedAt          *time.Time `json:"migrated_at"`
+	MigrationError      string     `json:"migration_error,omitempty" gorm:"type:text"`
+
 	Plan Plan `json:"-" gorm:"foreignKey:PlanID"`
 }
 

@@ -187,7 +187,6 @@ onMounted(() => {
       </div>
       <div class="api-docs-links">
         <a class="btn btn-secondary btn-sm" href="/docs" target="_blank" rel="noopener noreferrer">API Reference</a>
-        <a class="btn btn-secondary btn-sm" href="/swagger" target="_blank" rel="noopener noreferrer">OpenAPI (Swagger)</a>
       </div>
     </div>
 

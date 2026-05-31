@@ -680,19 +680,6 @@ export interface UserProfile extends User {
 }
 
 // User Data Export/Import
-export interface UserDataExport {
-  posta_version?: string
-  exported_at?: string
-  templates: TemplateExport[]
-  stylesheets: ExportStyleSheet[]
-  languages: ExportLanguage[]
-  contacts: ExportContact[]
-  contact_lists: ExportContactList[]
-  suppressions: ExportSuppression[]
-  webhooks: ExportWebhook[]
-  settings?: ExportUserSettings
-}
-
 export interface ExportStyleSheet {
   name: string
   css: string
@@ -813,7 +800,24 @@ export interface Workspace {
   description: string
   owner_id: number
   role: WorkspaceRole
+  is_personal: boolean
   created_at: string
+}
+
+// Operational settings that live on the workspace (not the user). Personal
+// notification preferences stay on UserSettings.
+export interface WorkspaceSettings {
+  id: number
+  workspace_id: number
+  timezone: string
+  default_sender_name: string
+  default_sender_email: string
+  webhook_retry_count: number
+  api_key_expiry_days: number
+  bounce_auto_suppress: boolean
+  require_verified_domain: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface WorkspaceInput {
@@ -845,17 +849,6 @@ export interface WorkspaceInvitation {
 export interface InviteMemberInput {
   email: string
   role: WorkspaceRole
-}
-
-export interface TransferResult {
-  resource: string
-  count: number
-}
-
-export interface TransferResponse {
-  message: string
-  results: TransferResult[]
-  total: number
 }
 
 // OAuth
