@@ -266,12 +266,13 @@ type ExportVersion struct {
 	Version       int                  `json:"version"`
 	SampleData    string               `json:"sample_data"`
 	IsActive      bool                 `json:"is_active"`
+	StyleSheet    *ExportStyleSheet    `json:"stylesheet,omitempty"`
 	Localizations []ExportLocalization `json:"localizations"`
 }
 
 type TemplateExport struct {
-	PostaVersion    string          `json:"posta_version"`
-	ExportedAt      string          `json:"exported_at"`
+	PostaVersion    string          `json:"posta_version,omitempty"`
+	ExportedAt      string          `json:"exported_at,omitempty"`
 	Name            string          `json:"name"`
 	Description     string          `json:"description"`
 	DefaultLanguage string          `json:"default_language"`
@@ -316,6 +317,7 @@ func (h *TemplateHandler) Export(c *okapi.Context, req *ExportTemplateRequest) e
 			Version:       v.Version,
 			SampleData:    v.SampleData,
 			IsActive:      isActive,
+			StyleSheet:    exportVersionStyleSheet(v.StyleSheet, true),
 			Localizations: exportLocs,
 		})
 	}
@@ -375,9 +377,10 @@ func (h *TemplateHandler) Import(c *okapi.Context, req *ImportTemplateRequest) e
 		}
 
 		v := &models.TemplateVersion{
-			TemplateID: tmpl.ID,
-			Version:    nextVersion,
-			SampleData: ev.SampleData,
+			TemplateID:   tmpl.ID,
+			Version:      nextVersion,
+			SampleData:   ev.SampleData,
+			StyleSheetID: findOrCreateStyleSheet(ev.StyleSheet, scope, h.stylesheetRepo),
 		}
 		if err := h.versionRepo.Create(v); err != nil {
 			return c.AbortInternalServerError(fmt.Sprintf("failed to create version %d", ev.Version))

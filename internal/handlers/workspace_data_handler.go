@@ -222,7 +222,7 @@ func (h *WorkspaceDataHandler) Import(c *okapi.Context, req *ImportWorkspaceData
 	var total int
 	total += importLanguages(data.Languages, userID, &wsID, h.languageRepo)
 	total += importStylesheets(data.Stylesheets, userID, &wsID, h.stylesheetRepo)
-	total += importTemplates(data.Templates, userID, &wsID, h.templateRepo, h.versionRepo, h.localizationRepo)
+	total += importTemplates(data.Templates, userID, &wsID, h.templateRepo, h.versionRepo, h.localizationRepo, h.stylesheetRepo)
 	total += importContacts(data.Contacts, userID, &wsID, h.db)
 	total += importContactLists(data.ContactLists, userID, &wsID, h.db)
 	total += importSuppressions(data.Suppressions, userID, &wsID, h.suppressionRepo)

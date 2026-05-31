@@ -172,6 +172,7 @@ export interface TemplateExportVersion {
   version: number
   sample_data: string
   is_active: boolean
+  stylesheet?: ExportStyleSheet | null
   localizations: TemplateExportLocalization[]
 }
 

@@ -28,7 +28,7 @@ const exportLimit = 10000
 
 type ExportStyleSheet struct {
 	Name string `json:"name"`
-	CSS  string `json:"css"`
+	CSS  string `json:"css,omitempty"`
 }
 
 type ExportLanguage struct {
@@ -147,6 +147,7 @@ func exportTemplates(
 				Version:       v.Version,
 				SampleData:    v.SampleData,
 				IsActive:      isActive,
+				StyleSheet:    exportVersionStyleSheet(v.StyleSheet, false),
 				Localizations: exportLocs,
 			})
 		}
@@ -160,6 +161,39 @@ func exportTemplates(
 		})
 	}
 	return result, nil
+}
+
+func exportVersionStyleSheet(ss *models.StyleSheet, includeCSS bool) *ExportStyleSheet {
+	if ss == nil {
+		return nil
+	}
+	es := &ExportStyleSheet{Name: ss.Name}
+	if includeCSS {
+		es.CSS = ss.CSS
+	}
+	return es
+}
+
+func findOrCreateStyleSheet(es *ExportStyleSheet, scope repositories.ResourceScope, repo *repositories.StyleSheetRepository) *uint {
+	if es == nil || es.Name == "" {
+		return nil
+	}
+	if existing, err := repo.FindByNameInScope(scope, es.Name); err == nil && existing != nil {
+		return &existing.ID
+	}
+	if es.CSS == "" {
+		return nil
+	}
+	ss := &models.StyleSheet{
+		UserID:      scope.UserID,
+		WorkspaceID: scope.WorkspaceID,
+		Name:        es.Name,
+		CSS:         es.CSS,
+	}
+	if err := repo.Create(ss); err != nil {
+		return nil
+	}
+	return &ss.ID
 }
 
 func exportStylesheets(stylesheets []models.StyleSheet) []ExportStyleSheet {
@@ -275,7 +309,9 @@ func importTemplates(
 	templateRepo *repositories.TemplateRepository,
 	versionRepo *repositories.TemplateVersionRepository,
 	localizationRepo *repositories.TemplateLocalizationRepository,
+	stylesheetRepo *repositories.StyleSheetRepository,
 ) int {
+	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	var count int
 	for _, tmplData := range data {
 		if tmplData.Name == "" {
@@ -306,9 +342,10 @@ func importTemplates(
 				continue
 			}
 			v := &models.TemplateVersion{
-				TemplateID: tmpl.ID,
-				Version:    nextVersion,
-				SampleData: ev.SampleData,
+				TemplateID:   tmpl.ID,
+				Version:      nextVersion,
+				SampleData:   ev.SampleData,
+				StyleSheetID: findOrCreateStyleSheet(ev.StyleSheet, scope, stylesheetRepo),
 			}
 			if err := versionRepo.Create(v); err != nil {
 				continue

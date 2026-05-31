@@ -80,6 +80,14 @@ func (r *StyleSheetRepository) FindByUserID(userID uint, limit, offset int) ([]m
 	return sheets, total, nil
 }
 
+func (r *StyleSheetRepository) FindByNameInScope(scope ResourceScope, name string) (*models.StyleSheet, error) {
+	var ss models.StyleSheet
+	if err := ApplyScope(r.db, scope).Where("name = ?", name).First(&ss).Error; err != nil {
+		return nil, err
+	}
+	return &ss, nil
+}
+
 func (r *StyleSheetRepository) FindByScope(scope ResourceScope, limit, offset int) ([]models.StyleSheet, int64, error) {
 	var items []models.StyleSheet
 	var total int64
