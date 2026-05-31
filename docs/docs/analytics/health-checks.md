@@ -11,7 +11,7 @@ Posta provides health check endpoints for container orchestration and load balan
 ## Liveness Probe
 
 ```
-GET /api/v1/healthz
+GET /healthz
 ```
 
 Returns `200 OK` if the server is running:
@@ -26,7 +26,7 @@ Returns `200 OK` if the server is running:
 ## Readiness Probe
 
 ```
-GET /api/v1/readyz
+GET /readyz
 ```
 
 Checks database and Redis connectivity:
@@ -62,14 +62,14 @@ GET /api/v1/info
 ```yaml
 livenessProbe:
   httpGet:
-    path: /api/v1/healthz
+    path: /healthz
     port: 9000
   initialDelaySeconds: 5
   periodSeconds: 10
 
 readinessProbe:
   httpGet:
-    path: /api/v1/readyz
+    path: /readyz
     port: 9000
   initialDelaySeconds: 10
   periodSeconds: 15
@@ -79,7 +79,7 @@ readinessProbe:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:9000/api/v1/healthz"]
+  test: ["CMD", "curl", "-f", "http://localhost:9000/healthz"]
   interval: 30s
   timeout: 10s
   retries: 3

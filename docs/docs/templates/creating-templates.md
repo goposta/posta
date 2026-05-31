@@ -9,14 +9,15 @@ description: Create and manage email templates
 ## Create a Template
 
 ```
-POST /api/v1/users/me/templates
+POST /api/v1/workspaces/current/templates
 ```
 
-**Authentication:** JWT token
+**Authentication:** JWT token + `X-Posta-Workspace-Id` header
 
 ```bash
-curl -X POST http://localhost:9000/api/v1/users/me/templates \
+curl -X POST http://localhost:9000/api/v1/workspaces/current/templates \
   -H "Authorization: Bearer <jwt-token>" \
+  -H "X-Posta-Workspace-Id: 1" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "welcome",
@@ -51,13 +52,13 @@ Template names must be unique. A `409 Conflict` is returned if the name already 
 ## List Templates
 
 ```
-GET /api/v1/users/me/templates?page=1&size=20
+GET /api/v1/workspaces/current/templates?page=1&size=20
 ```
 
 ## Update a Template
 
 ```
-PUT /api/v1/users/me/templates/{id}
+PUT /api/v1/workspaces/current/templates/{id}
 ```
 
 ```json
@@ -71,7 +72,7 @@ PUT /api/v1/users/me/templates/{id}
 ## Delete a Template
 
 ```
-DELETE /api/v1/users/me/templates/{id}
+DELETE /api/v1/workspaces/current/templates/{id}
 ```
 
 Returns `204 No Content`.

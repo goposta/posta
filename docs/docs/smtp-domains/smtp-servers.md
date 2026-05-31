@@ -14,18 +14,24 @@ For the full request/response schema, see the interactive [API Reference](https:
 
 ## Adding an SMTP Server
 
-Add a server from the dashboard or via `POST /api/v1/users/me/smtp-servers`. Example:
+```
+POST /api/v1/workspaces/current/smtp-servers
+```
 
-```json
-{
-  "host": "smtp.gmail.com",
-  "port": 587,
-  "username": "your-email@gmail.com",
-  "password": "your-app-password",
-  "encryption": "starttls",
-  "max_retries": 3,
-  "allowed_emails": ["noreply@yourdomain.com", "alerts@yourdomain.com"]
-}
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/smtp-servers \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "username": "your-email@gmail.com",
+    "password": "your-app-password",
+    "encryption": "starttls",
+    "max_retries": 3,
+    "allowed_emails": ["noreply@yourdomain.com", "alerts@yourdomain.com"]
+  }'
 ```
 
 ### Encryption Options
@@ -38,7 +44,7 @@ Add a server from the dashboard or via `POST /api/v1/users/me/smtp-servers`. Exa
 
 ## Testing Connections
 
-Verify SMTP credentials and connectivity before sending via `POST /api/v1/users/me/smtp-servers/{id}/test`. This validates the hostname, port, credentials, and encryption.
+Verify SMTP credentials and connectivity before sending via `POST /api/v1/workspaces/current/smtp-servers/{id}/test`. This validates the hostname, port, credentials, and encryption.
 
 ## Sender Restrictions
 

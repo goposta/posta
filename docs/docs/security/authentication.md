@@ -97,7 +97,7 @@ GET /api/v1/auth/oauth/{provider}/authorize
 Redirects the user to the provider's authorization page. After authentication, the provider redirects back to:
 
 ```
-GET /api/v1/auth/oauth/callback?code=...&state=...
+GET /api/v1/auth/oauth/{provider}/callback?code=...&state=...
 ```
 
 Posta exchanges the authorization code for user info and issues a JWT token.
@@ -121,8 +121,8 @@ Authorization: Bearer posta_abc123...
 
 These endpoints do not require authentication:
 
-- `GET /api/v1/healthz` — Liveness probe
-- `GET /api/v1/readyz` — Readiness probe
+- `GET /healthz` — Liveness probe
+- `GET /readyz` — Readiness probe
 - `GET /api/v1/info` — Application info
 - `POST /api/v1/auth/login` — Login
 - `POST /api/v1/auth/register` — Register

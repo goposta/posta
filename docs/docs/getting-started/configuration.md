@@ -13,7 +13,7 @@ Posta is configured via environment variables. All variables are prefixed with `
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `POSTA_PORT` | `9000` | HTTP server port |
-| `POSTA_ENV` | `production` | Environment name |
+| `POSTA_ENV` | `dev` | Environment name |
 | `POSTA_DEV_MODE` | `false` | Development mode — stores emails without sending |
 | `POSTA_WEB_DIR` | `web/dist` | Path to the dashboard frontend build |
 | `POSTA_WEB_URL` | — | Public base URL of the Posta instance |
@@ -66,7 +66,7 @@ Posta is configured via environment variables. All variables are prefixed with `
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `POSTA_EMBEDDED_WORKER` | `true` | Run the worker within the API server process |
+| `POSTA_EMBEDDED_WORKER` | `false` | Run the worker within the API server process |
 | `POSTA_WORKER_CONCURRENCY` | `10` | Number of worker goroutines |
 | `POSTA_WORKER_MAX_RETRIES` | `5` | Maximum retry attempts per email |
 

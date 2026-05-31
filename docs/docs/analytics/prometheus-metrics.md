@@ -6,7 +6,11 @@ description: Production monitoring with Prometheus
 
 # Prometheus Metrics
 
-Posta exposes Prometheus-compatible metrics for production monitoring when enabled.
+Posta exposes Prometheus-compatible metrics for production monitoring when enabled. The metrics endpoint is served at the root path — not under `/api/v1`.
+
+```
+GET /metrics
+```
 
 ## Enabling Metrics
 

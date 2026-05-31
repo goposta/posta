@@ -47,7 +47,12 @@ curl http://localhost:9000/api/v1/emails/550e8400-e29b-41d4-a716-446655440000/st
 
 ## Retry Failed Emails
 
-Failed emails can be retried from the dashboard via `POST /api/v1/users/me/emails/{emailId}/retry`.
+Failed emails can be retried via `POST /api/v1/emails/{id}/retry` (API-key auth).
+
+```bash
+curl -X POST http://localhost:9000/api/v1/emails/550e8400-e29b-41d4-a716-446655440000/retry \
+  -H "Authorization: Bearer your-api-key"
+```
 
 :::note
 Only emails with `failed` status can be retried. Retry respects the configured maximum retry limit.

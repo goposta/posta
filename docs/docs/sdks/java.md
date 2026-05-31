@@ -23,7 +23,7 @@ Official Java client for Posta.
 <dependency>
     <groupId>com.github.goposta</groupId>
     <artifactId>posta-java</artifactId>
-    <version>v0.1.0</version>
+    <version>v1.1.0</version>
 </dependency>
 ```
 
@@ -35,7 +35,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.goposta:posta-java:v0.1.0'
+    implementation 'com.github.goposta:posta-java:v1.1.0'
 }
 ```
 
@@ -44,9 +44,9 @@ dependencies {
 ## Quick Start
 
 ```java
-import com.goposta.posta.PostaClient;
-import com.goposta.posta.SendEmailRequest;
-import com.goposta.posta.SendResponse;
+import com.github.goposta.posta.PostaClient;
+import com.github.goposta.posta.SendEmailRequest;
+import com.github.goposta.posta.SendResponse;
 
 PostaClient client = new PostaClient("https://posta.example.com", "your-api-key");
 
@@ -77,8 +77,8 @@ BatchResponse response = client.sendBatch(new BatchRequest()
     .template("newsletter")
     .from("news@example.com")
     .recipients(List.of(
-        new BatchRecipient("user1@example.com").templateData(Map.of("name", "Bob")),
-        new BatchRecipient("user2@example.com").language("fr").templateData(Map.of("name", "Carol"))
+        new BatchRecipient().email("user1@example.com").templateData(Map.of("name", "Bob")),
+        new BatchRecipient().email("user2@example.com").language("fr").templateData(Map.of("name", "Carol"))
     )));
 
 System.out.printf("Sent: %d, Failed: %d%n", response.getSent(), response.getFailed());
@@ -94,14 +94,12 @@ System.out.printf("Status: %s%n", status.getStatus());
 ## Error Handling
 
 ```java
-import com.goposta.posta.PostaException;
+import com.github.goposta.posta.PostaException;
 
 try {
     client.getEmailStatus("invalid-uuid");
 } catch (PostaException e) {
     System.out.printf("Status: %d%n", e.getStatusCode());
-    if (e.getErrorInfo() != null) {
-        System.out.printf("Message: %s%n", e.getErrorInfo().getMessage());
-    }
+    System.out.printf("Message: %s%n", e.getMessage());
 }
 ```

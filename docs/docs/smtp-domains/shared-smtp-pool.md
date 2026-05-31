@@ -20,15 +20,19 @@ POST /api/v1/admin/servers
 
 ```json
 {
+  "name": "Company Outbound",
   "host": "smtp.company.com",
   "port": 587,
   "username": "posta@company.com",
   "password": "server-password",
   "encryption": "starttls",
   "max_retries": 5,
-  "allowed_domains": ["company.com", "company.org"]
+  "allowed_domains": ["company.com", "company.org"],
+  "security_mode": "permissive"
 }
 ```
+
+`name` is required. `security_mode` accepts `permissive` (default) or `strict`. In strict mode, the sender must have verified ownership of the sending domain before the shared server is available to them.
 
 ### List Shared Servers
 

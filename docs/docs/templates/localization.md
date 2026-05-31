@@ -10,42 +10,30 @@ Add localized versions of templates for different languages. Localizations are a
 
 ## Managing Languages
 
-Before adding localizations, create the languages you need:
-
-### Create a Language
-
-```
-POST /api/v1/users/me/languages
-```
-
-```json
-{
-  "code": "fr",
-  "name": "French"
-}
-```
-
-### List Languages
-
-```
-GET /api/v1/users/me/languages
-```
+Before adding localizations, create the languages you need. Languages are a
+workspace-level resource — see [Languages](/docs/templates/languages) for the
+full CRUD reference. Each localization references a language by its `code`
+(for example `fr`).
 
 ## Adding Localizations
 
 ### Add a Localization to a Version
 
 ```
-POST /api/v1/users/me/templates/{templateId}/versions/{versionId}/localizations
+POST /api/v1/workspaces/current/templates/{templateId}/versions/{versionId}/localizations
 ```
 
 ```json
 {
-  "language_id": "language-uuid",
-  "html": "<h1>Bienvenue, {{name}} !</h1><p>Merci de nous avoir rejoints.</p>",
-  "text": "Bienvenue, {{name}} ! Merci de nous avoir rejoints."
+  "language": "fr",
+  "subject_template": "Bienvenue, {{name}} !",
+  "html_template": "<h1>Bienvenue, {{name}} !</h1><p>Merci de nous avoir rejoints.</p>",
+  "text_template": "Bienvenue, {{name}} ! Merci de nous avoir rejoints."
 }
 ```
+
+`language` and `subject_template` are required. `html_template` and
+`text_template` are optional, as is `builder_json` (the visual builder layout).
 
 Response (`201`):
 
@@ -53,10 +41,11 @@ Response (`201`):
 {
   "success": true,
   "data": {
-    "id": "localization-uuid",
-    "language_id": "language-uuid",
-    "html": "...",
-    "text": "..."
+    "id": 1,
+    "language": "fr",
+    "subject_template": "Bienvenue, {{name}} !",
+    "html_template": "...",
+    "text_template": "..."
   }
 }
 ```
@@ -68,26 +57,27 @@ A `409 Conflict` is returned if the language already exists for this version.
 ### List Localizations
 
 ```
-GET /api/v1/users/me/templates/{templateId}/versions/{versionId}/localizations
+GET /api/v1/workspaces/current/templates/{templateId}/versions/{versionId}/localizations
 ```
 
 ### Update a Localization
 
 ```
-PUT /api/v1/users/me/localizations/{localizationId}
+PUT /api/v1/workspaces/current/localizations/{localizationId}
 ```
 
 ```json
 {
-  "html": "<h1>Updated French content</h1>",
-  "text": "Updated French content"
+  "subject_template": "Bienvenue !",
+  "html_template": "<h1>Updated French content</h1>",
+  "text_template": "Updated French content"
 }
 ```
 
 ### Delete a Localization
 
 ```
-DELETE /api/v1/users/me/localizations/{localizationId}
+DELETE /api/v1/workspaces/current/localizations/{localizationId}
 ```
 
 ## Sending with Language
@@ -128,12 +118,12 @@ curl -X POST http://localhost:9000/api/v1/emails/send-template \
 ## Preview a Localized Version
 
 ```
-POST /api/v1/users/me/templates/{templateId}/versions/{versionId}/preview
+POST /api/v1/workspaces/current/templates/{templateId}/versions/{versionId}/preview
 ```
 
 ```json
 {
-  "language_id": "language-uuid",
+  "language": "fr",
   "template_data": {"name": "Marie"}
 }
 ```

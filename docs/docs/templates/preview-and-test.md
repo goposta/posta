@@ -13,7 +13,7 @@ Preview rendered templates and send test emails before going live.
 Render a template with sample data without sending:
 
 ```
-POST /api/v1/users/me/templates/preview
+POST /api/v1/workspaces/current/templates/preview
 ```
 
 ```json
@@ -45,7 +45,7 @@ Response:
 Send a test email using a specific template:
 
 ```
-POST /api/v1/users/me/templates/{templateId}/send-test
+POST /api/v1/workspaces/current/templates/{templateId}/send-test
 ```
 
 ```json

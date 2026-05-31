@@ -15,7 +15,7 @@ For the full request/response schema, see the interactive [API Reference](https:
 ## Sending a Campaign
 
 ```
-POST /api/v1/users/me/campaigns/{id}/send
+POST /api/v1/workspaces/current/campaigns/{id}/send
 ```
 
 No request body required. The campaign transitions from `draft` to:
@@ -24,6 +24,12 @@ No request body required. The campaign transitions from `draft` to:
 - **`scheduled`** — if `scheduled_at` is in the future
 
 Posta processes the subscriber list and queues individual emails for delivery. Each subscriber in the list receives one email.
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/campaigns/42/send \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
+```
 
 ### Send Rate Control
 
@@ -36,34 +42,58 @@ When `send_at_local_time` is `true` and `scheduled_at` is set, Posta delivers th
 ## Pausing a Campaign
 
 ```
-POST /api/v1/users/me/campaigns/{id}/pause
+POST /api/v1/workspaces/current/campaigns/{id}/pause
 ```
 
 Transitions a `sending` campaign to `paused`. Emails already queued will still be delivered, but no new emails are queued.
 
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/campaigns/42/pause \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
+```
+
 ## Resuming a Campaign
 
 ```
-POST /api/v1/users/me/campaigns/{id}/resume
+POST /api/v1/workspaces/current/campaigns/{id}/resume
 ```
 
 Transitions a `paused` campaign back to `sending`. Remaining subscribers will be processed.
 
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/campaigns/42/resume \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
+```
+
 ## Cancelling a Campaign
 
 ```
-POST /api/v1/users/me/campaigns/{id}/cancel
+POST /api/v1/workspaces/current/campaigns/{id}/cancel
 ```
 
 Permanently cancels a campaign. Works from `sending`, `paused`, or `scheduled` states. Cancelled campaigns cannot be resumed.
 
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/campaigns/42/cancel \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
+```
+
 ## Duplicating a Campaign
 
 ```
-POST /api/v1/users/me/campaigns/{id}/duplicate
+POST /api/v1/workspaces/current/campaigns/{id}/duplicate
 ```
 
 Creates a copy of the campaign with `(copy)` appended to the name. The new campaign starts in `draft` status with all settings preserved.
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/campaigns/42/duplicate \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
+```
 
 ## Status Transitions
 

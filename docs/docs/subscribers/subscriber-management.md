@@ -12,10 +12,14 @@ Subscribers represent people who receive campaign emails. Each subscriber has an
 For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
 :::
 
+:::note
+All subscriber management endpoints are workspace-scoped. Requests require a JWT bearer token and the `X-Posta-Workspace-Id` header.
+:::
+
 ## Creating a Subscriber
 
 ```
-POST /api/v1/users/me/subscribers
+POST /api/v1/workspaces/current/subscribers
 ```
 
 ```json
@@ -46,7 +50,7 @@ Only `email` is required. Status defaults to `subscribed`.
 ## Listing Subscribers
 
 ```
-GET /api/v1/users/me/subscribers?page=0&size=20
+GET /api/v1/workspaces/current/subscribers?page=0&size=20
 ```
 
 Optional query parameters:
@@ -61,13 +65,13 @@ Optional query parameters:
 ## Getting a Subscriber
 
 ```
-GET /api/v1/users/me/subscribers/{id}
+GET /api/v1/workspaces/current/subscribers/{id}
 ```
 
 ## Updating a Subscriber
 
 ```
-PUT /api/v1/users/me/subscribers/{id}
+PUT /api/v1/workspaces/current/subscribers/{id}
 ```
 
 ```json
@@ -85,7 +89,7 @@ All fields are optional. When status changes to `unsubscribed`, the `unsubscribe
 ## Deleting a Subscriber
 
 ```
-DELETE /api/v1/users/me/subscribers/{id}
+DELETE /api/v1/workspaces/current/subscribers/{id}
 ```
 
 ## Custom Fields

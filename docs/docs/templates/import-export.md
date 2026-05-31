@@ -11,7 +11,7 @@ Export templates as JSON and import them into other Posta instances. This is use
 ## Export a Template
 
 ```
-GET /api/v1/users/me/templates/{templateId}/export
+GET /api/v1/workspaces/current/templates/{templateId}/export
 ```
 
 Returns the complete template including all versions and localizations as a JSON file.
@@ -42,14 +42,15 @@ Returns the complete template including all versions and localizations as a JSON
 ## Import a Template
 
 ```
-POST /api/v1/users/me/templates/import
+POST /api/v1/workspaces/current/templates/import
 ```
 
 Send the exported JSON as the request body. Returns `201 Created` with the new template.
 
 ```bash
-curl -X POST http://localhost:9000/api/v1/users/me/templates/import \
+curl -X POST http://localhost:9000/api/v1/workspaces/current/templates/import \
   -H "Authorization: Bearer <jwt-token>" \
+  -H "X-Posta-Workspace-Id: 1" \
   -H "Content-Type: application/json" \
   -d @template-export.json
 ```

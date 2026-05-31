@@ -6,14 +6,14 @@ description: Delete contact and email data for GDPR compliance
 
 # Data Deletion
 
-Posta provides endpoints for GDPR-compliant data deletion.
+Posta provides endpoints for GDPR-compliant data deletion scoped to the active workspace.
 
 ## Delete Contact Data
 
-Remove all data associated with a specific email address, or all contacts:
+Remove all data associated with a specific email address, or all contacts in the workspace:
 
 ```
-POST /api/v1/users/me/gdpr/delete-contacts
+POST /api/v1/workspaces/current/gdpr/delete-contacts
 ```
 
 ### Delete a Specific Contact
@@ -24,12 +24,29 @@ POST /api/v1/users/me/gdpr/delete-contacts
 }
 ```
 
-### Delete All Contacts
+Response:
 
 ```json
 {
-  "email": null
+  "success": true,
+  "data": {
+    "deleted": 1,
+    "message": "Contact user@example.com and associated data deleted"
+  }
 }
+```
+
+This removes the contact from:
+- The contacts list
+- All contact list memberships
+- The suppression list
+
+### Delete All Contacts
+
+Omit the `email` field (or pass an empty string) to delete all contacts in the workspace:
+
+```json
+{}
 ```
 
 Response:
@@ -38,22 +55,26 @@ Response:
 {
   "success": true,
   "data": {
-    "deleted_count": 1
+    "deleted": 500,
+    "message": "All contacts deleted"
   }
 }
 ```
 
-This removes the contact from:
-- The contacts list
-- All contact lists
-- The suppression list
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/gdpr/delete-contacts \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com"}'
+```
 
 ## Delete Email Logs
 
-Remove email logs older than a specified number of days:
+Remove email logs scoped to the active workspace, optionally filtered by age:
 
 ```
-POST /api/v1/users/me/gdpr/delete-email-logs
+POST /api/v1/workspaces/current/gdpr/delete-email-logs
 ```
 
 ### Delete Logs Older Than 30 Days
@@ -64,7 +85,21 @@ POST /api/v1/users/me/gdpr/delete-email-logs
 }
 ```
 
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "deleted": 1500,
+    "message": "Email logs older than 30 days deleted"
+  }
+}
+```
+
 ### Delete All Email Logs
+
+Pass `0` to delete all email logs regardless of age:
 
 ```json
 {
@@ -78,9 +113,22 @@ Response:
 {
   "success": true,
   "data": {
-    "deleted_count": 1500
+    "deleted": 8200,
+    "message": "All email logs deleted"
   }
 }
+```
+
+:::note
+Deleting email logs also removes associated bounce records.
+:::
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/gdpr/delete-email-logs \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"older_than_days": 30}'
 ```
 
 ## Automatic Retention

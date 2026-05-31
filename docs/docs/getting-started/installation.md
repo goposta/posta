@@ -216,8 +216,8 @@ Once running, verify the deployment:
 
 ```bash
 # Liveness probe
-curl http://localhost:9000/api/v1/healthz
+curl http://localhost:9000/healthz
 
 # Readiness probe (checks DB + Redis)
-curl http://localhost:9000/api/v1/readyz
+curl http://localhost:9000/readyz
 ```

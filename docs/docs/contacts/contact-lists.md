@@ -1,83 +1,31 @@
 ---
 sidebar_position: 2
 title: Contact Lists
-description: Organize contacts into lists
+description: Why contacts are not manually grouped, and where to manage mailing lists
 ---
 
 # Contact Lists
 
-Organize your contacts into reusable mailing lists.
+Posta does **not** provide a "contact list" resource. [Contacts](/docs/contacts/contact-management) are auto-tracked recipients — they are created and updated by the system as you send mail, and are read-only. You cannot manually create lists of contacts or add/remove members.
 
-## Create a List
+If you are looking to group recipients, you almost certainly want one of the dedicated resources below.
 
-```
-POST /api/v1/users/me/contact-lists
-```
+## Reusable mailing lists → Subscriber Lists
 
-```json
-{
-  "name": "Newsletter Subscribers",
-  "description": "Users who opted in to the monthly newsletter"
-}
-```
+To build audiences you can target with campaigns and let people subscribe to or unsubscribe from, use **Subscriber Lists**. Subscribers are first-class records (with custom attributes and subscription state), and lists can be static or dynamic (segment-based).
 
-## List All Contact Lists
+See [Subscriber Lists](/docs/subscribers/subscriber-lists) and [Subscriber Management](/docs/subscribers/subscriber-management).
 
-```
-GET /api/v1/users/me/contact-lists?page=1&size=20
-```
+## Opt-out groups → Unsubscribe Lists
 
-Response includes `member_count` for each list.
+To give recipients a granular way to opt out of one category of mail (for example "Product updates") without blocking everything, use **Unsubscribe Lists**. A send references an unsubscribe list so Posta can mint a one-click link that suppresses the recipient on that list only.
 
-## Update a List
+See [Unsubscribe Lists](/docs/contacts/unsubscribe-lists).
 
-```
-PUT /api/v1/users/me/contact-lists/{id}
-```
+## Blocking individual addresses → Suppression List
 
-```json
-{
-  "name": "Weekly Newsletter",
-  "description": "Updated description"
-}
-```
+To stop sending to a specific address (globally or for one unsubscribe list), use the [Suppression List](/docs/contacts/suppression-list). Hard bounces and complaints add addresses here automatically.
 
-## Delete a List
-
-```
-DELETE /api/v1/users/me/contact-lists/{id}
-```
-
-## Managing Members
-
-### Add a Member
-
-```
-POST /api/v1/users/me/contact-lists/{listId}/members
-```
-
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-Returns `409 Conflict` if the email is already a member.
-
-### Remove a Member
-
-```
-DELETE /api/v1/users/me/contact-lists/{listId}/members
-```
-
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-### List Members
-
-```
-GET /api/v1/users/me/contact-lists/{listId}/members?page=1&size=20
-```
+:::note
+There is no `contact-lists` API. Contacts are tracked automatically; grouping and opt-out are handled by Subscriber Lists and Unsubscribe Lists.
+:::

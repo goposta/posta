@@ -23,6 +23,7 @@ const sidebars: SidebarsConfig = {
         'email-sending/scheduled-email',
         'email-sending/attachments',
         'email-sending/email-status',
+        'email-sending/email-verification',
       ],
     },
     {
@@ -33,6 +34,7 @@ const sidebars: SidebarsConfig = {
         'templates/creating-templates',
         'templates/versioning',
         'templates/localization',
+        'templates/languages',
         'templates/stylesheets',
         'templates/preview-and-test',
         'templates/import-export',
@@ -85,6 +87,15 @@ const sidebars: SidebarsConfig = {
         'contacts/contact-lists',
         'contacts/bounce-handling',
         'contacts/suppression-list',
+        'contacts/unsubscribe-lists',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Tracking & Engagement',
+      items: [
+        'tracking/overview',
+        'tracking/unsubscribe',
       ],
     },
     {
@@ -95,6 +106,15 @@ const sidebars: SidebarsConfig = {
         'webhooks/event-types',
         'webhooks/delivery-tracking',
         'webhooks/audit-log',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Inbound Email',
+      items: [
+        'inbound/overview',
+        'inbound/receiving',
+        'inbound/managing',
       ],
     },
     {
@@ -112,6 +132,8 @@ const sidebars: SidebarsConfig = {
       label: 'Workspaces',
       items: [
         'workspaces/overview',
+        'workspaces/members-and-invitations',
+        'workspaces/settings',
       ],
     },
     {

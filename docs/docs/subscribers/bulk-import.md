@@ -12,10 +12,14 @@ Import subscribers in bulk using JSON or CSV formats.
 For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
 :::
 
+:::note
+Bulk import endpoints are workspace-scoped. Requests require a JWT bearer token and the `X-Posta-Workspace-Id` header.
+:::
+
 ## JSON Import
 
 ```
-POST /api/v1/users/me/subscribers/import/json
+POST /api/v1/workspaces/current/subscribers/import/json
 ```
 
 ```json
@@ -57,7 +61,7 @@ Duplicate emails (already existing) are skipped, not updated.
 ## CSV Import
 
 ```
-POST /api/v1/users/me/subscribers/import/csv
+POST /api/v1/workspaces/current/subscribers/import/csv
 Content-Type: multipart/form-data
 ```
 
@@ -81,9 +85,7 @@ Map CSV columns to subscriber fields using a JSON object where keys are column i
   "0": "email",
   "1": "name",
   "2": "custom_fields.company",
-  "3": "custom_fields.role",
-  "4": "timezone",
-  "5": "language"
+  "3": "custom_fields.role"
 }
 ```
 
@@ -92,8 +94,9 @@ Custom fields use dot notation: `custom_fields.field_name`.
 ### Example
 
 ```bash
-curl -X POST http://localhost:9000/api/v1/users/me/subscribers/import/csv \
-  -H "Authorization: Bearer <your-token>" \
+curl -X POST http://localhost:9000/api/v1/workspaces/current/subscribers/import/csv \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
   -F "file=@subscribers.csv" \
   -F 'column_mapping={"0":"email","1":"name","2":"custom_fields.company"}'
 ```

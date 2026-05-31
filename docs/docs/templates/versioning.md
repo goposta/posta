@@ -11,13 +11,13 @@ Each template can have multiple versions. Only one version is active at a time â
 ## List Versions
 
 ```
-GET /api/v1/users/me/templates/{templateId}/versions
+GET /api/v1/workspaces/current/templates/{templateId}/versions
 ```
 
 ## Create a New Version
 
 ```
-POST /api/v1/users/me/templates/{templateId}/versions
+POST /api/v1/workspaces/current/templates/{templateId}/versions
 ```
 
 ```json
@@ -45,7 +45,7 @@ Response (`201`):
 ## Update a Version
 
 ```
-PUT /api/v1/users/me/templates/{templateId}/versions/{versionId}
+PUT /api/v1/workspaces/current/templates/{templateId}/versions/{versionId}
 ```
 
 ```json
@@ -61,7 +61,7 @@ PUT /api/v1/users/me/templates/{templateId}/versions/{versionId}
 Switch the active version used for sending:
 
 ```
-POST /api/v1/users/me/templates/{templateId}/activate/{versionId}
+POST /api/v1/workspaces/current/templates/{templateId}/activate/{versionId}
 ```
 
 The response includes the updated template with the new `active_version_id`.
@@ -69,7 +69,7 @@ The response includes the updated template with the new `active_version_id`.
 ## Delete a Version
 
 ```
-DELETE /api/v1/users/me/templates/{templateId}/versions/{versionId}
+DELETE /api/v1/workspaces/current/templates/{templateId}/versions/{versionId}
 ```
 
 Returns `204 No Content`.
