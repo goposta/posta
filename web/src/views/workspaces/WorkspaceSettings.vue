@@ -94,6 +94,8 @@ const myRole = computed(() => {
 })
 const isAdminOrOwner = computed(() => myRole.value === 'owner' || myRole.value === 'admin')
 const isOwner = computed(() => myRole.value === 'owner')
+// Personal workspaces are auto-provisioned and cannot be deleted (enforced server-side).
+const isPersonal = computed(() => ws.value?.is_personal ?? false)
 
 async function withWorkspace<T>(fn: () => Promise<T>): Promise<T> {
   const prevWs = wsStore.currentWorkspaceId
@@ -615,12 +617,17 @@ watch(activeTab, (value) => {
           </div>
         </div>
 
-        <div v-if="isOwner" class="card-body" style="border-top: 1px solid var(--border-primary);">
+        <div v-if="isOwner && !isPersonal" class="card-body" style="border-top: 1px solid var(--border-primary);">
           <h4 style="color: var(--danger-600); margin-bottom: 8px;">Danger Zone</h4>
           <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
             Deleting this workspace will permanently remove all its resources. This cannot be undone.
           </p>
           <button class="btn btn-danger" @click="deleteWorkspace">Delete Workspace</button>
+        </div>
+        <div v-else-if="isOwner && isPersonal" class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <p style="font-size: 13px; color: var(--text-muted);">
+            This is your personal workspace and cannot be deleted. It is removed only if you delete your account.
+          </p>
         </div>
       </div>
 

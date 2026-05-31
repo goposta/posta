@@ -288,6 +288,14 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 func (h *WorkspaceHandler) Delete(c *okapi.Context) error {
 	wsID := c.GetInt("workspace_id")
 
+	ws, err := h.workspaceRepo.FindByID(uint(wsID))
+	if err != nil {
+		return c.AbortNotFound("workspace not found")
+	}
+	if ws.IsPersonal {
+		return c.AbortBadRequest("personal workspace cannot be deleted")
+	}
+
 	if err := h.workspaceRepo.Delete(uint(wsID)); err != nil {
 		return c.AbortInternalServerError("failed to delete workspace")
 	}
