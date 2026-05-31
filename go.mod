@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.9
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.17
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.19
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.102.2
 	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/emersion/go-smtp v0.24.0
