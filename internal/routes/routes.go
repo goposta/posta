@@ -243,7 +243,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			email:            handlers.NewEmailHandler(emailService, emailRepo, bus, statsCache),
 			apiKey:           handlers.NewAPIKeyHandler(apiKeyService, apiKeyRepo, userSettingRepo, auditLogger),
 			template:         handlers.NewTemplateHandler(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo, emailService),
-			version:          handlers.NewTemplateVersionHandler(templateRepo, versionRepo),
+			version:          handlers.NewTemplateVersionHandler(templateRepo, versionRepo, stylesheetRepo),
 			localization:     handlers.NewTemplateLocalizationHandler(templateRepo, versionRepo, localizationRepo, stylesheetRepo),
 			language:         handlers.NewLanguageHandler(languageRepo),
 			stylesheet:       handlers.NewStyleSheetHandler(stylesheetRepo),

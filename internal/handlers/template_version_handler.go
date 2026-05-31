@@ -26,8 +26,9 @@ import (
 )
 
 type TemplateVersionHandler struct {
-	templateRepo *repositories.TemplateRepository
-	versionRepo  *repositories.TemplateVersionRepository
+	templateRepo   *repositories.TemplateRepository
+	versionRepo    *repositories.TemplateVersionRepository
+	stylesheetRepo *repositories.StyleSheetRepository
 }
 type ListVersionsRequest struct {
 	TemplateID int `param:"id"`
@@ -58,11 +59,23 @@ type DeleteVersionRequest struct {
 func NewTemplateVersionHandler(
 	templateRepo *repositories.TemplateRepository,
 	versionRepo *repositories.TemplateVersionRepository,
+	stylesheetRepo *repositories.StyleSheetRepository,
 ) *TemplateVersionHandler {
 	return &TemplateVersionHandler{
-		templateRepo: templateRepo,
-		versionRepo:  versionRepo,
+		templateRepo:   templateRepo,
+		versionRepo:    versionRepo,
+		stylesheetRepo: stylesheetRepo,
 	}
+}
+
+func (h *TemplateVersionHandler) resolveStyleSheetID(scope repositories.ResourceScope, id *uint) (*uint, error) {
+	if id == nil || *id == 0 {
+		return nil, nil
+	}
+	if _, err := h.stylesheetRepo.FindByIDInScope(scope, *id); err != nil {
+		return nil, err
+	}
+	return id, nil
 }
 
 func (h *TemplateVersionHandler) List(c *okapi.Context, req *ListVersionsRequest) error {
@@ -88,6 +101,11 @@ func (h *TemplateVersionHandler) Create(c *okapi.Context, req *CreateVersionRequ
 		return c.AbortNotFound("template not found")
 	}
 
+	styleSheetID, err := h.resolveStyleSheetID(getScope(c), req.Body.StyleSheetID)
+	if err != nil {
+		return c.AbortNotFound("stylesheet not found")
+	}
+
 	nextVersion, err := h.versionRepo.NextVersion(tmpl.ID)
 	if err != nil {
 		return c.AbortInternalServerError("failed to determine next version")
@@ -96,7 +114,7 @@ func (h *TemplateVersionHandler) Create(c *okapi.Context, req *CreateVersionRequ
 	v := &models.TemplateVersion{
 		TemplateID:   tmpl.ID,
 		Version:      nextVersion,
-		StyleSheetID: req.Body.StyleSheetID,
+		StyleSheetID: styleSheetID,
 		SampleData:   req.Body.SampleData,
 	}
 
@@ -122,7 +140,11 @@ func (h *TemplateVersionHandler) Update(c *okapi.Context, req *UpdateVersionRequ
 		return c.AbortNotFound("version not found")
 	}
 
-	v.StyleSheetID = req.Body.StyleSheetID
+	styleSheetID, err := h.resolveStyleSheetID(getScope(c), req.Body.StyleSheetID)
+	if err != nil {
+		return c.AbortNotFound("stylesheet not found")
+	}
+	v.StyleSheetID = styleSheetID
 
 	if err := h.versionRepo.Update(v); err != nil {
 		return c.AbortInternalServerError("failed to update version")

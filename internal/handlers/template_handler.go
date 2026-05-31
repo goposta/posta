@@ -210,9 +210,8 @@ func (h *TemplateHandler) Preview(c *okapi.Context, req *PreviewTemplateRequest)
 		TextTemplate:    req.Body.TextTemplate,
 	}
 
-	// Resolve the linked stylesheet for preview
 	if req.Body.StyleSheetID != nil && *req.Body.StyleSheetID > 0 {
-		ss, err := h.stylesheetRepo.FindByID(*req.Body.StyleSheetID)
+		ss, err := h.stylesheetRepo.FindByIDInScope(getScope(c), *req.Body.StyleSheetID)
 		if err != nil {
 			return c.AbortNotFound("stylesheet not found")
 		}
