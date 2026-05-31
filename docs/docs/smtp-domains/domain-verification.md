@@ -11,13 +11,15 @@ Verify your sending domains to improve deliverability and prevent spoofing. Post
 ## Register a Domain
 
 ```
-POST /api/v1/users/me/domains
+POST /api/v1/workspaces/current/domains
 ```
 
-```json
-{
-  "domain": "yourdomain.com"
-}
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/domains \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "yourdomain.com"}'
 ```
 
 Response:
@@ -26,13 +28,35 @@ Response:
 {
   "success": true,
   "data": {
-    "id": "domain-uuid",
+    "id": 1,
     "domain": "yourdomain.com",
     "ownership_verified": false,
-    "verification_token": "posta-verify=abc123def456",
-    "spf_record": "v=spf1 include:yourdomain.com ~all",
-    "dkim_record": "...",
-    "dmarc_record": "v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"
+    "spf_verified": false,
+    "dkim_verified": false,
+    "dmarc_verified": false,
+    "verification_token": "abc123def456",
+    "dns_records": {
+      "verification": {
+        "type": "TXT",
+        "host": "yourdomain.com",
+        "value": "posta-verification=abc123def456"
+      },
+      "spf": {
+        "type": "TXT",
+        "host": "yourdomain.com",
+        "value": "v=spf1 include:_spf.posta ~all"
+      },
+      "dkim": {
+        "type": "CNAME",
+        "host": "posta._domainkey.yourdomain.com",
+        "value": "posta._domainkey.posta"
+      },
+      "dmarc": {
+        "type": "TXT",
+        "host": "_dmarc.yourdomain.com",
+        "value": "v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com"
+      }
+    }
   }
 }
 ```
@@ -45,32 +69,38 @@ Add the following DNS records to your domain:
 
 | Type | Host | Value |
 |------|------|-------|
-| TXT | `@` or `yourdomain.com` | `posta-verify=abc123def456` |
+| TXT | `yourdomain.com` | `posta-verification=<verification_token>` |
 
 ### 2. SPF Record (TXT)
 
 | Type | Host | Value |
 |------|------|-------|
-| TXT | `@` | `v=spf1 include:yourdomain.com ~all` |
+| TXT | `yourdomain.com` | `v=spf1 include:_spf.posta ~all` |
 
-### 3. DKIM Record (TXT)
+### 3. DKIM Record (CNAME)
 
 | Type | Host | Value |
 |------|------|-------|
-| TXT | `posta._domainkey` | *(provided in response)* |
+| CNAME | `posta._domainkey.yourdomain.com` | `posta._domainkey.posta` |
 
 ### 4. DMARC Record (TXT)
 
 | Type | Host | Value |
 |------|------|-------|
-| TXT | `_dmarc` | `v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com` |
+| TXT | `_dmarc.yourdomain.com` | `v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com` |
 
 ## Verify DNS Records
 
 After adding DNS records, trigger verification:
 
 ```
-POST /api/v1/users/me/domains/{id}/verify
+POST /api/v1/workspaces/current/domains/{id}/verify
+```
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/domains/1/verify \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
 ```
 
 Response:
@@ -79,10 +109,21 @@ Response:
 {
   "success": true,
   "data": {
-    "ownership_verified": true,
-    "spf_verified": true,
-    "dkim_verified": true,
-    "dmarc_verified": false
+    "domain": {
+      "id": 1,
+      "domain": "yourdomain.com",
+      "ownership_verified": true,
+      "spf_verified": true,
+      "dkim_verified": true,
+      "dmarc_verified": false
+    },
+    "verification": {
+      "ownership_verified": true,
+      "spf_verified": true,
+      "dkim_verified": true,
+      "dmarc_verified": false
+    },
+    "fully_verified": false
   }
 }
 ```
@@ -98,11 +139,19 @@ When `require_verified_domain` is enabled in user settings, Posta will reject em
 ## List Domains
 
 ```
-GET /api/v1/users/me/domains?page=1&size=20
+GET /api/v1/workspaces/current/domains?page=1&size=20
 ```
+
+## Get Domain Details
+
+```
+GET /api/v1/workspaces/current/domains/{id}
+```
+
+The response includes the current `dns_records` values alongside the domain's verification status.
 
 ## Delete a Domain
 
 ```
-DELETE /api/v1/users/me/domains/{id}
+DELETE /api/v1/workspaces/current/domains/{id}
 ```

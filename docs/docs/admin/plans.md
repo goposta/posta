@@ -118,3 +118,25 @@ GET /api/v1/workspaces/current/plan
 ```
 
 Returns the effective plan and limits for the current workspace.
+
+## User Plans
+
+Plans can also be assigned directly to user accounts (independent of workspaces).
+
+### Assign a Plan to a User
+
+```
+POST /api/v1/admin/users/{id}/plan
+```
+
+```json
+{
+  "plan_id": 2
+}
+```
+
+### Get a User's Plan
+
+```
+GET /api/v1/admin/users/{id}/plan
+```

@@ -19,8 +19,9 @@ Log in to the dashboard at `http://localhost:9000` with the admin credentials co
 Navigate to **API Keys** and create a new key:
 
 ```bash
-curl -X POST http://localhost:9000/api/v1/users/me/api-keys \
+curl -X POST http://localhost:9000/api/v1/workspaces/current/api-keys \
   -H "Authorization: Bearer <your-jwt-token>" \
+  -H "X-Posta-Workspace-Id: 1" \
   -H "Content-Type: application/json" \
   -d '{"name": "my-app"}'
 ```
@@ -32,8 +33,9 @@ curl -X POST http://localhost:9000/api/v1/users/me/api-keys \
 Add your SMTP server:
 
 ```bash
-curl -X POST http://localhost:9000/api/v1/users/me/smtp-servers \
+curl -X POST http://localhost:9000/api/v1/workspaces/current/smtp-servers \
   -H "Authorization: Bearer <your-jwt-token>" \
+  -H "X-Posta-Workspace-Id: 1" \
   -H "Content-Type: application/json" \
   -d '{
     "host": "smtp.gmail.com",

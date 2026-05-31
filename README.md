@@ -69,6 +69,7 @@ Response:
 * Attachments, custom headers, and unsubscribe support
 * Web view ("view in browser") with signed, expiring links
 * Scheduled sending and preview mode
+* Email address verification (syntax, MX, disposable & role-account checks)
 * Async processing with Redis and Asynq
 * Automatic retries and priority queues
 
@@ -111,10 +112,11 @@ Response:
 
 ### Contacts & Subscribers
 
-* Contact tracking, lists, and segmentation
+* Auto-tracked contacts with per-recipient send/failure stats
+* Subscriber management with static and dynamic (segmented) lists
+* Bulk import via JSON or CSV with column mapping
 * Subscriber lifecycle (active, bounced, unsubscribed)
-* Hard/soft bounce and complaint handling
-* Automatic suppression lists
+* Hard/soft bounce and complaint handling with automatic suppression
 
 ### Unsubscribe Lists
 
@@ -134,8 +136,9 @@ Response:
 ### Workspaces
 
 * Multi-tenant architecture with isolated workspaces
-* Role-based access control
-* Shared resources and scoped API keys
+* Role-based access control (owner, admin, editor, viewer)
+* Member invitations and scoped API keys
+* Data export/import and GDPR contact/log deletion
 
 ### Webhooks & Events
 
@@ -154,6 +157,8 @@ Response:
 * User and API key management
 * Global metrics and logs
 * SMTP pool management
+* Usage plans with quotas and per-workspace assignment
+* OAuth/SSO provider configuration
 * Platform configuration and retention policies
 
 ### Dashboard
@@ -298,5 +303,5 @@ Apache License 2.0
 
 ## Copyright
 
-Copyright (c) 2026 Jonas Kaninda and contributors
+Copyright (c) 2026 Jonas Kaninda
 

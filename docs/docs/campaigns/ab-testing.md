@@ -16,6 +16,10 @@ For the full request/response schema, see the interactive [API Reference](https:
 
 Enable A/B testing when creating a campaign:
 
+```
+POST /api/v1/workspaces/current/campaigns
+```
+
 ```json
 {
   "name": "Subject Line Test",
@@ -35,6 +39,14 @@ Enable A/B testing when creating a campaign:
     }
   ]
 }
+```
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/campaigns \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Subject Line Test","subject":"Default subject","from_email":"news@example.com","template_id":5,"list_id":3,"ab_test_enabled":true,"ab_test_variants":[{"name":"Variant A","split_percentage":50},{"name":"Variant B","split_percentage":50}]}'
 ```
 
 ### Requirements
@@ -59,7 +71,13 @@ When the campaign is sent, Posta randomly splits the subscriber list according t
 Use the campaign analytics endpoint to compare variant performance:
 
 ```
-GET /api/v1/users/me/campaigns/{id}/analytics
+GET /api/v1/workspaces/current/campaigns/{id}/analytics
+```
+
+```bash
+curl http://localhost:9000/api/v1/workspaces/current/campaigns/42/analytics \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
 ```
 
 The response includes delivery stats broken down by variant, allowing you to compare open rates, click rates, and other metrics across variants.
@@ -69,7 +87,13 @@ The response includes delivery stats broken down by variant, allowing you to com
 View individual messages sent for a campaign:
 
 ```
-GET /api/v1/users/me/campaigns/{id}/messages?page=0&size=20
+GET /api/v1/workspaces/current/campaigns/{id}/messages?page=0&size=20
+```
+
+```bash
+curl "http://localhost:9000/api/v1/workspaces/current/campaigns/42/messages?page=0&size=20" \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1"
 ```
 
 Each message includes which variant was sent to that subscriber.

@@ -15,7 +15,7 @@ For the full request/response schema, see the interactive [API Reference](https:
 ## Creating a Campaign
 
 ```
-POST /api/v1/users/me/campaigns
+POST /api/v1/workspaces/current/campaigns
 ```
 
 ```json
@@ -35,6 +35,14 @@ POST /api/v1/users/me/campaigns
   "send_rate": 100,
   "scheduled_at": "2026-04-10T09:00:00Z"
 }
+```
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/campaigns \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"April Newsletter","subject":"What'\''s new in April","from_email":"newsletter@example.com","template_id":5,"list_id":3}'
 ```
 
 ### Required Fields
@@ -75,7 +83,7 @@ POST /api/v1/users/me/campaigns
 ## Listing Campaigns
 
 ```
-GET /api/v1/users/me/campaigns?page=0&size=20
+GET /api/v1/workspaces/current/campaigns?page=0&size=20
 ```
 
 Optional query parameters:
@@ -107,13 +115,13 @@ Response includes delivery stats for each campaign:
 ## Getting a Campaign
 
 ```
-GET /api/v1/users/me/campaigns/{id}
+GET /api/v1/workspaces/current/campaigns/{id}
 ```
 
 ## Updating a Campaign
 
 ```
-PUT /api/v1/users/me/campaigns/{id}
+PUT /api/v1/workspaces/current/campaigns/{id}
 ```
 
 Only `draft` campaigns can be updated. All fields are optional.
@@ -121,5 +129,9 @@ Only `draft` campaigns can be updated. All fields are optional.
 ## Deleting a Campaign
 
 ```
-DELETE /api/v1/users/me/campaigns/{id}
+DELETE /api/v1/workspaces/current/campaigns/{id}
 ```
+
+:::caution
+A `sending` campaign must be cancelled before it can be deleted. Cancel the campaign first, then delete it.
+:::

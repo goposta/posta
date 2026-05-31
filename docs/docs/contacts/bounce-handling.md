@@ -16,25 +16,43 @@ Posta tracks email bounces and automatically suppresses addresses that hard boun
 | `soft` | Temporary failure (e.g., mailbox full) | Tracked, not suppressed |
 | `complaint` | Recipient reported as spam | Auto-suppressed |
 
+These routes are workspace-scoped. Send a JWT plus the `X-Posta-Workspace-Id` header (a workspace-scoped API key implies the workspace).
+
 ## Record a Bounce
 
 ```
-POST /api/v1/users/me/bounces
+POST /api/v1/workspaces/current/bounces
 ```
 
-```json
-{
-  "email": "bounced@example.com",
-  "bounce_type": "hard",
-  "message": "550 5.1.1 The email account does not exist"
-}
+| Field | Required | Description |
+|-------|----------|-------------|
+| `email_id` | yes | UUID of the sent email this bounce relates to |
+| `recipient` | yes | Bounced recipient address |
+| `type` | yes | One of `hard`, `soft`, `complaint` |
+| `reason` | no | Free-text diagnostic / SMTP message |
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/bounces \
+  -H "Authorization: Bearer <jwt>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_id": "b1e3...uuid",
+    "recipient": "bounced@example.com",
+    "type": "hard",
+    "reason": "550 5.1.1 The email account does not exist"
+  }'
 ```
+
+Returns `201 Created` with the recorded bounce. An invalid `type` returns `400`, and an unknown `email_id` returns `404`.
 
 ## List Bounces
 
 ```
-GET /api/v1/users/me/bounces?page=1&size=20
+GET /api/v1/workspaces/current/bounces?page=0&size=20
 ```
+
+Each item includes `id`, `email_id`, `recipient`, `type`, `reason`, and `created_at`.
 
 ## Automatic Suppression
 

@@ -15,7 +15,7 @@ Most email clients strip `<style>` tags and external stylesheets. Posta automati
 ## Create a Stylesheet
 
 ```
-POST /api/v1/users/me/stylesheets
+POST /api/v1/workspaces/current/stylesheets
 ```
 
 ```json
@@ -28,13 +28,13 @@ POST /api/v1/users/me/stylesheets
 ## List Stylesheets
 
 ```
-GET /api/v1/users/me/stylesheets?page=1&size=20
+GET /api/v1/workspaces/current/stylesheets?page=1&size=20
 ```
 
 ## Update a Stylesheet
 
 ```
-PUT /api/v1/users/me/stylesheets/{id}
+PUT /api/v1/workspaces/current/stylesheets/{id}
 ```
 
 ```json
@@ -47,7 +47,7 @@ PUT /api/v1/users/me/stylesheets/{id}
 ## Delete a Stylesheet
 
 ```
-DELETE /api/v1/users/me/stylesheets/{id}
+DELETE /api/v1/workspaces/current/stylesheets/{id}
 ```
 
 Returns `204 No Content`.
