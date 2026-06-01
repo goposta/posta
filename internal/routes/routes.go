@@ -471,6 +471,9 @@ func (r *Router) registerRoutes() {
 	r.app.Register(r.adminRoutes()...)
 	r.app.Register(r.adminSSERoutes()...)
 
+	// Documentation-only OpenAPI webhooks (events Posta POSTs to subscribers).
+	r.registerWebhookDocs()
+
 	// Dashboard UI (static files + SPA fallback)
 	webDir := r.cfg.WebDir
 	if info, err := os.Stat(webDir); err == nil && info.IsDir() {
