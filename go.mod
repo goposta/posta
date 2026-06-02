@@ -13,7 +13,7 @@ require (
 	github.com/hibiken/asynq v0.26.0
 	github.com/jkaninda/go-utils v0.1.4
 	github.com/jkaninda/logger v0.0.5
-	github.com/jkaninda/okapi v0.6.3
+	github.com/jkaninda/okapi v0.7.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
 	github.com/pquerna/otp v1.5.0

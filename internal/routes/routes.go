@@ -19,10 +19,6 @@ package routes
 
 import (
 	"context"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/goposta/posta/internal/config"
@@ -475,23 +471,6 @@ func (r *Router) registerRoutes() {
 	r.registerWebhookDocs()
 
 	// Dashboard UI (static files + SPA fallback)
-	webDir := r.cfg.WebDir
-	if info, err := os.Stat(webDir); err == nil && info.IsDir() {
-		r.app.Static("/assets", filepath.Join(webDir, "assets"))
+	r.app.SPA("/", r.cfg.WebDir, okapi.SPAConfig{MaxAge: time.Hour})
 
-		indexPath := filepath.Join(webDir, "index.html")
-		r.app.NoRoute(func(c *okapi.Context) error {
-			path := c.Request().URL.Path
-			if strings.HasPrefix(path, "/api/v1/") || strings.HasPrefix(path, "/healthz") || strings.HasPrefix(path, "/readyz") || strings.HasPrefix(path, "/metrics") || strings.HasPrefix(path, "/docs") {
-				return c.AbortNotFound("not found")
-			}
-			filePath := filepath.Join(webDir, filepath.Clean(path))
-			if stat, err := os.Stat(filePath); err == nil && !stat.IsDir() {
-				http.ServeFile(c.ResponseWriter(), c.Request(), filePath)
-				return nil
-			}
-			http.ServeFile(c.ResponseWriter(), c.Request(), indexPath)
-			return nil
-		})
-	}
 }
