@@ -1,45 +1,52 @@
 {{ define "content" }}
-<h2>Daily Email Report</h2>
-<p>Here's the email activity summary{{ if .WorkspaceName }} for <strong>{{ .WorkspaceName }}</strong>{{ end }} on <strong>{{ .ReportDate }}</strong>.</p>
-
-<table class="stats-table">
-  <tr>
-    <th>Metric</th>
-    <th style="text-align: right;">Count</th>
-  </tr>
-  <tr>
-    <td>Total Emails</td>
-    <td style="text-align: right;"><strong>{{ .TotalEmails }}</strong></td>
-  </tr>
-  <tr>
-    <td>Sent</td>
-    <td style="text-align: right; color: #059669;">{{ .SentEmails }}</td>
-  </tr>
-  <tr>
-    <td>Failed</td>
-    <td style="text-align: right; color: #dc2626;">{{ .FailedEmails }}</td>
-  </tr>
-  <tr>
-    <td>Bounced</td>
-    <td style="text-align: right; color: #d97706;">{{ .BouncedEmails }}</td>
-  </tr>
-  <tr>
-    <td>Suppressed</td>
-    <td style="text-align: right; color: #6b7280;">{{ .SuppressedEmails }}</td>
-  </tr>
-</table>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">Daily email report</h2>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">Here's your email activity summary{{ if .WorkspaceName }} for <strong>{{ .WorkspaceName }}</strong>{{ end }} on <strong>{{ .ReportDate }}</strong>.</p>
 
 {{ if gt .TotalEmails 0 }}
-<p>Delivery rate: <span class="highlight">{{ .DeliveryRate }}%</span></p>
-{{ else }}
-<p class="muted">No emails were sent during this period.</p>
-{{ end }}
-
-{{ if .AppURL }}
-<p style="text-align: center; margin-top: 24px;">
-  <a href="{{ .AppURL }}" class="btn">View Dashboard</a>
+<p style="text-align: center; margin: 24px 0 4px;">
+  <span class="highlight" style="font-size: 30px; font-weight: 800; color: #7c3aed; letter-spacing: -0.02em;">{{ .DeliveryRate }}%</span><br>
+  <span class="muted" style="color: #6b7280; font-size: 13px;">delivery rate</span>
 </p>
 {{ end }}
 
-<p class="muted" style="margin-top: 24px;">You receive this report as an owner or admin of this workspace.</p>
+<table class="stats-table" role="presentation" style="width: 100%; border-collapse: separate; border-spacing: 0; margin: 20px 0; border: 1px solid #eceef2; border-radius: 10px; overflow: hidden;">
+  <tr>
+    <th style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; background-color: #f9fafb; color: #6b7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;">Metric</th>
+    <th style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; background-color: #f9fafb; color: #6b7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; text-align: right;">Count</th>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Total emails</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827; text-align: right;"><strong>{{ .TotalEmails }}</strong></td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Sent</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827; text-align: right; color: #059669; font-weight: 600;">{{ .SentEmails }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Failed</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827; text-align: right; color: #dc2626; font-weight: 600;">{{ .FailedEmails }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Bounced</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827; text-align: right; color: #d97706; font-weight: 600;">{{ .BouncedEmails }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Suppressed</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827; text-align: right; color: #6b7280;">{{ .SuppressedEmails }}</td>
+  </tr>
+</table>
+
+{{ if eq .TotalEmails 0 }}
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px;">No emails were sent during this period.</p>
+{{ end }}
+
+{{ if .AppURL }}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AppURL }}/analytics" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">View dashboard</a>
+  </td></tr>
+</table>
+{{ end }}
+
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px; text-align: center;">You receive this report because you're an owner or admin of this workspace.</p>
 {{ end }}

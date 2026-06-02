@@ -19,21 +19,6 @@ package upgrade
 
 import "gorm.io/gorm"
 
-// Step is a one-shot data migration that runs at boot time, exactly once per
-// database. Schema migrations stay in GORM AutoMigrate; this registry is for
-// data backfills, defaults, and cleanup that AutoMigrate cannot express.
-//
-// Rules each step author must follow:
-//
-//  1. ID is permanent. Once a step ships, never rename or delete its ID —
-//     that's how the registry knows the step has already been applied.
-//     Use a date-prefixed slug, e.g. "2026-05-30-mark-default-plan".
-//  2. Apply must be idempotent in spirit even though the framework guarantees
-//     single-run, because a step that crashes mid-way will retry on the next
-//     boot. Use INSERT … ON CONFLICT DO NOTHING, WHERE NOT EXISTS, etc.
-//  3. Apply runs inside its own transaction; do not start one yourself.
-//  4. If a step is wrong after it ships, write a follow-up step that fixes
-//     forward. Do not retroactively edit a step's Apply.
 type Step struct {
 	ID    string
 	Apply func(tx *gorm.DB) error
@@ -52,8 +37,6 @@ var registry = []Step{
 	},
 }
 
-// Registry returns a copy of the registered steps so callers (status command,
-// tests) can inspect the list without mutating it.
 func Registry() []Step {
 	out := make([]Step, len(registry))
 	copy(out, registry)

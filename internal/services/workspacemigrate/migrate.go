@@ -28,9 +28,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// operationalTables are the user-scoped resources whose rows are re-scoped to
-// the personal workspace. Each has a `user_id NOT NULL` + nullable `workspace_id`.
-// Order is irrelevant — every table is backfilled by user_id in one pass.
 var operationalTables = []interface{}{
 	&models.APIKey{},
 	&models.Template{},
@@ -50,23 +47,14 @@ var operationalTables = []interface{}{
 	&models.Campaign{},
 }
 
-// Seeder provisions default content (stylesheet, templates, languages) for a
-// freshly-created personal workspace. Implemented by services/seeder.Seeder.
-// It is only invoked on the per-user hook path (register/login/oauth), not the
-// bulk backfill — existing users already own their content.
 type Seeder interface {
 	SeedWorkspaceDefaults(workspaceID, userID uint, userName string)
 }
 
 // Service performs personal-workspace migrations.
 type Service struct {
-	// planEnforcement mirrors config.PlanEnforcement. When true a default plan
-	// must exist and is assigned to each personal workspace; when false (OSS
-	// default) workspaces get plan_id = NULL. See plan §1.
 	planEnforcement bool
 
-	// seeder, when set, seeds default content into a newly-created personal
-	// workspace after MigrateUser commits. nil on the backfill path.
 	seeder Seeder
 }
 
@@ -75,9 +63,6 @@ func New(planEnforcement bool) *Service {
 	return &Service{planEnforcement: planEnforcement}
 }
 
-// SetSeeder attaches a seeder so MigrateUser provisions default content for new
-// personal workspaces. Folds the old fire-and-forget SeedUserDefaults call into
-// the migration (§4).
 func (s *Service) SetSeeder(seeder Seeder) {
 	s.seeder = seeder
 }
@@ -103,9 +88,6 @@ func (s *Service) MigrateUser(db *gorm.DB, userID uint) (uint, error) {
 		return 0, err
 	}
 
-	// Seed default content after commit so the workspace row is visible. The
-	// seeder is idempotent (skips users who already own templates), so this is a
-	// no-op for users who were re-scoped rather than freshly created.
 	if s.seeder != nil {
 		s.seeder.SeedWorkspaceDefaults(wsID, userID, existing.Name)
 	}

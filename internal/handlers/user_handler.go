@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/clientinfo"
 	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/notification"
@@ -356,7 +357,7 @@ func (h *UserHandler) ChangePassword(c *okapi.Context, req *ChangePasswordReques
 	// Send password change notification (best-effort)
 	if h.notifier != nil {
 		go func() {
-			_ = h.notifier.SendToUser(user.ID, "Your password has been changed", notification.TemplatePasswordChanged, map[string]any{
+			_ = h.notifier.SendSecurityToUser(user.ID, "Your password has been changed", notification.TemplatePasswordChanged, map[string]any{
 				"ChangedAt": time.Now().UTC().Format("January 2, 2006 at 15:04 UTC"),
 			})
 		}()
@@ -420,11 +421,20 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 			fmt.Sprintf("User %q logged in", user.Email), nil)
 	}
 
+	// Detect a sign-in from a new device before the session is recorded, so the
+	// freshly created session doesn't count as a prior known device.
+	ua := c.Header("User-Agent")
+	newDevice := h.isNewDevice(user.ID, ua)
+
 	token, jti, err := h.generateTokenWithSession(c, user)
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate token", err)
 	}
 	_ = jti
+
+	if newDevice {
+		h.sendLoginAlert(user.ID, ua, c.RealIP())
+	}
 
 	return ok(c, AuthResponse{
 		Token: token,
@@ -515,6 +525,8 @@ func (h *UserHandler) Verify2FA(c *okapi.Context, req *Verify2FARequest) error {
 		return c.AbortInternalServerError("failed to enable 2FA")
 	}
 
+	h.sendTwoFactorAlert(user.ID, "enabled")
+
 	return ok(c, okapi.M{"message": "2FA enabled successfully"})
 }
 
@@ -539,7 +551,60 @@ func (h *UserHandler) Disable2FA(c *okapi.Context, req *Disable2FARequest) error
 		return c.AbortInternalServerError("failed to disable 2FA")
 	}
 
+	h.sendTwoFactorAlert(user.ID, "disabled")
+
 	return ok(c, okapi.M{"message": "2FA disabled successfully"})
+}
+
+func (h *UserHandler) isNewDevice(userID uint, ua string) bool {
+	if h.sessionRepo == nil {
+		return false
+	}
+	sessions, err := h.sessionRepo.FindActiveByUserID(userID)
+	if err != nil {
+		return false
+	}
+	sig := clientinfo.Parse(ua).Signature()
+	for _, s := range sessions {
+		if clientinfo.Parse(s.UserAgent).Signature() == sig {
+			return false
+		}
+	}
+	return true
+}
+
+// sendLoginAlert emails the user about a sign-in from a new device (best-effort).
+func (h *UserHandler) sendLoginAlert(userID uint, ua, ip string) {
+	if h.notifier == nil {
+		return
+	}
+	client := clientinfo.Parse(ua)
+	data := map[string]any{
+		"Browser":   client.Browser,
+		"OS":        client.OS,
+		"Device":    client.Device,
+		"IPAddress": ip,
+		"LoginAt":   time.Now().UTC().Format("January 2, 2006 at 15:04 UTC"),
+	}
+	go func() {
+		_ = h.notifier.SendSecurityToUser(userID, "New sign-in to your account", notification.TemplateLoginAlert, data)
+	}()
+}
+
+// sendTwoFactorAlert emails the user when 2FA is enabled or disabled (best-effort).
+// action must be "enabled" or "disabled".
+func (h *UserHandler) sendTwoFactorAlert(userID uint, action string) {
+	if h.notifier == nil {
+		return
+	}
+	subject := "Two-factor authentication " + action
+	data := map[string]any{
+		"Action":    action,
+		"ChangedAt": time.Now().UTC().Format("January 2, 2006 at 15:04 UTC"),
+	}
+	go func() {
+		_ = h.notifier.SendSecurityToUser(userID, subject, notification.TemplateTwoFactorChange, data)
+	}()
 }
 
 // generateTokenWithSession creates a JWT with a jti claim and records the session.
@@ -604,6 +669,17 @@ func (h *UserHandler) RequestAccountDeletion(c *okapi.Context) error {
 		uid := user.ID
 		h.bus.PublishSimple(models.EventCategoryUser, "user.deletion_requested", &uid, user.Email, c.RealIP(),
 			fmt.Sprintf("Account deletion scheduled for %s", deletionDate.Format("2006-01-02")), nil)
+	}
+
+	// Confirm the scheduled deletion by email (best-effort).
+	if h.notifier != nil {
+		uid := user.ID
+		data := map[string]any{
+			"ScheduledFor": deletionDate.UTC().Format("January 2, 2006"),
+		}
+		go func() {
+			_ = h.notifier.SendSecurityToUser(uid, "Your account is scheduled for deletion", notification.TemplateAccountDeletion, data)
+		}()
 	}
 
 	return ok(c, map[string]any{

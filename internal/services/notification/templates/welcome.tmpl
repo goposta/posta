@@ -1,13 +1,27 @@
 {{ define "content" }}
-<h2>Welcome to {{ .AppName }}!</h2>
-<p>Hi {{ .UserName }},</p>
-<p>Your account has been created successfully. You can now start sending emails, managing templates, and configuring your workspace.</p>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">Welcome to {{ .AppName }}</h2>
+<p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">Your account is ready. You can now send transactional and marketing email, manage templates and contacts, and track delivery in real time.</p>
+
+<table class="stats-table" role="presentation" style="width: 100%; border-collapse: separate; border-spacing: 0; margin: 20px 0; border: 1px solid #eceef2; border-radius: 10px; overflow: hidden;">
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;"><strong>1.</strong>&nbsp; Verify a sending domain to start delivering email</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;"><strong>2.</strong>&nbsp; Create an API key and send your first message</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;"><strong>3.</strong>&nbsp; Invite your team and set notification preferences</td>
+  </tr>
+</table>
 
 {{ if .AppURL }}
-<p style="text-align: center; margin: 32px 0;">
-  <a href="{{ .AppURL }}" class="btn">Go to Dashboard</a>
-</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AppURL }}" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Go to dashboard</a>
+  </td></tr>
+</table>
 {{ end }}
 
-<p class="muted">If you didn't create this account, please ignore this email.</p>
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px;">If you didn't create this account, you can safely ignore this email.</p>
 {{ end }}

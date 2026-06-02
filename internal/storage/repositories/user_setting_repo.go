@@ -39,12 +39,16 @@ func (r *UserSettingRepository) FindByUserID(userID uint) (*models.UserSetting, 
 	}
 	if result.Error == gorm.ErrRecordNotFound {
 		setting = models.UserSetting{
-			UserID:             userID,
-			Timezone:           "UTC",
-			EmailNotifications: true,
-			WebhookRetryCount:  3,
-			APIKeyExpiryDays:   90,
-			BounceAutoSuppress: true,
+			UserID:                  userID,
+			Timezone:                "UTC",
+			EmailNotifications:      true,
+			WebhookRetryCount:       3,
+			APIKeyExpiryDays:        90,
+			BounceAutoSuppress:      true,
+			DailyReport:             true,
+			NotifyBounceAlerts:      true,
+			NotifyAPIKeyExpiry:      true,
+			NotifyWorkspaceActivity: true,
 		}
 		if err := r.db.Create(&setting).Error; err != nil {
 			return nil, err
@@ -57,15 +61,4 @@ func (r *UserSettingRepository) FindByUserID(userID uint) (*models.UserSetting, 
 // CreateOrUpdate saves or updates the user's settings row.
 func (r *UserSettingRepository) CreateOrUpdate(setting *models.UserSetting) error {
 	return r.db.Save(setting).Error
-}
-
-// FindUsersWithDailyReport returns user IDs that have daily_report enabled.
-func (r *UserSettingRepository) FindUsersWithDailyReport() ([]uint, error) {
-	var userIDs []uint
-	if err := r.db.Model(&models.UserSetting{}).
-		Where("daily_report = ?", true).
-		Pluck("user_id", &userIDs).Error; err != nil {
-		return nil, err
-	}
-	return userIDs, nil
 }

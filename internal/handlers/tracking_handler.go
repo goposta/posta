@@ -19,8 +19,8 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"html"
+	"html/template"
 	"net/http"
 	"regexp"
 	"strings"
@@ -141,30 +141,27 @@ func (h *TrackingHandler) ClickRedirect(c *okapi.Context, req *TrackingClickRequ
 func (h *TrackingHandler) UnsubscribePage(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	messageID, err := h.trackingService.VerifyUnsubscribeToken(req.Token)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Invalid or expired unsubscribe link", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Link expired", "This unsubscribe link is invalid or has expired.", "error")
 	}
 
 	msg, err := h.messageRepo.FindByCampaignMessageID(messageID)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
-
+		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the message this link points to.", "error")
 	}
 
 	sub, err := h.subRepo.FindByID(msg.SubscriberID)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Subscriber not found", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the recipient for this link.", "error")
 	}
 
-	html := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribe</title>
-<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}
-.card{background:#fff;border-radius:12px;padding:40px;max-width:420px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
-h1{font-size:20px;margin-bottom:8px}p{color:#6b7280;font-size:14px;margin-bottom:20px}
-button{background:#9333ea;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:15px;cursor:pointer}
-button:hover{background:#7e22ce}.done{color:#16a34a;font-weight:600}</style></head><body>
-<div class="card"><h1>Unsubscribe</h1><p>%s</p>
-<form method="POST"><button type="submit">Confirm Unsubscribe</button></form></div></body></html>`, html.EscapeString(sub.Email))
-
-	return c.HTMLView(http.StatusOK, html, okapi.M{})
+	return trackingHTMLView(c, http.StatusOK, "unsubscribe", unsubData{
+		Title:       "Unsubscribe",
+		Heading:     "Unsubscribe from this list?",
+		Message:     "You're about to stop receiving these emails at:",
+		Recipient:   sub.Email,
+		ButtonLabel: "Confirm unsubscribe",
+		Fine:        "Other lists you're subscribed to won't be affected.",
+	})
 }
 
 // TxUnsubscribePage renders a confirmation page for a transactional one-click
@@ -173,26 +170,24 @@ button:hover{background:#7e22ce}.done{color:#16a34a;font-weight:600}</style></he
 func (h *TrackingHandler) TxUnsubscribePage(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	emailID, err := h.trackingService.VerifyTxUnsubscribeToken(req.Token)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Invalid or expired unsubscribe link", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Link expired", "This unsubscribe link is invalid or has expired.", "error")
 	}
 	em, err := h.emailRepo.FindByID(emailID)
 	if err != nil || em == nil {
-		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the message this link points to.", "error")
 	}
 	shown := ""
 	if len(em.Recipients) > 0 {
 		shown = em.Recipients[0]
 	}
-	page := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribe</title>
-<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}
-.card{background:#fff;border-radius:12px;padding:40px;max-width:420px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
-h1{font-size:20px;margin-bottom:8px}p{color:#6b7280;font-size:14px;margin-bottom:20px}
-button{background:#9333ea;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:15px;cursor:pointer}
-button:hover{background:#7e22ce}</style></head><body>
-<div class="card"><h1>Unsubscribe</h1><p>%s</p>
-<form method="POST"><button type="submit">Confirm Unsubscribe</button></form></div></body></html>`, html.EscapeString(shown))
-
-	return c.HTMLView(http.StatusOK, page, okapi.M{})
+	return trackingHTMLView(c, http.StatusOK, "unsubscribe", unsubData{
+		Title:       "Unsubscribe",
+		Heading:     "Unsubscribe from these emails?",
+		Message:     "You're about to stop receiving this type of email at:",
+		Recipient:   shown,
+		ButtonLabel: "Confirm unsubscribe",
+		Fine:        "You'll still receive other essential messages from the sender.",
+	})
 }
 
 // TxUnsubscribeConfirm processes a POST to the transactional unsubscribe link.
@@ -201,16 +196,14 @@ button:hover{background:#7e22ce}</style></head><body>
 func (h *TrackingHandler) TxUnsubscribeConfirm(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	emailID, err := h.trackingService.VerifyTxUnsubscribeToken(req.Token)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Invalid or expired unsubscribe link", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Link expired", "This unsubscribe link is invalid or has expired.", "error")
 	}
 	em, err := h.emailRepo.FindByID(emailID)
 	if err != nil || em == nil {
-		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the message this link points to.", "error")
 	}
 
 	if h.suppressionRepo != nil {
-		// A Posta-minted link carries a list ⇒ scoped opt-out. A nil list means a
-		// legacy link, which keeps the old global behavior.
 		kind := models.SuppressionKindHard
 		if em.UnsubscribeListID != nil {
 			kind = models.SuppressionKindListUnsubscribe
@@ -231,18 +224,10 @@ func (h *TrackingHandler) TxUnsubscribeConfirm(c *okapi.Context, req *TrackingUn
 		}
 	}
 
-	confirmHTML := `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title>
-<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}
-.card{background:#fff;border-radius:12px;padding:40px;max-width:420px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
-h1{font-size:20px;color:#16a34a}p{color:#6b7280;font-size:14px}</style></head><body>
-<div class="card"><h1>Unsubscribed</h1><p>You will no longer receive emails of this type from the sender.</p></div></body></html>`
-
-	return c.HTMLView(http.StatusOK, confirmHTML, okapi.M{})
+	return trackingNotice(c, http.StatusOK, "You're unsubscribed",
+		"You'll no longer receive emails of this type from the sender.", "success")
 }
 
-// emitUnsubscribed fires the email.unsubscribed webhook for a one-click opt-out.
-// It uses DispatchJSON because the payload is richer than the standard outbound
-// {event, email_id} shape — it carries the recipient and the scoped list.
 func (h *TrackingHandler) emitUnsubscribed(em *models.Email, addr string) {
 	if h.dispatcher == nil {
 		return
@@ -267,24 +252,20 @@ func (h *TrackingHandler) emitUnsubscribed(em *models.Email, addr string) {
 	h.dispatcher.DispatchJSON(em.UserID, em.WorkspaceID, "email.unsubscribed", body, em.Sender)
 }
 
-// WebView renders a hosted copy of a sent email ("view in browser"). The token is
-// an HMAC-signed, expiring capability bound to the email's opaque UUID. Because the
-// page renders arbitrary customer HTML, it is served with a restrictive CSP, no
-// cookies, and noindex, and the open-tracking pixel is stripped so a web view does
-// not inflate open metrics.
+// WebView renders a hosted copy of a sent email ("view in browser").
 func (h *TrackingHandler) WebView(c *okapi.Context, req *TrackingWebViewRequest) error {
 	emailUUID, err := h.trackingService.VerifyWebViewToken(req.Token)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "This link is invalid or has expired.", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Link expired", "This link is invalid or has expired.", "error")
 	}
 	em, err := h.emailRepo.FindByUUID(emailUUID)
 	if err != nil || em == nil {
-		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the message this link points to.", "error")
 	}
 
 	body := em.HTMLBody
 	if strings.TrimSpace(body) == "" {
-		body = "<pre style=\"white-space:pre-wrap;font-family:sans-serif\">" + html.EscapeString(em.TextBody) + "</pre>"
+		body = "<pre style=\"white-space:pre-wrap;font-family:sans-serif;padding:24px;margin:0\">" + html.EscapeString(em.TextBody) + "</pre>"
 	}
 	body = openPixelRe.ReplaceAllString(body, "")
 
@@ -293,31 +274,27 @@ func (h *TrackingHandler) WebView(c *okapi.Context, req *TrackingWebViewRequest)
 	hdr.Set("X-Robots-Tag", "noindex, nofollow")
 	hdr.Set("Referrer-Policy", "no-referrer")
 
-	page := fmt.Sprintf(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow">
-<title>%s</title>
-<style>body{margin:0;background:#f3f4f6}.posta-wv-bar{font-family:sans-serif;font-size:12px;color:#6b7280;text-align:center;padding:10px;background:#fff;border-bottom:1px solid #e5e7eb}.posta-wv-body{max-width:680px;margin:0 auto;padding:16px}</style>
-</head><body><div class="posta-wv-bar">You are viewing a copy of an email.</div><div class="posta-wv-body">%s</div></body></html>`,
-		html.EscapeString(em.Subject), body)
-
-	return c.HTMLView(http.StatusOK, page, okapi.M{})
+	return trackingHTMLView(c, http.StatusOK, "webview", webViewData{
+		Subject: em.Subject,
+		Body:    template.HTML(body),
+	})
 }
 
 // UnsubscribeConfirm processes the unsubscribe action.
 func (h *TrackingHandler) UnsubscribeConfirm(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	messageID, err := h.trackingService.VerifyUnsubscribeToken(req.Token)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Invalid or expired unsubscribe link", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Link expired", "This unsubscribe link is invalid or has expired.", "error")
 	}
 
 	msg, err := h.messageRepo.FindByCampaignMessageID(messageID)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Message not found", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the message this link points to.", "error")
 	}
 
 	camp, err := h.campaignRepo.FindByID(msg.CampaignID)
 	if err != nil {
-		return c.HTMLView(http.StatusNotFound, "Campaign not found", okapi.M{})
+		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the campaign this link points to.", "error")
 	}
 
 	// Suppress this subscriber on the campaign's list
@@ -336,13 +313,8 @@ func (h *TrackingHandler) UnsubscribeConfirm(c *okapi.Context, req *TrackingUnsu
 		UserAgent:         c.Request().UserAgent(),
 	})
 
-	confirmHTML := `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title>
-<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}
-.card{background:#fff;border-radius:12px;padding:40px;max-width:420px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
-h1{font-size:20px;color:#16a34a}p{color:#6b7280;font-size:14px}</style></head><body>
-<div class="card"><h1>Unsubscribed</h1><p>You have been removed from this mailing list. Other lists you are subscribed to are unaffected.</p></div></body></html>`
-
-	return c.HTMLView(http.StatusOK, confirmHTML, okapi.M{})
+	return trackingNotice(c, http.StatusOK, "You're unsubscribed",
+		"You've been removed from this mailing list. Other lists you're subscribed to are unaffected.", "success")
 }
 
 type CampaignAnalyticsRequest struct {
@@ -421,7 +393,6 @@ func (h *TrackingHandler) recordClick(messageID uint, linkID uint, ip, userAgent
 	// Increment link click count
 	h.trackingRepo.IncrementLinkClickCount(linkID)
 
-	// Record event (unique per link per message for deduplication stats)
 	if !h.trackingRepo.HasClickEvent(msg.ID, linkID) {
 		_ = h.trackingRepo.CreateEvent(&models.TrackingEvent{
 			CampaignMessageID: msg.ID,

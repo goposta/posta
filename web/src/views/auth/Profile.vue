@@ -297,6 +297,18 @@ function parseUserAgent(ua: string): string {
   return ua.slice(0, 30) + (ua.length > 30 ? '...' : '')
 }
 
+// sessionLabel prefers the server-parsed label, falling back to the local
+// User-Agent parser for sessions created before the server enriched them.
+function sessionLabel(s: Session): string {
+  if (s.label && s.label !== 'Unknown device') return s.label
+  return parseUserAgent(s.user_agent)
+}
+
+// sessionDevice returns a short form-factor hint (e.g. "Mobile") when known.
+function sessionDevice(s: Session): string {
+  return s.device && s.device !== 'Unknown' ? s.device : ''
+}
+
 function formatSessionDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -587,7 +599,8 @@ onMounted(() => { loadSessions() })
             <div v-for="s in sessions" :key="s.id" class="session-item" :class="{ 'session-current': s.current }">
               <div class="session-info">
                 <div class="session-browser">
-                  {{ parseUserAgent(s.user_agent) }}
+                  {{ sessionLabel(s) }}
+                  <span v-if="sessionDevice(s)" class="badge" style="margin-left: 6px">{{ sessionDevice(s) }}</span>
                   <span v-if="s.current" class="badge badge-success" style="margin-left: 6px">Current</span>
                 </div>
                 <div class="session-meta">

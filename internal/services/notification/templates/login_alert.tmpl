@@ -1,0 +1,30 @@
+{{ define "content" }}
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">New sign-in to your account</h2>
+<p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">Your {{ .AppName }} account was just accessed from a new device or location.</p>
+
+<table class="stats-table" role="presentation" style="width: 100%; border-collapse: separate; border-spacing: 0; margin: 20px 0; border: 1px solid #eceef2; border-radius: 10px; overflow: hidden;">
+  <tr>
+    <th style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; background-color: #f9fafb; color: #6b7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;">Detail</th>
+    <th style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; background-color: #f9fafb; color: #6b7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;">Value</th>
+  </tr>
+  {{ if .Browser }}<tr><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Browser</td><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;"><strong>{{ .Browser }}</strong></td></tr>{{ end }}
+  {{ if .OS }}<tr><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Operating system</td><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">{{ .OS }}</td></tr>{{ end }}
+  {{ if .Device }}<tr><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Device</td><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">{{ .Device }}</td></tr>{{ end }}
+  {{ if .Location }}<tr><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Location</td><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">{{ .Location }}</td></tr>{{ end }}
+  <tr><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">IP address</td><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;"><code style="background-color: #f3f4f6; padding: 2px 7px; border-radius: 5px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; color: #6d28d9;">{{ .IPAddress }}</code></td></tr>
+  <tr><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Time</td><td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">{{ .LoginAt }}</td></tr>
+</table>
+
+<div class="alert-box alert-warning" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e;">
+  <strong>Wasn't you?</strong> Change your password and revoke active sessions right away to keep your account secure.
+</div>
+
+{{ if .AppURL }}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AppURL }}/profile" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Review account activity</a>
+  </td></tr>
+</table>
+{{ end }}
+{{ end }}

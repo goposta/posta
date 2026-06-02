@@ -27,8 +27,29 @@ let savedClearTimer: ReturnType<typeof setTimeout> | null = null
 const form = ref<Partial<UserSettings>>({
   email_notifications: true,
   notification_email: '',
-  daily_report: false,
+  daily_report: true,
+  notify_bounce_alerts: true,
+  notify_api_key_expiry: true,
+  notify_workspace_activity: true,
 })
+
+// Per-type notification toggles rendered under the master switch. Security
+// alerts (sign-in, 2FA, password, account deletion) are always on and shown
+// separately as informational.
+const notificationTypes: {
+  key: 'daily_report' | 'notify_bounce_alerts' | 'notify_api_key_expiry' | 'notify_workspace_activity'
+  label: string
+  hint: string
+}[] = [
+  { key: 'notify_bounce_alerts', label: 'Bounce & deliverability alerts', hint: 'Warn me when my bounce rate crosses the safe threshold.' },
+  { key: 'notify_api_key_expiry', label: 'API key expiry reminders', hint: 'Remind me before an API key expires.' },
+  { key: 'notify_workspace_activity', label: 'Workspace updates', hint: 'Notify me about role changes and workspace activity.' },
+  { key: 'daily_report', label: 'Daily report', hint: 'Receive a daily email summary of send statistics.' },
+]
+
+function toggleType(key: typeof notificationTypes[number]['key']) {
+  form.value[key] = !form.value[key]
+}
 
 // Theme
 const themeModes: { value: ThemeMode; label: string; icon: string }[] = [
@@ -45,6 +66,9 @@ onMounted(async () => {
       email_notifications: u.email_notifications,
       notification_email: u.notification_email || '',
       daily_report: u.daily_report,
+      notify_bounce_alerts: u.notify_bounce_alerts,
+      notify_api_key_expiry: u.notify_api_key_expiry,
+      notify_workspace_activity: u.notify_workspace_activity,
     }
   } catch {
     notify.error('Failed to load settings')
@@ -130,7 +154,7 @@ async function autoSave() {
           <div class="toggle-row">
             <div>
               <label class="toggle-label">Email Notifications</label>
-              <span class="form-hint">Receive notifications on failures, bounces, etc.</span>
+              <span class="form-hint">Master switch for all notification emails below. Turn off to pause everything except security alerts.</span>
             </div>
             <button
               :class="['toggle-btn', { active: form.email_notifications }]"
@@ -144,17 +168,37 @@ async function autoSave() {
             <input v-model="form.notification_email" type="email" class="form-input" placeholder="Defaults to your login email" />
             <span class="form-hint">Where to send notifications (can differ from your login email).</span>
           </div>
-          <div class="toggle-row" style="margin-top: 16px">
+
+          <div class="notif-divider"></div>
+          <p class="notif-group-title">Notification types</p>
+          <p class="form-hint" style="margin-top: -4px; margin-bottom: 8px">You receive all of these by default. Turn off any you don't want.</p>
+
+          <div
+            v-for="t in notificationTypes"
+            :key="t.key"
+            class="toggle-row notif-type-row"
+            :class="{ 'notif-disabled': !form.email_notifications }"
+          >
             <div>
-              <label class="toggle-label">Daily Report</label>
-              <span class="form-hint">Receive a daily email summary of send statistics.</span>
+              <label class="toggle-label">{{ t.label }}</label>
+              <span class="form-hint">{{ t.hint }}</span>
             </div>
             <button
-              :class="['toggle-btn', { active: form.daily_report }]"
-              @click="form.daily_report = !form.daily_report"
+              :class="['toggle-btn', { active: form.email_notifications && form[t.key] }]"
+              :disabled="!form.email_notifications"
+              @click="toggleType(t.key)"
             >
               <span class="toggle-slider"></span>
             </button>
+          </div>
+
+          <div class="notif-divider"></div>
+          <div class="toggle-row notif-type-row">
+            <div>
+              <label class="toggle-label">Security alerts</label>
+              <span class="form-hint">Sign-ins from new devices, 2FA changes, password changes, and account deletion. Always on to protect your account.</span>
+            </div>
+            <span class="badge badge-success notif-always-on">Always on</span>
           </div>
         </div>
       </div>
@@ -245,6 +289,41 @@ async function autoSave() {
   background: white;
   transition: transform 0.2s;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.notif-divider {
+  height: 1px;
+  background: var(--border-primary);
+  margin: 20px 0 16px;
+}
+
+.notif-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.notif-type-row {
+  margin-top: 14px;
+}
+
+.notif-type-row:first-of-type {
+  margin-top: 0;
+}
+
+.notif-disabled .toggle-label,
+.notif-disabled .form-hint {
+  opacity: 0.6;
+}
+
+.notif-always-on {
+  flex-shrink: 0;
 }
 
 .toggle-btn.active .toggle-slider {

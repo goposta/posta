@@ -5,6 +5,10 @@ export interface Session {
   id: number
   ip_address: string
   user_agent: string
+  browser: string
+  os: string
+  device: string
+  label: string
   current: boolean
   created_at: string
   expires_at: string

@@ -44,7 +44,24 @@ const (
 	TemplateBounceAlert     = "bounce_alert"
 	TemplateRoleChanged     = "role_changed"
 	TemplateEmailVerify     = "email_verification"
+	TemplateLoginAlert      = "login_alert"
+	TemplateTwoFactorChange = "two_factor_changed"
+	TemplateAccountDeletion = "account_deletion"
 )
+
+var templatePreference = map[string]func(*models.UserSetting) bool{
+	TemplateDailyReport:  func(s *models.UserSetting) bool { return s.DailyReport },
+	TemplateBounceAlert:  func(s *models.UserSetting) bool { return s.NotifyBounceAlerts },
+	TemplateAPIKeyExpiry: func(s *models.UserSetting) bool { return s.NotifyAPIKeyExpiry },
+	TemplateRoleChanged:  func(s *models.UserSetting) bool { return s.NotifyWorkspaceActivity },
+}
+
+func templateEnabled(templateName string, settings *models.UserSetting) bool {
+	if pref, ok := templatePreference[templateName]; ok {
+		return pref(settings)
+	}
+	return true
+}
 
 // Service sends platform notification emails via the system SMTP server.
 type Service struct {
@@ -91,6 +108,9 @@ func (s *Service) loadTemplates() {
 		TemplateBounceAlert,
 		TemplateRoleChanged,
 		TemplateEmailVerify,
+		TemplateLoginAlert,
+		TemplateTwoFactorChange,
+		TemplateAccountDeletion,
 	}
 	for _, name := range names {
 		tmpl := template.Must(template.ParseFS(templateFS,
@@ -135,6 +155,20 @@ func (s *Service) Send(to, subject, templateName string, data map[string]any) er
 
 // SendToUser sends a notification to a user, respecting their notification preferences.
 func (s *Service) SendToUser(userID uint, subject, templateName string, data map[string]any) error {
+	return s.sendToUser(userID, subject, templateName, data, false)
+}
+
+// SendSecurityToUser sends a security-critical notification (sign-in alerts, 2FA
+// changes, password changes, account deletion). It bypasses the user's
+// EmailNotifications preference — these messages must always reach the account
+// owner — but still skips unverified accounts and honors their notification email.
+func (s *Service) SendSecurityToUser(userID uint, subject, templateName string, data map[string]any) error {
+	return s.sendToUser(userID, subject, templateName, data, true)
+}
+
+// sendToUser is the shared implementation behind SendToUser and SendSecurityToUser.
+// When security is true the recipient's EmailNotifications toggle is ignored.
+func (s *Service) sendToUser(userID uint, subject, templateName string, data map[string]any, security bool) error {
 	if !s.IsConfigured() {
 		return nil
 	}
@@ -149,8 +183,13 @@ func (s *Service) SendToUser(userID uint, subject, templateName string, data map
 		return fmt.Errorf("notification: settings for user %d: %w", userID, err)
 	}
 
-	if !settings.EmailNotifications {
+	if !security && !settings.EmailNotifications {
 		logger.Debug("notification service: email notifications disabled for user", "user_id", userID)
+		return nil
+	}
+
+	if !security && !templateEnabled(templateName, settings) {
+		logger.Debug("notification service: notification type disabled for user", "user_id", userID, "template", templateName)
 		return nil
 	}
 

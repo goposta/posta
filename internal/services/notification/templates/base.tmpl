@@ -1,45 +1,132 @@
 {{ define "base" }}<!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>{{ .Subject }}</title>
+<!--[if mso]>
+<noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<![endif]-->
 <style>
-  body { margin: 0; padding: 0; background-color: #f4f4f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-  .wrapper { width: 100%; background-color: #f4f4f7; padding: 40px 0; }
-  .container { max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-  .header { background-color: #7c3aed; padding: 24px 32px; text-align: center; }
-  .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 600; }
-  .body { padding: 32px; color: #374151; font-size: 15px; line-height: 1.6; }
-  .body h2 { color: #111827; font-size: 18px; margin: 0 0 16px; }
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+  table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+  img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+  body { margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #eef0f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+
+  .wrapper { width: 100%; background-color: #eef0f5; padding: 32px 12px; }
+  .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 4px 16px rgba(16,24,40,0.06); }
+
+  .header { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); background-color: #7c3aed; padding: 28px 32px; text-align: center; }
+  .header .brand { color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
+  .header .brand-dot { color: #c4b5fd; margin-left: 1px; }
+
+  .body { padding: 36px 32px 8px; color: #374151; font-size: 15px; line-height: 1.65; }
+  .body h2 { color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em; }
   .body p { margin: 0 0 16px; }
-  .btn { display: inline-block; padding: 12px 28px; background-color: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; }
-  .footer { padding: 24px 32px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
-  .stats-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-  .stats-table th, .stats-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
-  .stats-table th { color: #6b7280; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .body a { color: #7c3aed; }
+  .lead { font-size: 15px; color: #4b5563; }
+
+  /* Buttons */
+  .btn-wrap { margin: 28px 0; }
+  .btn { display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1; }
+  .btn-secondary { display: inline-block; padding: 11px 26px; background-color: #ffffff; color: #7c3aed !important; text-decoration: none; border: 1px solid #d8b4fe; border-radius: 8px; font-weight: 600; font-size: 14px; line-height: 1; }
+
+  .footer { padding: 28px 32px 32px; text-align: center; font-size: 12px; line-height: 1.6; color: #9ca3af; border-top: 1px solid #eceef2; }
+  .footer a { color: #7c3aed; text-decoration: none; }
+  .footer .footer-links { margin: 0 0 10px; }
+  .footer .footer-links a { margin: 0 8px; font-weight: 600; }
+  .footer .footer-note { margin: 0 0 6px; color: #6b7280; }
+  .footer .footer-meta { margin: 10px 0 0; color: #b6bcc7; }
+
+  /* Stats / detail table */
+  .stats-table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 20px 0; border: 1px solid #eceef2; border-radius: 10px; overflow: hidden; }
+  .stats-table th, .stats-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; }
+  .stats-table tr:last-child th, .stats-table tr:last-child td { border-bottom: 0; }
+  .stats-table th { background-color: #f9fafb; color: #6b7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
   .stats-table td { color: #111827; }
-  .highlight { font-size: 28px; font-weight: 700; color: #7c3aed; }
+  .stats-table code { background-color: #f3f4f6; padding: 2px 7px; border-radius: 5px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; color: #6d28d9; }
+
+  /* Highlight number */
+  .highlight { font-size: 30px; font-weight: 800; color: #7c3aed; letter-spacing: -0.02em; }
   .muted { color: #6b7280; font-size: 13px; }
-  .alert-box { padding: 16px; border-radius: 6px; margin: 16px 0; }
-  .alert-warning { background-color: #fef3c7; border: 1px solid #fbbf24; color: #92400e; }
-  .alert-danger { background-color: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
-  .alert-info { background-color: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; }
+
+  /* Alert boxes */
+  .alert-box { padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; }
+  .alert-warning { background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .alert-danger { background-color: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .alert-info { background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+  .alert-success { background-color: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+
+  /* Link fallback for buttons */
+  .link-fallback { word-break: break-all; font-size: 13px; }
+  .link-fallback a { color: #7c3aed; }
+
+  .divider { height: 1px; line-height: 1px; font-size: 1px; background-color: #eceef2; margin: 28px 0; }
+
+  @media only screen and (max-width: 600px) {
+    .wrapper { padding: 16px 0 !important; }
+    .container { border-radius: 0 !important; }
+    .body { padding: 28px 22px 4px !important; }
+    .header { padding: 24px 22px !important; }
+    .footer { padding: 24px 22px 28px !important; }
+    .body h2 { font-size: 19px !important; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body, .wrapper { background-color: #0f1115 !important; }
+    .container { background-color: #1a1d24 !important; box-shadow: none !important; }
+    .body { color: #cbd2dd !important; }
+    .body h2 { color: #f3f4f6 !important; }
+    .lead { color: #aab2bf !important; }
+    .stats-table { border-color: #2a2e38 !important; }
+    .stats-table th { background-color: #20242c !important; color: #9aa3b2 !important; }
+    .stats-table th, .stats-table td { border-color: #2a2e38 !important; }
+    .stats-table td { color: #e5e7eb !important; }
+    .stats-table code { background-color: #2a2e38 !important; color: #c4b5fd !important; }
+    .footer { border-color: #2a2e38 !important; color: #7d8696 !important; }
+    .footer .footer-note { color: #9aa3b2 !important; }
+    .divider { background-color: #2a2e38 !important; }
+  }
 </style>
 </head>
 <body>
-<div class="wrapper">
-  <div class="container">
-    <div class="header">
-      <h1>{{ .AppName }}</h1>
-    </div>
-    <div class="body">
-      {{ template "content" . }}
-    </div>
-    <div class="footer">
-      {{ if .AppURL }}<a href="{{ .AppURL }}" style="color: #7c3aed; text-decoration: none;">{{ .AppName }}</a> &mdash; {{ end }}This is an automated notification.
-    </div>
-  </div>
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">{{ if .Preheader }}{{ .Preheader }}{{ else }}{{ .Subject }}{{ end }}&#8199;&#65279;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;</div>
+<div class="wrapper" style="width: 100%; background-color: #eef0f5; padding: 32px 12px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center">
+        <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 4px 16px rgba(16,24,40,0.06);">
+          <tr>
+            <td class="header" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); background-color: #7c3aed; padding: 28px 32px; text-align: center;">
+              {{ if .AppURL }}<a class="brand" href="{{ .AppURL }}" style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; text-decoration: none;">{{ .AppName }}<span class="brand-dot" style="color: #c4b5fd; margin-left: 1px;">.</span></a>{{ else }}<span class="brand" style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; text-decoration: none;">{{ .AppName }}<span class="brand-dot" style="color: #c4b5fd; margin-left: 1px;">.</span></span>{{ end }}
+            </td>
+          </tr>
+          <tr>
+            <td class="body" style="padding: 36px 32px 8px; color: #374151; font-size: 15px; line-height: 1.65;">
+              {{ template "content" . }}
+            </td>
+          </tr>
+          <tr>
+            <td class="footer" style="padding: 28px 32px 32px; text-align: center; font-size: 12px; line-height: 1.6; color: #9ca3af; border-top: 1px solid #eceef2;">
+              {{ if .FooterNote }}<p class="footer-note" style="margin: 0 0 6px; color: #6b7280;">{{ .FooterNote }}</p>{{ end }}
+              <p class="footer-note" style="margin: 0 0 6px; color: #6b7280;">You're receiving this email because you have an account on {{ .AppName }}.</p>
+              {{ if .AppURL }}
+              <p class="footer-links" style="margin: 0 0 10px;">
+                <a href="{{ .AppURL }}" style="color: #7c3aed; text-decoration: none; margin: 0 8px; font-weight: 600;">Visit {{ .AppName }}</a>
+                <a href="{{ .AppURL }}/settings" style="color: #7c3aed; text-decoration: none; margin: 0 8px; font-weight: 600;">Notification settings</a>
+              </p>
+              {{ end }}
+              <p class="footer-meta" style="margin: 10px 0 0; color: #b6bcc7;">This is an automated message, please do not reply.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </div>
 </body>
 </html>{{ end }}

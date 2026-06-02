@@ -20,6 +20,7 @@ package handlers
 import (
 	"fmt"
 
+	"github.com/goposta/posta/internal/services/clientinfo"
 	"github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
@@ -39,6 +40,10 @@ type SessionResponse struct {
 	ID        uint   `json:"id"`
 	IPAddress string `json:"ip_address"`
 	UserAgent string `json:"user_agent"`
+	Browser   string `json:"browser"`
+	OS        string `json:"os"`
+	Device    string `json:"device"`
+	Label     string `json:"label"`
 	Current   bool   `json:"current"`
 	CreatedAt string `json:"created_at"`
 	ExpiresAt string `json:"expires_at"`
@@ -60,10 +65,15 @@ func (h *SessionHandler) List(c *okapi.Context) error {
 
 	result := make([]SessionResponse, 0, len(sessions))
 	for _, s := range sessions {
+		client := clientinfo.Parse(s.UserAgent)
 		result = append(result, SessionResponse{
 			ID:        s.ID,
 			IPAddress: s.IPAddress,
 			UserAgent: s.UserAgent,
+			Browser:   client.Browser,
+			OS:        client.OS,
+			Device:    client.Device,
+			Label:     client.Label(),
 			Current:   s.JTI == currentJTI,
 			CreatedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			ExpiresAt: s.ExpiresAt.Format("2006-01-02T15:04:05Z"),

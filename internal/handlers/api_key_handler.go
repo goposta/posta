@@ -117,7 +117,7 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 			expiresStr = key.ExpiresAt.Format("January 2, 2006")
 		}
 		go func() {
-			_ = h.notifier.SendToUser(scope.UserID, fmt.Sprintf("New API key created: %s", key.Name), notification.TemplateAPIKeyCreated, map[string]any{
+			_ = h.notifier.SendSecurityToUser(scope.UserID, fmt.Sprintf("New API key created: %s", key.Name), notification.TemplateAPIKeyCreated, map[string]any{
 				"KeyName":   key.Name,
 				"KeyPrefix": key.KeyPrefix,
 				"ExpiresAt": expiresStr,

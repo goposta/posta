@@ -653,6 +653,9 @@ export interface UserSettings {
   api_key_expiry_days: number
   bounce_auto_suppress: boolean
   daily_report: boolean
+  notify_bounce_alerts: boolean
+  notify_api_key_expiry: boolean
+  notify_workspace_activity: boolean
   created_at: string
   updated_at: string
 }

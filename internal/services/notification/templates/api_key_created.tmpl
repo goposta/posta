@@ -1,42 +1,44 @@
 {{ define "content" }}
-<h2>New API Key Created</h2>
-<p>Hi {{ .UserName }},</p>
-<p>A new API key has been created on your account:</p>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">New API key created</h2>
+<p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">A new API key was just created on your account.</p>
 
-<table class="stats-table">
+<table class="stats-table" role="presentation" style="width: 100%; border-collapse: separate; border-spacing: 0; margin: 20px 0; border: 1px solid #eceef2; border-radius: 10px; overflow: hidden;">
   <tr>
-    <th>Detail</th>
-    <th>Value</th>
+    <th style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; background-color: #f9fafb; color: #6b7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;">Detail</th>
+    <th style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; background-color: #f9fafb; color: #6b7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;">Value</th>
   </tr>
   <tr>
-    <td>Name</td>
-    <td><strong>{{ .KeyName }}</strong></td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Name</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;"><strong>{{ .KeyName }}</strong></td>
   </tr>
   <tr>
-    <td>Prefix</td>
-    <td><code>{{ .KeyPrefix }}</code></td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Prefix</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;"><code style="background-color: #f3f4f6; padding: 2px 7px; border-radius: 5px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; color: #6d28d9;">{{ .KeyPrefix }}</code></td>
   </tr>
   <tr>
-    <td>Expires</td>
-    <td>{{ .ExpiresAt }}</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Expires</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">{{ .ExpiresAt }}</td>
   </tr>
   <tr>
-    <td>Created</td>
-    <td>{{ .CreatedAt }}</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">Created</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">{{ .CreatedAt }}</td>
   </tr>
   <tr>
-    <td>IP Address</td>
-    <td>{{ .IPAddress }}</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">IP address</td>
+    <td style="padding: 12px 16px; text-align: left; border-bottom: 1px solid #eceef2; font-size: 14px; color: #111827;">{{ .IPAddress }}</td>
   </tr>
 </table>
 
-<div class="alert-box alert-warning">
-  <strong>Wasn't you?</strong> If you did not create this key, please revoke it immediately and review your account security.
+<div class="alert-box alert-warning" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e;">
+  <strong>Didn't create this key?</strong> Revoke it immediately and review your account security.
 </div>
 
 {{ if .AppURL }}
-<p style="text-align: center; margin: 24px 0;">
-  <a href="{{ .AppURL }}/api-keys" class="btn">Manage API Keys</a>
-</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AppURL }}/api-keys" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Manage API keys</a>
+  </td></tr>
+</table>
 {{ end }}
 {{ end }}

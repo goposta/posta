@@ -1,12 +1,18 @@
 {{ define "content" }}
-<h2>You've been invited to a workspace</h2>
-<p><strong>{{ .InviterName }}</strong> has invited you to join the workspace <strong>"{{ .WorkspaceName }}"</strong> as {{ .RoleArticle }} <strong>{{ .Role }}</strong>.</p>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">You've been invited to a workspace</h2>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;"><strong>{{ .InviterName }}</strong> has invited you to join <strong>"{{ .WorkspaceName }}"</strong> on {{ .AppName }} as {{ .RoleArticle }} <strong>{{ .Role }}</strong>.</p>
 
 {{ if .AcceptURL }}
-<p style="text-align: center; margin: 32px 0;">
-  <a href="{{ .AcceptURL }}" class="btn">Accept Invitation</a>
-</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AcceptURL }}" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Accept invitation</a>
+  </td></tr>
+</table>
+
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px;">Or paste this link into your browser:</p>
+<p class="link-fallback" style="margin: 0 0 16px; word-break: break-all; font-size: 13px;"><a href="{{ .AcceptURL }}" style="color: #7c3aed;">{{ .AcceptURL }}</a></p>
 {{ end }}
 
-<p class="muted">This invitation expires on {{ .ExpiresAt }}. If you don't have an account, you'll need to register first.</p>
+<div class="divider" style="height: 1px; line-height: 1px; font-size: 1px; background-color: #eceef2; margin: 28px 0;"></div>
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px;">This invitation expires on {{ .ExpiresAt }}. If you don't have an account yet, you'll be prompted to create one first.</p>
 {{ end }}

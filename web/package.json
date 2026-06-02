@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.11",

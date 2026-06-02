@@ -1,14 +1,19 @@
 {{ define "content" }}
-<h2>Verify your email address</h2>
-<p>Hi {{ .UserName }},</p>
-<p>To finish setting up your {{ .AppName }} account, please confirm this is your email address by clicking the button below.</p>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">Verify your email address</h2>
+<p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">To finish setting up your {{ .AppName }} account, please confirm this is your email address.</p>
 
-<p style="text-align: center; margin: 32px 0;">
-  <a href="{{ .VerifyURL }}" class="btn">Verify email</a>
-</p>
+{{ if .VerifyURL }}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .VerifyURL }}" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Verify email address</a>
+  </td></tr>
+</table>
 
-<p class="muted">Or paste this link into your browser:<br>
-<a href="{{ .VerifyURL }}">{{ .VerifyURL }}</a></p>
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px;">Or paste this link into your browser:</p>
+<p class="link-fallback" style="margin: 0 0 16px; word-break: break-all; font-size: 13px;"><a href="{{ .VerifyURL }}" style="color: #7c3aed;">{{ .VerifyURL }}</a></p>
+{{ end }}
 
-<p class="muted">This link expires in {{ .ExpiryHours }} hours. If you didn't create an account, you can safely ignore this email.</p>
+<div class="divider" style="height: 1px; line-height: 1px; font-size: 1px; background-color: #eceef2; margin: 28px 0;"></div>
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px;">This link expires in {{ .ExpiryHours }} hours. If you didn't create an account, you can safely ignore this email.</p>
 {{ end }}

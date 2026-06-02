@@ -1,0 +1,21 @@
+{{ define "content" }}
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">Your account is scheduled for deletion</h2>
+<p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">We've received a request to delete your {{ .AppName }} account. It has been deactivated now and will be <strong>permanently deleted on {{ .ScheduledFor }}</strong>.</p>
+
+<div class="alert-box alert-danger" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #fef2f2; border: 1px solid #fecaca; color: #991b1b;">
+  This action is permanent. Once deleted, your account, workspaces, and email history cannot be recovered.
+</div>
+
+<p style="margin: 0 0 16px;">Changed your mind? You can cancel the deletion and reactivate your account any time before the date above.</p>
+
+{{ if .AppURL }}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AppURL }}/profile" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Cancel deletion</a>
+  </td></tr>
+</table>
+{{ end }}
+
+<p class="muted" style="margin: 0 0 16px; color: #6b7280; font-size: 13px;">If you didn't request this, cancel the deletion immediately and change your password.</p>
+{{ end }}

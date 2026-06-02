@@ -167,6 +167,13 @@ async function handleCancelDeletion() {
   }
 }
 
+// selectedPlanId reads a <select> change event's value as a plan id, or null
+// for the "no plan" option.
+function selectedPlanId(event: Event): number | null {
+  const value = (event.target as HTMLSelectElement).value
+  return Number(value) || null
+}
+
 async function handleChangeUserPlan(planId: number | null) {
   if (!metrics.value) return
   changingUserPlan.value = true
@@ -442,7 +449,7 @@ function formatDate(date: string) {
               style="max-width: 300px;"
               :value="metrics.user.plan_id || ''"
               :disabled="changingUserPlan"
-              @change="handleChangeUserPlan(Number($event.target.value) || null)"
+              @change="handleChangeUserPlan(selectedPlanId($event))"
             >
               <option value="">No plan (use default)</option>
               <option v-for="plan in plans" :key="plan.id" :value="plan.id">
@@ -480,7 +487,7 @@ function formatDate(date: string) {
                     class="form-select form-select-sm"
                     :value="ws.plan_id || ''"
                     :disabled="changingPlan === ws.id"
-                    @change="handleChangePlan(ws, Number($event.target.value) || null)"
+                    @change="handleChangePlan(ws, selectedPlanId($event))"
                   >
                     <option value="">No plan (use default)</option>
                     <option v-for="plan in plans" :key="plan.id" :value="plan.id">

@@ -44,6 +44,10 @@ type UpdateUserSettingsRequest struct {
 		BounceAutoSuppress *bool   `json:"bounce_auto_suppress"`
 		DefaultLanguage    *string `json:"default_language"`
 		DailyReport        *bool   `json:"daily_report"`
+
+		NotifyBounceAlerts      *bool `json:"notify_bounce_alerts"`
+		NotifyAPIKeyExpiry      *bool `json:"notify_api_key_expiry"`
+		NotifyWorkspaceActivity *bool `json:"notify_workspace_activity"`
 	} `json:"body"`
 }
 
@@ -97,6 +101,15 @@ func (h *UserSettingHandler) UpdateSettings(c *okapi.Context, req *UpdateUserSet
 	}
 	if req.Body.DailyReport != nil {
 		settings.DailyReport = *req.Body.DailyReport
+	}
+	if req.Body.NotifyBounceAlerts != nil {
+		settings.NotifyBounceAlerts = *req.Body.NotifyBounceAlerts
+	}
+	if req.Body.NotifyAPIKeyExpiry != nil {
+		settings.NotifyAPIKeyExpiry = *req.Body.NotifyAPIKeyExpiry
+	}
+	if req.Body.NotifyWorkspaceActivity != nil {
+		settings.NotifyWorkspaceActivity = *req.Body.NotifyWorkspaceActivity
 	}
 
 	if err := h.repo.CreateOrUpdate(settings); err != nil {

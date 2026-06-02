@@ -24,11 +24,6 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// The transactional migration itself is exercised against a live Postgres (it
-// relies on SAVEPOINTs and the partial unique index, which an in-memory engine
-// won't replicate). These unit tests cover the pure pieces that are easy to get
-// wrong without a database.
-
 func TestPersonalSlugIsStableAndUnique(t *testing.T) {
 	if got := personalSlug(42); got != "personal-42" {
 		t.Fatalf("personalSlug(42) = %q, want %q", got, "personal-42")
@@ -38,9 +33,6 @@ func TestPersonalSlugIsStableAndUnique(t *testing.T) {
 	}
 }
 
-// TestOperationalTablesMatchPlan guards against silently dropping a table from
-// the backfill — every user-scoped operational resource listed in §3 of the
-// plan must be present, and each must actually carry a workspace_id column.
 func TestOperationalTablesMatchPlan(t *testing.T) {
 	want := []interface{}{
 		&models.APIKey{}, &models.Template{}, &models.StyleSheet{}, &models.Language{},

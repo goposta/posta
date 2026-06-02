@@ -1,23 +1,307 @@
 /**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
+ * Homepage styles. Scoped locally via CSS modules.
+ * Colors derive from the Infima --ifm-color-primary palette so light/dark
+ * themes stay in sync with the rest of the docs.
  */
 
-.heroBanner {
-  padding: 4rem 0;
-  text-align: center;
+/* ---------- Hero ---------- */
+
+.hero {
   position: relative;
   overflow: hidden;
+  padding: 6rem 0 4rem;
+  text-align: center;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(124, 58, 237, 0.12), transparent 70%),
+    linear-gradient(180deg, var(--ifm-background-surface-color) 0%, var(--ifm-background-color) 100%);
+  border-bottom: 1px solid var(--ifm-toc-border-color);
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
-  }
+.heroGlow {
+  position: absolute;
+  top: -200px;
+  right: -120px;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.14);
+  filter: blur(120px);
+  pointer-events: none;
+}
+
+.heroInner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary-darker);
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  margin-bottom: 1.75rem;
+}
+
+[data-theme='dark'] .badge {
+  color: var(--ifm-color-primary-lightest);
+  background: rgba(167, 139, 250, 0.12);
+  border-color: rgba(167, 139, 250, 0.25);
+}
+
+.badgeDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18);
+}
+
+.heroTitle {
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.25rem;
+  max-width: 18ch;
+}
+
+.gradientText {
+  background: linear-gradient(120deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-light) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.heroSubtitle {
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+  max-width: 42rem;
+  margin-bottom: 2.25rem;
 }
 
 .buttons {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+  gap: 0.85rem;
+}
+
+.githubButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.githubIcon {
+  flex-shrink: 0;
+}
+
+/* ---------- Stats ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 40rem;
+  margin-top: 3.5rem;
+}
+
+.statItem {
+  text-align: center;
+}
+
+.statValue {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ifm-heading-color);
+}
+
+.statLabel {
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-top: 0.2rem;
+}
+
+/* ---------- Sections ---------- */
+
+.section {
+  padding: 4.5rem 0;
+}
+
+.sectionMuted {
+  background: var(--ifm-background-surface-color);
+  border-top: 1px solid var(--ifm-toc-border-color);
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+.sectionHeader {
+  text-align: center;
+  max-width: 44rem;
+  margin: 0 auto 3rem;
+}
+
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ifm-color-primary);
+  margin-bottom: 0.6rem;
+}
+
+.sectionTitle {
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+}
+
+.sectionLead {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+}
+
+/* ---------- Quick start ---------- */
+
+.codeColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.codeColumns :global(.theme-code-block) {
+  margin-bottom: 0;
+}
+
+.codeCta {
+  text-align: center;
+  margin-top: 1.75rem;
+  font-weight: 600;
+}
+
+/* ---------- Feature grid ---------- */
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.card {
+  position: relative;
+  display: block;
+  padding: 1.6rem;
+  border-radius: 14px;
+  background: var(--ifm-background-color);
+  border: 1px solid var(--ifm-toc-border-color);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  color: inherit;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 16px 40px rgba(16, 24, 40, 0.12);
+  text-decoration: none;
+  color: inherit;
+}
+
+.cardTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  padding-right: 1.5rem;
+}
+
+.cardDescription {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+}
+
+.cardArrow {
+  position: absolute;
+  top: 1.6rem;
+  right: 1.6rem;
+  font-size: 1.1rem;
+  color: var(--ifm-color-primary);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.card:hover .cardArrow {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ---------- Call to action ---------- */
+
+.cta {
+  text-align: center;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 3.5rem 2rem;
+  border-radius: 20px;
+  background:
+    radial-gradient(800px 400px at 50% 0%, rgba(124, 58, 237, 0.14), transparent 70%),
+    var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-toc-border-color);
+}
+
+.ctaTitle {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.75rem;
+}
+
+.ctaLead {
+  font-size: 1.1rem;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 1.75rem;
+}
+
+/* ---------- Responsive ---------- */
+
+@media screen and (max-width: 996px) {
+  .hero {
+    padding: 4.5rem 0 3rem;
+  }
+
+  .codeColumns {
+    grid-template-columns: 1fr;
+  }
+
+  .featureGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .featureGrid {
+    grid-template-columns: 1fr;
+  }
 }

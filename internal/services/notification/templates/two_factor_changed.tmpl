@@ -1,0 +1,23 @@
+{{ define "content" }}
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">Two-factor authentication {{ .Action }}</h2>
+<p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">Two-factor authentication (2FA) was <strong>{{ .Action }}</strong> on your {{ .AppName }} account on <strong>{{ .ChangedAt }}</strong>.</p>
+
+{{ if eq .Action "enabled" }}
+<div class="alert-box alert-success" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;">
+  <strong>Your account is now better protected.</strong> You'll be asked for a verification code from your authenticator app each time you sign in.
+</div>
+{{ else }}
+<div class="alert-box alert-warning" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e;">
+  <strong>Your account is now less protected.</strong> If you didn't disable 2FA, re-enable it immediately and change your password.
+</div>
+{{ end }}
+
+{{ if .AppURL }}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AppURL }}/profile" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Manage security settings</a>
+  </td></tr>
+</table>
+{{ end }}
+{{ end }}

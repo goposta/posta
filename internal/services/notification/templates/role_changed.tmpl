@@ -1,15 +1,17 @@
 {{ define "content" }}
-<h2>Workspace Role Updated</h2>
-<p>Hi {{ .UserName }},</p>
-<p>Your role in the workspace <strong>"{{ .WorkspaceName }}"</strong> has been changed from <strong>{{ .OldRole }}</strong> to <strong>{{ .NewRole }}</strong> by {{ .ChangedBy }}.</p>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">Your workspace role was updated</h2>
+<p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
+<p class="lead" style="margin: 0 0 16px; font-size: 15px; color: #4b5563;">Your role in <strong>"{{ .WorkspaceName }}"</strong> was changed from <strong>{{ .OldRole }}</strong> to <strong>{{ .NewRole }}</strong> by {{ .ChangedBy }}.</p>
 
-<div class="alert-box alert-info">
+<div class="alert-box alert-info" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;">
   Your new permissions as <strong>{{ .NewRole }}</strong> are now active.
 </div>
 
 {{ if .AppURL }}
-<p style="text-align: center; margin: 24px 0;">
-  <a href="{{ .AppURL }}/workspaces" class="btn">View Workspaces</a>
-</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+  <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
+    <a href="{{ .AppURL }}/workspaces" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">View workspace</a>
+  </td></tr>
+</table>
 {{ end }}
 {{ end }}
