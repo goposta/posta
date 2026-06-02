@@ -19,6 +19,8 @@ package clientinfo
 
 import "strings"
 
+const unknown = "Unknown"
+
 // Client is a parsed, display-oriented view of a User-Agent string.
 type Client struct {
 	Browser string
@@ -28,7 +30,7 @@ type Client struct {
 
 func Parse(ua string) Client {
 	if strings.TrimSpace(ua) == "" {
-		return Client{Browser: "Unknown", OS: "Unknown", Device: "Unknown"}
+		return Client{Browser: unknown, OS: unknown, Device: unknown}
 	}
 	return Client{
 		Browser: detectBrowser(ua),
@@ -39,11 +41,11 @@ func Parse(ua string) Client {
 
 func (c Client) Label() string {
 	switch {
-	case c.Browser == "Unknown" && c.OS == "Unknown":
+	case c.Browser == unknown && c.OS == unknown:
 		return "Unknown device"
-	case c.OS == "Unknown":
+	case c.OS == unknown:
 		return c.Browser
-	case c.Browser == "Unknown":
+	case c.Browser == unknown:
 		return c.OS
 	default:
 		return c.Browser + " on " + c.OS
@@ -71,7 +73,7 @@ func detectBrowser(ua string) string {
 	case containsAny(ua, "curl/", "Wget", "PostmanRuntime", "Go-http-client", "python-requests"):
 		return "API client"
 	default:
-		return "Unknown"
+		return unknown
 	}
 }
 
@@ -92,7 +94,7 @@ func detectOS(ua string) string {
 	case strings.Contains(ua, "Linux"):
 		return "Linux"
 	default:
-		return "Unknown"
+		return unknown
 	}
 }
 
