@@ -18,6 +18,9 @@ export const templatesApi = {
   list(page = 0, size = 20, search = '') {
     return api.get<PaginatedResponse<Template>>('/workspaces/current/templates', { params: { page, size, search } })
   },
+  get(id: number) {
+    return api.get<ApiResponse<Template>>(`/workspaces/current/templates/${id}`)
+  },
   create(data: TemplateInput) {
     return api.post<ApiResponse<Template>>('/workspaces/current/templates', data)
   },

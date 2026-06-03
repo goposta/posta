@@ -121,6 +121,7 @@ func (h *TemplateVersionHandler) Create(c *okapi.Context, req *CreateVersionRequ
 	if err := h.versionRepo.Create(v); err != nil {
 		return c.AbortInternalServerError("failed to create version")
 	}
+	_ = h.templateRepo.TouchEditor(tmpl.ID, getScope(c).UserID)
 
 	v, _ = h.versionRepo.FindByID(v.ID)
 	return created(c, v)
@@ -149,6 +150,7 @@ func (h *TemplateVersionHandler) Update(c *okapi.Context, req *UpdateVersionRequ
 	if err := h.versionRepo.Update(v); err != nil {
 		return c.AbortInternalServerError("failed to update version")
 	}
+	_ = h.templateRepo.TouchEditor(tmpl.ID, getScope(c).UserID)
 
 	// Reload to get the stylesheet association
 	v, _ = h.versionRepo.FindByID(v.ID)
@@ -173,9 +175,15 @@ func (h *TemplateVersionHandler) Activate(c *okapi.Context, req *ActivateVersion
 	tmpl.ActiveVersionID = &vID
 	now := time.Now()
 	tmpl.UpdatedAt = &now
+	editorID := getScope(c).UserID
+	tmpl.LastEditedByID = &editorID
 
 	if err := h.templateRepo.Update(tmpl); err != nil {
 		return c.AbortInternalServerError("failed to activate version")
+	}
+
+	if updated, ferr := h.templateRepo.FindByIDWithActors(tmpl.ID); ferr == nil {
+		tmpl = updated
 	}
 
 	return ok(c, tmpl)
@@ -203,6 +211,7 @@ func (h *TemplateVersionHandler) Delete(c *okapi.Context, req *DeleteVersionRequ
 	if err := h.versionRepo.Delete(v.ID); err != nil {
 		return c.AbortInternalServerError("failed to delete version")
 	}
+	_ = h.templateRepo.TouchEditor(tmpl.ID, getScope(c).UserID)
 
 	return noContent(c)
 }

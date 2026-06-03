@@ -101,12 +101,12 @@ async function loadAll() {
   loading.value = true;
   try {
     const [tmplRes, versionsRes, ssRes, langRes] = await Promise.all([
-      templatesApi.list(0, 100),
+      templatesApi.get(templateId),
       templatesApi.listVersions(templateId),
       stylesheetsApi.list(0, 100),
       languagesApi.list(0, 100),
     ]);
-    template.value = tmplRes.data.data.find((t: Template) => t.id === templateId) || null;
+    template.value = tmplRes.data.data || null;
     versions.value = versionsRes.data.data || [];
     stylesheets.value = ssRes.data.data || [];
     languages.value = langRes.data.data || [];
@@ -519,6 +519,18 @@ onMounted(loadAll);
               <tr>
                 <td class="info-label">Created</td>
                 <td>{{ formatDate(template.created_at) }}</td>
+              </tr>
+              <tr v-if="template.created_by">
+                <td class="info-label">Created by</td>
+                <td>{{ template.created_by.name }}</td>
+              </tr>
+              <tr v-if="template.last_edited_by">
+                <td class="info-label">Last edited by</td>
+                <td>
+                  {{ template.last_edited_by.name }}
+                  <span v-if="template.updated_at" class="text-muted">
+                    · {{ formatDate(template.updated_at) }}</span>
+                </td>
               </tr>
             </tbody>
           </table>

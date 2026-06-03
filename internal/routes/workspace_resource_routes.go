@@ -206,8 +206,21 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.PageableResponse[models.Template]{},
 		},
 		{
+			Method:   http.MethodGet,
+			Path:     "/templates/{id}",
+			Handler:  okapi.H(r.h.template.Get),
+			Group:    opsGroup,
+			Summary:  "Get template",
+			Request:  &handlers.GetTemplateRequest{},
+			Response: &dto.Response[models.Template]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Template ID"),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
 			Method:   http.MethodPut,
-			Path:     "/templates/{id:int}",
+			Path:     "/templates/{id}",
 			Handler:  okapi.H(r.h.template.Update),
 			Group:    opsGroup,
 			Summary:  "Update template",

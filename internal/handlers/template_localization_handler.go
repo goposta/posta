@@ -127,6 +127,7 @@ func (h *TemplateLocalizationHandler) Create(c *okapi.Context, req *CreateLocali
 	if err := h.localizationRepo.Create(l); err != nil {
 		return c.AbortConflict("localization for this language already exists")
 	}
+	_ = h.templateRepo.TouchEditor(tmpl.ID, getScope(c).UserID)
 
 	return created(c, l)
 }
@@ -169,6 +170,7 @@ func (h *TemplateLocalizationHandler) Update(c *okapi.Context, req *UpdateLocali
 	if err := h.localizationRepo.Update(l); err != nil {
 		return c.AbortInternalServerError("failed to update localization")
 	}
+	_ = h.templateRepo.TouchEditor(tmpl.ID, getScope(c).UserID)
 
 	return ok(c, l)
 }
@@ -194,6 +196,7 @@ func (h *TemplateLocalizationHandler) Delete(c *okapi.Context, req *DeleteLocali
 	if err := h.localizationRepo.Delete(l.ID); err != nil {
 		return c.AbortInternalServerError("failed to delete localization")
 	}
+	_ = h.templateRepo.TouchEditor(tmpl.ID, getScope(c).UserID)
 
 	return noContent(c)
 }

@@ -18,8 +18,11 @@
 package repositories
 
 import (
+	"time"
+
 	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type TemplateRepository struct {
@@ -35,7 +38,7 @@ func (r *TemplateRepository) Create(tmpl *models.Template) error {
 }
 
 func (r *TemplateRepository) Update(tmpl *models.Template) error {
-	return r.db.Save(tmpl).Error
+	return r.db.Omit(clause.Associations).Save(tmpl).Error
 }
 
 func (r *TemplateRepository) Delete(id uint) error {
@@ -48,6 +51,19 @@ func (r *TemplateRepository) FindByID(id uint) (*models.Template, error) {
 		return nil, err
 	}
 	return &tmpl, nil
+}
+
+func (r *TemplateRepository) FindByIDWithActors(id uint) (*models.Template, error) {
+	var tmpl models.Template
+	if err := r.db.Preload("CreatedBy").Preload("LastEditedBy").First(&tmpl, id).Error; err != nil {
+		return nil, err
+	}
+	return &tmpl, nil
+}
+
+func (r *TemplateRepository) TouchEditor(id, editorID uint) error {
+	return r.db.Model(&models.Template{}).Where("id = ?", id).
+		Updates(map[string]any{"last_edited_by_id": editorID, "updated_at": time.Now()}).Error
 }
 
 func (r *TemplateRepository) FindByName(userID uint, name string) (*models.Template, error) {

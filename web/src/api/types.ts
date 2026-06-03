@@ -141,6 +141,11 @@ export interface ApiKeyCreateResponse {
   message: string
 }
 
+export interface ActorRef {
+  id: number
+  name: string
+}
+
 export interface Template {
   id: number
   user_id: number
@@ -150,6 +155,9 @@ export interface Template {
   description: string
   active_version?: TemplateVersion | null
   sample_data: string
+  last_edited_by_id?: number | null
+  created_by?: ActorRef | null
+  last_edited_by?: ActorRef | null
   created_at: string
   updated_at?: string
 }

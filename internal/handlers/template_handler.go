@@ -41,7 +41,7 @@ type TemplateHandler struct {
 type CreateTemplateRequest struct {
 	Body struct {
 		Name            string `json:"name" required:"true"`
-		SampleData      string `json:"sample_data"`
+		SampleData      string `json:"sample_data" default:"{}"`
 		DefaultLanguage string `json:"default_language"`
 		Description     string `json:"description"`
 	} `json:"body"`
@@ -50,10 +50,13 @@ type UpdateTemplateRequest struct {
 	ID   int `param:"id"`
 	Body struct {
 		Name            string  `json:"name"`
-		SampleData      *string `json:"sample_data"`
+		SampleData      *string `json:"sample_data" default:"{}"`
 		DefaultLanguage string  `json:"default_language"`
 		Description     *string `json:"description"`
 	} `json:"body"`
+}
+type GetTemplateRequest struct {
+	ID int `param:"id"`
 }
 type DeleteTemplateRequest struct {
 	ID int `param:"id"`
@@ -109,6 +112,7 @@ func (h *TemplateHandler) Create(c *okapi.Context, req *CreateTemplateRequest) e
 		DefaultLanguage: defaultLang,
 		Description:     req.Body.Description,
 		SampleData:      req.Body.SampleData,
+		LastEditedByID:  &scope.UserID,
 	}
 
 	if err := h.repo.Create(tmpl); err != nil {
@@ -157,9 +161,16 @@ func (h *TemplateHandler) Update(c *okapi.Context, req *UpdateTemplateRequest) e
 
 	now := time.Now()
 	tmpl.UpdatedAt = &now
+	editorID := getScope(c).UserID
+	tmpl.LastEditedByID = &editorID
 
 	if err := h.repo.Update(tmpl); err != nil {
 		return c.AbortInternalServerError("failed to update template")
+	}
+
+	// Reload so the response carries the populated CreatedBy / LastEditedBy refs.
+	if updated, ferr := h.repo.FindByIDWithActors(tmpl.ID); ferr == nil {
+		tmpl = updated
 	}
 
 	return ok(c, tmpl)
@@ -174,6 +185,14 @@ func (h *TemplateHandler) List(c *okapi.Context, req *ListTemplatesRequest) erro
 	}
 
 	return paginated(c, templates, total, page, size)
+}
+
+func (h *TemplateHandler) Get(c *okapi.Context, req *GetTemplateRequest) error {
+	tmpl, err := h.repo.FindByIDWithActors(uint(req.ID))
+	if err != nil || !ownsResource(c, tmpl.UserID, tmpl.WorkspaceID) {
+		return c.AbortNotFound("template not found")
+	}
+	return ok(c, tmpl)
 }
 
 func (h *TemplateHandler) Delete(c *okapi.Context, req *DeleteTemplateRequest) error {
