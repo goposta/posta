@@ -59,8 +59,11 @@ func (b *EventBus) Publish(event *models.Event) {
 	}
 }
 
-// PublishSimple is a convenience method for emitting events with JSON metadata.
 func (b *EventBus) PublishSimple(category models.EventCategory, eventType string, actorID *uint, actorName, clientIP, message string, meta map[string]any) {
+	b.PublishScoped(nil, category, eventType, actorID, actorName, clientIP, message, meta)
+}
+
+func (b *EventBus) PublishScoped(workspaceID *uint, category models.EventCategory, eventType string, actorID *uint, actorName, clientIP, message string, meta map[string]any) {
 	var metaStr string
 	if meta != nil {
 		if data, err := json.Marshal(meta); err == nil {
@@ -69,13 +72,14 @@ func (b *EventBus) PublishSimple(category models.EventCategory, eventType string
 	}
 
 	b.Publish(&models.Event{
-		Category:  category,
-		Type:      eventType,
-		ActorID:   actorID,
-		ActorName: actorName,
-		ClientIP:  clientIP,
-		Message:   message,
-		Metadata:  metaStr,
+		Category:    category,
+		Type:        eventType,
+		WorkspaceID: workspaceID,
+		ActorID:     actorID,
+		ActorName:   actorName,
+		ClientIP:    clientIP,
+		Message:     message,
+		Metadata:    metaStr,
 	})
 }
 

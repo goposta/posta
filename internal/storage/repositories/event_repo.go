@@ -36,6 +36,15 @@ func (r *EventRepository) Create(event *models.Event) error {
 	return r.db.Create(event).Error
 }
 
+// FindByID returns a single event by its primary key.
+func (r *EventRepository) FindByID(id uint) (*models.Event, error) {
+	var event models.Event
+	if err := r.db.First(&event, id).Error; err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
 func (r *EventRepository) FindAll(limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
@@ -50,13 +59,13 @@ func (r *EventRepository) FindAll(limit, offset int) ([]models.Event, int64, err
 	return events, total, nil
 }
 
-func (r *EventRepository) FindByActorAndCategory(actorID uint, category models.EventCategory, limit, offset int) ([]models.Event, int64, error) {
+func (r *EventRepository) FindPersonalByActorAndCategory(actorID uint, category models.EventCategory, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
 
-	r.db.Model(&models.Event{}).Where("actor_id = ? AND category = ?", actorID, category).Count(&total)
+	r.db.Model(&models.Event{}).Where("actor_id = ? AND category = ? AND workspace_id IS NULL", actorID, category).Count(&total)
 
-	if err := r.db.Where("actor_id = ? AND category = ?", actorID, category).
+	if err := r.db.Where("actor_id = ? AND category = ? AND workspace_id IS NULL", actorID, category).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&events).Error; err != nil {
@@ -112,8 +121,6 @@ func (r *EventRepository) FindByWorkspaceAndCategory(workspaceID uint, category 
 	return events, total, nil
 }
 
-// DeleteOlderThan deletes event records older than the given time.
-// Returns the number of rows deleted.
 func (r *EventRepository) DeleteOlderThan(before time.Time) (int64, error) {
 	result := r.db.Where("created_at < ?", before).Delete(&models.Event{})
 	return result.RowsAffected, result.Error

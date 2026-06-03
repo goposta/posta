@@ -513,8 +513,9 @@ export interface WorkerDetail {
 
 export interface Event {
   id: number
-  category: 'user' | 'email' | 'system'
+  category: 'user' | 'email' | 'system' | 'audit'
   type: string
+  workspace_id?: number | null
   actor_id: number | null
   actor_name: string
   client_ip?: string

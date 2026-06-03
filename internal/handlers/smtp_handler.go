@@ -165,7 +165,7 @@ func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
 		return c.AbortInternalServerError("failed to create SMTP server", err)
 	}
 
-	h.audit.Log(scope.UserID, c.GetString("email"), c.RealIP(), "smtp.created", "SMTP server created: "+req.Body.Host, nil)
+	h.audit.LogCtx(c, "smtp.created", "SMTP server created: "+req.Body.Host, nil)
 
 	return created(c, server)
 }
@@ -256,7 +256,7 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 		return c.AbortInternalServerError("failed to update SMTP server")
 	}
 
-	h.audit.Log(server.UserID, c.GetString("email"), c.RealIP(), "smtp.updated", "SMTP server updated: "+server.Host, nil)
+	h.audit.LogCtx(c, "smtp.updated", "SMTP server updated: "+server.Host, nil)
 
 	return ok(c, server)
 }
@@ -285,7 +285,7 @@ func (h *SMTPHandler) Delete(c *okapi.Context, req *DeleteSMTPRequest) error {
 		return c.AbortInternalServerError("failed to delete SMTP server")
 	}
 
-	h.audit.Log(server.UserID, c.GetString("email"), c.RealIP(), "smtp.deleted", "SMTP server deleted: "+server.Host, nil)
+	h.audit.LogCtx(c, "smtp.deleted", "SMTP server deleted: "+server.Host, nil)
 
 	return noContent(c)
 }

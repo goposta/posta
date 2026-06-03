@@ -49,6 +49,9 @@ export const adminApi = {
     if (category) params.category = category
     return api.get<PaginatedResponse<Event>>('/admin/events', { params })
   },
+  getEvent(id: number) {
+    return api.get<ApiResponse<Event>>(`/admin/events/${id}`)
+  },
   listJobs() {
     return api.get<ApiResponse<CronJob[]>>('/admin/jobs')
   },

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
@@ -39,6 +40,7 @@ type WorkspaceHandler struct {
 	planService   planService
 	notifier      *notification.Service
 	appURL        string
+	audit         *audit.Logger
 }
 
 // planService is an optional interface for resolving workspace plans and quotas.
@@ -184,6 +186,8 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		return c.AbortInternalServerError("failed to add workspace member")
 	}
 
+	h.logAudit(c, ws.ID, "workspace.created", "Workspace created: "+ws.Name, map[string]any{"slug": ws.Slug})
+
 	return created(c, WorkspaceResponse{
 		ID:          ws.ID,
 		Name:        ws.Name,
@@ -271,6 +275,8 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 		return c.AbortInternalServerError("failed to update workspace")
 	}
 
+	h.logAudit(c, ws.ID, "workspace.updated", "Workspace updated: "+ws.Name, nil)
+
 	role := c.GetString("workspace_role")
 
 	return ok(c, WorkspaceResponse{
@@ -299,6 +305,8 @@ func (h *WorkspaceHandler) Delete(c *okapi.Context) error {
 	if err := h.workspaceRepo.Delete(uint(wsID)); err != nil {
 		return c.AbortInternalServerError("failed to delete workspace")
 	}
+
+	h.logAudit(c, ws.ID, "workspace.deleted", "Workspace deleted: "+ws.Name, map[string]any{"slug": ws.Slug})
 
 	return noContent(c)
 }
@@ -349,6 +357,10 @@ func (h *WorkspaceHandler) UpdateMemberRole(c *okapi.Context, req *UpdateMemberR
 		return c.AbortInternalServerError("failed to update member role")
 	}
 
+	h.logAudit(c, uint(wsID), "member.role_updated",
+		fmt.Sprintf("Member role changed from %s to %s", oldRole, req.Body.Role),
+		map[string]any{"member_user_id": req.MemberID, "old_role": string(oldRole), "new_role": string(req.Body.Role)})
+
 	// Send role change notification (best-effort)
 	if h.notifier != nil && req.Body.Role != oldRole {
 		ws, _ := h.workspaceRepo.FindByID(uint(wsID))
@@ -394,6 +406,9 @@ func (h *WorkspaceHandler) RemoveMember(c *okapi.Context, req *RemoveWorkspaceMe
 		return c.AbortInternalServerError("failed to remove member")
 	}
 
+	h.logAudit(c, uint(wsID), "member.removed", "Member removed from workspace",
+		map[string]any{"member_user_id": req.MemberID, "role": string(member.Role)})
+
 	return noContent(c)
 }
 
@@ -435,6 +450,9 @@ func (h *WorkspaceHandler) InviteMember(c *okapi.Context, req *InviteMemberReque
 	if err := h.workspaceRepo.CreateInvitation(inv); err != nil {
 		return c.AbortInternalServerError("failed to create invitation")
 	}
+
+	h.logAudit(c, uint(wsID), "member.invited", "Invitation sent to "+email,
+		map[string]any{"email": email, "role": string(req.Body.Role)})
 
 	// Send invitation email (best-effort, don't fail the request)
 	if h.notifier != nil {
@@ -507,9 +525,17 @@ type DeleteInvitationRequest struct {
 }
 
 func (h *WorkspaceHandler) DeleteInvitation(c *okapi.Context, req *DeleteInvitationRequest) error {
+	inv, err := h.workspaceRepo.FindInvitationByID(uint(req.InvitationID))
+	if err != nil {
+		return c.AbortNotFound("invitation not found")
+	}
+
 	if err := h.workspaceRepo.DeleteInvitation(uint(req.InvitationID)); err != nil {
 		return c.AbortNotFound("invitation not found")
 	}
+
+	h.logAudit(c, inv.WorkspaceID, "invitation.revoked", "Invitation revoked for "+inv.Email,
+		map[string]any{"email": inv.Email})
 
 	return noContent(c)
 }
@@ -585,6 +611,9 @@ func (h *WorkspaceHandler) AcceptInvitation(c *okapi.Context, req *AcceptInvitat
 	inv.Status = models.InvitationStatusAccepted
 	_ = h.workspaceRepo.UpdateInvitation(inv)
 
+	h.logAudit(c, inv.WorkspaceID, "member.joined", "Joined workspace "+inv.Workspace.Name,
+		map[string]any{"role": string(inv.Role)})
+
 	return ok(c, okapi.M{
 		"message":      fmt.Sprintf("joined workspace %q", inv.Workspace.Name),
 		"workspace_id": inv.WorkspaceID,
@@ -644,6 +673,9 @@ func (h *WorkspaceHandler) AcceptInvitationByID(c *okapi.Context, req *AcceptInv
 
 	inv.Status = models.InvitationStatusAccepted
 	_ = h.workspaceRepo.UpdateInvitation(inv)
+
+	h.logAudit(c, inv.WorkspaceID, "member.joined", "Joined workspace "+inv.Workspace.Name,
+		map[string]any{"role": string(inv.Role)})
 
 	return ok(c, okapi.M{
 		"message":      fmt.Sprintf("joined workspace %q", inv.Workspace.Name),
@@ -729,6 +761,17 @@ func (h *WorkspaceHandler) SetPlanService(ps planService) {
 func (h *WorkspaceHandler) SetNotifier(n *notification.Service, appURL string) {
 	h.notifier = n
 	h.appURL = appURL
+}
+
+func (h *WorkspaceHandler) SetAuditLogger(l *audit.Logger) {
+	h.audit = l
+}
+
+func (h *WorkspaceHandler) logAudit(c *okapi.Context, workspaceID uint, action, message string, metadata map[string]any) {
+	if h.audit == nil {
+		return
+	}
+	h.audit.LogCtxScoped(c, workspaceID, action, message, metadata)
 }
 
 // GetPlan returns the effective plan for the current workspace.

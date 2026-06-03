@@ -208,6 +208,16 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ListEventsRequest{},
 			Response:    &dto.PageableResponse[models.Event]{},
 		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/events/{id:int}",
+			Handler:     okapi.H(r.h.event.Get),
+			Group:       adminGroup,
+			Summary:     "Get event",
+			Description: "Returns a single platform event by ID",
+			Request:     &handlers.EventRequest{},
+			Response:    &dto.Response[models.Event]{},
+		},
 
 		// ==================== Metrics & Analytics ====================
 		{

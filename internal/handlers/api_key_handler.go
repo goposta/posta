@@ -108,9 +108,9 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 		return c.AbortInternalServerError("failed to create API key", err)
 	}
 
-	h.audit.Log(scope.UserID, c.GetString("email"), c.RealIP(), "apikey.created", "API key created: "+req.Body.Name, nil)
+	h.audit.LogCtx(c, "apikey.created", "API key created: "+req.Body.Name, nil)
 
-	// Send API key created notification (best-effort)
+	// Send API key created notification
 	if h.notifier != nil {
 		expiresStr := "Never"
 		if key.ExpiresAt != nil {
@@ -161,7 +161,7 @@ func (h *APIKeyHandler) Revoke(c *okapi.Context, req *RevokeAPIKeyRequest) error
 		return c.AbortInternalServerError("failed to revoke API key")
 	}
 
-	h.audit.Log(key.UserID, c.GetString("email"), c.RealIP(), "apikey.revoked", "API key revoked: "+key.Name, nil)
+	h.audit.LogCtx(c, "apikey.revoked", "API key revoked: "+key.Name, nil)
 
 	return ok(c, okapi.M{"message": "API key revoked"})
 }
@@ -184,7 +184,7 @@ func (h *APIKeyHandler) Delete(c *okapi.Context, req *DeleteAPIKeyRequest) error
 		return c.AbortInternalServerError("failed to delete API key")
 	}
 
-	h.audit.Log(key.UserID, c.GetString("email"), c.RealIP(), "apikey.deleted", "API key deleted: "+key.Name, nil)
+	h.audit.LogCtx(c, "apikey.deleted", "API key deleted: "+key.Name, nil)
 
 	return ok(c, okapi.M{"message": "API key deleted"})
 }

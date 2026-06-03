@@ -274,6 +274,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	r.h.plan = handlers.NewPlanHandler(planRepo, workspaceRepo, userRepo, planService, auditLogger)
 	r.h.admin.SetWorkspaceRepo(workspaceRepo, planRepo)
 	r.h.workspace.SetPlanService(planService)
+	r.h.workspace.SetAuditLogger(auditLogger)
 	r.h.apiKey.SetQuota(planService, db)
 	r.h.domain.SetQuota(planService, db)
 	r.h.smtp.SetQuota(planService, db)
@@ -464,8 +465,9 @@ func (r *Router) registerRoutes() {
 		r.app.Register(r.inboundWebhookRoutes()...)
 		r.app.Register(r.inboundWorkspaceRoutes()...)
 	}
-	r.app.Register(r.adminRoutes()...)
+
 	r.app.Register(r.adminSSERoutes()...)
+	r.app.Register(r.adminRoutes()...)
 
 	// Documentation-only OpenAPI webhooks (events Posta POSTs to subscribers).
 	r.registerWebhookDocs()

@@ -72,7 +72,7 @@ func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) err
 		return c.AbortInternalServerError("failed to create webhook", err)
 	}
 
-	h.audit.Log(scope.UserID, c.GetString("email"), c.RealIP(), "webhook.created", "Webhook created: "+req.Body.URL, nil)
+	h.audit.LogCtx(c, "webhook.created", "Webhook created: "+req.Body.URL, nil)
 
 	return created(c, wh)
 }
@@ -101,7 +101,7 @@ func (h *WebhookHandler) Delete(c *okapi.Context, req *DeleteWebhookRequest) err
 		return c.AbortInternalServerError("failed to delete webhook")
 	}
 
-	h.audit.Log(wh.UserID, c.GetString("email"), c.RealIP(), "webhook.deleted", "Webhook deleted: "+wh.URL, nil)
+	h.audit.LogCtx(c, "webhook.deleted", "Webhook deleted: "+wh.URL, nil)
 
 	return noContent(c)
 }

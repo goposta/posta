@@ -41,6 +41,19 @@ func NewEventHandler(repo *repositories.EventRepository, bus *eventbus.EventBus)
 	return &EventHandler{repo: repo, bus: bus}
 }
 
+type EventRequest struct {
+	ID int `param:"id"`
+}
+
+// Get returns a single event by ID (admin scope, any category or workspace).
+func (h *EventHandler) Get(c *okapi.Context, req *EventRequest) error {
+	event, err := h.repo.FindByID(uint(req.ID))
+	if err != nil {
+		return c.AbortNotFound("event not found")
+	}
+	return ok(c, event)
+}
+
 // List returns paginated historical events.
 func (h *EventHandler) List(c *okapi.Context, req *ListEventsRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
@@ -66,7 +79,7 @@ func (h *EventHandler) UserAuditLog(c *okapi.Context, req *ListEventsRequest) er
 	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	events, total, err := h.repo.FindByActorAndCategory(uint(userID), models.EventCategoryAudit, size, offset)
+	events, total, err := h.repo.FindPersonalByActorAndCategory(uint(userID), models.EventCategoryAudit, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list audit events")
 	}
@@ -84,6 +97,27 @@ func (h *EventHandler) WorkspaceAuditLog(c *okapi.Context, req *ListEventsReques
 	}
 
 	return paginated(c, events, total, page, size)
+}
+
+type AuditEventRequest struct {
+	ID int `param:"id"`
+}
+
+// WorkspaceAuditLogDetail returns a single audit event scoped to the current workspace.
+func (h *EventHandler) WorkspaceAuditLogDetail(c *okapi.Context, req *AuditEventRequest) error {
+	wsID := uint(c.GetInt("workspace_id"))
+
+	event, err := h.repo.FindByID(uint(req.ID))
+	if err != nil {
+		return c.AbortNotFound("audit event not found")
+	}
+
+	// Only expose audit events that belong to the current workspace.
+	if event.Category != models.EventCategoryAudit || event.WorkspaceID == nil || *event.WorkspaceID != wsID {
+		return c.AbortNotFound("audit event not found")
+	}
+
+	return ok(c, event)
 }
 
 // Stream sends real-time events to the admin via SSE.

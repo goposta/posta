@@ -184,6 +184,7 @@ const navSections: NavSection[] = [
       { name: 'All Workspaces', path: '/workspaces', icon: 'layers' },
       { name: 'Members', path: '', icon: 'users', workspaceSubpath: 'members', hideInPersonal: true },
       { name: 'Plan & Billing', path: '', icon: 'credit-card', workspaceTab: 'plan', hideInPersonal: true },
+      { name: 'Audit Log', path: '/audit-log', icon: 'history' },
       { name: 'Settings', path: '', icon: 'settings', workspaceTab: 'settings', requiresWorkspaceAdmin: true },
     ],
   },
@@ -477,17 +478,6 @@ function getIcon(name: string): string {
                     stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 Settings
-              </a>
-              <a class="user-dropdown-item" @click.stop="navigate('/audit-log'); userMenuOpen = false">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 8a6 6 0 102.7-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                    stroke-linejoin="round" />
-                  <path d="M2 12V8.7h3.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                    stroke-linejoin="round" />
-                  <path d="M8 4.7V8l2 1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                    stroke-linejoin="round" />
-                </svg>
-                Audit Log
               </a>
               <div class="user-dropdown-divider"></div>
               <div class="user-dropdown-theme">

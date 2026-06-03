@@ -229,6 +229,18 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.PageableResponse[models.Event]{},
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/audit-log/{id:int}",
+			Handler:     okapi.H(r.h.event.WorkspaceAuditLogDetail),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Get workspace audit event",
+			Description: "Returns a single audit event for the current workspace (admin/owner only)",
+			Request:     &handlers.AuditEventRequest{},
+			Response:    &dto.Response[models.Event]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
 
 		// Data Export/Import
 		{

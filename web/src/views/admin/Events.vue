@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { adminApi } from '../../api/admin'
 import { useAuthStore } from '../../stores/auth'
-import type { Event, Pageable } from '../../api/types'
+import type { Event } from '../../api/types'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
 const auth = useAuthStore()
+const router = useRouter()
 const loading = ref(true)
 const events = ref<Event[]>([])
 const page = ref(0)
@@ -115,6 +117,16 @@ function formatDate(date: string) {
   return new Date(date).toLocaleString()
 }
 
+function truncate(text: string, max = 80): string {
+  if (!text) return ''
+  return text.length > max ? text.slice(0, max).replace(/\s+$/, '') + '…' : text
+}
+
+function openDetail(evt: Event) {
+  if (!evt.id) return
+  router.push({ name: 'admin-event-detail', params: { id: evt.id } })
+}
+
 function timeAgo(date: string) {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
   if (seconds < 60) return 'just now'
@@ -142,11 +154,12 @@ function timeAgo(date: string) {
       </div>
       <div class="card-body">
         <div class="live-events">
-          <div v-for="(evt, i) in liveEvents" :key="'live-' + i" class="live-event-item">
+          <div v-for="(evt, i) in liveEvents" :key="'live-' + i" class="live-event-item"
+            :class="{ clickable: !!evt.id }" @click="openDetail(evt)">
             <span :class="categoryBadgeClass(evt.category)">{{ evt.category }}</span>
             <span class="event-type">{{ evt.type }}</span>
             <span v-if="evt.client_ip" class="event-ip">{{ evt.client_ip }}</span>
-            <span class="event-message">{{ evt.message }}</span>
+            <span class="event-message">{{ truncate(evt.message) }}</span>
             <span class="event-time">{{ timeAgo(evt.created_at) }}</span>
           </div>
         </div>
@@ -188,13 +201,13 @@ function timeAgo(date: string) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="evt in events" :key="evt.id">
+              <tr v-for="evt in events" :key="evt.id" class="clickable-row" @click="openDetail(evt)">
                 <td><span :class="categoryBadgeClass(evt.category)">{{ evt.category }}</span></td>
                 <td><code>{{ evt.type }}</code></td>
                 <td>{{ evt.actor_name || '-' }}</td>
                 <td><code v-if="evt.client_ip">{{ evt.client_ip }}</code><span v-else>-</span></td>
-                <td>{{ evt.message }}</td>
-                <td>{{ formatDate(evt.created_at) }}</td>
+                <td class="message-cell" :title="evt.message">{{ truncate(evt.message) }}</td>
+                <td style="white-space: nowrap">{{ formatDate(evt.created_at) }}</td>
               </tr>
             </tbody>
           </table>
@@ -260,6 +273,29 @@ function timeAgo(date: string) {
   background: var(--bg-secondary);
   font-size: 13px;
   animation: fadeIn 0.3s ease;
+}
+
+.live-event-item.clickable {
+  cursor: pointer;
+}
+
+.live-event-item.clickable:hover {
+  background: var(--bg-hover);
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover {
+  background: var(--bg-hover);
+}
+
+.message-cell {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .event-type {

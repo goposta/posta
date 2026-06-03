@@ -52,16 +52,14 @@ type Email struct {
 	ListUnsubscribeURL    string         `json:"list_unsubscribe_url,omitempty" gorm:"type:text"`
 	ListUnsubscribeMailto string         `json:"list_unsubscribe_mailto,omitempty" gorm:"type:text"`
 	ListUnsubscribePost   bool           `json:"list_unsubscribe_post,omitempty"`
-	// UnsubscribeListID scopes a one-click unsubscribe to a single UnsubscribeList.
-	// nil ⇒ a click suppresses globally (legacy links only).
-	UnsubscribeListID *uint       `json:"unsubscribe_list_id,omitempty" gorm:"index"`
-	Status            EmailStatus `json:"status" gorm:"default:pending;not null"`
-	ErrorMessage      string      `json:"error_message"`
-	RetryCount        int         `json:"retry_count" gorm:"default:0;not null"`
-	CreatedAt         time.Time   `json:"created_at"`
-	SentAt            *time.Time  `json:"sent_at"`
-	ScheduledAt       *time.Time  `json:"scheduled_at"`
-	Provider          string      `json:"provider,omitempty" gorm:"index;size:32"`
+	UnsubscribeListID     *uint          `json:"unsubscribe_list_id,omitempty" gorm:"index"`
+	Status                EmailStatus    `json:"status" gorm:"default:pending;not null"`
+	ErrorMessage          string         `json:"error_message"`
+	RetryCount            int            `json:"retry_count" gorm:"default:0;not null"`
+	CreatedAt             time.Time      `json:"created_at"`
+	SentAt                *time.Time     `json:"sent_at"`
+	ScheduledAt           *time.Time     `json:"scheduled_at"`
+	Provider              string         `json:"provider,omitempty" gorm:"index;size:32"`
 
 	SMTPHostname string `json:"smtp_hostname,omitempty"`
 
