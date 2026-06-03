@@ -30,7 +30,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func setup(t *testing.T) (*Service, *repositories.UserRepository, *repositories.PasswordResetRepository, *gorm.DB) {
+func setup(t *testing.T) (*Service, *repositories.UserRepository, *repositories.PasswordResetRepository) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_DSN")
 	if dsn == "" {
@@ -47,7 +47,7 @@ func setup(t *testing.T) (*Service, *repositories.UserRepository, *repositories.
 	t.Cleanup(func() { tx.Rollback() })
 	userRepo := repositories.NewUserRepository(tx)
 	tokenRepo := repositories.NewPasswordResetRepository(tx)
-	return NewService(userRepo, tokenRepo, nil, "https://app.test"), userRepo, tokenRepo, tx
+	return NewService(userRepo, tokenRepo, nil, "https://app.test"), userRepo, tokenRepo
 }
 
 func mkUser(t *testing.T, r *repositories.UserRepository, email string) *models.User {
@@ -74,7 +74,7 @@ func issue(t *testing.T, r *repositories.PasswordResetRepository, userID uint, e
 }
 
 func TestRedeemSetsNewPasswordAndBurnsToken(t *testing.T) {
-	svc, userRepo, tokenRepo, _ := setup(t)
+	svc, userRepo, tokenRepo := setup(t)
 	user := mkUser(t, userRepo, "reset@pr.test")
 	raw := issue(t, tokenRepo, user.ID, time.Now().Add(time.Hour))
 
@@ -98,7 +98,7 @@ func TestRedeemSetsNewPasswordAndBurnsToken(t *testing.T) {
 }
 
 func TestRedeemRejectsExpiredAndInvalidTokens(t *testing.T) {
-	svc, userRepo, tokenRepo, _ := setup(t)
+	svc, userRepo, tokenRepo := setup(t)
 	user := mkUser(t, userRepo, "expired@pr.test")
 
 	expired := issue(t, tokenRepo, user.ID, time.Now().Add(-time.Minute))
