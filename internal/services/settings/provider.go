@@ -146,3 +146,7 @@ func (p *Provider) EmailContentVisibility() bool {
 func (p *Provider) CustomHeadersEnabled() bool {
 	return p.GetBool("custom_headers_enabled", false)
 }
+
+func (p *Provider) PasswordResetEnabled() bool {
+	return p.GetBool("password_reset_enabled", false)
+}

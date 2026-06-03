@@ -39,6 +39,7 @@ const (
 	TemplateInvitation      = "workspace_invitation"
 	TemplateWelcome         = "welcome"
 	TemplatePasswordChanged = "password_changed"
+	TemplatePasswordReset   = "password_reset"
 	TemplateAPIKeyCreated   = "api_key_created"
 	TemplateAPIKeyExpiry    = "api_key_expiry"
 	TemplateBounceAlert     = "bounce_alert"
@@ -103,6 +104,7 @@ func (s *Service) loadTemplates() {
 		TemplateInvitation,
 		TemplateWelcome,
 		TemplatePasswordChanged,
+		TemplatePasswordReset,
 		TemplateAPIKeyCreated,
 		TemplateAPIKeyExpiry,
 		TemplateBounceAlert,

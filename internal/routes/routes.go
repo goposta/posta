@@ -35,6 +35,7 @@ import (
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/notification"
+	"github.com/goposta/posta/internal/services/passwordreset"
 	planpkg "github.com/goposta/posta/internal/services/plan"
 	"github.com/goposta/posta/internal/services/ratelimit"
 	"github.com/goposta/posta/internal/services/seeder"
@@ -292,6 +293,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	emailVerifySvc := emailverify.NewService(userRepo, emailVerifyRepo, notif, cfg.AppWebURL, cfg.EmailVerificationRequired)
 	r.h.user.SetEmailVerifier(emailVerifySvc)
 	r.mw.verifiedEmail = middlewares.RequireVerifiedEmail(emailVerifySvc, userRepo)
+
+	// Self-service password reset (gated by the password_reset_enabled setting)
+	passwordResetSvc := passwordreset.NewService(userRepo, repositories.NewPasswordResetRepository(db), notif, cfg.AppWebURL)
+	r.h.user.SetPasswordReset(passwordResetSvc)
 
 	// Email content privacy
 	r.h.email.SetSettings(settingsProvider)

@@ -38,7 +38,13 @@ export const authApi = {
     return api.post<ApiResponse<AuthResponse>>('/auth/register', { name, email, password })
   },
   registrationStatus() {
-    return api.get<ApiResponse<{ registration_enabled: boolean }>>('/auth/registration-status')
+    return api.get<ApiResponse<{ registration_enabled: boolean; password_reset_enabled: boolean }>>('/auth/registration-status')
+  },
+  forgotPassword(email: string) {
+    return api.post<ApiResponse<{ message: string }>>('/auth/forgot-password', { email })
+  },
+  resetPassword(token: string, newPassword: string) {
+    return api.post<ApiResponse<{ message: string }>>('/auth/reset-password', { token, new_password: newPassword })
   },
   verifyEmail(token: string) {
     return api.get<ApiResponse<{ message: string }>>(`/auth/verify-email?token=${encodeURIComponent(token)}`)

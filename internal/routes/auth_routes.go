@@ -121,6 +121,33 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/forgot-password",
+			Handler:     okapi.H(r.h.user.ForgotPassword),
+			Group:       authGroup,
+			Summary:     "Request password reset",
+			Description: "Email a password reset link (when the feature is enabled). Always responds generically to avoid revealing whether an account exists.",
+			Request:     &handlers.ForgotPasswordRequest{},
+			Response:    &dto.Response[any]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/reset-password",
+			Handler:     okapi.H(r.h.user.ResetPassword),
+			Group:       authGroup,
+			Summary:     "Reset password",
+			Description: "Redeem a password reset token and set a new password",
+			Request:     &handlers.ResetPasswordRequest{},
+			Response:    &dto.Response[any]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+			},
+		},
 	}
 }
 

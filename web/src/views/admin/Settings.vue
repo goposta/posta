@@ -18,6 +18,7 @@ const settingMeta: Record<string, { label: string; description: string; category
   require_email_verification: { label: 'Require Email Verification', description: 'New users must verify their email before sending.', category: 'Security' },
   require_domain_verification: { label: 'Require Domain Verification', description: 'Users must verify domain ownership before sending.', category: 'Security' },
   two_factor_required: { label: 'Require Two-Factor Auth', description: 'Force all users to enable 2FA.', category: 'Security' },
+  password_reset_enabled: { label: 'Self-Service Password Reset', description: 'Allow users to reset a forgotten password via an emailed link. Requires a configured system SMTP sender.', category: 'Security' },
   default_rate_limit_hourly: { label: 'Hourly Rate Limit', description: 'Default hourly send limit for users.', category: 'Limits' },
   default_rate_limit_daily: { label: 'Daily Rate Limit', description: 'Default daily send limit for users.', category: 'Limits' },
   max_batch_size: { label: 'Max Batch Size', description: 'Maximum recipients in a single batch send.', category: 'Limits' },

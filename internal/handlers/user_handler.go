@@ -31,6 +31,7 @@ import (
 	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/notification"
+	"github.com/goposta/posta/internal/services/passwordreset"
 	"github.com/goposta/posta/internal/services/seeder"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/twofactor"
@@ -51,6 +52,7 @@ type UserHandler struct {
 	settings      *settings.Provider
 	notifier      *notification.Service
 	emailVerifier *emailverify.Service
+	passwordReset *passwordreset.Service
 	db            *gorm.DB
 	migrator      *workspacemigrate.Service
 }
@@ -96,6 +98,18 @@ func (h *UserHandler) SetNotifier(n *notification.Service) {
 // SetEmailVerifier wires the email verification service.
 func (h *UserHandler) SetEmailVerifier(s *emailverify.Service) {
 	h.emailVerifier = s
+}
+
+// SetPasswordReset wires the self-service password reset service.
+func (h *UserHandler) SetPasswordReset(s *passwordreset.Service) {
+	h.passwordReset = s
+}
+
+// passwordResetEnabled reports whether the forgot-password flow is both turned
+// on in platform settings and actually deliverable (notifier configured).
+func (h *UserHandler) passwordResetEnabled() bool {
+	return h.settings != nil && h.settings.PasswordResetEnabled() &&
+		h.passwordReset != nil && h.passwordReset.Deliverable()
 }
 
 type LoginRequest struct {
@@ -256,10 +270,78 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 	})
 }
 
-// RegistrationStatus returns whether registration is enabled (public endpoint).
 func (h *UserHandler) RegistrationStatus(c *okapi.Context) error {
 	enabled := h.settings != nil && h.settings.RegistrationEnabled()
-	return ok(c, okapi.M{"registration_enabled": enabled})
+	return ok(c, okapi.M{
+		"registration_enabled":   enabled,
+		"password_reset_enabled": h.passwordResetEnabled(),
+	})
+}
+
+type ForgotPasswordRequest struct {
+	Body struct {
+		Email string `json:"email" required:"true" format:"email"`
+	} `json:"body"`
+}
+
+type ResetPasswordRequest struct {
+	Body struct {
+		Token       string `json:"token" required:"true"`
+		NewPassword string `json:"new_password" required:"true" minLength:"8"`
+	} `json:"body"`
+}
+
+func (h *UserHandler) ForgotPassword(c *okapi.Context, req *ForgotPasswordRequest) error {
+	if !h.passwordResetEnabled() {
+		return c.AbortBadRequest("password reset is not enabled")
+	}
+
+	const genericMsg = "If an account exists for that email, a password reset link is on its way."
+	email := strings.ToLower(strings.TrimSpace(req.Body.Email))
+
+	user, err := h.repo.FindByEmail(email)
+	if err != nil || user == nil {
+		return ok(c, okapi.M{"message": genericMsg})
+	}
+	// Rate-limit per account to curb token flooding; stay generic on the wire.
+	if err := h.passwordReset.CanIssue(user.ID); err != nil {
+		return ok(c, okapi.M{"message": genericMsg})
+	}
+	if err := h.passwordReset.IssueAndSend(user); err != nil {
+		logger.Error("failed to send password reset email", "user_id", user.ID, "err", err)
+		return ok(c, okapi.M{"message": genericMsg})
+	}
+	if h.bus != nil {
+		h.bus.PublishSimple(models.EventCategoryUser, "user.password_reset_requested", &user.ID, user.Email, c.RealIP(),
+			fmt.Sprintf("Password reset requested for %q", user.Email), nil)
+	}
+	return ok(c, okapi.M{"message": genericMsg})
+}
+
+// ResetPassword redeems a reset token and sets the new password.
+func (h *UserHandler) ResetPassword(c *okapi.Context, req *ResetPasswordRequest) error {
+	if !h.passwordResetEnabled() {
+		return c.AbortBadRequest("password reset is not enabled")
+	}
+
+	user, err := h.passwordReset.Redeem(req.Body.Token, req.Body.NewPassword)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+
+	if h.bus != nil {
+		h.bus.PublishSimple(models.EventCategoryUser, "user.password_reset", &user.ID, user.Email, c.RealIP(),
+			fmt.Sprintf("Password reset completed for %q", user.Email), nil)
+	}
+	// Notify the account owner that their password changed (best-effort).
+	if h.notifier != nil {
+		go func(uid uint) {
+			_ = h.notifier.SendSecurityToUser(uid, "Your password has been changed", notification.TemplatePasswordChanged, map[string]any{
+				"ChangedAt": time.Now().UTC().Format("January 2, 2006 at 15:04 UTC"),
+			})
+		}(user.ID)
+	}
+	return ok(c, okapi.M{"message": "password updated successfully"})
 }
 
 type VerifyEmailRequest struct {

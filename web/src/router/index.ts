@@ -37,6 +37,18 @@ const routes = [
     meta: { title: 'Verify email' },
   },
   {
+    path: '/auth/forgot-password',
+    name: 'forgot-password',
+    component: () => import('../views/auth/ForgotPassword.vue'),
+    meta: { guest: true, title: 'Forgot password' },
+  },
+  {
+    path: '/auth/reset-password',
+    name: 'reset-password',
+    component: () => import('../views/auth/ResetPassword.vue'),
+    meta: { guest: true, title: 'Reset password' },
+  },
+  {
     path: '/',
     component: () => import('../layouts/DashboardLayout.vue'),
     meta: { auth: true },

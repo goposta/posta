@@ -45,6 +45,7 @@ func SeedDefaultSettings(repo *repositories.SettingRepository) {
 		{Key: "webhook_delivery_retention_days", Value: "30", Type: "int"},
 		{Key: "email_content_visibility", Value: "false", Type: "bool"},
 		{Key: "custom_headers_enabled", Value: "false", Type: "bool"},
+		{Key: "password_reset_enabled", Value: "false", Type: "bool"},
 	}
 
 	for i := range defaults {

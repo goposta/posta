@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '../../api/auth'
 import { oauthApi } from '../../api/oauth'
@@ -20,6 +20,7 @@ const twoFactorCode = ref('')
 const loading = ref(false)
 const requires2FA = ref(false)
 const registrationEnabled = ref(false)
+const passwordResetEnabled = ref(false)
 const oauthProviders = ref<OAuthProviderInfo[]>([])
 const ssoAvailable = ref(false)
 const ssoMode = ref(false)
@@ -29,16 +30,36 @@ const passwordError = ref('')
 const codeError = ref('')
 const showPassword = ref(false)
 
+const emailInput = ref<HTMLInputElement | null>(null)
+const codeInput = ref<HTMLInputElement | null>(null)
+
 onMounted(async () => {
+  emailInput.value?.focus()
   try {
     const [regRes, oauthRes] = await Promise.all([
       authApi.registrationStatus(),
       oauthApi.providers(),
     ])
     registrationEnabled.value = regRes.data.data.registration_enabled
+    passwordResetEnabled.value = regRes.data.data.password_reset_enabled
     oauthProviders.value = oauthRes.data.data.providers || []
     ssoAvailable.value = !!oauthRes.data.data.sso_available
   } catch { /* ignore */ }
+})
+
+
+watch(requires2FA, (on) => {
+  if (on) nextTick(() => codeInput.value?.focus())
+})
+
+watch(twoFactorCode, (val) => {
+  const digits = val.replace(/\D/g, '').slice(0, 6)
+  if (digits !== val) {
+    twoFactorCode.value = digits
+    return
+  }
+  codeError.value = ''
+  if (digits.length === 6 && !loading.value) handleLogin()
 })
 
 function oauthLogin(slug: string) {
@@ -141,24 +162,39 @@ function resetLogin() {
         <p v-else-if="ssoMode" class="auth-subtitle">We'll redirect you to your identity provider.</p>
       </div>
 
+      <!-- Error surfaced via redirect (OAuth failure, session revoked, etc.) -->
+      <div v-if="loginError" class="auth-alert" role="alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>{{ loginError.replace(/_/g, ' ') }}</span>
+      </div>
+
       <form class="auth-form" @submit.prevent="ssoMode ? submitSSO() : handleLogin()">
         <template v-if="!requires2FA">
           <div class="form-group">
             <label class="form-label" for="email">Email</label>
             <input
               id="email"
+              ref="emailInput"
               v-model="email"
               type="email"
               class="form-input"
               :class="{ 'form-input-error': emailError }"
               placeholder="you@example.com"
               autocomplete="email"
+              :disabled="loading || ssoChecking"
+              :aria-invalid="!!emailError"
+              :aria-describedby="emailError ? 'email-error' : undefined"
               @input="emailError = ''"
             />
-            <small v-if="emailError" class="form-error">{{ emailError }}</small>
+            <small v-if="emailError" id="email-error" class="form-error">{{ emailError }}</small>
           </div>
           <div v-if="!ssoMode" class="form-group">
-            <label class="form-label" for="password">Password</label>
+            <div class="form-label-row">
+              <label class="form-label" for="password">Password</label>
+              <router-link v-if="passwordResetEnabled" class="forgot-link" :to="{ name: 'forgot-password' }">
+                Forgot password?
+              </router-link>
+            </div>
             <div class="password-wrap">
               <input
                 id="password"
@@ -168,6 +204,9 @@ function resetLogin() {
                 :class="{ 'form-input-error': passwordError }"
                 placeholder="Enter your password"
                 autocomplete="current-password"
+                :disabled="loading"
+                :aria-invalid="!!passwordError"
+                :aria-describedby="passwordError ? 'password-error' : undefined"
                 @input="passwordError = ''"
               />
               <button
@@ -181,7 +220,7 @@ function resetLogin() {
                 <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
-            <small v-if="passwordError" class="form-error">{{ passwordError }}</small>
+            <small v-if="passwordError" id="password-error" class="form-error">{{ passwordError }}</small>
           </div>
         </template>
         <template v-else>
@@ -189,6 +228,7 @@ function resetLogin() {
             <label class="form-label" for="2fa-code">Authentication code</label>
             <input
               id="2fa-code"
+              ref="codeInput"
               v-model="twoFactorCode"
               type="text"
               class="form-input totp-input"
@@ -197,10 +237,11 @@ function resetLogin() {
               maxlength="6"
               inputmode="numeric"
               autocomplete="one-time-code"
-              autofocus
-              @input="codeError = ''"
+              :disabled="loading"
+              :aria-invalid="!!codeError"
+              :aria-describedby="codeError ? 'code-error' : undefined"
             />
-            <small v-if="codeError" class="form-error">{{ codeError }}</small>
+            <small v-if="codeError" id="code-error" class="form-error">{{ codeError }}</small>
           </div>
         </template>
         <button v-if="!ssoMode" type="submit" class="btn btn-primary auth-btn" :disabled="loading">
@@ -239,11 +280,6 @@ function resetLogin() {
             Sign in with {{ p.name }}
           </button>
         </div>
-      </div>
-
-      <!-- Login error from redirect (OAuth failure, session revoked, etc.) -->
-      <div v-if="loginError" class="oauth-error-msg">
-        {{ loginError.replace(/_/g, ' ') }}
       </div>
 
       <div class="auth-footer">
@@ -306,6 +342,17 @@ function resetLogin() {
 }
 
 .auth-subtitle { font-size: 14px; color: var(--text-muted); margin: 0; }
+
+.form-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.forgot-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-500);
+}
 
 .password-wrap { position: relative; }
 .password-wrap .form-input { padding-right: 40px; }
@@ -410,10 +457,18 @@ function resetLogin() {
   font-weight: 500;
 }
 
-.oauth-error-msg {
-  padding: 10px 32px 16px;
+.auth-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 24px 32px 0;
+  padding: 10px 12px;
   font-size: 13px;
-  color: var(--danger-600);
-  text-align: center;
+  color: var(--danger-700, #b91c1c);
+  background: var(--danger-50, #fef2f2);
+  border: 1px solid var(--danger-200, #fecaca);
+  border-radius: var(--radius);
+  text-transform: capitalize;
 }
+.auth-alert svg { flex-shrink: 0; }
 </style>
