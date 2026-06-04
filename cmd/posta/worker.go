@@ -18,6 +18,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/cron/jobs"
 	"github.com/goposta/posta/internal/metrics"
@@ -27,6 +29,7 @@ import (
 	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/services/workermon"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/goposta/posta/internal/worker"
@@ -198,6 +201,9 @@ func runWorker() error {
 		)
 		mux.HandleFunc(worker.TypeInboundParse, parseHandler.ProcessTask)
 	}
+
+	// Publish worker's build info
+	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
 
 	logger.Info("Posta worker started",
 		"version", config.Version,

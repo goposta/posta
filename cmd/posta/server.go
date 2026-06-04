@@ -41,6 +41,7 @@ import (
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/tracking"
 	"github.com/goposta/posta/internal/services/webhook"
+	"github.com/goposta/posta/internal/services/workermon"
 	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage"
 	"github.com/goposta/posta/internal/storage/blob"
@@ -440,6 +441,8 @@ func startEmbeddedWorker(db *gorm.DB,
 		)
 		mux.HandleFunc(worker.TypeInboundParse, parseHandler.ProcessTask)
 	}
+
+	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
 
 	go func() {
 		if err := srv.Run(mux); err != nil {

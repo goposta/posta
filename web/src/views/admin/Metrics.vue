@@ -304,6 +304,23 @@ const avgDeliveryRate = computed(() => {
       <!-- Worker Details -->
       <template v-if="workerStatus && workerStatus.workers.length > 0">
         <div class="metrics-section-label">Workers</div>
+
+        <div v-if="workerStatus.version_mismatch" class="app-banner app-banner--warning" style="margin-bottom: 16px;">
+          <svg class="app-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div class="app-banner-content">
+            <p class="app-banner-title">Worker version mismatch</p>
+            <p class="app-banner-text">
+              One or more workers are running a different version than the server
+              (<strong>{{ workerStatus.server_version || 'unknown' }}</strong>).
+            </p>
+          </div>
+        </div>
+
         <div class="card" style="margin-bottom: 28px;">
           <div class="table-wrapper">
             <table>
@@ -312,6 +329,7 @@ const avgDeliveryRate = computed(() => {
                   <th>Host</th>
                   <th>PID</th>
                   <th>Type</th>
+                  <th>Version</th>
                   <th>Queues</th>
                 </tr>
               </thead>
@@ -323,6 +341,13 @@ const avgDeliveryRate = computed(() => {
                     <span class="badge" :class="w.type === 'embedded' ? 'badge-info' : 'badge-success'">
                       {{ w.type }}
                     </span>
+                  </td>
+                  <td>
+                    <span v-if="w.version" class="badge" :class="w.outdated ? 'badge-warning' : 'badge-neutral'"
+                      :title="w.outdated ? `Differs from server (${workerStatus.server_version})` : ''">
+                      {{ w.version }}
+                    </span>
+                    <span v-else style="color: var(--text-muted)">—</span>
                   </td>
                   <td>
                     <span v-for="(concurrency, queue) in w.queues" :key="queue" class="badge badge-neutral" style="margin-right: 6px;">

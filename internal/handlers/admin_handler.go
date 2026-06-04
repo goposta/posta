@@ -18,22 +18,26 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
 	"time"
 
+	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/cache"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/seeder"
 	"github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/services/workermon"
 	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -48,6 +52,7 @@ type AdminHandler struct {
 	workspaceRepo  *repositories.WorkspaceRepository
 	planRepo       *repositories.PlanRepository
 	inspector      *asynq.Inspector
+	redis          *redis.Client
 	bus            *eventbus.EventBus
 	seeder         *seeder.Seeder
 	migrator       *workspacemigrate.Service
@@ -154,8 +159,8 @@ type UserDetailMetrics struct {
 	WebhookDeliveries *repositories.WebhookDeliveryStats `json:"webhook_deliveries"`
 }
 
-func NewAdminHandler(db *gorm.DB, c *cache.Cache, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, emailRepo *repositories.EmailRepository, whDeliveryRepo *repositories.WebhookDeliveryRepository, inspector *asynq.Inspector, bus *eventbus.EventBus, seeder *seeder.Seeder, embeddedWorker bool) *AdminHandler {
-	return &AdminHandler{db: db, cache: c, userRepo: userRepo, keyRepo: keyRepo, emailRepo: emailRepo, whDeliveryRepo: whDeliveryRepo, inspector: inspector, bus: bus, seeder: seeder, embeddedWorker: embeddedWorker}
+func NewAdminHandler(db *gorm.DB, c *cache.Cache, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, emailRepo *repositories.EmailRepository, whDeliveryRepo *repositories.WebhookDeliveryRepository, inspector *asynq.Inspector, redisClient *redis.Client, bus *eventbus.EventBus, seeder *seeder.Seeder, embeddedWorker bool) *AdminHandler {
+	return &AdminHandler{db: db, cache: c, userRepo: userRepo, keyRepo: keyRepo, emailRepo: emailRepo, whDeliveryRepo: whDeliveryRepo, inspector: inspector, redis: redisClient, bus: bus, seeder: seeder, embeddedWorker: embeddedWorker}
 }
 
 // SetWorkspaceRepo sets the workspace and plan repositories for workspace management.
@@ -611,8 +616,10 @@ func (h *AdminHandler) RevokeUserSessions(c *okapi.Context, req *AdminGetUserReq
 
 // WorkerStatus is sent over SSE with the current worker count and details.
 type WorkerStatus struct {
-	ActiveWorkers int            `json:"active_workers"`
-	Workers       []WorkerDetail `json:"workers"`
+	ActiveWorkers   int            `json:"active_workers"`
+	Workers         []WorkerDetail `json:"workers"`
+	ServerVersion   string         `json:"server_version"`
+	VersionMismatch bool           `json:"version_mismatch"`
 }
 
 type SystemStatus struct {
@@ -633,10 +640,12 @@ func buildSystemStatus() SystemStatus {
 
 // WorkerDetail holds info about a single connected worker.
 type WorkerDetail struct {
-	Host   string         `json:"host"`
-	PID    int            `json:"pid"`
-	Queues map[string]int `json:"queues"`
-	Type   string         `json:"type"` // "embedded" or "standalone"
+	Host     string         `json:"host"`
+	PID      int            `json:"pid"`
+	Queues   map[string]int `json:"queues"`
+	Type     string         `json:"type"`              // "embedded" or "standalone"
+	Version  string         `json:"version,omitempty"` // self-reported via heartbeat; empty if none yet
+	Outdated bool           `json:"outdated"`          // version differs from the server
 }
 
 // MetricsStream sends real-time platform metrics updates via SSE
@@ -686,7 +695,7 @@ func (h *AdminHandler) MetricsStream(c *okapi.Context) error {
 }
 
 func (h *AdminHandler) buildWorkerStatus() WorkerStatus {
-	var status WorkerStatus
+	status := WorkerStatus{ServerVersion: config.Version}
 	if h.inspector == nil {
 		return status
 	}
@@ -694,6 +703,9 @@ func (h *AdminHandler) buildWorkerStatus() WorkerStatus {
 	if err != nil {
 		return status
 	}
+
+	heartbeats := workermon.ReadHeartbeats(context.Background(), h.redis)
+
 	selfPID := os.Getpid()
 	selfHost, _ := os.Hostname()
 	status.ActiveWorkers = len(servers)
@@ -703,12 +715,21 @@ func (h *AdminHandler) buildWorkerStatus() WorkerStatus {
 		if h.embeddedWorker && s.PID == selfPID && s.Host == selfHost {
 			wType = "embedded"
 		}
-		status.Workers = append(status.Workers, WorkerDetail{
+		detail := WorkerDetail{
 			Host:   s.Host,
 			PID:    s.PID,
 			Queues: s.Queues,
 			Type:   wType,
-		})
+		}
+		if hb, ok := heartbeats[fmt.Sprintf("%s:%d", s.Host, s.PID)]; ok {
+			detail.Version = hb.Version
+
+			if hb.Version != "" && hb.Version != config.Version {
+				detail.Outdated = true
+				status.VersionMismatch = true
+			}
+		}
+		status.Workers = append(status.Workers, detail)
 	}
 	return status
 }

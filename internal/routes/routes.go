@@ -253,7 +253,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			suppression:      handlers.NewSuppressionHandler(suppressionRepo, unsubListRepo),
 			unsubscribeList:  handlers.NewUnsubscribeListHandler(unsubListRepo),
 			contact:          handlers.NewContactHandler(contactRepo, suppressionRepo),
-			admin:            handlers.NewAdminHandler(db, statsCache, userRepo, apiKeyRepo, emailRepo, webhookDeliveryRepo, inspector, bus, userSeeder, cfg.EmbeddedWorker),
+			admin:            handlers.NewAdminHandler(db, statsCache, userRepo, apiKeyRepo, emailRepo, webhookDeliveryRepo, inspector, redisClient, bus, userSeeder, cfg.EmbeddedWorker),
 			workspace:        handlers.NewWorkspaceHandler(workspaceRepo, userRepo, db),
 			server:           handlers.NewServerHandler(serverRepo, auditLogger),
 			event:            handlers.NewEventHandler(eventRepo, bus),

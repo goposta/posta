@@ -506,6 +506,8 @@ export interface AdminMetrics {
 export interface WorkerStatus {
   active_workers: number
   workers: WorkerDetail[]
+  server_version?: string
+  version_mismatch?: boolean
 }
 
 export interface SystemStatus {
@@ -519,6 +521,8 @@ export interface WorkerDetail {
   pid: number
   queues: Record<string, number>
   type: 'embedded' | 'standalone'
+  version?: string
+  outdated?: boolean
 }
 
 export interface Event {
