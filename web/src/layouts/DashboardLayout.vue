@@ -183,7 +183,6 @@ const navSections: NavSection[] = [
     items: [
       { name: 'All Workspaces', path: '/workspaces', icon: 'layers' },
       { name: 'Members', path: '', icon: 'users', workspaceSubpath: 'members', hideInPersonal: true },
-      { name: 'Plan & Billing', path: '', icon: 'credit-card', workspaceTab: 'plan', hideInPersonal: true },
       { name: 'Audit Log', path: '/audit-log', icon: 'history' },
       { name: 'Settings', path: '', icon: 'settings', workspaceTab: 'settings', requiresWorkspaceAdmin: true },
     ],
