@@ -35,6 +35,10 @@ var registry = []Step{
 		ID:    "2026-05-31-personal-workspaces",
 		Apply: applyPersonalWorkspaces,
 	},
+	{
+		ID:    "2026-06-04-dedupe-contacts",
+		Apply: applyDedupeContacts,
+	},
 }
 
 func Registry() []Step {
