@@ -22,7 +22,20 @@ const appInfo = ref<AppInfo | null>(null)
 const showCreateModal = ref(false)
 const newKeyName = ref('')
 const newKeyIPs = ref('')
+const newKeyScopes = ref<string[]>(['send'])
 const newKeyExpiry = ref('default')
+
+const scopeOptions = [
+  { value: 'send', label: 'Send', hint: 'Send emails, batches, templates, and manage subscriber lists' },
+  { value: 'read', label: 'Read', hint: 'List/get emails, bounces, and webhook deliveries' },
+  { value: 'webhooks', label: 'Webhooks', hint: 'Create, list, and delete webhooks' },
+]
+
+function toggleScope(value: string) {
+  const i = newKeyScopes.value.indexOf(value)
+  if (i === -1) newKeyScopes.value.push(value)
+  else newKeyScopes.value.splice(i, 1)
+}
 const defaultExpiryDays = ref(90)
 const creating = ref(false)
 
@@ -79,15 +92,18 @@ async function createKey() {
       .map(ip => ip.trim())
       .filter(ip => ip.length > 0)
     const expiresInDays = resolveExpiryDays()
+    const scopes = newKeyScopes.value.length > 0 ? [...newKeyScopes.value] : ['send']
     const res = await apiKeysApi.create(
       newKeyName.value.trim(),
       allowedIPs.length > 0 ? allowedIPs : undefined,
+      scopes,
       expiresInDays,
     )
     createdKey.value = res.data.data
     showCreateModal.value = false
     newKeyName.value = ''
     newKeyIPs.value = ''
+    newKeyScopes.value = ['send']
     newKeyExpiry.value = 'default'
     showKeyModal.value = true
     notify.success('API key created')
@@ -290,6 +306,25 @@ onMounted(() => {
             </small>
           </div>
           <div class="form-group">
+            <label class="form-label">Scopes</label>
+            <div class="scope-list">
+              <label v-for="opt in scopeOptions" :key="opt.value" class="scope-option">
+                <input
+                  type="checkbox"
+                  :checked="newKeyScopes.includes(opt.value)"
+                  @change="toggleScope(opt.value)"
+                />
+                <span class="scope-text">
+                  <strong>{{ opt.label }}</strong>
+                  <small>{{ opt.hint }}</small>
+                </span>
+              </label>
+            </div>
+            <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block">
+              Scopes are fixed at creation. To change them, create a new key.
+            </small>
+          </div>
+          <div class="form-group">
             <label class="form-label">Allowed IPs <span style="font-weight: 400; color: var(--text-muted)">(optional)</span></label>
             <textarea
               v-model="newKeyIPs"
@@ -355,4 +390,10 @@ onMounted(() => {
 .api-docs-text span { font-size: 13px; color: var(--text-secondary); }
 .api-docs-links { display: flex; gap: 8px; flex-shrink: 0; }
 .api-docs-links .btn { text-decoration: none; }
+.scope-list { display: flex; flex-direction: column; gap: 8px; }
+.scope-option { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.scope-option input { margin-top: 3px; }
+.scope-text { display: flex; flex-direction: column; gap: 1px; }
+.scope-text strong { font-size: 13px; color: var(--text-primary); }
+.scope-text small { font-size: 12px; color: var(--text-muted); }
 </style>

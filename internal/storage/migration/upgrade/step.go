@@ -39,6 +39,10 @@ var registry = []Step{
 		ID:    "2026-06-04-dedupe-contacts",
 		Apply: applyDedupeContacts,
 	},
+	{
+		ID:    "2026-06-11-api-key-scopes",
+		Apply: applyAPIKeyScopes,
+	},
 }
 
 func Registry() []Step {

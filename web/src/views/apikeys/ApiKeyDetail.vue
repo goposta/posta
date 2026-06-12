@@ -37,6 +37,9 @@ const status = computed<{ label: string; class: string }>(() => {
   return { label: 'Active', class: 'badge-success' }
 })
 
+// An empty/missing scope set means the key predates scopes; show it as send.
+const keyScopes = computed<string[]>(() => key.value?.scopes ?? [])
+
 const isActive = computed(() => {
   const k = key.value
   return !!k && !k.revoked && !(k.expires_at && new Date(k.expires_at) < new Date())
@@ -143,6 +146,20 @@ async function remove() {
             <tr>
               <td style="font-weight: 600">Expires</td>
               <td>{{ formatDate(key.expires_at) }}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 600">Scopes</td>
+              <td>
+                <template v-if="keyScopes.length > 0">
+                  <span
+                    v-for="s in keyScopes"
+                    :key="s"
+                    style="display: inline-block; padding: 2px 8px; margin-right: 4px; font-size: 12px; border-radius: 4px; background: var(--bg-muted, #eef0f3); color: var(--text-secondary)"
+                    >{{ s }}</span
+                  >
+                </template>
+                <span v-else style="color: var(--text-muted)">send</span>
+              </td>
             </tr>
             <tr>
               <td style="font-weight: 600">Allowed IPs</td>

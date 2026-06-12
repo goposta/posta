@@ -23,6 +23,21 @@ import (
 	"github.com/lib/pq"
 )
 
+const (
+	ScopeSend     = "send"
+	ScopeRead     = "read"
+	ScopeWebhooks = "webhooks"
+	ScopeSetup    = "setup"
+	ScopeAll      = "*"
+)
+
+var ValidScopes = map[string]bool{
+	ScopeSend:     true,
+	ScopeRead:     true,
+	ScopeWebhooks: true,
+	ScopeAll:      true,
+}
+
 type APIKey struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	UserID      uint           `json:"user_id" gorm:"index;not null"`
@@ -35,9 +50,22 @@ type APIKey struct {
 	LastUsedAt  *time.Time     `json:"last_used_at"`
 	Revoked     bool           `json:"revoked" gorm:"default:false"`
 	AllowedIPs  pq.StringArray `json:"allowed_ips" gorm:"type:text[]"`
+	Scopes      pq.StringArray `json:"scopes" gorm:"type:text[]"`
 
 	User      User      `json:"-" gorm:"foreignKey:UserID"`
 	CreatedBy *ActorRef `json:"created_by,omitempty" gorm:"foreignKey:UserID;references:ID;constraint:false"`
+}
+
+func (k *APIKey) HasScope(s string) bool {
+	if len(k.Scopes) == 0 {
+		return s == ScopeSend
+	}
+	for _, sc := range k.Scopes {
+		if sc == ScopeAll || sc == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (k *APIKey) IsExpired() bool {

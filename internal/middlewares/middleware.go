@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/goposta/posta/internal/config"
+	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/auth"
 	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/ratelimit"
@@ -208,9 +209,29 @@ func APIKeyAuthMiddleware(keyService *auth.APIKeyService, userRepo *repositories
 			c.Set("workspace_id", int(*apiKey.WorkspaceID))
 		}
 
+		scopes := []string(apiKey.Scopes)
+		if len(scopes) == 0 {
+			scopes = []string{models.ScopeSend}
+		}
+		c.Set("api_key_scopes", strings.Join(scopes, ","))
+
 		go func() { _ = keyRepo.UpdateLastUsed(apiKey.ID) }()
 
 		return c.Next()
 
+	}
+}
+
+// RequireScope aborts 403 unless the authenticated API key grants scope (or "*").
+// These routes are API-key-only; JWT callers never reach this middleware.
+func RequireScope(scope string) okapi.Middleware {
+	return func(c *okapi.Context) error {
+		raw := c.GetString("api_key_scopes")
+		for _, s := range strings.Split(raw, ",") {
+			if s == models.ScopeAll || s == scope {
+				return c.Next()
+			}
+		}
+		return c.AbortForbidden("API key missing required scope: " + scope)
 	}
 }
