@@ -50,10 +50,13 @@ async function createUser() {
 }
 
 
+const search = ref('')
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    const res = await adminApi.listUsers(page)
+    const res = await adminApi.listUsers(page, pageable.value.size, search.value)
     users.value = res.data.data
     pageable.value = res.data.pageable
   } catch (e) {
@@ -62,6 +65,12 @@ const { pageable, goToPage } = usePagination(async (page) => {
     loading.value = false
   }
 })
+
+// Debounce keystrokes, then reset to the first page of results.
+function onSearchInput() {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => goToPage(0), 300)
+}
 
 function roleBadgeClass(role: string) {
   switch (role) {
@@ -73,6 +82,18 @@ function roleBadgeClass(role: string) {
 
 function formatDate(date: string) {
   return new Date(date).toLocaleString()
+}
+
+function formatDateShort(date: string) {
+  return new Date(date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// Up to two initials for the avatar, falling back to the email when unnamed.
+function getInitials(user: User) {
+  const base = (user.name || user.email || '?').trim()
+  const parts = base.split(/\s+/)
+  if (parts.length >= 2 && parts[0] && parts[1]) return (parts[0][0] + parts[1][0])
+  return base.slice(0, 2)
 }
 
 function startEdit(user: User) {
@@ -194,63 +215,118 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="loading-page">
-      <div class="spinner"></div>
-    </div>
-
-    <template v-else>
-      <div class="card">
-        <div class="card-header">
-          <h2>Users</h2>
-        </div>
-        <div v-if="users.length === 0" class="empty-state">
-          <h3>No users found</h3>
-          <p>There are no registered users.</p>
-        </div>
-        <div v-else class="card-body">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Created At</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="user in users" :key="user.id">
-                <td>{{ user.name }}</td>
-                <td>{{ user.email }}</td>
-                <td><span :class="roleBadgeClass(user.role)">{{ user.role }}</span></td>
-                <td>
-                  <span :class="user.active ? 'badge badge-success' : 'badge badge-danger'">
-                    {{ user.active ? 'Active' : 'Disabled' }}
-                  </span>
-                </td>
-                <td>{{ formatDate(user.created_at) }}</td>
-                <td style="display: flex; gap: 0.5rem; align-items: center;">
-                  <button class="btn btn-sm btn-secondary" @click="startEdit(user)">Edit</button>
-                  <button class="btn btn-sm btn-secondary" @click="router.push(`/admin/users/${user.id}`)">Details</button>
-                  <button
-                    class="btn btn-sm"
-                    :class="user.active ? 'btn-warning' : 'btn-primary'"
-                    @click="toggleActive(user)"
-                  >
-                    {{ user.active ? 'Disable' : 'Enable' }}
-                  </button>
-                  <button class="btn btn-sm btn-danger" @click="deleteUser(user)">Delete</button>
-                  <button v-if="!user.active" class="btn btn-sm btn-danger" @click="forceDeleteUser(user)">Force Delete</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-  <Pagination :pageable="pageable" @page="goToPage" />
-          
-        </div>
+    <div class="card">
+      <div class="card-header" style="display: flex; gap: 12px; align-items: center;">
+        <h2>Users</h2>
+        <input
+          v-model="search"
+          type="text"
+          class="form-input"
+          placeholder="Search by name or email..."
+          style="max-width: 320px; margin-left: auto;"
+          @input="onSearchInput"
+        />
       </div>
-    </template>
+
+      <!-- Loading: skeleton rows preserve the table layout while data streams in. -->
+      <div v-if="loading" class="card-body">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="n in 6" :key="n">
+              <td>
+                <div class="cell-id">
+                  <span class="avatar skeleton"></span>
+                  <span class="cell-text" style="flex: 1;">
+                    <span class="skeleton skeleton-text" style="width: 45%;"></span>
+                    <span class="skeleton skeleton-text" style="width: 65%; margin-top: 5px;"></span>
+                  </span>
+                </div>
+              </td>
+              <td><span class="skeleton skeleton-text" style="width: 52px;"></span></td>
+              <td><span class="skeleton skeleton-text" style="width: 68px;"></span></td>
+              <td><span class="skeleton skeleton-text" style="width: 88px;"></span></td>
+              <td><span class="skeleton skeleton-text" style="width: 120px; margin-left: auto;"></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-else-if="users.length === 0" class="empty-state">
+        <span class="mdi mdi-account-multiple-outline" style="font-size: 44px; display: block; margin-bottom: 10px;"></span>
+        <h3>No users found</h3>
+        <p v-if="search">No users match “{{ search }}”.</p>
+        <p v-else>There are no registered users yet.</p>
+      </div>
+
+      <div v-else class="card-body">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="user in users"
+              :key="user.id"
+              class="row-clickable"
+              @click="router.push(`/admin/users/${user.id}`)"
+            >
+              <td>
+                <div class="cell-id">
+                  <span class="avatar">{{ getInitials(user) }}</span>
+                  <span class="cell-text">
+                    <span class="cell-title">{{ user.name || '—' }}</span>
+                    <span class="cell-sub">{{ user.email }}</span>
+                  </span>
+                </div>
+              </td>
+              <td><span :class="roleBadgeClass(user.role)">{{ user.role }}</span></td>
+              <td>
+                <span class="badge badge-dot" :class="user.active ? 'badge-success' : 'badge-danger'">
+                  {{ user.active ? 'Active' : 'Disabled' }}
+                </span>
+              </td>
+              <td><span :title="formatDate(user.created_at)">{{ formatDateShort(user.created_at) }}</span></td>
+              <td>
+                <div class="table-actions">
+                  <button class="btn btn-icon btn-icon-muted" title="Edit role" @click.stop="startEdit(user)">
+                    <span class="mdi mdi-pencil-outline"></span>
+                  </button>
+                  <button
+                    class="btn btn-icon btn-icon-muted"
+                    :title="user.active ? 'Disable user' : 'Enable user'"
+                    @click.stop="toggleActive(user)"
+                  >
+                    <span class="mdi" :class="user.active ? 'mdi-account-off-outline' : 'mdi-account-check-outline'"></span>
+                  </button>
+                  <button class="btn btn-icon btn-icon-danger" title="Delete user" @click.stop="deleteUser(user)">
+                    <span class="mdi mdi-trash-can-outline"></span>
+                  </button>
+                  <button v-if="!user.active" class="btn btn-icon btn-icon-danger" title="Force delete (permanent)" @click.stop="forceDeleteUser(user)">
+                    <span class="mdi mdi-delete-alert-outline"></span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <Pagination :pageable="pageable" @page="goToPage" />
+      </div>
+    </div>
 
     <!-- Edit User Modal -->
     <div v-if="editingUser" class="modal-overlay" @mousedown="watchClickStart" 

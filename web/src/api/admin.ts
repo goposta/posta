@@ -2,8 +2,8 @@ import api from './client'
 import type { ApiResponse, PaginatedResponse, User, ApiKey, Email, Event, AdminMetrics, UserDetailMetrics, CronJob, AdminWorkspace } from './types'
 
 export const adminApi = {
-  listUsers(page = 0, size = 20) {
-    return api.get<PaginatedResponse<User>>('/admin/users', { params: { page, size } })
+  listUsers(page = 0, size = 20, search = '') {
+    return api.get<PaginatedResponse<User>>('/admin/users', { params: { page, size, search: search || undefined } })
   },
   createUser(name: string, email: string, password: string, role: string) {
     return api.post<ApiResponse<User>>('/admin/users', { name, email, password, role })

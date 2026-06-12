@@ -358,10 +358,14 @@ td {
   font-size: 14px;
   border-bottom: 1px solid var(--border-secondary);
   color: var(--text-secondary);
+  vertical-align: middle;
 }
 
+/* Last row sits flush against the card/pagination border. */
+tbody tr:last-child td { border-bottom: none; }
+
 tr { transition: background var(--transition); }
-tr:hover td { background: var(--bg-hover); }
+tbody tr:hover td { background: var(--bg-hover); }
 
 /* ─── Badges ─── */
 .badge {
@@ -850,6 +854,95 @@ input[type="checkbox"]:checked::before {
 .cursor-pointer {
   cursor: pointer;
 }
+
+/* ─── Data table polish ─── */
+/* Rounded scroll container so wide tables clip cleanly inside cards. */
+.table-wrapper { overflow-x: auto; border-radius: var(--radius); }
+
+/* Two-line identity cell: avatar + stacked title/subtitle.
+   <td><div class="cell-id"><span class="avatar">JK</span>
+     <span class="cell-text"><span class="cell-title">Name</span>
+     <span class="cell-sub">email</span></span></div></td> */
+.cell-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.cell-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.cell-title {
+  font-weight: 550;
+  color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cell-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Right-align + tabular figures for numeric columns (set on th and td). */
+.cell-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Circular initials avatar. */
+.avatar {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+  background: var(--primary-100); color: var(--primary-700);
+  text-transform: uppercase;
+  user-select: none;
+}
+[data-theme="dark"] .avatar { background: var(--primary-900); color: var(--primary-200); }
+.avatar-sm { width: 26px; height: 26px; font-size: 11px; }
+
+/* Right-aligned row action cluster — keeps icon buttons from wrapping oddly. */
+.table-actions { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+
+/* Clickable table rows (navigate on click; inner buttons use @click.stop). */
+.row-clickable { cursor: pointer; }
+.row-clickable:hover td { background: var(--bg-hover); }
+
+/* Status pill with a leading colored dot — inherits the badge color. */
+.badge-dot::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+/* Square icon button (overrides the earlier compact .btn-icon). */
+.btn-icon {
+  width: 32px; height: 32px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  font-size: 17px;
+  line-height: 1;
+}
+.btn-icon .mdi { line-height: 1; }
+/* Borderless icon buttons for dense row actions. */
+.btn-icon-muted {
+  background: transparent; border-color: transparent; color: var(--text-tertiary);
+}
+.btn-icon-muted:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.btn-icon-danger {
+  background: transparent; border-color: transparent; color: var(--text-tertiary);
+}
+.btn-icon-danger:hover:not(:disabled) { background: var(--danger-50); color: var(--danger-600); }
+
+/* Warning button (referenced by views but previously undefined). */
+.btn-warning {
+  background: var(--warning-500); color: #fff; border-color: var(--warning-500);
+}
+.btn-warning:hover:not(:disabled) { background: var(--warning-600); border-color: var(--warning-600); }
+
+/* Shimmer skeleton for loading rows/blocks. */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 37%, var(--bg-tertiary) 63%);
+  background-size: 400% 100%;
+  animation: skeleton 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+}
+.skeleton-text { display: block; height: 12px; width: 70%; }
+@keyframes skeleton { from { background-position: 100% 50%; } to { background-position: 0 50%; } }
 
 /* ─── Scrollbar ─── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

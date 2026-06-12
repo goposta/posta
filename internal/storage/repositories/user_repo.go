@@ -63,13 +63,21 @@ func (r *UserRepository) PersonalWorkspaceID(userID uint) (*uint, error) {
 	return user.PersonalWorkspaceID, nil
 }
 
-func (r *UserRepository) FindAll(limit, offset int) ([]models.User, int64, error) {
+func (r *UserRepository) FindAll(search string, limit, offset int) ([]models.User, int64, error) {
 	var users []models.User
 	var total int64
 
-	r.db.Model(&models.User{}).Count(&total)
+	countQ := r.db.Model(&models.User{})
+	findQ := r.db.Model(&models.User{})
+	if search != "" {
+		like := "%" + search + "%"
+		countQ = countQ.Where("name ILIKE ? OR email ILIKE ?", like, like)
+		findQ = findQ.Where("name ILIKE ? OR email ILIKE ?", like, like)
+	}
 
-	if err := r.db.Order("created_at DESC").
+	countQ.Count(&total)
+
+	if err := findQ.Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&users).Error; err != nil {
 		return nil, 0, err
