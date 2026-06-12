@@ -220,11 +220,16 @@ func (h *AdminHandler) CreateUser(c *okapi.Context, req *AdminCreateUserRequest)
 	return created(c, user)
 }
 
-// ListUsers returns all users.
-func (h *AdminHandler) ListUsers(c *okapi.Context, req *ListRequest) error {
+type ListUsersRequest struct {
+	Page   int    `query:"page" default:"0"`
+	Size   int    `query:"size" default:"20"`
+	Search string `query:"search"`
+}
+
+func (h *AdminHandler) ListUsers(c *okapi.Context, req *ListUsersRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	users, total, err := h.userRepo.FindAll(size, offset)
+	users, total, err := h.userRepo.FindAll(req.Search, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list users")
 	}

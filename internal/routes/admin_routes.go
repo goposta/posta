@@ -56,7 +56,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Handler:  okapi.H(r.h.admin.ListUsers),
 			Group:    adminGroup,
 			Summary:  "List all users",
-			Request:  &handlers.ListRequest{},
+			Request:  &handlers.ListUsersRequest{},
 			Response: &dto.PageableResponse[models.User]{},
 		},
 		{
