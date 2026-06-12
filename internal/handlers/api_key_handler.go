@@ -48,6 +48,7 @@ type CreateAPIKeyRequest struct {
 	Body struct {
 		Name          string   `json:"name" required:"true"`
 		AllowedIPs    []string `json:"allowed_ips"`
+		Scopes        []string `json:"scopes" enum:"send,read,webhooks,*" default:"send"`
 		ExpiresInDays *int     `json:"expires_in_days"`
 	} `json:"body"`
 }
@@ -79,6 +80,11 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 	}
 	scope := getScope(c)
 
+	scopes, err := auth.NormalizeScopes(req.Body.Scopes)
+	if err != nil {
+		return c.AbortBadRequest("invalid scope", err)
+	}
+
 	if h.quota != nil {
 		if err := h.quota.CheckQuota(h.db, scope.UserID, scope.WorkspaceID, "api_keys"); err != nil {
 			return c.AbortForbidden("API key quota exceeded for this workspace", err)
@@ -103,12 +109,14 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 		}
 	}
 
-	rawKey, key, err := h.service.GenerateKey(scope.UserID, scope.WorkspaceID, req.Body.Name, req.Body.AllowedIPs, expiresAt)
+	rawKey, key, err := h.service.GenerateKey(scope.UserID, scope.WorkspaceID, req.Body.Name, req.Body.AllowedIPs, scopes, expiresAt)
 	if err != nil {
 		return c.AbortInternalServerError("failed to create API key", err)
 	}
 
-	h.audit.LogCtx(c, "apikey.created", "API key created: "+req.Body.Name, nil)
+	h.audit.LogCtx(c, "apikey.created", "API key created: "+req.Body.Name, map[string]any{
+		"scopes": []string(key.Scopes),
+	})
 
 	// Send API key created notification
 	if h.notifier != nil {
@@ -132,6 +140,7 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 		"id":         key.ID,
 		"name":       key.Name,
 		"prefix":     key.KeyPrefix,
+		"scopes":     []string(key.Scopes),
 		"expires_at": key.ExpiresAt,
 		"message":    "Save this key securely. It will not be shown again.",
 	})

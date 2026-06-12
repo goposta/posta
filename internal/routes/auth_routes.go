@@ -22,6 +22,8 @@ import (
 
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/middlewares"
+	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/email"
 	"github.com/goposta/posta/internal/services/verifier"
 	"github.com/jkaninda/okapi"
@@ -153,12 +155,31 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 
 // apiAuthRoutes returns route definitions for API-key authenticated endpoints.
 func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
-	apiAuth := r.v1.Group("", r.mw.apiKey).
+	apiKeySec := []map[string][]string{{"ApiKeyAuth": {}}}
+
+	// Send/subscriber routes require the `send` scope explicitly.
+	apiAuth := r.v1.Group("", r.mw.apiKey, middlewares.RequireScope(models.ScopeSend)).
 		WithTagInfo(okapi.GroupTag{
 			Name:        "Emails",
 			Description: "Send transactional and templated emails, run batch sends, and manage scheduled delivery. Authenticated with an API key.",
 		}).
-		WithSecurity([]map[string][]string{{"ApiKeyAuth": {}}})
+		WithSecurity(apiKeySec)
+
+	// Read routes (list/get emails, bounces, webhook deliveries) require `read`.
+	apiRead := r.v1.Group("", r.mw.apiKey, middlewares.RequireScope(models.ScopeRead)).
+		WithTagInfo(okapi.GroupTag{
+			Name:        "Read",
+			Description: "Read-only access to emails, bounces, and webhook delivery logs. Authenticated with an API key holding the `read` scope.",
+		}).
+		WithSecurity(apiKeySec)
+
+	// Webhook management routes require the `webhooks` scope.
+	apiWebhooks := r.v1.Group("", r.mw.apiKey, middlewares.RequireScope(models.ScopeWebhooks)).
+		WithTagInfo(okapi.GroupTag{
+			Name:        "Webhooks",
+			Description: "Create, list, and delete webhooks. Authenticated with an API key holding the `webhooks` scope.",
+		}).
+		WithSecurity(apiKeySec)
 
 	return []okapi.RouteDefinition{
 		{
@@ -301,6 +322,108 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+			},
+		},
+
+		//  read scope
+		{
+			Method:      http.MethodGet,
+			Path:        "/emails",
+			Handler:     okapi.H(r.h.email.List),
+			Group:       apiRead,
+			Summary:     "List emails",
+			Description: "List sent emails with pagination. Requires the `read` scope.",
+			Request:     &handlers.ListRequest{},
+			Response:    &dto.PageableResponse[models.Email]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/emails/{id}",
+			Handler:     okapi.H(r.h.email.Get),
+			Group:       apiRead,
+			Summary:     "Get email details",
+			Description: "Returns full details for a single email. Requires the `read` scope.",
+			Response:    &dto.Response[models.Email]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "string", "Email UUID"),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/bounces",
+			Handler:     okapi.H(r.h.bounce.List),
+			Group:       apiRead,
+			Summary:     "List bounces",
+			Description: "List recorded bounces and complaints with pagination. Requires the `read` scope.",
+			Request:     &handlers.ListRequest{},
+			Response:    &dto.PageableResponse[models.Bounce]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/webhook-deliveries",
+			Handler:     okapi.H(r.h.webhookDelivery.List),
+			Group:       apiRead,
+			Summary:     "List webhook deliveries",
+			Description: "List webhook delivery attempts with pagination. Requires the `read` scope.",
+			Request:     &handlers.ListRequest{},
+			Response:    &dto.PageableResponse[models.WebhookDelivery]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+			},
+		},
+
+		// webhooks scope
+		{
+			Method:      http.MethodGet,
+			Path:        "/webhooks",
+			Handler:     okapi.H(r.h.webhook.List),
+			Group:       apiWebhooks,
+			Summary:     "List webhooks",
+			Description: "List configured webhooks with pagination. Requires the `webhooks` scope.",
+			Request:     &handlers.ListRequest{},
+			Response:    &dto.PageableResponse[models.Webhook]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/webhooks",
+			Handler:     okapi.H(r.h.webhook.Create),
+			Group:       apiWebhooks,
+			Summary:     "Create webhook",
+			Description: "Register a webhook endpoint for event delivery. Requires the `webhooks` scope.",
+			Request:     &handlers.CreateWebhookRequest{},
+			Options: []okapi.RouteOption{
+				okapi.DocResponse(201, &dto.Response[models.Webhook]{}),
+				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:      http.MethodDelete,
+			Path:        "/webhooks/{id:int}",
+			Handler:     okapi.H(r.h.webhook.Delete),
+			Group:       apiWebhooks,
+			Summary:     "Delete webhook",
+			Description: "Delete a webhook by ID. Requires the `webhooks` scope.",
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Webhook ID"),
+				okapi.DocResponse(204, nil),
+				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 	}

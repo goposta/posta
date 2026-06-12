@@ -39,9 +39,31 @@ func NewAPIKeyService(repo *repositories.APIKeyRepository) *APIKeyService {
 	return &APIKeyService{repo: repo}
 }
 
-// GenerateKey creates a new API key and returns the raw key (only shown once).
-// If expiresAt is nil the key never expires.
-func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string, allowedIPs []string, expiresAt *time.Time) (string, *models.APIKey, error) {
+func NormalizeScopes(scopes []string) ([]string, error) {
+	if len(scopes) == 0 {
+		return []string{models.ScopeSend}, nil
+	}
+	seen := make(map[string]bool, len(scopes))
+	out := make([]string, 0, len(scopes))
+	for _, sc := range scopes {
+		if !models.ValidScopes[sc] {
+			return nil, fmt.Errorf("unknown scope: %q", sc)
+		}
+		if seen[sc] {
+			continue
+		}
+		seen[sc] = true
+		out = append(out, sc)
+	}
+	return out, nil
+}
+
+func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string, allowedIPs []string, scopes []string, expiresAt *time.Time) (string, *models.APIKey, error) {
+	normScopes, err := NormalizeScopes(scopes)
+	if err != nil {
+		return "", nil, err
+	}
+
 	rawBytes := make([]byte, 32)
 	if _, err := rand.Read(rawBytes); err != nil {
 		return "", nil, fmt.Errorf("failed to generate key: %w", err)
@@ -57,6 +79,7 @@ func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string,
 		KeyHash:     hash,
 		KeyPrefix:   rawKey[:len(apiKeyPrefix)+8],
 		AllowedIPs:  allowedIPs,
+		Scopes:      normScopes,
 		ExpiresAt:   expiresAt,
 	}
 

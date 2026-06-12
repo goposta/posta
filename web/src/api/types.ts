@@ -119,6 +119,7 @@ export interface ApiKey {
   last_used_at: string | null
   revoked: boolean
   allowed_ips: string[] | null
+  scopes: string[] | null
   created_by?: ActorRef | null
 }
 
@@ -139,6 +140,7 @@ export interface ApiKeyCreateResponse {
   id: number
   name: string
   prefix: string
+  scopes: string[] | null
   expires_at: string | null
   message: string
 }

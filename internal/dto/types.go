@@ -54,11 +54,12 @@ type ErrorInfo struct {
 }
 
 type APIKeyCreatedData struct {
-	Key     string `json:"key"`
-	ID      uint   `json:"id"`
-	Name    string `json:"name"`
-	Prefix  string `json:"prefix"`
-	Message string `json:"message"`
+	Key     string   `json:"key"`
+	ID      uint     `json:"id"`
+	Name    string   `json:"name"`
+	Prefix  string   `json:"prefix"`
+	Scopes  []string `json:"scopes" enum:"send,read,webhooks,*"`
+	Message string   `json:"message"`
 }
 
 type MessageData struct {
