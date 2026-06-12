@@ -88,7 +88,7 @@ func (r *Router) trackingRoutes() []okapi.RouteDefinition {
 
 // bounceWebhookRoutes returns the bounce webhook route (authenticated via API key).
 func (r *Router) bounceWebhookRoutes() []okapi.RouteDefinition {
-	bounceGroup := r.app.Group("/webhooks/bounce", r.mw.apiKey).WithTagInfo(okapi.GroupTag{
+	bounceGroup := r.v1.Group("/webhooks/bounce", r.mw.apiKey).WithTagInfo(okapi.GroupTag{
 		Name:        "Webhooks",
 		Description: "Inbound webhook endpoints that receive bounce and complaint notifications from upstream mail providers. Authenticated with an API key.",
 	}).WithSecurity([]map[string][]string{{"ApiKeyAuth": {}}})
