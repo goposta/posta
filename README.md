@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Self-hosted email delivery platform for developers and teams
+  Self-hosted email delivery & inbound platform for developers and teams
 </p>
 
 [![CI](https://github.com/goposta/posta/actions/workflows/ci.yml/badge.svg)](https://github.com/goposta/posta/actions/workflows/ci.yml)
@@ -23,12 +23,16 @@
 
 ## Overview
 
-**Posta** is a self-hosted email delivery platform that enables applications to send emails via HTTP APIs while handling SMTP delivery, templates, storage, security, and analytics.
+**Posta** is a self-hosted, developer-first email platform that handles both **outbound** and **inbound** email through a single HTTP API.
 
-It is designed as a developer-first, fully self-hostable alternative to services like SendGrid or Mailgun.
+- **Outbound** — send transactional and marketing email over your own SMTP, with templates, localization, campaigns, subscriber lists, bounce and complaint handling, and delivery analytics.
+- **Inbound** — receive email at your domains, parse messages and attachments, and forward the structured payloads to your application via webhooks.
+
+It is designed as a fully self-hostable alternative to services like SendGrid, Mailgun, and Postmark — giving you complete ownership of your email infrastructure, data, and deliverability.
 
 [![Website](https://img.shields.io/badge/Website-goposta.dev-blue?style=flat-square)](https://www.goposta.dev/)
 [![Try it](https://img.shields.io/badge/Try%20it-app.goposta.dev-green?style=flat-square)](https://app.goposta.dev/)
+[![Source Code](https://img.shields.io/badge/Source%20Code-GitHub-181717?style=flat-square&logo=github)](https://github.com/goposta/posta)
 ---
 
 ## Quick Example
