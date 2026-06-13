@@ -50,13 +50,21 @@ func (r *PlanRepository) FindByID(id uint) (*models.Plan, error) {
 	return &plan, nil
 }
 
-func (r *PlanRepository) FindAll(limit, offset int) ([]models.Plan, int64, error) {
+func (r *PlanRepository) FindAll(search string, limit, offset int) ([]models.Plan, int64, error) {
 	var plans []models.Plan
 	var total int64
 
-	r.db.Model(&models.Plan{}).Count(&total)
+	countQ := r.db.Model(&models.Plan{})
+	findQ := r.db.Model(&models.Plan{})
+	if search != "" {
+		like := "%" + search + "%"
+		countQ = countQ.Where("name ILIKE ? OR description ILIKE ?", like, like)
+		findQ = findQ.Where("name ILIKE ? OR description ILIKE ?", like, like)
+	}
 
-	if err := r.db.Order("created_at DESC").
+	countQ.Count(&total)
+
+	if err := findQ.Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&plans).Error; err != nil {
 		return nil, 0, err

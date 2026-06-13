@@ -2,8 +2,8 @@ import api from './client'
 import type { ApiResponse, PaginatedResponse, SharedServer, SharedServerInput } from './types'
 
 export const serversApi = {
-  list(page = 0, size = 20) {
-    return api.get<PaginatedResponse<SharedServer>>('/admin/servers', { params: { page, size } })
+  list(page = 0, size = 20, search = '') {
+    return api.get<PaginatedResponse<SharedServer>>('/admin/servers', { params: { page, size, search: search || undefined } })
   },
   get(id: number) {
     return api.get<ApiResponse<SharedServer>>(`/admin/servers/${id}`)

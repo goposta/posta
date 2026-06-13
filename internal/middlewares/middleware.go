@@ -223,7 +223,6 @@ func APIKeyAuthMiddleware(keyService *auth.APIKeyService, userRepo *repositories
 }
 
 // RequireScope aborts 403 unless the authenticated API key grants scope (or "*").
-// These routes are API-key-only; JWT callers never reach this middleware.
 func RequireScope(scope string) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		raw := c.GetString("api_key_scopes")

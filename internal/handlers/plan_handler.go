@@ -148,11 +148,16 @@ func (h *PlanHandler) Create(c *okapi.Context, req *CreatePlanRequest) error {
 	return created(c, plan)
 }
 
-// List returns all plans with pagination.
-func (h *PlanHandler) List(c *okapi.Context, req *ListRequest) error {
+type ListPlansRequest struct {
+	Page   int    `query:"page" default:"0"`
+	Size   int    `query:"size" default:"20"`
+	Search string `query:"search"`
+}
+
+func (h *PlanHandler) List(c *okapi.Context, req *ListPlansRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	plans, total, err := h.planRepo.FindAll(size, offset)
+	plans, total, err := h.planRepo.FindAll(req.Search, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list plans")
 	}

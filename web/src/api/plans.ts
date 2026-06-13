@@ -2,8 +2,8 @@ import api from './client'
 import type { ApiResponse, PaginatedResponse, Plan, PlanInput } from './types'
 
 export const plansApi = {
-  list(page = 0, size = 20) {
-    return api.get<PaginatedResponse<Plan>>('/admin/plans', { params: { page, size } })
+  list(page = 0, size = 20, search = '') {
+    return api.get<PaginatedResponse<Plan>>('/admin/plans', { params: { page, size, search: search || undefined } })
   },
   get(id: number) {
     return api.get<ApiResponse<Plan>>(`/admin/plans/${id}`)

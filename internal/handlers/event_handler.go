@@ -35,6 +35,7 @@ type ListEventsRequest struct {
 	Page     int    `query:"page" default:"0"`
 	Size     int    `query:"size" default:"20"`
 	Category string `query:"category"`
+	Search   string `query:"search"`
 }
 
 func NewEventHandler(repo *repositories.EventRepository, bus *eventbus.EventBus) *EventHandler {
@@ -63,9 +64,9 @@ func (h *EventHandler) List(c *okapi.Context, req *ListEventsRequest) error {
 	var err error
 
 	if req.Category != "" {
-		events, total, err = h.repo.FindByCategory(models.EventCategory(req.Category), size, offset)
+		events, total, err = h.repo.FindByCategory(models.EventCategory(req.Category), req.Search, size, offset)
 	} else {
-		events, total, err = h.repo.FindAll(size, offset)
+		events, total, err = h.repo.FindAll(req.Search, size, offset)
 	}
 	if err != nil {
 		return c.AbortInternalServerError("failed to list events")

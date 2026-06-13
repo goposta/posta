@@ -143,7 +143,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/users/{id:int}/revoke-sessions",
+			Path:        "/users/{id}/revoke-sessions",
 			Handler:     okapi.H(r.h.admin.RevokeUserSessions),
 			Group:       adminGroup,
 			Summary:     "Revoke all user sessions",
@@ -299,7 +299,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Handler:  okapi.H(r.h.plan.List),
 			Group:    adminGroup,
 			Summary:  "List plans",
-			Request:  &handlers.ListRequest{},
+			Request:  &handlers.ListPlansRequest{},
 			Response: &dto.PageableResponse[models.Plan]{},
 		},
 		{
@@ -403,7 +403,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Handler:  okapi.H(r.h.server.List),
 			Group:    adminGroup,
 			Summary:  "List shared SMTP servers",
-			Request:  &handlers.ListRequest{},
+			Request:  &handlers.ListServersRequest{},
 			Response: &dto.PageableResponse[models.Server]{},
 		},
 		{

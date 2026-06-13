@@ -12,6 +12,8 @@ const loading = ref(true)
 const events = ref<Event[]>([])
 const page = ref(0)
 const category = ref('')
+const search = ref('')
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
 const liveEvents = ref<Event[]>([])
 const streaming = ref(false)
 let eventSource: EventSource | null = null
@@ -28,7 +30,7 @@ onBeforeUnmount(() => {
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    const res = await adminApi.listEvents(page, 20, category.value || undefined)
+    const res = await adminApi.listEvents(page, pageable.value.size, category.value || undefined, search.value)
     events.value = res.data.data
     pageable.value = res.data.pageable
   } catch (e) {
@@ -38,7 +40,11 @@ const { pageable, goToPage } = usePagination(async (page) => {
   }
 })
 
-
+// Debounce keystrokes, then reset to the first page of results.
+function onSearchInput() {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => goToPage(0), 300)
+}
 
 function filterByCategory(cat: string) {
   category.value = cat
@@ -181,12 +187,21 @@ function timeAgo(date: string) {
 
     <template v-else>
       <div class="card">
-        <div class="card-header">
+        <div class="card-header" style="display: flex; gap: 12px; align-items: center;">
           <h2>Event History</h2>
+          <input
+            v-model="search"
+            type="text"
+            class="form-input"
+            placeholder="Search events..."
+            style="max-width: 320px; margin-left: auto;"
+            @input="onSearchInput"
+          />
         </div>
         <div v-if="events.length === 0" class="empty-state">
           <h3>No events found</h3>
-          <p>No activity has been recorded yet.</p>
+          <p v-if="search || category">No events match your filters.</p>
+          <p v-else>No activity has been recorded yet.</p>
         </div>
         <div v-else class="card-body">
           <table class="table">
@@ -201,7 +216,7 @@ function timeAgo(date: string) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="evt in events" :key="evt.id" class="clickable-row" @click="openDetail(evt)">
+              <tr v-for="evt in events" :key="evt.id" class="row-clickable" @click="openDetail(evt)">
                 <td><span :class="categoryBadgeClass(evt.category)">{{ evt.category }}</span></td>
                 <td><code>{{ evt.type }}</code></td>
                 <td>{{ evt.actor_name || '-' }}</td>

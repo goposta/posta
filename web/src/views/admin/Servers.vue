@@ -17,7 +17,6 @@ const { confirm } = useConfirm()
 
 const servers = ref<SharedServer[]>([])
 const loading = ref(true)
-const currentPage = ref(0)
 
 const showModal = ref(false)
 const editing = ref<SharedServer | null>(null)
@@ -34,10 +33,14 @@ const editing = ref<SharedServer | null>(null)
 })
 const allowedDomainsText = ref('')
 const saving = ref(false)
+
+const search = ref('')
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    const res = await serversApi.list(currentPage.value)
+    const res = await serversApi.list(page, pageable.value.size, search.value)
     servers.value = res.data.data
     pageable.value = res.data.pageable
   } catch (e) {
@@ -46,6 +49,12 @@ const { pageable, goToPage } = usePagination(async (page) => {
     loading.value = false
   }
 })
+
+// Debounce keystrokes, then reset to the first page of results.
+function onSearchInput() {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => goToPage(0), 300)
+}
 
 function openCreate() {
   editing.value = null
@@ -132,12 +141,24 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       <button class="btn btn-primary" @click="openCreate">Add Server</button>
     </div>
 
-    <div v-if="loading" class="loading-page">
-      <div class="spinner"></div>
-    </div>
+    <div class="card">
+      <div class="card-header" style="display: flex; gap: 12px; align-items: center;">
+        <h2>Servers</h2>
+        <input
+          v-model="search"
+          type="text"
+          class="form-input"
+          placeholder="Search by name or host..."
+          style="max-width: 320px; margin-left: auto;"
+          @input="onSearchInput"
+        />
+      </div>
 
-    <template v-else>
-      <div class="card">
+      <div v-if="loading" class="loading-page">
+        <div class="spinner"></div>
+      </div>
+
+      <template v-else>
         <div class="table-wrapper" v-if="servers.length > 0">
           <table>
             <thead>
@@ -151,7 +172,12 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="server in servers" :key="server.id">
+              <tr
+                v-for="server in servers"
+                :key="server.id"
+                class="row-clickable"
+                @click="router.push(`/admin/servers/${server.id}`)"
+              >
                 <td><strong>{{ server.name }}</strong></td>
                 <td>{{ server.host }}</td>
                 <td>
@@ -174,9 +200,9 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
                 </td>
                 <td>
                   <div class="flex gap-2">
-                    <button class="btn btn-secondary btn-sm" @click="router.push(`/admin/servers/${server.id}`)">View</button>
-                    <button class="btn btn-secondary btn-sm" @click="openEdit(server)">Edit</button>
-                    <button class="btn btn-danger btn-sm" @click="deleteServer(server)">Delete</button>
+                    <button class="btn btn-secondary btn-sm" @click.stop="router.push(`/admin/servers/${server.id}`)">View</button>
+                    <button class="btn btn-secondary btn-sm" @click.stop="openEdit(server)">Edit</button>
+                    <button class="btn btn-danger btn-sm" @click.stop="deleteServer(server)">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -186,13 +212,13 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
         <div v-else class="empty-state">
           <h3>No shared servers</h3>
-          <p>Add a shared SMTP server to give accounts without personal SMTP configuration a delivery path.</p>
+          <p v-if="search">No servers match “{{ search }}”.</p>
+          <p v-else>Add a shared SMTP server to give accounts without personal SMTP configuration a delivery path.</p>
         </div>
 
-<Pagination :pageable="pageable" @page="goToPage" />
-       
-      </div>
-    </template>
+        <Pagination :pageable="pageable" @page="goToPage" />
+      </template>
+    </div>
 
     <!-- Create/Edit Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">

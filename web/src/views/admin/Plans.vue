@@ -38,10 +38,14 @@ const defaultForm = (): PlanInput => ({
 })
 
 const form = ref<PlanInput>(defaultForm())
+
+const search = ref('')
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    const res = await plansApi.list(currentPage.value)
+    const res = await plansApi.list(page, pageable.value.size, search.value)
     plans.value = res.data.data
     pageable.value = res.data.pageable
   } catch (e) {
@@ -50,6 +54,12 @@ const { pageable, goToPage } = usePagination(async (page) => {
     loading.value = false
   }
 })
+
+// Debounce keystrokes, then reset to the first page of results.
+function onSearchInput() {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => goToPage(0), 300)
+}
 
 function openCreate() {
   editing.value = null
@@ -144,12 +154,24 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       <button class="btn btn-primary" @click="openCreate">Create Plan</button>
     </div>
 
-    <div v-if="loading" class="loading-page">
-      <div class="spinner"></div>
-    </div>
+    <div class="card">
+      <div class="card-header" style="display: flex; gap: 12px; align-items: center;">
+        <h2>Plans</h2>
+        <input
+          v-model="search"
+          type="text"
+          class="form-input"
+          placeholder="Search by name or description..."
+          style="max-width: 320px; margin-left: auto;"
+          @input="onSearchInput"
+        />
+      </div>
 
-    <template v-else>
-      <div class="card">
+      <div v-if="loading" class="loading-page">
+        <div class="spinner"></div>
+      </div>
+
+      <template v-else>
         <div class="table-wrapper" v-if="plans.length > 0">
           <table>
             <thead>
@@ -163,7 +185,12 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="plan in plans" :key="plan.id">
+              <tr
+                v-for="plan in plans"
+                :key="plan.id"
+                class="row-clickable"
+                @click="router.push(`/admin/plans/${plan.id}`)"
+              >
                 <td>
                   <strong>{{ plan.name }}</strong>
                   <span v-if="plan.is_default" class="badge badge-info" style="margin-left: 8px">Default</span>
@@ -189,10 +216,10 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
                 <td>{{ formatLimit(plan.max_workspaces) }}</td>
                 <td>
                   <div class="flex gap-2">
-                    <button class="btn btn-secondary btn-sm" @click="router.push(`/admin/plans/${plan.id}`)">View</button>
-                    <button class="btn btn-secondary btn-sm" @click="openEdit(plan)">Edit</button>
-                    <button v-if="!plan.is_default" class="btn btn-secondary btn-sm" @click="setDefault(plan)">Set Default</button>
-                    <button class="btn btn-danger btn-sm" @click="deletePlan(plan)">Delete</button>
+                    <button class="btn btn-secondary btn-sm" @click.stop="router.push(`/admin/plans/${plan.id}`)">View</button>
+                    <button class="btn btn-secondary btn-sm" @click.stop="openEdit(plan)">Edit</button>
+                    <button v-if="!plan.is_default" class="btn btn-secondary btn-sm" @click.stop="setDefault(plan)">Set Default</button>
+                    <button class="btn btn-danger btn-sm" @click.stop="deletePlan(plan)">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -202,11 +229,12 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 
         <div v-else class="empty-state">
           <h3>No plans</h3>
-          <p>Create a plan to define usage limits and resource quotas for workspaces.</p>
+          <p v-if="search">No plans match “{{ search }}”.</p>
+          <p v-else>Create a plan to define usage limits and resource quotas for workspaces.</p>
         </div>
-<Pagination :pageable="pageable" @page="goToPage" />
-      </div>
-    </template>
+        <Pagination :pageable="pageable" @page="goToPage" />
+      </template>
+    </div>
 
     <!-- Create/Edit Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">

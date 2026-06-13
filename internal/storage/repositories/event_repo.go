@@ -45,13 +45,21 @@ func (r *EventRepository) FindByID(id uint) (*models.Event, error) {
 	return &event, nil
 }
 
-func (r *EventRepository) FindAll(limit, offset int) ([]models.Event, int64, error) {
+func (r *EventRepository) FindAll(search string, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
 
-	r.db.Model(&models.Event{}).Count(&total)
+	countQ := r.db.Model(&models.Event{})
+	findQ := r.db.Model(&models.Event{})
+	if search != "" {
+		like := "%" + search + "%"
+		countQ = countQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
+		findQ = findQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
+	}
 
-	if err := r.db.Order("created_at DESC").
+	countQ.Count(&total)
+
+	if err := findQ.Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&events).Error; err != nil {
 		return nil, 0, err
@@ -74,14 +82,21 @@ func (r *EventRepository) FindPersonalByActorAndCategory(actorID uint, category 
 	return events, total, nil
 }
 
-func (r *EventRepository) FindByCategory(category models.EventCategory, limit, offset int) ([]models.Event, int64, error) {
+func (r *EventRepository) FindByCategory(category models.EventCategory, search string, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
 
-	r.db.Model(&models.Event{}).Where("category = ?", category).Count(&total)
+	countQ := r.db.Model(&models.Event{}).Where("category = ?", category)
+	findQ := r.db.Model(&models.Event{}).Where("category = ?", category)
+	if search != "" {
+		like := "%" + search + "%"
+		countQ = countQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
+		findQ = findQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
+	}
 
-	if err := r.db.Where("category = ?", category).
-		Order("created_at DESC").
+	countQ.Count(&total)
+
+	if err := findQ.Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&events).Error; err != nil {
 		return nil, 0, err

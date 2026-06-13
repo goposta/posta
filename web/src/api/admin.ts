@@ -44,9 +44,10 @@ export const adminApi = {
   getMetrics() {
     return api.get<ApiResponse<AdminMetrics>>('/admin/metrics')
   },
-  listEvents(page = 0, size = 20, category?: string) {
+  listEvents(page = 0, size = 20, category?: string, search = '') {
     const params: Record<string, any> = { page, size }
     if (category) params.category = category
+    if (search) params.search = search
     return api.get<PaginatedResponse<Event>>('/admin/events', { params })
   },
   getEvent(id: number) {

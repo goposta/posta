@@ -414,7 +414,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/webhooks/{id:int}",
+			Path:        "/webhooks/{id}",
 			Handler:     okapi.H(r.h.webhook.Delete),
 			Group:       apiWebhooks,
 			Summary:     "Delete webhook",

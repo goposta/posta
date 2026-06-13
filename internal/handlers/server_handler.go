@@ -133,10 +133,16 @@ func (h *ServerHandler) Get(c *okapi.Context, req *ServerIDRequest) error {
 	return ok(c, server)
 }
 
-func (h *ServerHandler) List(c *okapi.Context, req *ListRequest) error {
+type ListServersRequest struct {
+	Page   int    `query:"page" default:"0"`
+	Size   int    `query:"size" default:"20"`
+	Search string `query:"search"`
+}
+
+func (h *ServerHandler) List(c *okapi.Context, req *ListServersRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	servers, total, err := h.repo.FindAll(size, offset)
+	servers, total, err := h.repo.FindAll(req.Search, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list servers")
 	}

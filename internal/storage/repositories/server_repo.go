@@ -50,13 +50,21 @@ func (r *ServerRepository) FindByID(id uint) (*models.Server, error) {
 	return &server, nil
 }
 
-func (r *ServerRepository) FindAll(limit, offset int) ([]models.Server, int64, error) {
+func (r *ServerRepository) FindAll(search string, limit, offset int) ([]models.Server, int64, error) {
 	var servers []models.Server
 	var total int64
 
-	r.db.Model(&models.Server{}).Count(&total)
+	countQ := r.db.Model(&models.Server{})
+	findQ := r.db.Model(&models.Server{})
+	if search != "" {
+		like := "%" + search + "%"
+		countQ = countQ.Where("name ILIKE ? OR host ILIKE ?", like, like)
+		findQ = findQ.Where("name ILIKE ? OR host ILIKE ?", like, like)
+	}
 
-	if err := r.db.Order("created_at DESC").
+	countQ.Count(&total)
+
+	if err := findQ.Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&servers).Error; err != nil {
 		return nil, 0, err
