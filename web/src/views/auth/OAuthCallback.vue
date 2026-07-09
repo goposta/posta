@@ -9,7 +9,6 @@ const auth = useAuthStore()
 const error = ref('')
 
 onMounted(async () => {
-  const token = route.query.token as string
   const errorParam = route.query.error as string
 
   if (errorParam) {
@@ -18,23 +17,15 @@ onMounted(async () => {
     return
   }
 
-  if (!token) {
-    error.value = 'No token received'
+  // The callback set an HttpOnly session cookie, so there is no token on the URL
+  // to pick up. Fetching the profile both loads it and proves the cookie is good.
+  await auth.fetchUser()
+  if (!auth.isAuthenticated) {
+    error.value = 'Failed to load user profile'
     setTimeout(() => router.push('/login'), 3000)
     return
   }
-
-  // Set token and fetch user profile
-  localStorage.setItem('posta_token', token)
-  auth.token = token
-
-  try {
-    await auth.fetchUser()
-    router.push('/')
-  } catch {
-    error.value = 'Failed to load user profile'
-    setTimeout(() => router.push('/login'), 3000)
-  }
+  router.push('/')
 })
 </script>
 

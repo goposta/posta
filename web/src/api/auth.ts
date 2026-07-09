@@ -10,6 +10,10 @@ export const authApi = {
   me() {
     return api.get<ApiResponse<UserProfile>>('/users/me')
   },
+  // Revokes the current session server-side and expires the session cookie.
+  logout() {
+    return api.post<ApiResponse<{ message: string }>>('/users/me/sessions/logout')
+  },
   updateProfile(data: { name: string; require_verified_domain?: boolean }) {
     return api.put<ApiResponse<UserProfile>>('/users/me', data)
   },

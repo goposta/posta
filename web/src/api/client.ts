@@ -6,14 +6,9 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-})
-
-api.interceptors.request.use((config) => {
-  const auth = useAuthStore()
-  if (auth.token) {
-    config.headers.Authorization = `Bearer ${auth.token}`
-  }
-  return config
+  // The session travels as an HttpOnly cookie. Same-origin requests would send
+  // it anyway; this also covers a cross-origin VITE_API_URL in development.
+  withCredentials: true,
 })
 
 api.interceptors.response.use(
@@ -22,7 +17,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !error.response?.data?.data?.requires_2fa) {
       const auth = useAuthStore()
       const message = error.response?.data?.error?.message || 'Your session has expired'
-      auth.logout()
+      // clearSession, not logout: logout() calls the API, which would 401 in turn.
+      auth.clearSession()
       window.location.href = `/login?error=${encodeURIComponent(message)}`
     }
     return Promise.reject(error)

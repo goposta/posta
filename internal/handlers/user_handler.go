@@ -33,6 +33,7 @@ import (
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/services/passwordreset"
 	"github.com/goposta/posta/internal/services/seeder"
+	"github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/twofactor"
 	"github.com/goposta/posta/internal/services/workspacemigrate"
@@ -258,6 +259,7 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate token", err)
 	}
+	session.SetCookie(c, token, jwtTokenTTL)
 
 	return created(c, AuthResponse{
 		Token: token,
@@ -508,11 +510,14 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 	ua := c.Header("User-Agent")
 	newDevice := h.isNewDevice(user.ID, ua)
 
-	token, jti, err := h.generateTokenWithSession(c, user)
+	token, _, err := h.generateTokenWithSession(c, user)
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate token", err)
 	}
-	_ = jti
+
+	// Browser clients ride the HttpOnly cookie; the body's token remains for
+	// CLI/SDK clients, which send it back as a Bearer header.
+	session.SetCookie(c, token, jwtTokenTTL)
 
 	if newDevice {
 		h.sendLoginAlert(user.ID, ua, c.RealIP())

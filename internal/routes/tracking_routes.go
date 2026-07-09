@@ -109,7 +109,7 @@ func (r *Router) bounceWebhookRoutes() []okapi.RouteDefinition {
 // trackingAnalyticsRoutes returns the authenticated campaign analytics route,
 // scoped to the active workspace (workspace-only migration §7).
 func (r *Router) trackingAnalyticsRoutes() []okapi.RouteDefinition {
-	wsGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTagInfo(okapi.GroupTag{
+	wsGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspace).WithTagInfo(okapi.GroupTag{
 		Name:        "Campaigns",
 		Description: "Email campaign analytics — open, click, bounce, and engagement metrics for campaigns in the active workspace.",
 	})

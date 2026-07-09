@@ -301,8 +301,8 @@ function createWorkspace() {
   router.push('/workspaces?create=1')
 }
 
-function logout() {
-  auth.logout()
+async function logout() {
+  await auth.logout()
   router.push('/login')
 }
 

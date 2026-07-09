@@ -500,7 +500,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 
 // adminSSERoutes returns route definitions for admin SSE (Server-Sent Events) endpoints.
 func (r *Router) adminSSERoutes() []okapi.RouteDefinition {
-	adminSSE := r.v1.Group("/admin", r.mw.jwtAdminQueryAuth.Middleware).WithTagInfo(okapi.GroupTag{
+	adminSSE := r.v1.Group("/admin", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
 		Name:        "Admin",
 		Description: "Platform-level administration: users, workspaces, global settings, OAuth providers, and live event streams. Admin-only.",
 	})
@@ -512,7 +512,7 @@ func (r *Router) adminSSERoutes() []okapi.RouteDefinition {
 			Handler:     r.h.event.Stream,
 			Group:       adminSSE,
 			Summary:     "Stream events (SSE)",
-			Description: "Real-time event stream via Server-Sent Events. Pass JWT token as ?token= query parameter.",
+			Description: "Real-time event stream via Server-Sent Events. Authenticated by the session cookie the browser sends on the EventSource handshake.",
 			Options:     []okapi.RouteOption{okapi.DocHide()},
 		},
 		{
@@ -521,7 +521,7 @@ func (r *Router) adminSSERoutes() []okapi.RouteDefinition {
 			Handler:     r.h.admin.MetricsStream,
 			Group:       adminSSE,
 			Summary:     "Stream platform metrics (SSE)",
-			Description: "Real-time worker status and system runtime stats via Server-Sent Events. Emits worker.status and system.status events. Pass JWT token as ?token= query parameter.",
+			Description: "Real-time worker status and system runtime stats via Server-Sent Events. Emits worker.status and system.status events. Authenticated by the session cookie.",
 			Options:     []okapi.RouteOption{okapi.DocHide()},
 		},
 	}

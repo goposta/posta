@@ -54,17 +54,14 @@ func (r *Router) inboundWebhookRoutes() []okapi.RouteDefinition {
 }
 
 func (r *Router) inboundWorkspaceRoutes() []okapi.RouteDefinition {
-	userGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
+	// The SSE stream shares this group: EventSource cannot set an Authorization
+	// header, but it does send the session cookie, which r.mw.auth reads. Machine
+	// clients may stream with an API key via `?token=psk_…`.
+	userGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
 		Name:        "Inbound",
-		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events. Public ingest endpoints use opaque secrets; user endpoints use JWT.",
+		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events. Public ingest endpoints use opaque secrets; user endpoints use a dashboard session or an API key.",
 	})
 	userGroup.WithBearerAuth()
-
-	// SSE endpoints
-	streamGroup := r.v1.Group("/workspaces/current", r.mw.jwtQueryAuth.Middleware, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
-		Name:        "Inbound",
-		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events. Public ingest endpoints use opaque secrets; user endpoints use JWT.",
-	})
 
 	return []okapi.RouteDefinition{
 		{
@@ -125,7 +122,7 @@ func (r *Router) inboundWorkspaceRoutes() []okapi.RouteDefinition {
 			Method:  http.MethodGet,
 			Path:    "/inbound-stream",
 			Handler: r.h.inbound.Stream,
-			Group:   streamGroup,
+			Group:   userGroup,
 			Summary: "Server-sent events stream of inbound-email events",
 			Options: []okapi.RouteOption{okapi.DocHide()},
 		},

@@ -25,10 +25,14 @@ const newKeyIPs = ref('')
 const newKeyScopes = ref<string[]>(['send'])
 const newKeyExpiry = ref('default')
 
+// Workspace-level scopes. None of them grant platform administration — the
+// /admin dashboard is reachable only with a user session.
 const scopeOptions = [
   { value: 'send', label: 'Send', hint: 'Send emails, batches, templates, and manage subscriber lists' },
   { value: 'read', label: 'Read', hint: 'List/get emails, bounces, and webhook deliveries' },
   { value: 'webhooks', label: 'Webhooks', hint: 'Create, list, and delete webhooks' },
+  { value: 'write', label: 'Write', hint: 'Create, update, and delete workspace resources' },
+  { value: 'admin', label: 'Admin', hint: 'Administrative operations within the workspace' },
 ]
 
 function toggleScope(value: string) {

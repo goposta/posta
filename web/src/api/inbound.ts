@@ -48,10 +48,10 @@ export const inboundApi = {
     const ws = workspaceParam()
     return `/api/v1/workspaces/current/inbound-emails/${uuid}/attachments/${idx}${ws ? `?${ws}` : ''}`
   },
-  streamUrl(token?: string) {
-    const t = token ?? localStorage.getItem('posta_token') ?? ''
-    const parts = [t ? `token=${encodeURIComponent(t)}` : '', workspaceParam()].filter(Boolean)
-    const qs = parts.length ? `?${parts.join('&')}` : ''
-    return `/api/v1/workspaces/current/inbound-stream${qs}`
+  // No token in the URL: EventSource sends the HttpOnly session cookie on the
+  // handshake, same as the download links above.
+  streamUrl() {
+    const ws = workspaceParam()
+    return `/api/v1/workspaces/current/inbound-stream${ws ? `?${ws}` : ''}`
   },
 }
