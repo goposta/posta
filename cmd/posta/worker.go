@@ -117,7 +117,7 @@ func runWorker() error {
 	}
 
 	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: cfg.Redis.Addr, Password: cfg.Redis.Password},
+		cfg.Redis.AsynqRedisOpt(),
 		asynq.Config{
 			Concurrency: cfg.WorkerConcurrency,
 			Queues: map[string]int{
@@ -130,7 +130,7 @@ func runWorker() error {
 	)
 
 	// Campaign processor
-	campaignProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+	campaignProducer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 	trackingRepo := repositories.NewTrackingRepository(db)
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
 	campaignDispatcher := newWebhookDispatcher(db, cfg)
@@ -178,7 +178,7 @@ func runWorker() error {
 		inboundHandler.OnFailed(metrics.IncrementInboundFailed)
 		mux.HandleFunc(worker.TypeInboundProcess, inboundHandler.ProcessTask)
 
-		parseProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+		parseProducer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 		parseBus := eventbus.New(repositories.NewEventRepository(db))
 		parseSvc := inbound.NewService(
 			repositories.NewInboundEmailRepository(db),

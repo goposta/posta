@@ -206,10 +206,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	userHandler := handlers.NewUserHandler(userRepo, cfg.JWTSecret, userSeeder, bus)
 	userHandler.SetSettings(settingsProvider)
 	userHandler.SetMigrator(db, migrator)
-	inspector := asynq.NewInspector(asynq.RedisClientOpt{
-		Addr:     cfg.Redis.Addr,
-		Password: cfg.Redis.Password,
-	})
+	inspector := asynq.NewInspector(cfg.Redis.AsynqRedisOpt())
 
 	// Seed default platform settings
 	go seeder.SeedDefaultSettings(settingRepo)

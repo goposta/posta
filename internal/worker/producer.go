@@ -31,11 +31,8 @@ type Producer struct {
 	maxRetries int
 }
 
-func NewProducer(redisAddr, redisPassword string, maxRetries int) *Producer {
-	client := asynq.NewClient(asynq.RedisClientOpt{
-		Addr:     redisAddr,
-		Password: redisPassword,
-	})
+func NewProducer(redisOpt asynq.RedisClientOpt, maxRetries int) *Producer {
+	client := asynq.NewClient(redisOpt)
 	return &Producer{
 		client:     client,
 		maxRetries: maxRetries,
