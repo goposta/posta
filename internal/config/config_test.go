@@ -113,4 +113,24 @@ func TestNewRedisConfigURL(t *testing.T) {
 	if ao.Addr != "cache.example.com:6390" || ao.Username != "alice" || ao.Password != "hunter2" || ao.DB != 5 {
 		t.Fatalf("AsynqRedisOpt mismatch: %+v", ao)
 	}
+	// Plain redis:// URL must not carry TLS.
+	if rc.TLSConfig != nil {
+		t.Fatalf("TLSConfig should be nil for redis:// URL")
+	}
+}
+
+// TestNewRedisConfigTLS: a rediss:// URL enables TLS in both option builders.
+func TestNewRedisConfigTLS(t *testing.T) {
+	clearRedisEnv(t)
+	t.Setenv("POSTA_REDIS_URL", "rediss://cache.example.com:6390/1")
+	rc := newRedisConfig()
+	if rc.TLSConfig == nil {
+		t.Fatal("TLSConfig is nil, want TLS enabled for rediss://")
+	}
+	if rc.RedisOptions().TLSConfig == nil {
+		t.Fatal("RedisOptions().TLSConfig is nil")
+	}
+	if rc.AsynqRedisOpt().TLSConfig == nil {
+		t.Fatal("AsynqRedisOpt().TLSConfig is nil")
+	}
 }

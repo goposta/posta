@@ -18,6 +18,7 @@
 package config
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strings"
 
@@ -151,6 +152,8 @@ type RedisConfig struct {
 	DB       int
 	// URL, when set, overrides the discrete fields above (e.g. redis://user:pass@host:6379/2).
 	URL string
+	// set for rediss:// URLs
+	TLSConfig *tls.Config
 }
 
 // newRedisConfig reads Redis settings from the env; POSTA_REDIS_URL, if set,
@@ -172,6 +175,7 @@ func newRedisConfig() RedisConfig {
 		rc.Username = opt.Username
 		rc.Password = opt.Password
 		rc.DB = opt.DB
+		rc.TLSConfig = opt.TLSConfig
 	}
 	return rc
 }
@@ -179,20 +183,22 @@ func newRedisConfig() RedisConfig {
 // RedisOptions returns the go-redis client options.
 func (r RedisConfig) RedisOptions() *redis.Options {
 	return &redis.Options{
-		Addr:     r.Addr,
-		Username: r.Username,
-		Password: r.Password,
-		DB:       r.DB,
+		Addr:      r.Addr,
+		Username:  r.Username,
+		Password:  r.Password,
+		DB:        r.DB,
+		TLSConfig: r.TLSConfig,
 	}
 }
 
 // AsynqRedisOpt returns the Asynq Redis connection options.
 func (r RedisConfig) AsynqRedisOpt() asynq.RedisClientOpt {
 	return asynq.RedisClientOpt{
-		Addr:     r.Addr,
-		Username: r.Username,
-		Password: r.Password,
-		DB:       r.DB,
+		Addr:      r.Addr,
+		Username:  r.Username,
+		Password:  r.Password,
+		DB:        r.DB,
+		TLSConfig: r.TLSConfig,
 	}
 }
 
