@@ -20,6 +20,12 @@ RUN go mod download
 
 COPY cmd/ cmd/
 COPY internal/ internal/
+
+# Stage the built dashboard where //go:embed reads it, so the binary is
+# self-contained. Must come after `COPY internal/`, which would otherwise
+# clobber it.
+COPY --from=ui-builder /app/web/dist ./internal/web/dist
+
 RUN CGO_ENABLED=0 go build \
     -ldflags "-s -w -X 'github.com/goposta/posta/internal/config.Version=${VERSION}' -X 'github.com/goposta/posta/internal/config.CommitID=${COMMIT}' -X 'github.com/goposta/posta/internal/config.BuildDate=${BUILD_DATE}'" \
     -o /bin/posta ./cmd/posta
@@ -41,12 +47,10 @@ LABEL org.opencontainers.image.title="posta" \
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S posta && adduser -S posta -G posta
 
+# Single self-contained binary: the dashboard is embedded, so there are no
+# static files to copy and no POSTA_WEB_DIR to set.
 COPY --from=builder /bin/posta /bin/posta
 RUN ln -s /bin/posta /posta
-COPY --from=ui-builder /app/web/dist /app/web/dist
-
-ENV POSTA_WEB_DIR=/app/web/dist
-
 
 USER posta
 EXPOSE 9000

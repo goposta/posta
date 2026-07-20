@@ -63,6 +63,9 @@ type Config struct {
 	PlanEnforcement   bool
 	WorkspaceOnlyMode bool
 
+	// WebDir overrides where the dashboard is served from. The UI is normally
+	// embedded in the binary (internal/web); setting POSTA_WEB_DIR serves it from
+	// this directory instead, for frontend development or a customized build.
 	WebDir      string
 	AppWebURL   string
 	ApiBaseURL  string
@@ -248,7 +251,7 @@ func New() *Config {
 		MetricsEnabled:    goutils.EnvBool("POSTA_METRICS_ENABLED", false),
 		PlanEnforcement:   goutils.EnvBool("POSTA_PLAN_ENFORCEMENT", false),
 		WorkspaceOnlyMode: goutils.EnvBool("POSTA_WORKSPACE_ONLY_MODE", false),
-		WebDir:            goutils.Env("POSTA_WEB_DIR", "web/dist"),
+		WebDir:            goutils.Env("POSTA_WEB_DIR", ""),
 		AppWebURL:         goutils.Env("POSTA_WEB_URL", ""),
 		ApiBaseURL:        goutils.Env("POSTA_API_URL", ""),
 

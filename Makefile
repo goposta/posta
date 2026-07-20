@@ -3,16 +3,23 @@
 BINARY := posta
 BUILD_DIR := bin
 UI_DIR := web
+# Where `go build` picks the dashboard up for embedding (see internal/web).
+EMBED_UI_DIR := internal/web/dist
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -X github.com/goposta/posta/internal/config.Version=$(VERSION) -X github.com/goposta/posta/internal/config.CommitID=$(COMMIT)
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/posta
 
-build-ui:
+build-ui: ## Build the dashboard and stage it for embedding (internal/web/dist)
 	cd $(UI_DIR) && npm install && npm run build
+	# Stage the build output where //go:embed reads it, keeping the committed
+	# .gitkeep so `go build` still works on a clean tree.
+	rm -rf $(EMBED_UI_DIR)
+	cp -r $(UI_DIR)/dist $(EMBED_UI_DIR)
+	touch $(EMBED_UI_DIR)/.gitkeep
 
-build-all: build-ui build
+build-all: build-ui build ## Build the dashboard, then a self-contained binary
 
 run: build
 	./$(BUILD_DIR)/$(BINARY) server
@@ -58,6 +65,8 @@ fmt:
 
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -rf $(EMBED_UI_DIR)
+	mkdir -p $(EMBED_UI_DIR) && touch $(EMBED_UI_DIR)/.gitkeep
 	rm -rf $(UI_DIR)/dist
 
 tidy:

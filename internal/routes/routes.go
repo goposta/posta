@@ -48,6 +48,7 @@ import (
 	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
+	"github.com/goposta/posta/internal/web"
 	"github.com/goposta/posta/internal/worker"
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/okapi"
@@ -482,7 +483,17 @@ func (r *Router) registerRoutes() {
 	// Documentation-only OpenAPI webhooks (events Posta POSTs to subscribers).
 	r.registerWebhookDocs()
 
-	// Dashboard UI (static files + SPA fallback)
-	r.app.SPA("/", r.cfg.WebDir, okapi.SPAConfig{MaxAge: time.Hour})
-
+	// Dashboard UI (static files + SPA fallback). Registered last so API routes
+	// win; Okapi auto-excludes their top-level segments (/api, /healthz, /metrics)
+	// from the index fallback, so those keep returning JSON rather than index.html.
+	//
+	// The UI is embedded in the binary (internal/web), so a stock `posta`
+	// executable serves it with no static files to ship. POSTA_WEB_DIR overrides
+	// this to serve from disk — useful for frontend development against live
+	// rebuilds, or to swap in a customized build without recompiling.
+	if r.cfg.WebDir != "" {
+		r.app.Web("/", r.cfg.WebDir, okapi.WebConfig{MaxAge: time.Hour})
+	} else {
+		r.app.WebFS("/", web.Assets, okapi.WebConfig{Root: "dist", MaxAge: time.Hour})
+	}
 }

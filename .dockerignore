@@ -9,3 +9,6 @@ README.md
 LICENSE
 web/node_modules
 web/dist
+# Never ship a locally staged dashboard build into the image: the Dockerfile
+# builds the UI itself and copies it to internal/web/dist for embedding.
+internal/web/dist
