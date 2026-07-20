@@ -25,120 +25,115 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-func OptionalWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository) okapi.Middleware {
-	return func(c *okapi.Context) error {
-		wsHeader := c.Header("X-Posta-Workspace-Id")
-		if wsHeader == "" {
-			if c.GetInt("workspace_id") > 0 {
-				return c.Next()
-			}
-			userID := c.GetInt("user_id")
-			if userID == 0 || userRepo == nil {
-				return c.Next()
-			}
-			personalID, err := userRepo.PersonalWorkspaceID(uint(userID))
-			if err != nil || personalID == nil {
-				// Not migrated yet — legacy personal mode.
-				return c.Next()
-			}
-			c.Set("workspace_id", int(*personalID))
-			c.Set("workspace_role", string(models.WorkspaceRoleOwner))
-			return c.Next()
-		}
+// WorkspaceHeader names the header carrying the active workspace. Browser-direct
+// requests (EventSource, download links) cannot set headers, so the
+// query-tolerant middleware also accepts `?workspace_id=`.
+const WorkspaceHeader = "X-Posta-Workspace-Id"
 
-		userID := c.GetInt("user_id")
-		if userID == 0 {
-			return c.AbortUnauthorized("authentication required")
-		}
-
-		wsID, err := strconv.Atoi(wsHeader)
-		if err != nil || wsID <= 0 {
-			return c.AbortBadRequest("invalid X-Posta-Workspace-Id")
-		}
-
-		member, err := workspaceRepo.FindMember(uint(wsID), uint(userID))
-		if err != nil {
-			return c.AbortForbidden("you are not a member of this workspace")
-		}
-
-		c.Set("workspace_id", wsID)
-		c.Set("workspace_role", string(member.Role))
-
-		return c.Next()
+// resolveWorkspace establishes the request's workspace and the caller's role in
+// it, given the raw workspace id the caller asked for ("" when unspecified).
+//
+// Three callers, three sources of authority:
+//
+//   - A workspace-bound API key IS the workspace. It gets owner-equivalent
+//     access to it and cannot reach any other workspace, whatever it asks for.
+//   - An account-wide API key, and any JWT session, must prove membership of the
+//     workspace they name, and inherit that membership's role.
+//   - When nobody names a workspace and `required` is false, we fall back to the
+//     user's personal workspace.
+//
+// Membership answers "which workspace?", never "how much of it?". An API key's
+// scopes answer the latter, and are enforced here for every workspace-scoped
+// route — see requireWorkspaceScope.
+func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository, raw string, required bool) error {
+	userID := c.GetInt(CtxUserID)
+	if userID == 0 {
+		return c.AbortUnauthorized("authentication required")
 	}
-}
 
-func WorkspaceFromQueryOrHeader(workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository) okapi.Middleware {
-	return func(c *okapi.Context) error {
-		userID := c.GetInt("user_id")
-		if userID == 0 {
-			return c.AbortUnauthorized("authentication required")
-		}
+	// Checked before the workspace is resolved, so an under-scoped key is refused
+	// without learning whether the workspace it named exists.
+	if err := requireWorkspaceScope(c); err != nil {
+		return err
+	}
 
-		raw := c.Header("X-Posta-Workspace-Id")
-		if raw == "" {
-			raw = c.Query("workspace_id")
-		}
+	if bound := APIKeyWorkspaceID(c); bound != nil {
 		if raw != "" {
 			wsID, err := strconv.Atoi(raw)
 			if err != nil || wsID <= 0 {
 				return c.AbortBadRequest("invalid workspace id")
 			}
-			member, err := workspaceRepo.FindMember(uint(wsID), uint(userID))
-			if err != nil {
-				return c.AbortForbidden("you are not a member of this workspace")
-			}
-			c.Set("workspace_id", wsID)
-			c.Set("workspace_role", string(member.Role))
-			return c.Next()
-		}
-
-		// Neither header nor query — fall back to the personal workspace.
-		if userRepo != nil {
-			if personalID, err := userRepo.PersonalWorkspaceID(uint(userID)); err == nil && personalID != nil {
-				c.Set("workspace_id", int(*personalID))
-				c.Set("workspace_role", string(models.WorkspaceRoleOwner))
+			if uint(wsID) != *bound {
+				return c.AbortForbidden("API key is not bound to this workspace")
 			}
 		}
+		c.Set(CtxWorkspaceID, int(*bound))
+		c.Set(CtxWorkspaceRole, string(models.WorkspaceRoleOwner))
 		return c.Next()
 	}
-}
 
-// RequireWorkspaceMiddleware is like OptionalWorkspaceMiddleware but requires
-// the header to be present (for workspace-only endpoints like member management).
-func RequireWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository) okapi.Middleware {
-	return func(c *okapi.Context) error {
-		wsHeader := c.Header("X-Posta-Workspace-Id")
-		if wsHeader == "" {
-			return c.AbortBadRequest("X-Posta-Workspace-Id header is required")
-		}
-
-		userID := c.GetInt("user_id")
-		if userID == 0 {
-			return c.AbortUnauthorized("authentication required")
-		}
-
-		wsID, err := strconv.Atoi(wsHeader)
+	if raw != "" {
+		wsID, err := strconv.Atoi(raw)
 		if err != nil || wsID <= 0 {
-			return c.AbortBadRequest("invalid X-Posta-Workspace-Id")
+			return c.AbortBadRequest("invalid workspace id")
 		}
-
 		member, err := workspaceRepo.FindMember(uint(wsID), uint(userID))
 		if err != nil {
 			return c.AbortForbidden("you are not a member of this workspace")
 		}
-
-		c.Set("workspace_id", wsID)
-		c.Set("workspace_role", string(member.Role))
-
+		c.Set(CtxWorkspaceID, wsID)
+		c.Set(CtxWorkspaceRole, string(member.Role))
 		return c.Next()
+	}
+
+	if required {
+		return c.AbortBadRequest(WorkspaceHeader + " header is required")
+	}
+
+	// Nobody named a workspace: fall back to the caller's personal one. An
+	// unmigrated user has none — that is the legacy personal mode, not an error.
+	if userRepo != nil {
+		if personalID, err := userRepo.PersonalWorkspaceID(uint(userID)); err == nil && personalID != nil {
+			c.Set(CtxWorkspaceID, int(*personalID))
+			c.Set(CtxWorkspaceRole, string(models.WorkspaceRoleOwner))
+		}
+	}
+	return c.Next()
+}
+
+// RequireWorkspaceMiddleware demands an explicit workspace, except for a
+// workspace-bound API key, whose binding names it.
+func RequireWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository) okapi.Middleware {
+	return func(c *okapi.Context) error {
+		return resolveWorkspace(c, workspaceRepo, userRepo, c.Header(WorkspaceHeader), true)
 	}
 }
 
-// RequireWorkspaceRole returns a middleware that enforces a minimum workspace role.
+// OptionalWorkspaceMiddleware resolves the workspace when named, and otherwise
+// falls back to the caller's personal workspace.
+func OptionalWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository) okapi.Middleware {
+	return func(c *okapi.Context) error {
+		return resolveWorkspace(c, workspaceRepo, userRepo, c.Header(WorkspaceHeader), false)
+	}
+}
+
+// WorkspaceFromQueryOrHeader is OptionalWorkspaceMiddleware for browser-direct
+// requests, which can pass the workspace only as a query parameter.
+func WorkspaceFromQueryOrHeader(workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository) okapi.Middleware {
+	return func(c *okapi.Context) error {
+		raw := c.Header(WorkspaceHeader)
+		if raw == "" {
+			raw = c.Query("workspace_id")
+		}
+		return resolveWorkspace(c, workspaceRepo, userRepo, raw, false)
+	}
+}
+
+// RequireWorkspaceRole enforces a minimum workspace role. A workspace-bound API
+// key resolves as owner, so it clears every tier.
 func RequireWorkspaceRole(minRole models.WorkspaceRole) okapi.Middleware {
 	return func(c *okapi.Context) error {
-		roleStr := c.GetString("workspace_role")
+		roleStr := c.GetString(CtxWorkspaceRole)
 		if roleStr == "" {
 			return c.AbortForbidden("workspace context required")
 		}

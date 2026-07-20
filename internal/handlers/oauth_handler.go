@@ -14,6 +14,7 @@ import (
 	"github.com/goposta/posta/internal/services/auth"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/seeder"
+	sessionpkg "github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/workspacemigrate"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
@@ -270,8 +271,11 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 	user.LastLoginAt = &now
 	_ = h.userRepo.Update(user)
 
-	// Redirect to frontend with token
-	c.Redirect(http.StatusFound, fmt.Sprintf("%s/auth/oauth/callback?token=%s", h.appWebURL, jwtToken))
+	// Hand the session to the browser as an HttpOnly cookie rather than a query
+	// parameter, so the JWT never lands in browser history or a Referer header.
+	// The SPA callback route just fetches /users/me to learn who it is.
+	sessionpkg.SetCookie(c, jwtToken, jwtTokenTTL)
+	c.Redirect(http.StatusFound, h.appWebURL+"/auth/oauth/callback")
 	return nil
 }
 
@@ -345,7 +349,7 @@ func (h *OAuthHandler) generateToken(c *okapi.Context, user *models.User) (strin
 		"role":  string(user.Role),
 		"aud":   "posta",
 		"jti":   jti,
-	}, 24*time.Hour)
+	}, jwtTokenTTL)
 	if err != nil {
 		return "", err
 	}
@@ -357,7 +361,7 @@ func (h *OAuthHandler) generateToken(c *okapi.Context, user *models.User) (strin
 			JTI:       jti,
 			IPAddress: c.RealIP(),
 			UserAgent: c.Request().UserAgent(),
-			ExpiresAt: time.Now().Add(24 * time.Hour),
+			ExpiresAt: time.Now().Add(jwtTokenTTL),
 		}
 		_ = h.sessionRepo.Create(session)
 	}

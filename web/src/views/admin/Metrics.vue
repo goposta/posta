@@ -2,10 +2,8 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { adminApi } from '../../api/admin'
 import { analyticsApi } from '../../api/analytics'
-import { useAuthStore } from '../../stores/auth'
 import type { AdminMetrics, WorkerStatus, SystemStatus, AnalyticsResponse, DashboardAnalyticsResponse } from '../../api/types'
 
-const auth = useAuthStore()
 const loading = ref(true)
 const metrics = ref<AdminMetrics | null>(null)
 const workerStatus = ref<WorkerStatus | null>(null)
@@ -37,10 +35,9 @@ onBeforeUnmount(() => {
 
 function startWorkerStream() {
   const baseUrl = import.meta.env.VITE_API_URL || '/api/v1'
-  const token = auth.token
-  if (!token) return
-  const url = `${baseUrl}/admin/metrics/stream?token=${encodeURIComponent(token)}`
-  workerSSE = new EventSource(url)
+  // EventSource cannot set an Authorization header; the HttpOnly session cookie
+  // rides the handshake instead.
+  workerSSE = new EventSource(`${baseUrl}/admin/metrics/stream`, { withCredentials: true })
 
   workerSSE.addEventListener('worker.status', (e) => {
     try {

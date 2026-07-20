@@ -30,9 +30,9 @@ import (
 // workspaceRoutes returns route definitions for workspace management.
 func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	// Routes that don't require workspace context (user-level)
-	userGroup := r.v1.Group("/workspaces", r.mw.jwtAuth.Middleware).WithTagInfo(okapi.GroupTag{
+	userGroup := r.v1.Group("/workspaces", r.mw.jwtOnly).WithTagInfo(okapi.GroupTag{
 		Name:        "Workspaces",
-		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings.",
+		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings. Creating and listing workspaces is account-level and requires a dashboard session.",
 	})
 	userGroup.WithBearerAuth()
 
@@ -65,7 +65,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// Workspace-scoped routes (require workspace context via middleware)
-	wsGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTagInfo(okapi.GroupTag{
+	wsGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspace).WithTagInfo(okapi.GroupTag{
 		Name:        "Workspaces",
 		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings (including SSO).",
 	})
@@ -293,7 +293,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// User-level invitation actions (no workspace context needed)
-	invGroup := r.v1.Group("/invitations", r.mw.jwtAuth.Middleware).WithTagInfo(okapi.GroupTag{
+	invGroup := r.v1.Group("/invitations", r.mw.jwtOnly).WithTagInfo(okapi.GroupTag{
 		Name:        "Workspaces",
 		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings (including SSO).",
 	})

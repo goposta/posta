@@ -39,6 +39,16 @@ func TestAPIKeyHasScope(t *testing.T) {
 		{"wildcard grants webhooks", []string{ScopeAll}, ScopeWebhooks, true},
 		{"multi grants both", []string{ScopeSend, ScopeWebhooks}, ScopeWebhooks, true},
 		{"multi denies missing", []string{ScopeSend, ScopeWebhooks}, ScopeRead, false},
+
+		// write and admin are workspace-level scopes, covered by the wildcard like
+		// any other. Neither confers platform administration.
+		{"wildcard grants write", []string{ScopeAll}, ScopeWrite, true},
+		{"wildcard grants admin", []string{ScopeAll}, ScopeAdmin, true},
+		{"explicit write grants write", []string{ScopeWrite}, ScopeWrite, true},
+		{"explicit admin grants admin", []string{ScopeAdmin}, ScopeAdmin, true},
+		{"admin alone denies send", []string{ScopeAdmin}, ScopeSend, false},
+		{"empty denies write", nil, ScopeWrite, false},
+		{"empty denies admin", nil, ScopeAdmin, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -135,8 +135,12 @@ func (h *SessionHandler) RevokeOthers(c *okapi.Context) error {
 	})
 }
 
-// Logout revokes the current session.
+// Logout revokes the current session and clears the browser session cookie.
+// Clearing the cookie unconditionally means a browser holding a token we can no
+// longer resolve still ends up logged out.
 func (h *SessionHandler) Logout(c *okapi.Context) error {
+	session.ClearCookie(c)
+
 	currentJTI := c.GetString("jti")
 	if currentJTI == "" {
 		return ok(c, okapi.M{"message": "logged out"})

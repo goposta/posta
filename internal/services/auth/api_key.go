@@ -29,7 +29,9 @@ import (
 	"github.com/goposta/posta/internal/storage/repositories"
 )
 
-const apiKeyPrefix = "psk_"
+// APIKeyPrefix identifies a raw Posta API key. Auth middleware uses it to tell
+// an API key apart from a JWT without parsing either.
+const APIKeyPrefix = "psk_"
 
 type APIKeyService struct {
 	repo *repositories.APIKeyRepository
@@ -69,7 +71,7 @@ func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string,
 		return "", nil, fmt.Errorf("failed to generate key: %w", err)
 	}
 
-	rawKey := apiKeyPrefix + hex.EncodeToString(rawBytes)
+	rawKey := APIKeyPrefix + hex.EncodeToString(rawBytes)
 	hash := hashKey(rawKey)
 
 	key := &models.APIKey{
@@ -77,7 +79,7 @@ func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string,
 		WorkspaceID: workspaceID,
 		Name:        name,
 		KeyHash:     hash,
-		KeyPrefix:   rawKey[:len(apiKeyPrefix)+8],
+		KeyPrefix:   rawKey[:len(APIKeyPrefix)+8],
 		AllowedIPs:  allowedIPs,
 		Scopes:      normScopes,
 		ExpiresAt:   expiresAt,
@@ -92,11 +94,14 @@ func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string,
 
 // ValidateKey checks if a raw API key is valid and returns the matching APIKey.
 func (s *APIKeyService) ValidateKey(rawKey string) (*models.APIKey, error) {
-	if !strings.HasPrefix(rawKey, apiKeyPrefix) {
+	if !strings.HasPrefix(rawKey, APIKeyPrefix) {
+		return nil, fmt.Errorf("invalid key format")
+	}
+	if len(rawKey) < len(APIKeyPrefix)+8 {
 		return nil, fmt.Errorf("invalid key format")
 	}
 
-	prefix := rawKey[:len(apiKeyPrefix)+8]
+	prefix := rawKey[:len(APIKeyPrefix)+8]
 	candidates, err := s.repo.FindByPrefix(prefix)
 	if err != nil {
 		return nil, fmt.Errorf("key not found")

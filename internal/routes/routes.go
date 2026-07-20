@@ -64,12 +64,18 @@ type Router struct {
 }
 
 type routerMiddleware struct {
-	jwtAuth           okapi.JWTAuth
-	jwtQueryAuth      okapi.JWTAuth
-	jwtAdminAuth      okapi.JWTAuth
-	jwtAdminQueryAuth okapi.JWTAuth
-	loginLimiter      okapi.Middleware
+	// jwtAdminAuth guards platform administration. Only an admin user session
+	// satisfies it — /admin/* is dashboard-only and an API key is never a valid
+	// credential there, whatever scopes it carries.
+	jwtAdminAuth okapi.JWTAuth
+	// auth accepts a user JWT or an API key; it guards workspace-scoped routes.
+	auth okapi.Middleware
+	// jwtOnly accepts only a user JWT; it guards account-level routes (profile,
+	// 2FA, API key management), which a machine key must not reach.
+	jwtOnly okapi.Middleware
+	// apiKey accepts only an API key; it guards the public machine-facing API.
 	apiKey            okapi.Middleware
+	loginLimiter      okapi.Middleware
 	workspace         okapi.Middleware
 	optionalWorkspace okapi.Middleware
 	workspaceQuery    okapi.Middleware
@@ -216,18 +222,20 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	wm.OnCount(metrics.SetActiveWorkers)
 	wm.Start(ctx)
 
+	jwtAuth := middlewares.JWTAuth(cfg, sessionStore)
+	jwtAdminAuth := middlewares.JWTAdminAuth(cfg, sessionStore)
+
 	r := &Router{
 		app: app,
 		cfg: cfg,
 		v1:  app.Group("/api/v1"),
 		mw: routerMiddleware{
-			jwtAuth:           middlewares.JWTAuth(cfg, sessionStore),
-			jwtQueryAuth:      middlewares.JWTQueryAuth(cfg, sessionStore),
-			jwtAdminAuth:      middlewares.JWTAdminAuth(cfg, sessionStore),
-			jwtAdminQueryAuth: middlewares.JWTAdminQueryAuth(cfg, sessionStore),
+			jwtAdminAuth:      jwtAdminAuth,
+			auth:              middlewares.Authenticate(jwtAuth, apiKeyService, userRepo, apiKeyRepo),
+			jwtOnly:           jwtAuth.Middleware,
+			apiKey:            middlewares.APIKeyAuth(apiKeyService, userRepo, apiKeyRepo),
 			loginLimiter:      loginLimiterMiddleware(cfg, limiter),
-			apiKey:            middlewares.APIKeyAuthMiddleware(apiKeyService, userRepo, apiKeyRepo),
-			workspace:         middlewares.RequireWorkspaceMiddleware(workspaceRepo),
+			workspace:         middlewares.RequireWorkspaceMiddleware(workspaceRepo, userRepo),
 			optionalWorkspace: middlewares.OptionalWorkspaceMiddleware(workspaceRepo, userRepo),
 			workspaceQuery:    middlewares.WorkspaceFromQueryOrHeader(workspaceRepo, userRepo),
 		},

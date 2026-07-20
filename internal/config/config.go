@@ -346,7 +346,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	}
 	app.WithCORS(okapi.Cors{
 		AllowedOrigins:   corsOrigins,
-		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Request-ID"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Request-ID", "X-Posta-Workspace-Id"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowCredentials: true,
 	})

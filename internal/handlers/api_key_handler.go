@@ -48,7 +48,7 @@ type CreateAPIKeyRequest struct {
 	Body struct {
 		Name          string   `json:"name" required:"true"`
 		AllowedIPs    []string `json:"allowed_ips"`
-		Scopes        []string `json:"scopes" enum:"send,read,webhooks,*" default:"send"`
+		Scopes        []string `json:"scopes" enum:"send,read,webhooks,write,admin,*" default:"send"`
 		ExpiresInDays *int     `json:"expires_in_days"`
 	} `json:"body"`
 }

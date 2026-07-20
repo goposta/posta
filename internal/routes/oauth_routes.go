@@ -63,7 +63,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// Authenticated OAuth routes (linked accounts)
-	oauthUser := r.v1.Group("/users/me/oauth", r.mw.jwtAuth.Middleware).WithTagInfo(okapi.GroupTag{
+	oauthUser := r.v1.Group("/users/me/oauth", r.mw.jwtOnly).WithTagInfo(okapi.GroupTag{
 		Name:        "OAuth",
 		Description: "Single sign-on via external identity providers (Google, GitHub, generic OIDC). Covers public flow, user-account linking, admin provider config, and workspace SSO enforcement.",
 	})
@@ -150,7 +150,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 	}...)
 
 	// Workspace SSO config
-	wsSSO := r.v1.Group("/workspaces/current/sso", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTagInfo(
+	wsSSO := r.v1.Group("/workspaces/current/sso", r.mw.auth, r.mw.workspace).WithTagInfo(
 		okapi.GroupTag{
 			Name:        "Workspaces",
 			Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings (including SSO).",

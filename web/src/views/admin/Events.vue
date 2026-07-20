@@ -2,11 +2,9 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminApi } from '../../api/admin'
-import { useAuthStore } from '../../stores/auth'
 import type { Event } from '../../api/types'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
-const auth = useAuthStore()
 const router = useRouter()
 const loading = ref(true)
 const events = ref<Event[]>([])
@@ -55,10 +53,9 @@ function filterByCategory(cat: string) {
 
 function startStream() {
   const baseUrl = import.meta.env.VITE_API_URL || '/api/v1'
-  const token = auth.token
-  if (!token) return
-  const url = `${baseUrl}/admin/events/stream?token=${encodeURIComponent(token)}`
-  eventSource = new EventSource(url)
+  // EventSource cannot set an Authorization header, but it does send the
+  // HttpOnly session cookie on the handshake, which is what the server reads.
+  eventSource = new EventSource(`${baseUrl}/admin/events/stream`, { withCredentials: true })
   
   eventSource.onopen = () => {
     streaming.value = true

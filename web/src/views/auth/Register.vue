@@ -58,10 +58,9 @@ async function handleRegister() {
 
   loading.value = true
   try {
+    // Register auto-logs-in by setting the session cookie on the response.
     const res = await authApi.register(name.value.trim(), email.value.trim(), password.value)
-    const data = res.data.data
-    localStorage.setItem('posta_token', data.token)
-    localStorage.setItem('posta_user', JSON.stringify(data.user))
+    auth.setUser(res.data.data.user)
     window.location.href = '/'
   } catch (err: any) {
     const message = err?.response?.data?.error?.message || err?.response?.data?.error || err?.message || 'Registration failed.'

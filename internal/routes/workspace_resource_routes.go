@@ -28,9 +28,9 @@ import (
 )
 
 func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
-	opsGroup := r.v1.Group("/workspaces/current", r.mw.jwtAuth.Middleware, r.mw.workspace).WithTagInfo(okapi.GroupTag{
+	opsGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspace).WithTagInfo(okapi.GroupTag{
 		Name:        "Workspace resources",
-		Description: "Operational resources scoped to the active workspace: sending, templates, stylesheets, languages, API keys, contacts, subscribers, campaigns, domains, SMTP servers, webhooks, suppressions, and workspace analytics.",
+		Description: "Operational resources scoped to the active workspace: sending, templates, stylesheets, languages, API keys, contacts, subscribers, campaigns, domains, SMTP servers, webhooks, suppressions, and workspace analytics. Authenticated with a dashboard session or an API key bound to the workspace.",
 	})
 	opsGroup.WithBearerAuth()
 
