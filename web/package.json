@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24.11.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -18,20 +21,20 @@
     "@mdi/font": "^7.4.47",
     "axios": "^1.13.6",
     "codemirror": "^6.0.2",
-    "grapesjs": "^0.22.14",
+    "grapesjs": "^0.23.2",
     "grapesjs-preset-newsletter": "^1.0.2",
-    "pinia": "^3.0.4",
+    "pinia": "^4.0.2",
     "vue": "^3.5.25",
-    "vue-router": "^4.6.4"
+    "vue-router": "^5.2.0"
   },
   "overrides": {
     "underscore": ">=1.13.8"
   },
   "devDependencies": {
-    "@tsconfig/node22": "^22.0.5",
+    "@tsconfig/node24": "^24.0.4",
     "@vitejs/plugin-vue": "^6.0.2",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1",
+    "vite": "^8.1.5",
     "vue-tsc": "^3.2.5"
   }
 }

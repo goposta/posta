@@ -1,5 +1,12 @@
-# UI build stage
-FROM node:22-alpine AS ui-builder
+# UI build stage.
+#
+# Built on a glibc image, not alpine: Vite 8 bundles with rolldown, which needs a
+# native binding, and `npm ci` on musl trips the npm optional-deps bug
+# (npm/cli#4828) — it silently skips the musl binaries, so the build then fails
+# on a missing package. glibc uses the well-supported -gnu bindings. This is a
+# throwaway builder stage (only web/dist is copied out), so it has no effect on
+# the size or base of the final image.
+FROM node:24-bookworm-slim AS ui-builder
 
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
