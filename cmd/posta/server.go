@@ -145,7 +145,7 @@ func runServer(cli *okapicli.CLI) {
 			}
 
 			if !cfg.DevMode {
-				res.producer = worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+				res.producer = worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 				if cfg.EmbeddedWorker {
 					startEmbeddedWorker(res.db, cfg, res.blobStore, notifier, inboundBus)
 				}
@@ -377,7 +377,7 @@ func startEmbeddedWorker(db *gorm.DB,
 	}
 
 	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: cfg.Redis.Addr, Password: cfg.Redis.Password},
+		cfg.Redis.AsynqRedisOpt(),
 		asynq.Config{
 			Concurrency: cfg.WorkerConcurrency,
 			Queues: map[string]int{
@@ -390,7 +390,7 @@ func startEmbeddedWorker(db *gorm.DB,
 	)
 
 	// Campaign processor
-	campaignProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+	campaignProducer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 	trackingRepo := repositories.NewTrackingRepository(db)
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
 	campaignDispatcher := newWebhookDispatcher(db, cfg)
@@ -432,7 +432,7 @@ func startEmbeddedWorker(db *gorm.DB,
 		inboundHandler.OnFailed(metrics.IncrementInboundFailed)
 		mux.HandleFunc(worker.TypeInboundProcess, inboundHandler.ProcessTask)
 
-		parseProducer := worker.NewProducer(cfg.Redis.Addr, cfg.Redis.Password, cfg.WorkerMaxRetries)
+		parseProducer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 		parseSvc := newInboundServiceForWorker(db, cfg, blobStore, parseProducer, bus)
 		parseHandler := worker.NewInboundParseHandler(
 			repositories.NewInboundEmailRepository(db),
@@ -461,10 +461,7 @@ func initCronManager(
 	blobStore blob.Store,
 	producer *worker.Producer,
 ) *cronpkg.Manager {
-	cronClient := asynq.NewClient(asynq.RedisClientOpt{
-		Addr:     cfg.Redis.Addr,
-		Password: cfg.Redis.Password,
-	})
+	cronClient := asynq.NewClient(cfg.Redis.AsynqRedisOpt())
 	settingsProvider := settings.NewProvider(repositories.NewSettingRepository(db))
 
 	manager := cronpkg.NewManager(cronClient)

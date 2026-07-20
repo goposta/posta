@@ -18,11 +18,13 @@
 package config
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strings"
 
 	errorhandlers "github.com/goposta/posta/internal/error_handlers"
 	"github.com/goposta/posta/internal/storage"
+	"github.com/hibiken/asynq"
 	goutils "github.com/jkaninda/go-utils"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
@@ -145,8 +147,61 @@ type DatabaseConfig struct {
 type RedisConfig struct {
 	Client   *redis.Client
 	Addr     string
+	Username string
 	Password string
+	DB       int
+	// URL, when set, overrides the discrete fields above (e.g. redis://user:pass@host:6379/2).
+	URL string
+	// set for rediss:// URLs
+	TLSConfig *tls.Config
 }
+
+// newRedisConfig reads Redis settings from the env; POSTA_REDIS_URL, if set,
+// is parsed and overrides the discrete POSTA_REDIS_* vars (mirrors POSTA_DB_URL).
+func newRedisConfig() RedisConfig {
+	rc := RedisConfig{
+		Addr:     goutils.Env("POSTA_REDIS_ADDR", "localhost:6379"),
+		Username: goutils.Env("POSTA_REDIS_USERNAME", ""),
+		Password: goutils.Env("POSTA_REDIS_PASSWORD", ""),
+		DB:       goutils.EnvInt("POSTA_REDIS_DB", 0),
+		URL:      goutils.Env("POSTA_REDIS_URL", ""),
+	}
+	if rc.URL != "" {
+		opt, err := redis.ParseURL(rc.URL)
+		if err != nil {
+			logger.Fatal("invalid POSTA_REDIS_URL", "error", err)
+		}
+		rc.Addr = opt.Addr
+		rc.Username = opt.Username
+		rc.Password = opt.Password
+		rc.DB = opt.DB
+		rc.TLSConfig = opt.TLSConfig
+	}
+	return rc
+}
+
+// RedisOptions returns the go-redis client options.
+func (r RedisConfig) RedisOptions() *redis.Options {
+	return &redis.Options{
+		Addr:      r.Addr,
+		Username:  r.Username,
+		Password:  r.Password,
+		DB:        r.DB,
+		TLSConfig: r.TLSConfig,
+	}
+}
+
+// AsynqRedisOpt returns the Asynq Redis connection options.
+func (r RedisConfig) AsynqRedisOpt() asynq.RedisClientOpt {
+	return asynq.RedisClientOpt{
+		Addr:      r.Addr,
+		Username:  r.Username,
+		Password:  r.Password,
+		DB:        r.DB,
+		TLSConfig: r.TLSConfig,
+	}
+}
+
 type JWTConfig struct {
 	Secret   string
 	Issuer   string
@@ -171,10 +226,7 @@ func New() *Config {
 			sslMode:  goutils.Env("POSTA_DB_SSL_MODE", "disable"),
 			url:      goutils.Env("POSTA_DB_URL", ""),
 		},
-		Redis: RedisConfig{
-			Addr:     goutils.Env("POSTA_REDIS_ADDR", "localhost:6379"),
-			Password: goutils.Env("POSTA_REDIS_PASSWORD", ""),
-		},
+		Redis:                newRedisConfig(),
 		Port:                 goutils.EnvInt("POSTA_PORT", 9000),
 		Env:                  goutils.Env("POSTA_ENV", "dev"),
 		JWTSecret:            goutils.Env("POSTA_JWT_SECRET", "change-me-in-production"),
@@ -367,7 +419,7 @@ func (c *Config) InitStorage() {
 	}
 	c.Database.DB = dbConn
 
-	redisClient, err := storage.NewRedis(c.Redis.Addr, c.Redis.Password)
+	redisClient, err := storage.NewRedis(c.Redis.RedisOptions())
 	if err != nil {
 		logger.Fatal("failed to connect to redis", "error", err)
 	}

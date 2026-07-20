@@ -5,8 +5,8 @@ go 1.26.3
 require (
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.24
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.3
-	github.com/coreos/go-oidc/v3 v3.18.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.0
+	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/emersion/go-smtp v0.24.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
@@ -18,7 +18,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/redis/go-redis/v9 v9.20.1
+	github.com/redis/go-redis/v9 v9.21.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/vanng822/go-premailer v1.34.0
 	golang.org/x/crypto v0.53.0
@@ -26,7 +26,7 @@ require (
 	golang.org/x/net v0.56.0
 	golang.org/x/oauth2 v0.36.0
 	gorm.io/driver/postgres v1.6.0
-	gorm.io/gorm v1.31.1
+	gorm.io/gorm v1.31.2
 )
 
 require (

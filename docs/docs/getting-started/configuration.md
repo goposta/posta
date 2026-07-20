@@ -35,8 +35,11 @@ Posta is configured via environment variables. All variables are prefixed with `
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `POSTA_REDIS_ADDR` | `localhost:6379` | Redis address |
+| `POSTA_REDIS_URL` | — | Full connection string, e.g. `redis://user:pass@host:6379/2`. When set, it overrides `POSTA_REDIS_ADDR`, `POSTA_REDIS_USERNAME`, `POSTA_REDIS_PASSWORD` and `POSTA_REDIS_DB`. |
+| `POSTA_REDIS_ADDR` | `localhost:6379` | Redis address (`host:port`) |
+| `POSTA_REDIS_USERNAME` | — | Redis ACL username (Redis 6+) |
 | `POSTA_REDIS_PASSWORD` | — | Redis password |
+| `POSTA_REDIS_DB` | `0` | Redis database number to select |
 
 ## Security
 
