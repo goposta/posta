@@ -41,10 +41,20 @@ const WorkspaceHeader = "X-Posta-Workspace-Id"
 //     workspace they name, and inherit that membership's role.
 //   - When nobody names a workspace and `required` is false, we fall back to the
 //     user's personal workspace.
+//
+// Membership answers "which workspace?", never "how much of it?". An API key's
+// scopes answer the latter, and are enforced here for every workspace-scoped
+// route — see requireWorkspaceScope.
 func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRepository, userRepo *repositories.UserRepository, raw string, required bool) error {
 	userID := c.GetInt(CtxUserID)
 	if userID == 0 {
 		return c.AbortUnauthorized("authentication required")
+	}
+
+	// Checked before the workspace is resolved, so an under-scoped key is refused
+	// without learning whether the workspace it named exists.
+	if err := requireWorkspaceScope(c); err != nil {
+		return err
 	}
 
 	if bound := APIKeyWorkspaceID(c); bound != nil {

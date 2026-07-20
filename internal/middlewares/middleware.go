@@ -32,6 +32,7 @@ package middlewares
 import (
 	"errors"
 	"net"
+	"net/http"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -281,6 +282,65 @@ func ipAllowed(allowed []string, clientIP string) bool {
 	return false
 }
 
+// hasScope reports whether the resolved API key grants scope ("*" grants all).
+func hasScope(c *okapi.Context, scope string) bool {
+	for _, s := range strings.Split(c.GetString(CtxAPIKeyScopes), ",") {
+		if s == models.ScopeAll || s == scope {
+			return true
+		}
+	}
+	return false
+}
+
+// tenantAdminPaths are workspace path segments whose routes administer the
+// tenant itself — credentials, membership, billing, and configuration — rather
+// than its content. They demand ScopeAdmin whatever the method, so a key that
+// can manage templates cannot also mint credentials or invite members.
+var tenantAdminPaths = []string{
+	"/api-keys",
+	"/members",
+	"/invitations",
+	"/settings",
+	"/sso",
+	"/plan",
+}
+
+// workspaceScopeFor returns the scope a workspace-scoped request demands.
+// Reads need `read`, mutations need `write`, and tenant administration needs
+// `admin`. Note that `send` grants none of these: sending lives on the public
+// API (/api/v1/emails/*), so a send-only key is confined to it and cannot read
+// or modify workspace resources.
+func workspaceScopeFor(method, path string) string {
+	for _, p := range tenantAdminPaths {
+		if strings.Contains(path, p) {
+			return models.ScopeAdmin
+		}
+	}
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return models.ScopeRead
+	default:
+		return models.ScopeWrite
+	}
+}
+
+// requireWorkspaceScope enforces workspaceScopeFor on API-key callers. Session
+// callers pass through — their access is governed by workspace RBAC instead.
+//
+// This runs inside workspace resolution rather than as a route-group middleware
+// so that it cannot be forgotten: any route that resolves a workspace is scope
+// checked by construction, and a new group cannot silently fail open.
+func requireWorkspaceScope(c *okapi.Context) error {
+	if c.GetString(CtxAuthMethod) != AuthMethodAPIKey {
+		return nil
+	}
+	required := workspaceScopeFor(c.Request().Method, c.Request().URL.Path)
+	if hasScope(c, required) {
+		return nil
+	}
+	return c.AbortForbidden("API key missing required scope: " + required)
+}
+
 // RequireScope guards a route for API-key callers, demanding the presented key
 // carry the given scope (or "*"). Session/JWT callers pass through — their access
 // is governed by workspace RBAC instead.
@@ -289,10 +349,8 @@ func RequireScope(scope string) okapi.Middleware {
 		if c.GetString(CtxAuthMethod) != AuthMethodAPIKey {
 			return c.Next()
 		}
-		for _, s := range strings.Split(c.GetString(CtxAPIKeyScopes), ",") {
-			if s == models.ScopeAll || s == scope {
-				return c.Next()
-			}
+		if hasScope(c, scope) {
+			return c.Next()
 		}
 		return c.AbortForbidden("API key missing required scope: " + scope)
 	}
