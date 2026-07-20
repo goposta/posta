@@ -33,7 +33,7 @@ func clearRedisEnv(t *testing.T) {
 		"POSTA_REDIS_URL",
 	} {
 		t.Setenv(k, "")
-		os.Unsetenv(k)
+		_= os.Unsetenv(k)
 	}
 }
 
