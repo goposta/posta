@@ -951,7 +951,9 @@ input[type="checkbox"]:checked::before {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
 /* ─── form select picker scrollbar ───  */
-.form-select::picker(select)::-webkit-scrollbar { width: 6px; height: 6px;}
-.form-select::picker(select)::-webkit-scrollbar-track { background: var(--bg-secondary); border-radius: var(--radius); }
-.form-select::picker(select)::-webkit-scrollbar-thumb { background-color: var(--border-primary); border-radius: 20px; border: 2px solid var(--bg-secondary); }
-.form-select::picker(select)::-webkit-scrollbar-thumb:hover { background-color: var(--primary-500); }
+/* Styled via the standard scrollbar-width / scrollbar-color on
+   .form-select::picker(select) above, which sets the same thumb and track
+   colours. The old ::picker(select)::-webkit-scrollbar rules chained two
+   pseudo-elements, which Lightning CSS (Vite 8's minifier) refuses to parse —
+   and they were redundant anyway, since ::picker(select) needs Chrome 135+ and
+   every browser that supports it also honours scrollbar-color. */

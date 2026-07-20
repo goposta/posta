@@ -7,9 +7,19 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          codemirror: ['codemirror', '@codemirror/lang-html', '@codemirror/lang-json', '@codemirror/theme-one-dark', '@codemirror/view', '@codemirror/state'],
-          grapesjs: ['grapesjs', 'grapesjs-preset-newsletter'],
+        // Split the two heavyweight editors into their own chunks so they are
+        // not pulled into the initial bundle.
+        //
+        // Vite 8 bundles with Rolldown, whose manualChunks only accepts a
+        // function — the object form silently used before now throws. These
+        // groups are the Rolldown-native equivalent, matched on module id:
+        // `codemirror` covers the `codemirror` package and the `@codemirror/*`
+        // scope, `grapesjs` covers grapesjs and grapesjs-preset-newsletter.
+        advancedChunks: {
+          groups: [
+            { name: 'codemirror', test: /[\\/]node_modules[\\/](?:@codemirror[\\/]|codemirror[\\/])/ },
+            { name: 'grapesjs', test: /[\\/]node_modules[\\/]grapesjs/ },
+          ],
         },
       },
     },
