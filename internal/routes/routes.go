@@ -400,7 +400,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	if cfg.SMTPRelayEnabled {
 		smtpCredRepo := repositories.NewSMTPCredentialRepository(db)
 		credService := smtprelay.NewCredentialService(smtpCredRepo)
-		r.h.smtpCredential = handlers.NewSMTPCredentialHandler(credService, smtpCredRepo, cfg)
+		r.h.smtpCredential = handlers.NewSMTPCredentialHandler(credService, smtpCredRepo, cfg, auditLogger)
 	}
 
 	// Workspace data export/import

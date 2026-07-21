@@ -19,6 +19,7 @@ package handlers
 
 import (
 	"github.com/goposta/posta/internal/config"
+	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/smtprelay"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
@@ -28,13 +29,15 @@ type SMTPCredentialHandler struct {
 	service *smtprelay.CredentialService
 	repo    *repositories.SMTPCredentialRepository
 	cfg     *config.Config
+	audit   *audit.Logger
 }
 
-func NewSMTPCredentialHandler(service *smtprelay.CredentialService, repo *repositories.SMTPCredentialRepository, cfg *config.Config) *SMTPCredentialHandler {
+func NewSMTPCredentialHandler(service *smtprelay.CredentialService, repo *repositories.SMTPCredentialRepository, cfg *config.Config, audit *audit.Logger) *SMTPCredentialHandler {
 	return &SMTPCredentialHandler{
 		service: service,
 		repo:    repo,
 		cfg:     cfg,
+		audit:   audit,
 	}
 }
 
@@ -70,6 +73,8 @@ func (h *SMTPCredentialHandler) Create(c *okapi.Context, req *CreateSMTPCredenti
 	if err != nil {
 		return c.AbortInternalServerError("failed to create SMTP credential", err)
 	}
+
+	h.audit.LogCtx(c, "smtprelay.created", "SMTP relay credential created: "+cred.Name, nil)
 
 	return created(c, okapi.M{
 		"id":         cred.ID,
@@ -120,6 +125,8 @@ func (h *SMTPCredentialHandler) Revoke(c *okapi.Context, req *RevokeSMTPCredenti
 		return c.AbortInternalServerError("failed to revoke SMTP credential")
 	}
 
+	h.audit.LogCtx(c, "smtprelay.revoked", "SMTP relay credential revoked: "+cred.Name, nil)
+
 	return ok(c, okapi.M{"message": "SMTP credential revoked"})
 }
 
@@ -135,6 +142,8 @@ func (h *SMTPCredentialHandler) Delete(c *okapi.Context, req *DeleteSMTPCredenti
 	if err := h.repo.Delete(cred.ID); err != nil {
 		return c.AbortInternalServerError("failed to delete SMTP credential")
 	}
+
+	h.audit.LogCtx(c, "smtprelay.deleted", "SMTP relay credential deleted: "+cred.Name, nil)
 
 	return ok(c, okapi.M{"message": "SMTP credential deleted"})
 }
