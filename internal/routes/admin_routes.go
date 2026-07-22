@@ -279,6 +279,27 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[[]models.Setting]{},
 		},
 
+		// ==================== Updates ====================
+		{
+			Method:      http.MethodGet,
+			Path:        "/update",
+			Handler:     r.h.update.GetUpdate,
+			Group:       adminGroup,
+			Summary:     "Get update status",
+			Description: "Returns the cached result of the daily release check for the running build",
+			Response:    &dto.Response[handlers.UpdateInfo]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/update/dismiss",
+			Handler:     okapi.H(r.h.update.DismissUpdate),
+			Group:       adminGroup,
+			Summary:     "Dismiss the update notice for a specific version",
+			Description: "Silences the notice until a newer version is released",
+			Request:     &handlers.DismissUpdateRequest{},
+			Response:    &dto.Response[dto.MessageData]{},
+		},
+
 		// ==================== Plans ====================
 		{
 			Method:      http.MethodPost,

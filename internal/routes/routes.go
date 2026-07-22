@@ -43,6 +43,7 @@ import (
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/smtprelay"
 	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/services/updatecheck"
 	"github.com/goposta/posta/internal/services/verifier"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/services/workermon"
@@ -86,6 +87,7 @@ type routerMiddleware struct {
 
 type routerHandlers struct {
 	health           *handlers.HealthHandler
+	update           *handlers.UpdateHandler
 	user             *handlers.UserHandler
 	email            *handlers.EmailHandler
 	apiKey           *handlers.APIKeyHandler
@@ -243,7 +245,11 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			workspaceQuery:    middlewares.WorkspaceFromQueryOrHeader(workspaceRepo, userRepo),
 		},
 		h: routerHandlers{
-			health:           handlers.NewHealthHandler(db, redisClient),
+			health: handlers.NewHealthHandler(db, redisClient),
+			// A second Service instance also exists for the cron job. They share no
+			// in-memory state — the cached verdict is a single database row — so
+			// constructing one per consumer is equivalent to threading one through.
+			update:           handlers.NewUpdateHandler(updatecheck.NewService(db, config.Version, cfg.UpdateCheck)),
 			user:             userHandler,
 			email:            handlers.NewEmailHandler(emailService, emailRepo, bus, statsCache),
 			apiKey:           handlers.NewAPIKeyHandler(apiKeyService, apiKeyRepo, userSettingRepo, auditLogger),

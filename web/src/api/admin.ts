@@ -1,5 +1,5 @@
 import api from './client'
-import type { ApiResponse, PaginatedResponse, User, ApiKey, Email, Event, AdminMetrics, UserDetailMetrics, CronJob, AdminWorkspace } from './types'
+import type { ApiResponse, PaginatedResponse, User, ApiKey, Email, Event, AdminMetrics, UserDetailMetrics, CronJob, AdminWorkspace, UpdateInfo } from './types'
 
 export const adminApi = {
   listUsers(page = 0, size = 20, search = '') {
@@ -55,5 +55,11 @@ export const adminApi = {
   },
   listJobs() {
     return api.get<ApiResponse<CronJob[]>>('/admin/jobs')
+  },
+  getUpdate() {
+    return api.get<ApiResponse<UpdateInfo>>('/admin/update')
+  },
+  dismissUpdate(version: string) {
+    return api.post<ApiResponse<{ message: string }>>('/admin/update/dismiss', { version })
   },
 }
