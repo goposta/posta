@@ -202,7 +202,6 @@ const navSections: NavSection[] = [
       { name: 'Metrics', path: '/admin/metrics', icon: 'pie-chart' },
       { name: 'Events', path: '/admin/events', icon: 'zap' },
       { name: 'Platform Settings', path: '/admin/settings', icon: 'settings' },
-      { name: 'About', path: '/about', icon: 'info' },
     ],
   },
 ]
@@ -478,6 +477,14 @@ function getIcon(name: string): string {
                     stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 Settings
+              </a>
+              <a class="user-dropdown-item" @click.stop="navigate('/about'); userMenuOpen = false">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M8 7.33V11.33" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                  <circle cx="8" cy="4.83" r="0.83" fill="currentColor" />
+                </svg>
+                About
               </a>
               <div class="user-dropdown-divider"></div>
               <div class="user-dropdown-theme">

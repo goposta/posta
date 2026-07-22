@@ -97,7 +97,7 @@ func runServer(cli *okapicli.CLI) {
 			// Initialize SMTP password encryption
 			crypto.Init(cfg.EncryptionKey)
 
-			if err := storage.SeedAdmin(res.db, cfg.AdminEmail, cfg.AdminPassword); err != nil {
+			if err := storage.SeedAdmin(res.db, cfg.AdminEmail, cfg.AdminPassword, cfg.ValidateAdminSeedPassword); err != nil {
 				logger.Fatal("failed to seed admin user", "error", err)
 			}
 

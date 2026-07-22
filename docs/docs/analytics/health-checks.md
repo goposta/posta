@@ -45,6 +45,9 @@ Returns `503 Service Unavailable` if any dependency is down.
 
 ## Application Info
 
+Requires authentication (a dashboard session or an API key), so it is not
+suitable as a probe target — use `/healthz` and `/readyz` for that.
+
 ```
 GET /api/v1/info
 ```

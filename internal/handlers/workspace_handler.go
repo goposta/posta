@@ -525,8 +525,18 @@ type DeleteInvitationRequest struct {
 }
 
 func (h *WorkspaceHandler) DeleteInvitation(c *okapi.Context, req *DeleteInvitationRequest) error {
+	wsID := c.GetInt("workspace_id")
+
 	inv, err := h.workspaceRepo.FindInvitationByID(uint(req.InvitationID))
 	if err != nil {
+		return c.AbortNotFound("invitation not found")
+	}
+
+	// Invitation IDs are global and guessable, so an ID alone does not authorize
+	// the revocation: it must belong to the workspace the caller is acting in.
+	// Report it as missing rather than forbidden so the endpoint cannot be used
+	// to probe which invitation IDs exist in other workspaces.
+	if inv.WorkspaceID != uint(wsID) {
 		return c.AbortNotFound("invitation not found")
 	}
 

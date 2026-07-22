@@ -38,12 +38,23 @@ func ConnectPostgres(dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
-// SeedAdmin creates the default admin user
-func SeedAdmin(db *gorm.DB, email, password string) error {
+// SeedAdmin creates the default admin user.
+//
+// approve, when non-nil, is consulted only once it is settled that an admin
+// will actually be created. That ordering matters: an existing deployment whose
+// admin password was changed in-app must keep starting even though the
+// configured seed password is still the shipped default.
+func SeedAdmin(db *gorm.DB, email, password string, approve func() error) error {
 	var count int64
 	db.Model(&models.User{}).Count(&count)
 	if count > 0 {
 		return nil
+	}
+
+	if approve != nil {
+		if err := approve(); err != nil {
+			return err
+		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
