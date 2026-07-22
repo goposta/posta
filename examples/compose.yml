@@ -18,9 +18,11 @@ services:
       POSTA_DB_PORT: 5432
       POSTA_DB_SSL_MODE: disable
       POSTA_REDIS_ADDR: "posta-redis:6379"
-      POSTA_JWT_SECRET: "change-me-in-production"
+      # Both are required: compose refuses to start until they are set, and the
+      # server rejects placeholder or too-short values in production anyway.
+      POSTA_JWT_SECRET: "${POSTA_JWT_SECRET:?required, min 32 chars, generate with openssl rand -hex 32}"
       POSTA_ADMIN_EMAIL: "admin@example.com"
-      POSTA_ADMIN_PASSWORD: "admin1234"
+      POSTA_ADMIN_PASSWORD: "${POSTA_ADMIN_PASSWORD:?required, min 12 chars, sets the initial admin password}"
       POSTA_EMBEDDED_WORKER: "true"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9000/healthz"]

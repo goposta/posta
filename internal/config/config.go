@@ -240,7 +240,7 @@ func New() *Config {
 		},
 		Redis:                newRedisConfig(),
 		Port:                 goutils.EnvInt("POSTA_PORT", 9000),
-		Env:                  goutils.Env("POSTA_ENV", "dev"),
+		Env:                  goutils.Env("POSTA_ENV", "production"),
 		JWTSecret:            goutils.Env("POSTA_JWT_SECRET", "change-me-in-production"),
 		DevMode:              goutils.EnvBool("POSTA_DEV_MODE", false),
 		RateLimitHourly:      goutils.EnvInt("POSTA_RATE_LIMIT_HOURLY", 100),
@@ -333,11 +333,12 @@ func (c *Config) validate() error {
 			return fmt.Errorf("POSTA_INBOUND_TLS_MODE=%s requires POSTA_INBOUND_TLS_CERT_FILE and POSTA_INBOUND_TLS_KEY_FILE", c.InboundTLSMode)
 		}
 	}
-	return nil
+	return c.ValidateSecurity()
 }
 func (c *Config) validateWorker() error {
-
-	return nil
+	// The worker verifies the same JWTs the server issues, so it needs the same
+	// secret to be real.
+	return c.ValidateSecurity()
 }
 func (c *Config) Initialize(app *okapi.Okapi) error {
 	if err := c.validate(); err != nil {
@@ -345,6 +346,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	}
 	// Initialize global logger
 	l := c.initLogger()
+	c.WarnInsecureConfig()
 	// Dev mode
 	if c.DevMode {
 		app.WithDebug()
@@ -414,6 +416,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 func (c *Config) InitWorker() error {
 	// Initialize global logger
 	c.initLogger()
+	c.WarnInsecureConfig()
 	if err := c.validateWorker(); err != nil {
 		return err
 	}

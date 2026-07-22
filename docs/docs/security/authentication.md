@@ -123,7 +123,6 @@ These endpoints do not require authentication:
 
 - `GET /healthz` — Liveness probe
 - `GET /readyz` — Readiness probe
-- `GET /api/v1/info` — Application info
 - `POST /api/v1/auth/login` — Login
 - `POST /api/v1/auth/register` — Register
 - `GET /api/v1/auth/registration-status` — Check registration

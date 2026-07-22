@@ -52,15 +52,20 @@ func (r *Router) healthRoutes() []okapi.RouteDefinition {
 }
 
 // infoRoute returns the route definition for the application info endpoint.
+//
+// Authenticated: the version and commit ID identify the exact build running,
+// which is what an attacker needs to match a deployment against known CVEs.
+// Liveness and readiness probes use /healthz and /readyz, which stay public.
 func (r *Router) infoRoute() okapi.RouteDefinition {
 	return okapi.RouteDefinition{
 		Method:      http.MethodGet,
 		Path:        "/info",
 		Handler:     handlers.Info,
 		Group:       r.v1,
+		Middlewares: []okapi.Middleware{r.mw.auth},
 		Tags:        []string{"Info"},
 		Summary:     "Application info",
-		Description: "Returns app name, version, and commit ID",
+		Description: "Returns app name, version, and commit ID. Requires a dashboard session or an API key.",
 		Response:    &dto.Response[handlers.AppInfo]{},
 	}
 }

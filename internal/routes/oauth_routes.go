@@ -5,6 +5,8 @@ import (
 
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/middlewares"
+	"github.com/goposta/posta/internal/models"
 	"github.com/jkaninda/okapi"
 )
 
@@ -164,32 +166,38 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 
 	routes = append(routes, []okapi.RouteDefinition{
 		{
-			Method:   http.MethodGet,
-			Path:     "",
-			Handler:  r.h.oauthAdmin.GetWorkspaceSSO,
-			Group:    wsSSO,
-			Summary:  "Get workspace SSO config",
-			Response: &dto.Response[handlers.WorkspaceSSOResponse]{},
-			Options:  []okapi.RouteOption{workspaceHeaderRequired},
+			Method:      http.MethodGet,
+			Path:        "",
+			Handler:     r.h.oauthAdmin.GetWorkspaceSSO,
+			Group:       wsSSO,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Get workspace SSO config",
+			Description: "Read the workspace's SSO enforcement config (admin/owner only)",
+			Response:    &dto.Response[handlers.WorkspaceSSOResponse]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 		{
-			Method:   http.MethodPut,
-			Path:     "",
-			Handler:  okapi.H(r.h.oauthAdmin.SetWorkspaceSSO),
-			Group:    wsSSO,
-			Summary:  "Set workspace SSO config",
-			Request:  &handlers.SetWorkspaceSSORequest{},
-			Response: &dto.Response[okapi.M]{},
-			Options:  []okapi.RouteOption{workspaceHeaderRequired},
+			Method:      http.MethodPut,
+			Path:        "",
+			Handler:     okapi.H(r.h.oauthAdmin.SetWorkspaceSSO),
+			Group:       wsSSO,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Set workspace SSO config",
+			Description: "Configure the workspace's SSO enforcement (admin/owner only)",
+			Request:     &handlers.SetWorkspaceSSORequest{},
+			Response:    &dto.Response[okapi.M]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 		{
-			Method:   http.MethodDelete,
-			Path:     "",
-			Handler:  r.h.oauthAdmin.DeleteWorkspaceSSO,
-			Group:    wsSSO,
-			Summary:  "Delete workspace SSO config",
-			Response: &dto.Response[okapi.M]{},
-			Options:  []okapi.RouteOption{workspaceHeaderRequired},
+			Method:      http.MethodDelete,
+			Path:        "",
+			Handler:     r.h.oauthAdmin.DeleteWorkspaceSSO,
+			Group:       wsSSO,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Delete workspace SSO config",
+			Description: "Remove the workspace's SSO enforcement (admin/owner only)",
+			Response:    &dto.Response[okapi.M]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 	}...)
 

@@ -8,6 +8,10 @@ services:
     environment:
       POSTA_DB_URL: "host=posta-db user=posta password=posta dbname=posta port=5432 sslmode=disable"
       POSTA_REDIS_ADDR: "posta-redis:6379"
+      # Local quick start only. Production rejects the placeholder credentials
+      # below, so this file declares itself dev; see examples/ for a deployable
+      # template that requires real secrets.
+      POSTA_ENV: "dev"
       POSTA_JWT_SECRET: "change-me-in-production"
       POSTA_ADMIN_EMAIL: "admin@example.com"
       POSTA_ADMIN_PASSWORD: "admin1234"
