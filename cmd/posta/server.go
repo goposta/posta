@@ -41,6 +41,7 @@ import (
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/smtprelay"
 	"github.com/goposta/posta/internal/services/tracking"
+	"github.com/goposta/posta/internal/services/updatecheck"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/services/workermon"
 	"github.com/goposta/posta/internal/services/workspacemigrate"
@@ -520,6 +521,22 @@ func initCronManager(
 		retentionJob.SetBlobStore(blobStore)
 	}
 	manager.Register(retentionJob)
+	// Daily release check. A second Service instance backs the admin handler; the
+	// cached verdict lives in a database row, so they need no shared state.
+	updateSvc := updatecheck.NewService(db, config.Version, cfg.UpdateCheck)
+	if updateSvc.Enabled() {
+		manager.Register(jobs.NewUpdateCheckJob(updateSvc))
+		// Seed the cache shortly after boot so a fresh install does not wait a day
+		// for its first answer. Off the startup path: never block serving on GitHub.
+		go func() {
+			time.Sleep(30 * time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := updateSvc.Check(ctx); err != nil {
+				logger.Warn("initial update check failed", "error", err)
+			}
+		}()
+	}
 	manager.Register(jobs.NewDailyReportJob(repositories.NewWorkspaceRepository(db)))
 	manager.Register(jobs.NewAccountCleanupJob(repositories.NewUserRepository(db)))
 	manager.Register(jobs.NewAPIKeyExpiryJob(db, notifier))

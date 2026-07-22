@@ -5,6 +5,8 @@ import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useWorkspaceStore } from '../stores/workspace'
 import { infoApi, type AppInfo } from '../api/info'
+import { adminApi } from '../api/admin'
+import type { UpdateInfo } from '../api/types'
 import EmailVerificationBanner from '../components/EmailVerificationBanner.vue'
 
 const router = useRouter()
@@ -52,6 +54,33 @@ const toggleSidebar = () => {
   localStorage.setItem('posta_sidebar_collapsed', String(sidebarCollapsed.value))
 }
 
+// New-release notice (platform admins only). Dismissal is stored server-side
+// against the version, not in localStorage: it must survive a browser change and
+// it must come back when the *next* version lands.
+const update = ref<UpdateInfo | null>(null)
+const showUpdateBanner = computed(() => auth.isAdmin && update.value?.update_available === true)
+
+async function loadUpdate() {
+  if (!auth.isAdmin) return
+  try {
+    update.value = (await adminApi.getUpdate()).data.data
+  } catch {
+    // Non-critical; the dashboard works without it.
+  }
+}
+
+async function dismissUpdate() {
+  const version = update.value?.latest_version
+  if (!version) return
+  const previous = update.value
+  update.value = { ...previous!, update_available: false } // optimistic
+  try {
+    await adminApi.dismissUpdate(version)
+  } catch {
+    update.value = previous
+  }
+}
+
 onMounted(async () => {
   document.addEventListener('click', closeUserMenu)
   try {
@@ -61,6 +90,7 @@ onMounted(async () => {
     // Version display is non-critical
   }
 
+  loadUpdate()
   wsStore.fetchWorkspaces()
 })
 onBeforeUnmount(() => {
@@ -532,6 +562,29 @@ function getIcon(name: string): string {
       </header>
       <main class="main-content">
         <EmailVerificationBanner />
+        <!-- A newer Posta release exists (platform admins). Links to the release
+             notes; it never upgrades anything on its own. -->
+        <div v-if="showUpdateBanner" class="app-banner app-banner--success">
+          <svg class="app-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="8" />
+            <polyline points="8 12 12 8 16 12" />
+          </svg>
+          <div class="app-banner-content">
+            <p class="app-banner-title">Posta {{ update?.latest_version }} is available</p>
+            <p class="app-banner-text">
+              You're running <strong>{{ update?.current_version }}</strong>.
+            </p>
+          </div>
+          <div class="app-banner-actions">
+            <a class="app-banner-btn" :href="update?.release_url" target="_blank" rel="noopener noreferrer">
+              Release notes
+            </a>
+            <button class="app-banner-dismiss" title="Dismiss until the next release"
+              aria-label="Dismiss until the next release" @click="dismissUpdate">×</button>
+          </div>
+        </div>
         <div v-if="showPersonalBanner" class="app-banner app-banner--info personal-ws-banner">
           <svg class="app-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

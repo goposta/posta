@@ -710,6 +710,20 @@ export interface CronJob {
   next_run_at: string | null
 }
 
+// Result of the daily release check. Admin-only.
+export interface UpdateInfo {
+  current_version: string
+  latest_version?: string
+  release_url?: string
+  published_at?: string
+  /** False when up to date, when checks are disabled, and when this exact version was dismissed. */
+  update_available: boolean
+  enabled: boolean
+  checked_at?: string
+  /** Set when the checker could not reach GitHub, so a silent failure is visible. */
+  last_error?: string
+}
+
 // 2FA
 export interface Setup2FAResponse {
   secret: string

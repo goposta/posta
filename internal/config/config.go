@@ -60,6 +60,11 @@ type Config struct {
 
 	MetricsEnabled bool
 
+	// UpdateCheck enables the daily "is there a newer release?" query to GitHub.
+	// It only ever reads a public release list and reports the answer to platform
+	// admins; it never upgrades anything and sends nothing about this install.
+	UpdateCheck bool
+
 	PlanEnforcement   bool
 	WorkspaceOnlyMode bool
 
@@ -258,6 +263,7 @@ func New() *Config {
 		securitySchemes:            okapi.SecuritySchemes{},
 
 		MetricsEnabled:    goutils.EnvBool("POSTA_METRICS_ENABLED", false),
+		UpdateCheck:       goutils.EnvBool("POSTA_UPDATE_CHECK", true),
 		PlanEnforcement:   goutils.EnvBool("POSTA_PLAN_ENFORCEMENT", false),
 		WorkspaceOnlyMode: goutils.EnvBool("POSTA_WORKSPACE_ONLY_MODE", false),
 		WebDir:            goutils.Env("POSTA_WEB_DIR", ""),
