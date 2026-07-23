@@ -51,8 +51,10 @@ type SendBatchEmailRequest struct {
 	Body   email.BatchRequest `json:"body"`
 }
 type ListRequest struct {
-	Page int `query:"page" default:"0"`
-	Size int `query:"size" default:"20"`
+	Page int    `query:"page" default:"0"`
+	Size int    `query:"size" default:"20"`
+	Q    string `query:"q" doc:"Search with operators: from: to: subject: template: has:attachment after: before: status:"`
+	Sort string `query:"sort" doc:"Sort key: created_at|sent_at|subject|sender|template|status, prefix '-' for descending (default: -created_at)"`
 }
 type GetByIDRequest struct {
 	ID int `param:"id"`
@@ -296,7 +298,8 @@ func normalizePageParams(page, size int) (int, int, int) {
 func (h *EmailHandler) List(c *okapi.Context, req *ListRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
-	emails, total, err := h.emailRepo.FindByScope(getScope(c), size, offset)
+	filter := repositories.ParseSearchQuery(req.Q)
+	emails, total, err := h.emailRepo.FindByScopeFiltered(getScope(c), filter, req.Sort, size, offset)
 	if err != nil {
 		return c.AbortInternalServerError("failed to list emails")
 	}

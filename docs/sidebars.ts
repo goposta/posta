@@ -23,6 +23,7 @@ const sidebars: SidebarsConfig = {
         'email-sending/scheduled-email',
         'email-sending/attachments',
         'email-sending/email-status',
+        'email-sending/email-log',
         'email-sending/email-verification',
       ],
     },
