@@ -65,6 +65,9 @@ View sent emails for the workspace with pagination:
 GET /api/v1/workspaces/current/emails?page=1&size=20
 ```
 
+The same endpoint also supports search, filtering, and sorting — see
+[Email Log](/docs/email-sending/email-log).
+
 ## Email Details
 
 Get full details for a specific email:

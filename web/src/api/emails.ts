@@ -19,8 +19,10 @@ export interface EmailPreviewResponse {
 }
 
 export const emailsApi = {
-  list(page = 0, size = 20) {
-    return api.get<PaginatedResponse<Email>>('/workspaces/current/emails', { params: { page, size } })
+  list(page = 0, size = 20, q = '', sort = '') {
+    return api.get<PaginatedResponse<Email>>('/workspaces/current/emails', {
+      params: { page, size, q: q || undefined, sort: sort || undefined },
+    })
   },
   get(uuid: string) {
     return api.get<ApiResponse<Email>>(`/workspaces/current/emails/${uuid}`)

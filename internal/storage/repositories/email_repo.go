@@ -109,6 +109,54 @@ func (r *EmailRepository) FindByScope(scope ResourceScope, limit, offset int) ([
 	return items, total, nil
 }
 
+// FindByScopeFiltered returns scoped emails narrowed by the given search filter.
+// sort is an optional sort key (e.g. "subject", "-sent_at"); empty/unknown keeps
+// the default newest-first order.
+func (r *EmailRepository) FindByScopeFiltered(scope ResourceScope, f EmailFilter, sort string, limit, offset int) ([]models.Email, int64, error) {
+	var items []models.Email
+	var total int64
+
+	apply := func(q *gorm.DB) *gorm.DB {
+		q = ApplyScope(q, scope)
+		if f.Sender != "" {
+			q = q.Where("LOWER(sender) LIKE ?", likePattern(f.Sender))
+		}
+		if f.Recipient != "" {
+			q = q.Where("EXISTS (SELECT 1 FROM unnest(recipients) AS r WHERE LOWER(r) LIKE ?)",
+				likePattern(f.Recipient))
+		}
+		if f.Subject != "" {
+			q = q.Where("LOWER(subject) LIKE ?", likePattern(f.Subject))
+		}
+		if f.Template != "" {
+			q = q.Where("LOWER(template_name) LIKE ?", likePattern(f.Template))
+		}
+		if len(f.Statuses) > 0 {
+			q = q.Where("status IN ?", f.Statuses)
+		}
+		if f.HasAttachment {
+			q = q.Where("attachments_json <> '' AND attachments_json <> '[]'")
+		}
+		if f.After != nil {
+			q = q.Where("created_at >= ?", *f.After)
+		}
+		if f.Before != nil {
+			q = q.Where("created_at < ?", *f.Before)
+		}
+		return q
+	}
+
+	apply(r.db.Model(&models.Email{})).Count(&total)
+
+	if err := apply(r.db).
+		Order(orderClause(sort)).
+		Limit(limit).Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
 // FindFailedForRetry returns failed emails with retry_count < maxRetries for a given user.
 func (r *EmailRepository) FindFailedForRetry(userID uint, maxRetries int) ([]models.Email, error) {
 	var emails []models.Email
