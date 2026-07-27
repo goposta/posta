@@ -19,11 +19,9 @@ package worker
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/mail"
 	"strings"
 	"time"
@@ -233,27 +231,17 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		em.TextBody = email.HTMLToText(em.HTMLBody)
 	}
 
-	// Parse attachments from stored JSON and fetch content from blob storage if needed
-	var attachments []models.Attachment
-	if em.AttachmentsJSON != "" {
-		_ = json.Unmarshal([]byte(em.AttachmentsJSON), &attachments)
-		if h.blobStore != nil {
-			for i, att := range attachments {
-				if att.StorageKey != "" && att.Content == "" {
-					rc, err := h.blobStore.Get(ctx, att.StorageKey)
-					if err != nil {
-						h.markFailed(em, fmt.Sprintf("failed to fetch attachment %q from storage: %v", att.Filename, err))
-						return nil
-					}
-					data, err := io.ReadAll(rc)
-					_ = rc.Close()
-					if err != nil {
-						h.markFailed(em, fmt.Sprintf("failed to read attachment %q: %v", att.Filename, err))
-						return nil
-					}
-					attachments[i].Content = base64.StdEncoding.EncodeToString(data)
-				}
-			}
+	// Rebuild the attachments from the record, pulling blob-stored content if needed.
+	attachments, err := email.LoadAttachments(ctx, em, h.blobStore)
+	if err != nil {
+		h.markFailed(em, fmt.Sprintf("failed to load attachments: %v", err))
+		return nil
+	}
+	// An attachment with no payload would go out as a zero-byte file; fail loudly instead.
+	for _, att := range attachments {
+		if att.Content == "" {
+			h.markFailed(em, fmt.Sprintf("attachment %q has no content", att.Filename))
+			return nil
 		}
 	}
 
