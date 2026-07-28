@@ -206,13 +206,17 @@ func (s *Service) uploadAttachments(ctx context.Context, emailUUID string, attac
 // DownloadAttachments fetches attachment content from blob storage and populates
 // the base64 Content field for each attachment that has a StorageKey.
 func (s *Service) DownloadAttachments(ctx context.Context, attachments []models.Attachment) ([]models.Attachment, error) {
+	return fetchAttachmentContent(ctx, s.blobStore, attachments)
+}
+
+func fetchAttachmentContent(ctx context.Context, store blob.Store, attachments []models.Attachment) ([]models.Attachment, error) {
 	result := make([]models.Attachment, len(attachments))
 	for i, att := range attachments {
 		result[i] = att
 		if att.StorageKey == "" {
 			continue
 		}
-		rc, err := s.blobStore.Get(ctx, att.StorageKey)
+		rc, err := store.Get(ctx, att.StorageKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download attachment %q: %w", att.Filename, err)
 		}
@@ -224,6 +228,42 @@ func (s *Service) DownloadAttachments(ctx context.Context, attachments []models.
 		result[i].Content = base64.StdEncoding.EncodeToString(data)
 	}
 	return result, nil
+}
+
+// persistAttachments prepares attachments for the email record. With a blob store
+// the bytes are uploaded and the record keeps only the key; without one the base64
+// content stays on the record, because the record is all the send worker gets.
+func (s *Service) persistAttachments(ctx context.Context, keyPrefix string, atts []models.Attachment) (string, error) {
+	if len(atts) == 0 {
+		return "", nil
+	}
+	stored := atts
+	if s.blobStore != nil {
+		uploaded, err := s.uploadAttachments(ctx, keyPrefix, atts)
+		if err != nil {
+			return "", fmt.Errorf("attachment upload: %w", err)
+		}
+		stored = uploaded
+	}
+	b, _ := json.Marshal(stored)
+	return string(b), nil
+}
+
+// LoadAttachments rebuilds the attachments to send from a stored email record.
+// The send worker runs long after Send returned, so the record is all it has:
+// whatever cannot be recovered here goes out as a zero-byte file. store may be nil.
+func LoadAttachments(ctx context.Context, em *models.Email, store blob.Store) ([]models.Attachment, error) {
+	if em.AttachmentsJSON == "" {
+		return nil, nil
+	}
+	var atts []models.Attachment
+	if err := json.Unmarshal([]byte(em.AttachmentsJSON), &atts); err != nil {
+		return nil, fmt.Errorf("decode attachments: %w", err)
+	}
+	if store == nil {
+		return atts, nil
+	}
+	return fetchAttachmentContent(ctx, store, atts)
 }
 
 // DeleteAttachments removes attachment blobs from storage for the given keys.
@@ -676,32 +716,11 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		req.To = filtered
 	}
 
-	// Serialize attachments for storage. When blob storage is configured,
-	// upload the binary content and store only the storage key reference.
-	// Otherwise store just filename + content_type metadata.
-	var attachmentsJSON string
-	if len(req.Attachments) > 0 {
-		if s.blobStore != nil {
-			// Generate a temporary UUID for the blob key prefix.
-			tempKey := fmt.Sprintf("%d", time.Now().UnixNano())
-			uploaded, err := s.uploadAttachments(ctx, tempKey, req.Attachments)
-			if err != nil {
-				return nil, fmt.Errorf("attachment upload: %w", err)
-			}
-			b, _ := json.Marshal(uploaded)
-			attachmentsJSON = string(b)
-		} else {
-			type attachMeta struct {
-				Filename    string `json:"filename"`
-				ContentType string `json:"content_type"`
-			}
-			meta := make([]attachMeta, len(req.Attachments))
-			for i, a := range req.Attachments {
-				meta[i] = attachMeta{Filename: a.Filename, ContentType: a.ContentType}
-			}
-			b, _ := json.Marshal(meta)
-			attachmentsJSON = string(b)
-		}
+	// Persist attachments. The blob key prefix is a temporary stand-in for the
+	// email UUID, which is not assigned until the record is created.
+	attachmentsJSON, err := s.persistAttachments(ctx, fmt.Sprintf("%d", time.Now().UnixNano()), req.Attachments)
+	if err != nil {
+		return nil, err
 	}
 
 	// Auto-generate plain text from HTML when text body is not provided

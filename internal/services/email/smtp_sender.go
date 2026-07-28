@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -226,6 +227,36 @@ func wrapSendError(stage, recipient string, err error) error {
 	return &SendError{Stage: stage, Recipient: recipient, Code: code, Msg: msg, Err: err}
 }
 
+const (
+	contentTypeTextPlain = "text/plain"
+	contentTypeTextHTML  = "text/html"
+)
+
+// writeTextPart writes a text body part. Non-ASCII bodies are quoted-printable
+// encoded: with no Content-Transfer-Encoding the part defaults to 7bit, so raw
+// UTF-8 would be a lie the next hop is free to mangle.
+func writeTextPart(b *strings.Builder, mediaType, body string) {
+	fmt.Fprintf(b, "Content-Type: %s; charset=\"UTF-8\"\r\n", mediaType)
+	if isASCII(body) {
+		b.WriteString("\r\n")
+		b.WriteString(body)
+		return
+	}
+	b.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	w := quotedprintable.NewWriter(b)
+	_, _ = w.Write([]byte(body))
+	_ = w.Close()
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > 127 {
+			return false
+		}
+	}
+	return true
+}
+
 func buildMessage(from string, to []string, subject, htmlBody, textBody string, attachments []models.Attachment, headers map[string]string, listUnsubscribeURL, listUnsubscribeMailto string, listUnsubscribePost bool) []byte {
 	var b strings.Builder
 
@@ -269,18 +300,14 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 		if htmlBody != "" && textBody != "" {
 			fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", altBoundary)
 			fmt.Fprintf(&b, "--%s\r\n", altBoundary)
-			b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(textBody)
+			writeTextPart(&b, contentTypeTextPlain, textBody)
 			fmt.Fprintf(&b, "\r\n--%s\r\n", altBoundary)
-			b.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(htmlBody)
+			writeTextPart(&b, contentTypeTextHTML, htmlBody)
 			fmt.Fprintf(&b, "\r\n--%s--\r\n", altBoundary)
 		} else if htmlBody != "" {
-			b.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(htmlBody)
+			writeTextPart(&b, contentTypeTextHTML, htmlBody)
 		} else {
-			b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(textBody)
+			writeTextPart(&b, contentTypeTextPlain, textBody)
 		}
 
 		// Attachment parts
@@ -290,9 +317,9 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 			if contentType == "" {
 				contentType = "application/octet-stream"
 			}
-			fmt.Fprintf(&b, "Content-Type: %s; name=\"%s\"\r\n", contentType, att.Filename)
+			fmt.Fprintf(&b, "Content-Type: %s\r\n", mime.FormatMediaType(contentType, map[string]string{"name": att.Filename}))
 			b.WriteString("Content-Transfer-Encoding: base64\r\n")
-			fmt.Fprintf(&b, "Content-Disposition: attachment; filename=\"%s\"\r\n\r\n", att.Filename)
+			fmt.Fprintf(&b, "Content-Disposition: %s\r\n\r\n", mime.FormatMediaType("attachment", map[string]string{"filename": att.Filename}))
 
 			// Content is already base64-encoded from the API request
 			content := att.Content
@@ -311,18 +338,14 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 		if htmlBody != "" && textBody != "" {
 			fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", altBoundary)
 			fmt.Fprintf(&b, "--%s\r\n", altBoundary)
-			b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(textBody)
+			writeTextPart(&b, contentTypeTextPlain, textBody)
 			fmt.Fprintf(&b, "\r\n--%s\r\n", altBoundary)
-			b.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(htmlBody)
+			writeTextPart(&b, contentTypeTextHTML, htmlBody)
 			fmt.Fprintf(&b, "\r\n--%s--\r\n", altBoundary)
 		} else if htmlBody != "" {
-			b.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(htmlBody)
+			writeTextPart(&b, contentTypeTextHTML, htmlBody)
 		} else {
-			b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n\r\n")
-			b.WriteString(textBody)
+			writeTextPart(&b, contentTypeTextPlain, textBody)
 		}
 	}
 
