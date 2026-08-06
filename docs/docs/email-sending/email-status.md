@@ -9,7 +9,7 @@ description: Track email delivery status
 Check the delivery status of a sent email by its UUID.
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 ## Example

@@ -169,11 +169,6 @@ const sidebars: SidebarsConfig = {
         'sdks/java',
       ],
     },
-    {
-      type: 'link',
-      label: 'API Reference',
-      href: 'https://app.goposta.dev/docs',
-    },
   ],
 };
 

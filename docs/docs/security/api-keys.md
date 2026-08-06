@@ -9,7 +9,7 @@ description: Create and manage API keys
 API keys provide programmatic access to Posta's email sending and status APIs. Keys are scoped to a workspace and managed under `/api/v1/workspaces/current/api-keys`.
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 ## Creating a Key

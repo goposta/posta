@@ -9,7 +9,7 @@ description: Send emails to multiple recipients efficiently
 Send template-based emails to multiple recipients in a single API call, with per-recipient variable customization.
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 ## Example

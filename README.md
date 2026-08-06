@@ -23,10 +23,11 @@
 
 ## Overview
 
-**Posta** is a self-hosted, developer-first email platform that handles both **outbound** and **inbound** email through a single HTTP API.
+**Posta** is a self-hosted, developer-first email platform that handles **outbound**, **inbound**, and **relayed** email — driven by a single HTTP API, with SMTP available for the paths that need it.
 
 - **Outbound** — send transactional and marketing email over your own SMTP, with templates, localization, campaigns, subscriber lists, bounce and complaint handling, and delivery analytics.
 - **Inbound** — receive email at your domains, parse messages and attachments, and forward the structured payloads to your application via webhooks.
+- **Relay** — point an existing SMTP client at Posta and its mail flows through the same outbound pipeline as the API, so you can migrate to the HTTP API at your own pace.
 
 It is designed as a fully self-hostable alternative to services like SendGrid, Mailgun, and Postmark — giving you complete ownership of your email infrastructure, data, and deliverability.
 
@@ -85,6 +86,15 @@ Response:
 * Forwarding with status tracking
 * Spam scoring & retry on failure
 * Real-time SSE stream for inbound notifications
+
+### Email Relay
+
+* Point an existing SMTP client at Posta — no code changes
+* Relays into the same pipeline as the send API
+* Domain verification, suppression & rate limits still apply
+* Workspace-scoped credentials with IP allowlist
+* Instant revocation, no redeploy
+* Off by default — built for private networks
 
 ### Templates
 
@@ -229,9 +239,12 @@ make dev-worker
 
 ## API Documentation
 
-* API Reference: [https://app.goposta.dev/docs](https://app.goposta.dev/docs)
-* OpenAPI Spec: [https://app.goposta.dev/openapi.json](https://app.goposta.dev/openapi.json)
-* Local: `/docs` on your Posta instance
+Every Posta instance serves its own interactive API documentation:
+
+* API Reference: `/docs` on your Posta instance
+* OpenAPI Spec: `/openapi.json` on your Posta instance
+
+Running locally with the default port, that is [http://localhost:9000/docs](http://localhost:9000/docs).
 ---
 
 # Dashboard

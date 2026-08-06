@@ -9,7 +9,7 @@ description: Send, pause, resume, and cancel campaigns
 Manage the full lifecycle of a campaign: send, pause, resume, cancel, and duplicate.
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 ## Sending a Campaign

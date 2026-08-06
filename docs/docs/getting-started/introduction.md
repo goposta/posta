@@ -20,6 +20,7 @@ description: What is Posta and why use it
 | Feature | Description |
 |---------|-------------|
 | **Email Delivery** | Send single, template, and batch emails via REST API with scheduled sending and automatic retries |
+| **Email Relay** | Point an existing SMTP client at Posta and relay its mail through the same outbound pipeline as the API |
 | **Templates** | Version-controlled templates with multi-language support, variable substitution, and stylesheet inlining |
 | **SMTP Management** | Configure multiple SMTP servers with TLS support and shared pools |
 | **Domain Verification** | SPF, DKIM, and DMARC record verification with verified sender enforcement |
@@ -37,12 +38,12 @@ description: What is Posta and why use it
 
 ## API Reference
 
-Posta provides interactive API documentation:
+Every Posta instance serves its own interactive API documentation:
 
-- **Swagger UI** — [https://app.goposta.dev/docs](https://app.goposta.dev/docs)
-- **OpenAPI spec** — [https://app.goposta.dev/openapi.json](https://app.goposta.dev/openapi.json)
+- **API Reference** — `/docs` on your Posta instance
+- **OpenAPI spec** — `/openapi.json` on your Posta instance
 
-When running locally, the docs are available at `/docs` on your Posta instance.
+Running locally with the default port, that is [http://localhost:9000/docs](http://localhost:9000/docs).
 
 ## Architecture
 
