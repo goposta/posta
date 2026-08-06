@@ -377,7 +377,7 @@ function getIcon(name: string): string {
   <div class="layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <aside class="sidebar">
         <div class="sidebar-header">
-            <img src="/logo.png" alt="Posta" class="sidebar-logo" @click="navigate('/')" />
+            <img src="/logo-navy.png" alt="Posta" class="sidebar-logo" @click="navigate('/')" />
             <span class="sidebar-brand-text" @click="navigate('/')">Posta<span class="sidebar-brand-text-dot">.</span></span>
          
           <button class="sidebar-collapse-btn" @click="toggleSidebar"
