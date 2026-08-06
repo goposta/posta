@@ -112,7 +112,7 @@ func (r *Router) inboundWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/inbound-emails/{uuid}/attachments/{idx:int}",
+			Path:    "/inbound-emails/{id}/attachments/{idx:int}",
 			Handler: okapi.H(r.h.inbound.DownloadAttachmentAuthed),
 			Group:   userGroup,
 			Summary: "Download an inbound email attachment (authenticated)",

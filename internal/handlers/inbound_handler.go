@@ -393,8 +393,8 @@ func (h *InboundHandler) DownloadAttachmentAuthed(c *okapi.Context, req *Inbound
 
 // InboundAttachmentOwnedRequest is the path-params-only variant used by authed users.
 type InboundAttachmentOwnedRequest struct {
-	UUID  string `param:"uuid"`
-	Index int    `param:"idx"`
+	UUID  string `param:"id" doc:"Inbound email UUID"`
+	Index int    `param:"idx" doc:"Zero-based attachment index"`
 }
 
 // GetRaw streams the raw RFC 5322 message bytes (if stored).
