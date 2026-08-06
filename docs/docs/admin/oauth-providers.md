@@ -9,7 +9,7 @@ description: Configure OAuth / SSO providers for user authentication
 Administrators can configure OAuth 2.0 / OpenID Connect providers to allow users to log in via single sign-on. Any OIDC-compliant identity provider is supported.
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 ## Supported Provider Types

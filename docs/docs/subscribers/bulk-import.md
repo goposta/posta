@@ -9,7 +9,7 @@ description: Import subscribers from JSON and CSV files
 Import subscribers in bulk using JSON or CSV formats.
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 :::note

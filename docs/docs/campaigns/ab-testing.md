@@ -9,7 +9,7 @@ description: Test email variants with split audience campaigns
 Run A/B tests by splitting your subscriber list across multiple email variants. Compare performance to find the most effective subject line, content, or design.
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 ## Creating an A/B Test Campaign

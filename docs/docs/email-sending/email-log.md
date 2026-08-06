@@ -16,7 +16,7 @@ X-Posta-Workspace-Id: 1
 ```
 
 :::tip
-For the full request/response schema, see the interactive [API Reference](https://app.goposta.dev/docs).
+For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
 ## List Emails
