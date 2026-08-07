@@ -147,6 +147,25 @@ SendResponse response = client.sendEmail(new SendEmailRequest()
 ```
 
 </TabItem>
+<TabItem value="dotnet" label=".NET">
+
+```csharp
+using Posta.Clients;
+using Posta.Models.Emails;
+
+using var client = new PostaClient("http://localhost:9000", "your-api-key");
+
+SendAnEmailResponse? response = await client.Emails.SendAnEmailAsync(
+    new SendAnEmailRequest
+    {
+        From = "sender@yourdomain.com",
+        To = ["recipient@example.com"],
+        Subject = "Hello from Posta!",
+        Html = "<h1>Welcome!</h1>"
+    });
+```
+
+</TabItem>
 </Tabs>
 
 ## Next Steps
