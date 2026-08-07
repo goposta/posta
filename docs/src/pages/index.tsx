@@ -70,7 +70,7 @@ function HomepageHeader() {
         <div className={styles.stats}>
           {[
             {value: 'API-First', label: 'Architecture'},
-            {value: '3 SDKs', label: 'Go · PHP · Java'},
+            {value: '4 SDKs', label: 'Go · PHP · Java · .NET'},
             {value: 'In & Outbound', label: 'SMTP Delivery'},
             {value: 'GDPR', label: 'Compliant'},
           ].map((stat) => (
