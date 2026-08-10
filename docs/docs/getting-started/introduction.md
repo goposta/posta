@@ -70,6 +70,7 @@ Posta is built with:
 
 ## Next Steps
 
+- [Managed Posta](/docs/getting-started/managed-posta) — deploy your own instance from the Miabi Marketplace, no Docker Compose required
 - [Installation](/docs/getting-started/installation) — Deploy Posta with Docker or from source
 - [Configuration](/docs/getting-started/configuration) — Configure environment variables
 - [Quick Start](/docs/getting-started/quickstart) — Send your first email in minutes

@@ -8,6 +8,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'getting-started/introduction',
+        'getting-started/managed-posta',
         'getting-started/installation',
         'getting-started/configuration',
         'getting-started/quickstart',
