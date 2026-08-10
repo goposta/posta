@@ -287,6 +287,19 @@ Posta includes a web dashboard for managing templates, SMTP servers, domains, co
 
 ---
 
+## Managed Posta on Miabi
+
+Posta is available in the **[Miabi Marketplace](https://marketplace.miabi.io/templates/posta)** as a ready-to-run template, deployed with a **dedicated worker** so queued sending, automatic retries, campaigns, and scheduled jobs work from the start.
+
+[![Deploy on Miabi](https://img.shields.io/badge/Deploy%20on-Miabi-7E22CE?style=flat-square)](https://marketplace.miabi.io/templates/posta)
+
+This is still self-hosted Posta — your own instance, your data, the same Apache 2.0 build. You just skip the setup: no Docker Compose to write, no services to wire together. Miabi deploys and manages it for you.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/miabi-posta.png" alt="Posta in the Miabi Marketplace" width="900" />
+</p>
+---
+
 ## Official SDKs
 
 * Go: [https://github.com/goposta/posta-go](https://github.com/goposta/posta-go)

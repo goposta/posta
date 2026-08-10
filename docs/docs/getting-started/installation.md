@@ -8,6 +8,10 @@ description: Deploy Posta with Docker Compose or from source
 
 Posta can be deployed using Docker Compose (recommended) or built from source.
 
+:::tip Don't want to write Docker Compose?
+Deploy the same self-hosted Posta from the [Miabi Marketplace](https://marketplace.miabi.io/templates/posta) — a ready-to-run template with a dedicated worker, provisioned and managed for you. See [Managed Posta](./managed-posta).
+:::
+
 :::tip
 Full Docker Compose examples are available in the [`examples/`](https://github.com/goposta/posta/tree/main/examples) folder of the repository.
 :::
