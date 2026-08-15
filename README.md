@@ -9,12 +9,12 @@
 </p>
 
 [![CI](https://github.com/goposta/posta/actions/workflows/ci.yml/badge.svg)](https://github.com/goposta/posta/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/goposta/posta)](https://goreportcard.com/report/github.com/goposta/posta)
 [![Go](https://img.shields.io/github/go-mod/go-version/goposta/posta)](https://go.dev/)
 [![Go Reference](https://pkg.go.dev/badge/github.com/goposta/posta.svg)](https://pkg.go.dev/github.com/goposta/posta)
 [![GitHub Release](https://img.shields.io/github/v/release/goposta/posta)](https://github.com/goposta/posta/releases)
 ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/posta?style=flat-square)
 ![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/posta?style=flat-square)
+[![Deploy on Miabi](https://miabi.io/badge.svg?style=flat-square&label=deploy&color=dark)](https://marketplace.miabi.io/templates/posta)
 
 
 
