@@ -33,6 +33,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 	"github.com/jkaninda/logger"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Settings keys persisted in the platform `settings` table.
@@ -79,6 +80,11 @@ func runLocked(ctx context.Context, db *gorm.DB, binaryVersion string, opts Opti
 	case fresh:
 		if err := markAllApplied(db, binaryVersion); err != nil {
 			return fmt.Errorf("upgrade: bootstrap fresh install: %w", err)
+		}
+		// Record the version even for dev builds, otherwise the next boot reads
+		// no app.version row, decides it is fresh again, and re-seals the registry.
+		if err := writeVersion(db, binaryVersion); err != nil {
+			return fmt.Errorf("upgrade: bootstrap persist version: %w", err)
 		}
 		logger.Info("upgrade: fresh install, sealed step registry", "version", binaryVersion)
 
@@ -165,5 +171,5 @@ func markAllApplied(db *gorm.DB, binaryVersion string) error {
 			AppliedAt:  now,
 		})
 	}
-	return db.Create(&rows).Error
+	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
 }
