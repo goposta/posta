@@ -369,6 +369,7 @@ This is still self-hosted Posta — your own instance, your data, the same Apach
 * Go: [https://github.com/goposta/posta-go](https://github.com/goposta/posta-go)
 * PHP: [https://github.com/goposta/posta-php](https://github.com/goposta/posta-php)
 * Java: [https://github.com/goposta/posta-java](https://github.com/goposta/posta-java)
+* .NET: [https://github.com/goposta/posta-dotnet](https://github.com/goposta/posta-dotnet)
 
 ### Go Example
 
@@ -398,4 +399,3 @@ Apache License 2.0
 ## Copyright
 
 Copyright (c) 2026 Jonas Kaninda
-
