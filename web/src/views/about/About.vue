@@ -113,7 +113,7 @@ onMounted(async () => {
                   v{{ appInfo.version }}
                   <template v-if="appInfo.commit_id"> ({{ appInfo.commit_id.slice(0, 7) }})</template>
                 </span>
-                <span class="badge badge-secondary">Apache License 2.0</span>
+                <span class="badge badge-secondary">AGPL-3.0</span>
               </div>
             </div>
           </div>

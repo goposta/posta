@@ -104,7 +104,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Jonas Kaninda. Licensed under Apache 2.0.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Jonas Kaninda. Licensed under AGPL-3.0.`,
     },
     prism: {
       theme: prismThemes.github,

@@ -1,19 +1,5 @@
-/*
- * Copyright 2026 Jonas Kaninda
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+// SPDX-FileCopyrightText: 2026 Jonas Kaninda
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package middlewares holds HTTP middleware: authentication, workspace scoping,
 // and role-based access control.
@@ -50,19 +36,14 @@ import (
 const (
 	CtxUserID    = "user_id"
 	CtxUserEmail = "user_email"
-	// CtxUserRole is the platform role ("admin" | "user"). For JWT callers okapi
-	// forwards it from the token; for API-key callers it is read from the owner.
-	CtxUserRole = "role"
-	CtxJTI      = "jti"
-	// CtxAuthMethod records how the request authenticated, so downstream
-	// middleware (notably RequireScope) can tell a session from a machine key.
-	CtxAuthMethod    = "auth_method"
-	CtxWorkspaceID   = "workspace_id"
-	CtxWorkspaceRole = "workspace_role"
-	CtxAPIKeyID      = "api_key_id"
-	CtxAPIKeyScopes  = "api_key_scopes"
-	// CtxAPIKeyWorkspaceID holds the workspace an API key is bound to, when the
-	// presented key is workspace-scoped (absent for account-wide keys).
+	CtxUserRole  = "role"
+	CtxJTI       = "jti"
+
+	CtxAuthMethod        = "auth_method"
+	CtxWorkspaceID       = "workspace_id"
+	CtxWorkspaceRole     = "workspace_role"
+	CtxAPIKeyID          = "api_key_id"
+	CtxAPIKeyScopes      = "api_key_scopes"
 	CtxAPIKeyWorkspaceID = "api_key_workspace_id"
 )
 
@@ -107,8 +88,7 @@ func baseJWTAuth(cfg *config.Config, store *sessionpkg.Store, requireAdmin bool)
 			CtxUserRole: "role",
 			CtxJTI:      "jti",
 		},
-		// Deliberately not ClaimsExpression: okapi evaluates it before
-		// ValidateClaims, which would deny us the chance to tag the rejection.
+
 		ValidateClaims: validateClaims(store, requireAdmin),
 	}
 	a.OnUnauthorized = func(c *okapi.Context) error {

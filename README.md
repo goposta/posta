@@ -357,7 +357,7 @@ Posta is available in the **[Miabi Marketplace](https://marketplace.miabi.io/tem
 [![Deploy on Miabi](https://miabi.io/badges/deploy-on-miabi-purple.svg)](https://marketplace.miabi.io/templates/posta)
 
 
-This is still self-hosted Posta — your own instance, your data, the same Apache 2.0 build. You just skip the setup: no Docker Compose to write, no services to wire together. Miabi deploys and manages it for you.
+This is still self-hosted Posta — your own instance, your data, the same AGPL-3.0 build. You just skip the setup: no Docker Compose to write, no services to wire together. Miabi deploys and manages it for you.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/miabi-posta.png" alt="Posta in the Miabi Marketplace" width="900" />
@@ -394,8 +394,11 @@ Contributions are welcome. Please open an issue before submitting a pull request
 
 ## License
 
-Apache License 2.0
+Posta is free and open-source software licensed under the
+GNU Affero General Public License v3.0 or later ([AGPL-3.0-or-later](LICENSE)).
+
+Commercial support and hosted Posta services may be offered separately.
 
 ## Copyright
 
-Copyright (c) 2026 Jonas Kaninda
+Copyright (c) 2026 Jonas Kaninda and contributors

@@ -8,7 +8,7 @@ description: Deploy your own Posta from the Miabi Marketplace, without writing D
 
 Posta is available in the **[Miabi Marketplace](https://marketplace.miabi.io/templates/posta)** as a ready-to-run template, deployed with a **dedicated worker**.
 
-This is still self-hosted Posta — your own instance, your data, the same Apache 2.0 build. What changes is the setup: instead of writing a Docker Compose file, wiring PostgreSQL and Redis, and running a second process for the worker, you deploy from the Marketplace and Miabi provisions and manages it for you.
+This is still self-hosted Posta — your own instance, your data, the same AGPL-3.0 build. What changes is the setup: instead of writing a Docker Compose file, wiring PostgreSQL and Redis, and running a second process for the worker, you deploy from the Marketplace and Miabi provisions and manages it for you.
 
 <div style={{textAlign: 'center', margin: '2rem 0'}}>
   <a href="https://marketplace.miabi.io/templates/posta" className="button button--primary button--lg">
@@ -30,7 +30,7 @@ This is still self-hosted Posta — your own instance, your data, the same Apach
 
 ## It is still your Posta
 
-Same REST API, same dashboard, same [SDKs](/docs/sdks/overview), same [configuration](./configuration) — everything in these docs applies unchanged. Posta stays open source under Apache 2.0, so nothing about deploying this way locks you in.
+Same REST API, same dashboard, same [SDKs](/docs/sdks/overview), same [configuration](./configuration) — everything in these docs applies unchanged. Posta stays open source under AGPL-3.0, so nothing about deploying this way locks you in.
 
 ## Prefer to wire it up yourself?
 
