@@ -1,19 +1,5 @@
-/*
- * Copyright 2026 Jonas Kaninda
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+// SPDX-FileCopyrightText: 2026 Jonas Kaninda
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 package config
 
@@ -402,8 +388,8 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 			Description: "Self-hosted email delivery platform for developers and teams.",
 			Favicon:     "/favicon.png",
 			License: okapi.License{
-				Name: "Apache-2.0",
-				URL:  "http://www.apache.org/licenses/LICENSE-2.0",
+				Name: "AGPL-3.0-or-later",
+				URL:  "https://www.gnu.org/licenses/agpl-3.0.html",
 			},
 			Contact: okapi.Contact{
 				Name:  "Support",
