@@ -166,6 +166,15 @@ const navSections: NavSection[] = [
     title: 'Inbound',
     items: [
       { name: 'Inbound Emails', path: '/inbound-emails', icon: 'inbox' },
+      {
+        name: 'Messages',
+        path: '/messages',
+        icon: 'message-square',
+        children: [
+          { name: 'Forms', path: '/forms', icon: 'edit-3' },
+          { name: 'Spam Filters', path: '/message-filters', icon: 'shield' },
+        ],
+      },
     ],
   },
   {
@@ -368,6 +377,7 @@ function getIcon(name: string): string {
     'pie-chart': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M16.5 11.4A7.5 7.5 0 116.6 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.5 9A7.5 7.5 0 009 1.5V9h7.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'zap': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9.75 1.5L3 10.5h5.25L8.25 16.5 15 7.5H9.75l0-6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'code': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M12 4.5L16.5 9 12 13.5M6 4.5L1.5 9 6 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'message-square': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M15.75 11.25a1.5 1.5 0 01-1.5 1.5H5.25L2.25 15.75V3.75a1.5 1.5 0 011.5-1.5h10.5a1.5 1.5 0 011.5 1.5v7.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   }
   return icons[name] || ''
 }

@@ -283,6 +283,8 @@ var tenantAdminPaths = []string{
 	"/settings",
 	"/sso",
 	"/plan",
+	"/forms",
+	"/message-filters",
 }
 
 // workspaceScopeFor returns the scope a workspace-scoped request demands.

@@ -34,13 +34,17 @@ const (
 	TemplateLoginAlert      = "login_alert"
 	TemplateTwoFactorChange = "two_factor_changed"
 	TemplateAccountDeletion = "account_deletion"
+	TemplateNewMessage      = "new_message"
+	TemplateMessageDigest   = "message_digest"
 )
 
 var templatePreference = map[string]func(*models.UserSetting) bool{
-	TemplateDailyReport:  func(s *models.UserSetting) bool { return s.DailyReport },
-	TemplateBounceAlert:  func(s *models.UserSetting) bool { return s.NotifyBounceAlerts },
-	TemplateAPIKeyExpiry: func(s *models.UserSetting) bool { return s.NotifyAPIKeyExpiry },
-	TemplateRoleChanged:  func(s *models.UserSetting) bool { return s.NotifyWorkspaceActivity },
+	TemplateDailyReport:   func(s *models.UserSetting) bool { return s.DailyReport },
+	TemplateBounceAlert:   func(s *models.UserSetting) bool { return s.NotifyBounceAlerts },
+	TemplateAPIKeyExpiry:  func(s *models.UserSetting) bool { return s.NotifyAPIKeyExpiry },
+	TemplateRoleChanged:   func(s *models.UserSetting) bool { return s.NotifyWorkspaceActivity },
+	TemplateNewMessage:    func(s *models.UserSetting) bool { return s.NotifyNewMessage },
+	TemplateMessageDigest: func(s *models.UserSetting) bool { return s.NotifyNewMessage },
 }
 
 func templateEnabled(templateName string, settings *models.UserSetting) bool {
@@ -99,6 +103,8 @@ func (s *Service) loadTemplates() {
 		TemplateLoginAlert,
 		TemplateTwoFactorChange,
 		TemplateAccountDeletion,
+		TemplateNewMessage,
+		TemplateMessageDigest,
 	}
 	for _, name := range names {
 		tmpl := template.Must(template.ParseFS(templateFS,

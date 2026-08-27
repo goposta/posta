@@ -119,6 +119,13 @@ func (c *Config) securityProblems() []secretProblem {
 			false,
 		})
 	}
+	if c.MessagesEnabled && c.MessagesIPRateLimit <= 0 {
+		problems = append(problems, secretProblem{
+			"POSTA_MESSAGES_IP_RATE_LIMIT",
+			"is disabled while public form ingest is enabled, leaving the endpoint open to flooding",
+			false,
+		})
+	}
 
 	return problems
 }

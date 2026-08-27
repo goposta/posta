@@ -470,6 +470,19 @@ func startEmbeddedWorker(db *gorm.DB,
 		mux.HandleFunc(worker.TypeInboundParse, parseHandler.ProcessTask)
 	}
 
+	if cfg.MessagesEnabled {
+		messageHandler := worker.NewMessageProcessHandler(
+			repositories.NewMessageRepository(db),
+			repositories.NewFormRepository(db),
+			repositories.NewWorkspaceRepository(db),
+			newWebhookDispatcher(db, cfg),
+			notifier,
+			cfg.AppWebURL,
+		)
+		messageHandler.OnNotified(metrics.IncrementMessageNotification)
+		mux.HandleFunc(worker.TypeMessageProcess, messageHandler.ProcessTask)
+	}
+
 	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
 
 	go func() {
@@ -536,6 +549,16 @@ func initCronManager(
 			repositories.NewCampaignRepository(db),
 			repositories.NewCampaignMessageRepository(db),
 			producer,
+		))
+	}
+	if cfg.MessagesEnabled {
+		retentionJob.SetMessageRepo(repositories.NewMessageRepository(db))
+		manager.Register(jobs.NewMessageDigestJob(
+			notifier,
+			repositories.NewFormRepository(db),
+			repositories.NewMessageRepository(db),
+			repositories.NewWorkspaceRepository(db),
+			cfg.AppWebURL,
 		))
 	}
 	return manager

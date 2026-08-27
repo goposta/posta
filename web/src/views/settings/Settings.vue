@@ -31,19 +31,21 @@ const form = ref<Partial<UserSettings>>({
   notify_bounce_alerts: true,
   notify_api_key_expiry: true,
   notify_workspace_activity: true,
+  notify_new_message: true,
 })
 
 // Per-type notification toggles rendered under the master switch. Security
 // alerts (sign-in, 2FA, password, account deletion) are always on and shown
 // separately as informational.
 const notificationTypes: {
-  key: 'daily_report' | 'notify_bounce_alerts' | 'notify_api_key_expiry' | 'notify_workspace_activity'
+  key: 'daily_report' | 'notify_bounce_alerts' | 'notify_api_key_expiry' | 'notify_workspace_activity' | 'notify_new_message'
   label: string
   hint: string
 }[] = [
   { key: 'notify_bounce_alerts', label: 'Bounce & deliverability alerts', hint: 'Warn me when my bounce rate crosses the safe threshold.' },
   { key: 'notify_api_key_expiry', label: 'API key expiry reminders', hint: 'Remind me before an API key expires.' },
   { key: 'notify_workspace_activity', label: 'Workspace updates', hint: 'Notify me about role changes and workspace activity.' },
+  { key: 'notify_new_message', label: 'Web form messages', hint: 'Notify me when a website form receives a new message.' },
   { key: 'daily_report', label: 'Daily report', hint: 'Receive a daily email summary of send statistics.' },
 ]
 
@@ -69,6 +71,7 @@ onMounted(async () => {
       notify_bounce_alerts: u.notify_bounce_alerts,
       notify_api_key_expiry: u.notify_api_key_expiry,
       notify_workspace_activity: u.notify_workspace_activity,
+      notify_new_message: u.notify_new_message,
     }
   } catch {
     notify.error('Failed to load settings')

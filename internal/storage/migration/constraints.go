@@ -68,6 +68,38 @@ func runConstraints(db *gorm.DB) {
 		CREATE UNIQUE INDEX IF NOT EXISTS one_personal_per_user ON workspaces (owner_id) WHERE is_personal;
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
+
+	db.Exec(`DO $$ BEGIN
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_form_slug ON forms (workspace_id, slug) WHERE workspace_id IS NOT NULL AND deleted_at IS NULL;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
+	db.Exec(`DO $$ BEGIN
+		CREATE INDEX IF NOT EXISTS idx_messages_ws_created ON messages (workspace_id, created_at DESC) WHERE deleted_at IS NULL;
+		CREATE INDEX IF NOT EXISTS idx_messages_form_status ON messages (form_id, status, created_at DESC) WHERE deleted_at IS NULL;
+		CREATE INDEX IF NOT EXISTS idx_messages_dedup ON messages (form_id, dedup_hash, created_at DESC) WHERE dedup_hash <> '';
+		CREATE INDEX IF NOT EXISTS idx_messages_inbox ON messages (workspace_id, state, created_at DESC) WHERE deleted_at IS NULL AND status IN ('received','flagged');
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
+	db.Exec(`DO $$ BEGIN
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_messages_form') THEN
+			ALTER TABLE messages ADD CONSTRAINT fk_messages_form
+				FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE;
+		END IF;
+	END $$`)
+
+	db.Exec(`DO $$ BEGIN
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_message_replies_message') THEN
+			ALTER TABLE message_replies ADD CONSTRAINT fk_message_replies_message
+				FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE;
+		END IF;
+	END $$`)
+
+	db.Exec(`DO $$ BEGIN
+		CREATE INDEX IF NOT EXISTS idx_message_filters_lookup ON message_filters (workspace_id, enabled);
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
 }
 
 // rebuildUniqueIndexes re-scopes the per-tenant uniqueness constraints to

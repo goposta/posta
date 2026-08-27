@@ -20,7 +20,7 @@ type WebhookHandler struct {
 type CreateWebhookRequest struct {
 	Body struct {
 		URL     string   `json:"url" required:"true" format:"url"`
-		Events  []string `json:"events" required:"true" minItems:"1" enum:"email.sent,email.failed,email.inbound,email.unsubscribed,email.complained,campaign.started,campaign.completed"`
+		Events  []string `json:"events" required:"true" minItems:"1" enum:"email.sent,email.failed,email.inbound,email.unsubscribed,email.complained,message.received,message.spam,campaign.started,campaign.completed"`
 		Filters []string `json:"filters"`
 	} `json:"body"`
 }

@@ -696,6 +696,7 @@ export interface UserSettings {
   notify_bounce_alerts: boolean
   notify_api_key_expiry: boolean
   notify_workspace_activity: boolean
+  notify_new_message: boolean
   created_at: string
   updated_at: string
 }
@@ -1112,4 +1113,132 @@ export interface CampaignAnalyticsData {
   links: Array<{ id: number; original_url: string; hash: string; click_count: number }>
   open_series: Array<{ time: string; count: number }>
   click_series: Array<{ time: string; count: number }>
+}
+
+export type FormStatus = 'active' | 'paused' | 'archived'
+export type NotifyMode = 'immediate' | 'hourly' | 'daily' | 'off'
+export type MessageStatus = 'received' | 'flagged' | 'quarantined' | 'rejected'
+export type MessageState = 'new' | 'open' | 'replied' | 'closed' | 'spam'
+export type MessageReplyKind = 'operator' | 'inbound'
+export type FilterKind = 'keyword' | 'phrase' | 'regex' | 'email' | 'domain' | 'ip'
+export type FilterAction = 'score' | 'flag' | 'quarantine' | 'reject' | 'allowlist'
+
+export interface Form {
+  id: number
+  uuid: string
+  workspace_id?: number | null
+  name: string
+  slug: string
+  description: string
+  public_key: string
+  status: FormStatus
+  allowed_origins: string[]
+  strict_origin: boolean
+  redirect_url: string
+  max_body_bytes: number
+  max_fields: number
+  allow_attachments: boolean
+  honeypot_field: string
+  require_nonce: boolean
+  min_fill_seconds: number
+  scan_enabled: boolean
+  flag_threshold: number
+  quarantine_threshold: number
+  reject_threshold: number
+  notify_enabled: boolean
+  notify_emails: string[]
+  notify_mode: NotifyMode
+  notify_on_flagged: boolean
+  reply_from: string
+  reply_from_name: string
+  retention_days: number
+  message_count: number
+  spam_count: number
+  last_message_at?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface MessageField {
+  key: string
+  value: string
+}
+
+export interface MessageReply {
+  id: number
+  uuid: string
+  message_id: number
+  kind: MessageReplyKind
+  author_id: number
+  from_addr: string
+  to_addr: string
+  subject: string
+  html_body: string
+  text_body: string
+  email_uuid?: string
+  created_at: string
+  author?: { id: number; name: string; email: string } | null
+}
+
+export interface Message {
+  id: number
+  uuid: string
+  workspace_id?: number | null
+  form_id: number
+  sender_email: string
+  sender_name: string
+  subject: string
+  body: string
+  client_ip?: string
+  user_agent?: string
+  referer?: string
+  origin?: string
+  status: MessageStatus
+  state: MessageState
+  spam_score: number
+  scan_reasons: string[] | null
+  notified_at?: string | null
+  assigned_to_id?: number | null
+  read_at?: string | null
+  replied_at?: string | null
+  reply_count: number
+  created_at: string
+  updated_at?: string | null
+  fields?: MessageField[]
+  attachments?: InboundAttachmentMeta[]
+  form?: Form | null
+  assigned_to?: { id: number; name: string; email: string } | null
+  replies?: MessageReply[]
+}
+
+export interface MessageFilterRule {
+  id: number
+  workspace_id?: number | null
+  form_id?: number | null
+  kind: FilterKind
+  pattern: string
+  action: FilterAction
+  score: number
+  fields: string[] | null
+  case_sensitive: boolean
+  enabled: boolean
+  hit_count: number
+  last_hit_at?: string | null
+  note: string
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface MessageStats {
+  total: number
+  unread: number
+  spam: number
+  forms: number
+}
+
+export interface FormSnippet {
+  endpoint: string
+  public_key: string
+  html: string
+  fetch: string
 }
