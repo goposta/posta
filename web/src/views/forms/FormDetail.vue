@@ -111,6 +111,8 @@ function copy(text: string) {
 }
 
 const endpoint = computed(() => snippet.value?.endpoint || "");
+
+onMounted(load);
 </script>
 
 <template>
