@@ -16,6 +16,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// planSourceGlobalSettings is returned in place of a plan when a workspace has
+// none assigned and the platform-wide settings apply. The dashboard branches on
+// this exact value.
+const planSourceGlobalSettings = "global_settings"
+
 var errForbidden = errors.New("insufficient workspace permissions: editor role or higher required")
 
 // 1x1 transparent GIF

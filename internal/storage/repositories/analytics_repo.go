@@ -4,6 +4,7 @@
 package repositories
 
 import (
+	"github.com/goposta/posta/internal/models"
 	"time"
 
 	"gorm.io/gorm"
@@ -131,7 +132,7 @@ func (r *AnalyticsRepository) DeliveryRateTrends(userID uint, from, to time.Time
 	var rows []deliveryRow
 	err := r.db.Table("emails").
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
-		Where("user_id = ? AND workspace_id IS NULL AND created_at >= ? AND created_at <= ? AND status IN ?", userID, from, to, []string{"sent", "failed"}).
+		Where("user_id = ? AND workspace_id IS NULL AND created_at >= ? AND created_at <= ? AND status IN ?", userID, from, to, []string{string(models.EmailStatusSent), string(models.EmailStatusFailed)}).
 		Group("date, status").Order("date ASC").
 		Find(&rows).Error
 	if err != nil {
@@ -145,7 +146,7 @@ func (r *AnalyticsRepository) AdminDeliveryRateTrends(from, to time.Time) ([]Del
 	var rows []deliveryRow
 	err := r.db.Table("emails").
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
-		Where("created_at >= ? AND created_at <= ? AND status IN ?", from, to, []string{"sent", "failed"}).
+		Where("created_at >= ? AND created_at <= ? AND status IN ?", from, to, []string{string(models.EmailStatusSent), string(models.EmailStatusFailed)}).
 		Group("date, status").Order("date ASC").
 		Find(&rows).Error
 	if err != nil {
@@ -169,9 +170,9 @@ func buildDeliveryRatePoints(rows []deliveryRow, from, to time.Time) []DeliveryR
 			m[r.Date] = p
 		}
 		switch r.Status {
-		case "sent":
+		case string(models.EmailStatusSent):
 			p.Sent = r.Count
-		case "failed":
+		case string(models.EmailStatusFailed):
 			p.Failed = r.Count
 		}
 	}
@@ -307,7 +308,7 @@ func (r *AnalyticsRepository) WorkspaceDeliveryRateTrends(workspaceID uint, from
 	var rows []deliveryRow
 	err := r.db.Table("emails").
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
-		Where("workspace_id = ? AND created_at >= ? AND created_at <= ? AND status IN ?", workspaceID, from, to, []string{"sent", "failed"}).
+		Where("workspace_id = ? AND created_at >= ? AND created_at <= ? AND status IN ?", workspaceID, from, to, []string{string(models.EmailStatusSent), string(models.EmailStatusFailed)}).
 		Group("date, status").Order("date ASC").
 		Find(&rows).Error
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 // userRoutes returns route definitions for all authenticated user endpoints.
 func (r *Router) userRoutes() []okapi.RouteDefinition {
 	userGroup := r.v1.Group("/users/me", r.mw.jwtOnly, r.mw.optionalWorkspace).WithTagInfo(okapi.GroupTag{
-		Name:        "User",
+		Name:        tagUser,
 		Description: "Manage the authenticated user: profile, password, API keys, notification preferences, and session. Requires a dashboard session — an API key cannot administer the account that issued it.",
 	})
 	userGroup.WithBearerAuth()
@@ -183,7 +183,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/settings",
+			Path:        pathSettings,
 			Handler:     r.h.userSetting.GetSettings,
 			Group:       userGroup,
 			Summary:     "Get user settings",
@@ -192,7 +192,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPut,
-			Path:        "/settings",
+			Path:        pathSettings,
 			Handler:     okapi.H(r.h.userSetting.UpdateSettings),
 			Group:       userGroup,
 			Summary:     "Update user settings",

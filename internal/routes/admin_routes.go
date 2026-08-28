@@ -16,8 +16,8 @@ import (
 // adminRoutes returns route definitions for admin endpoints.
 func (r *Router) adminRoutes() []okapi.RouteDefinition {
 	adminGroup := r.v1.Group("/admin", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
-		Name:        "Admin",
-		Description: "Platform-level administration: users, workspaces, global settings, OAuth providers, and live event streams. Admin-only.",
+		Name:        tagAdmin,
+		Description: descAdmin,
 	})
 	adminGroup.WithBearerAuth()
 
@@ -78,7 +78,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Path:    "/users/{id:int}",
 			Handler: okapi.H(r.h.admin.DeleteUser),
 			Group:   adminGroup,
-			Tags:    []string{"Admin"},
+			Tags:    []string{tagAdmin},
 			Summary: "Delete user",
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "User ID"),
@@ -91,7 +91,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Path:        "/users/{id:int}/force",
 			Handler:     okapi.H(r.h.admin.ForceDeleteUser),
 			Group:       adminGroup,
-			Tags:        []string{"Admin"},
+			Tags:        []string{tagAdmin},
 			Summary:     "Force delete user",
 			Description: "Permanently delete a disabled user and all their data. The user must be disabled before force deletion.",
 			Options: []okapi.RouteOption{
@@ -249,7 +249,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		// ==================== Platform Settings ====================
 		{
 			Method:   http.MethodGet,
-			Path:     "/settings",
+			Path:     pathSettings,
 			Handler:  r.h.setting.GetSettings,
 			Group:    adminGroup,
 			Summary:  "Get platform settings",
@@ -257,7 +257,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/settings",
+			Path:     pathSettings,
 			Handler:  okapi.H(r.h.setting.UpdateSettings),
 			Group:    adminGroup,
 			Summary:  "Update platform settings",
@@ -311,7 +311,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/plans/{id:int}",
+			Path:     pathPlanByID,
 			Handler:  okapi.H(r.h.plan.Get),
 			Group:    adminGroup,
 			Summary:  "Get plan",
@@ -323,7 +323,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPut,
-			Path:        "/plans/{id:int}",
+			Path:        pathPlanByID,
 			Handler:     okapi.H(r.h.plan.Update),
 			Group:       adminGroup,
 			Summary:     "Update plan",
@@ -337,7 +337,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/plans/{id:int}",
+			Path:        pathPlanByID,
 			Handler:     okapi.H(r.h.plan.Delete),
 			Group:       adminGroup,
 			Summary:     "Delete plan",
@@ -415,7 +415,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/servers/{id:int}",
+			Path:     pathServerByID,
 			Handler:  okapi.H(r.h.server.Get),
 			Group:    adminGroup,
 			Summary:  "Get shared SMTP server",
@@ -427,7 +427,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/servers/{id:int}",
+			Path:     pathServerByID,
 			Handler:  okapi.H(r.h.server.Update),
 			Group:    adminGroup,
 			Summary:  "Update shared SMTP server",
@@ -440,10 +440,10 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/servers/{id:int}",
+			Path:    pathServerByID,
 			Handler: okapi.H(r.h.server.Delete),
 			Group:   adminGroup,
-			Tags:    []string{"Admin"},
+			Tags:    []string{tagAdmin},
 			Summary: "Delete shared SMTP server",
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Server ID"),
@@ -508,8 +508,8 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 // adminSSERoutes returns route definitions for admin SSE (Server-Sent Events) endpoints.
 func (r *Router) adminSSERoutes() []okapi.RouteDefinition {
 	adminSSE := r.v1.Group("/admin", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
-		Name:        "Admin",
-		Description: "Platform-level administration: users, workspaces, global settings, OAuth providers, and live event streams. Admin-only.",
+		Name:        tagAdmin,
+		Description: descAdmin,
 	})
 
 	return []okapi.RouteDefinition{

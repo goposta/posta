@@ -64,15 +64,18 @@ type secretProblem struct {
 	fatal  bool
 }
 
+// envJWTSecret names the setting these checks report on.
+const envJWTSecret = "POSTA_JWT_SECRET"
+
 func (c *Config) jwtSecretProblem() *secretProblem {
 	switch {
 	case strings.TrimSpace(c.JWTSecret) == "":
-		return &secretProblem{"POSTA_JWT_SECRET", "is empty", true}
+		return &secretProblem{envJWTSecret, "is empty", true}
 	case isPlaceholder(c.JWTSecret):
-		return &secretProblem{"POSTA_JWT_SECRET", "is the published placeholder value, so sessions can be forged by anyone", true}
+		return &secretProblem{envJWTSecret, "is the published placeholder value, so sessions can be forged by anyone", true}
 	case len(c.JWTSecret) < MinJWTSecretLength:
 		return &secretProblem{
-			"POSTA_JWT_SECRET",
+			envJWTSecret,
 			fmt.Sprintf("is shorter than the recommended %d characters and may be brute-forced offline from a captured token", MinJWTSecretLength),
 			false,
 		}

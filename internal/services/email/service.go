@@ -291,6 +291,10 @@ type Unsubscribe struct {
 	OneClick bool `json:"one_click,omitempty" doc:"Emit 'List-Unsubscribe-Post: List-Unsubscribe=One-Click' (RFC 8058). Applies to the https URL target only; the caller-managed path requires an https url. Implied true on the Posta-managed (list_id) path."`
 }
 
+// errRecipientSuppressed is the reason recorded on an email, and reported in a
+// batch result, when the recipient is on the workspace suppression list.
+const errRecipientSuppressed = "recipient is suppressed"
+
 type SendRequest struct {
 	From        string              `json:"from" required:"true" doc:"Sender address. Accepts a plain address (hello@example.com) or RFC 5322 display-name format (Acme <hello@example.com>)."`
 	To          []string            `json:"to" required:"true" minItems:"1" doc:"Recipient addresses. Each accepts a plain address or RFC 5322 display-name format (e.g. Jonas <jonas@example.com>)."`
@@ -693,7 +697,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 					Subject:      req.Subject,
 					TemplateName: req.TemplateName,
 					Status:       models.EmailStatusSuppressed,
-					ErrorMessage: "recipient is suppressed",
+					ErrorMessage: errRecipientSuppressed,
 					Provider:     ClassifyProvider(addr),
 				}
 				_ = s.emailRepo.Create(em)
@@ -1006,7 +1010,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 					Subject:      req.Template,
 					TemplateName: tmpl.Name,
 					Status:       models.EmailStatusSuppressed,
-					ErrorMessage: "recipient is suppressed",
+					ErrorMessage: errRecipientSuppressed,
 					Provider:     ClassifyProvider(recipient.Email),
 				}
 				_ = s.emailRepo.Create(em)
@@ -1016,7 +1020,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 					Email:  recipient.Email,
 					ID:     em.UUID,
 					Status: models.EmailStatusSuppressed,
-					Error:  "recipient is suppressed",
+					Error:  errRecipientSuppressed,
 				})
 				continue
 			}

@@ -22,6 +22,12 @@ linters:
     - unparam
     - unused
   settings:
+    goconst:
+      # A JSON field name or a database column used as a map key is data, not a
+      # magic constant: hoisting `okapi.M{"message": ...}` behind an identifier
+      # makes the response shape harder to read, not easier. Without this, the
+      # single string "message" is reported 43 times across the handlers.
+      ignore-map-keys: true
     gocyclo:
       min-complexity: 75
     revive:

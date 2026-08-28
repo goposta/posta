@@ -347,7 +347,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/bounces",
+			Path:        pathBounces,
 			Handler:     okapi.H(r.h.bounce.List),
 			Group:       apiRead,
 			Summary:     "List bounces",
@@ -377,7 +377,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 		// webhooks scope
 		{
 			Method:      http.MethodGet,
-			Path:        "/webhooks",
+			Path:        pathWebhooks,
 			Handler:     okapi.H(r.h.webhook.List),
 			Group:       apiWebhooks,
 			Summary:     "List webhooks",
@@ -391,7 +391,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/webhooks",
+			Path:        pathWebhooks,
 			Handler:     okapi.H(r.h.webhook.Create),
 			Group:       apiWebhooks,
 			Summary:     "Create webhook",

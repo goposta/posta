@@ -14,10 +14,14 @@ import (
 )
 
 // stashAPIKey mimics authenticateAPIKey's context for a workspace-bound key.
-// boundWorkspace of 0 means an account-wide key.
-func stashAPIKey(userID, boundWorkspace int, scopes string) okapi.Middleware {
+// boundWorkspace of 0 means an account-wide key. The caller's identity is
+// irrelevant to what these tests assert — workspace binding and scopes — so it
+// is fixed rather than threaded through every call.
+const stubAPIKeyUserID = 1
+
+func stashAPIKey(boundWorkspace int, scopes string) okapi.Middleware {
 	return func(c *okapi.Context) error {
-		c.Set(CtxUserID, userID)
+		c.Set(CtxUserID, stubAPIKeyUserID)
 		c.Set(CtxAuthMethod, AuthMethodAPIKey)
 		c.Set(CtxAPIKeyScopes, scopes)
 		if boundWorkspace > 0 {
@@ -81,7 +85,7 @@ func TestRequireWorkspace_BoundAPIKey(t *testing.T) {
 					"workspace_id": c.GetInt(CtxWorkspaceID),
 					"role":         c.GetString(CtxWorkspaceRole),
 				})
-			}).Use(stashAPIKey(1, 7, models.ScopeRead), RequireWorkspaceMiddleware(nil, nil))
+			}).Use(stashAPIKey(7, models.ScopeRead), RequireWorkspaceMiddleware(nil, nil))
 
 			req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 			if tc.header != "" {
@@ -166,7 +170,7 @@ func TestWorkspaceScopeEnforcement(t *testing.T) {
 			o := okapi.NewTestServer(t)
 			route(o, tc.method, "/api/v1/workspaces/current"+tc.path, func(c *okapi.Context) error {
 				return c.String(http.StatusOK, "ok")
-			}).Use(stashAPIKey(1, 7, tc.scopes), RequireWorkspaceMiddleware(nil, nil))
+			}).Use(stashAPIKey(7, tc.scopes), RequireWorkspaceMiddleware(nil, nil))
 
 			req := httptest.NewRequest(tc.method, "/api/v1/workspaces/current"+tc.path, nil)
 			rec := httptest.NewRecorder()
@@ -231,12 +235,33 @@ func TestWorkspaceFromQuery_BoundKeyIgnoresMismatchedQuery(t *testing.T) {
 	o := okapi.NewTestServer(t)
 	o.Get("/stream", func(c *okapi.Context) error {
 		return c.String(http.StatusOK, "ok")
-	}).Use(stashAPIKey(1, 7, models.ScopeRead), WorkspaceFromQueryOrHeader(nil, nil))
+	}).Use(stashAPIKey(7, models.ScopeRead), WorkspaceFromQueryOrHeader(nil, nil))
 
 	rec := httptest.NewRecorder()
 	o.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/stream?workspace_id=9", nil))
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+// An account-wide API key carries no workspace binding, so it has nothing to
+// fall back on: a route that demands a workspace must refuse it rather than
+// resolving one on its behalf. This exercises stashAPIKey's boundWorkspace == 0
+// branch, which every other case skips.
+func TestRequireWorkspace_AccountWideKeyWithoutHeader(t *testing.T) {
+	o := okapi.New()
+	o.Get("/ws", func(c *okapi.Context) error {
+		return c.JSON(http.StatusOK, okapi.M{"workspace": c.GetInt(CtxWorkspaceID)})
+	}).Use(stashAPIKey(0, models.ScopeAll), RequireWorkspaceMiddleware(nil, nil))
+
+	rec := httptest.NewRecorder()
+	o.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ws", nil))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), WorkspaceHeader) {
+		t.Fatalf("response should name the missing header, got %s", rec.Body.String())
 	}
 }

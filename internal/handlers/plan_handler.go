@@ -336,7 +336,7 @@ func (h *PlanHandler) GetWorkspacePlan(c *okapi.Context, req *WorkspacePlanReque
 
 	plan := h.planService.EffectivePlan(&wsID)
 	if plan == nil {
-		return ok(c, okapi.M{"plan": nil, "source": "global_settings"})
+		return ok(c, okapi.M{"plan": nil, "source": planSourceGlobalSettings})
 	}
 
 	return ok(c, plan)
@@ -392,7 +392,7 @@ func (h *PlanHandler) GetUserPlan(c *okapi.Context, req *UserPlanRequest) error 
 
 	plan := h.planService.EffectiveUserPlan(user.ID)
 	if plan == nil {
-		return ok(c, okapi.M{"plan": nil, "source": "global_settings"})
+		return ok(c, okapi.M{"plan": nil, "source": planSourceGlobalSettings})
 	}
 
 	return ok(c, plan)
@@ -404,7 +404,7 @@ func (h *PlanHandler) GetMyPlan(c *okapi.Context) error {
 
 	plan := h.planService.EffectiveUserPlan(userID)
 	if plan == nil {
-		return ok(c, okapi.M{"plan": nil, "source": "global_settings"})
+		return ok(c, okapi.M{"plan": nil, "source": planSourceGlobalSettings})
 	}
 
 	return ok(c, plan)

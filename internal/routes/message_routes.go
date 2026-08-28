@@ -15,7 +15,7 @@ import (
 
 func (r *Router) formIngestRoutes() []okapi.RouteDefinition {
 	ingestGroup := r.app.Group("/api/v1/f").WithTagInfo(okapi.GroupTag{
-		Name:        "Forms",
+		Name:        tagForms,
 		Description: "Public form ingest. A website form posts here with the form's public key; no authentication is used, and access is governed by the form's origin allowlist, honeypot, nonce, and rate limits.",
 	})
 
@@ -50,13 +50,13 @@ func (r *Router) formIngestRoutes() []okapi.RouteDefinition {
 
 func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 	opsGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspace).WithTagInfo(okapi.GroupTag{
-		Name:        "Messages",
+		Name:        tagMessages,
 		Description: "Web form definitions, received messages, operator replies, and spam filters for the active workspace. Authenticated with a dashboard session or an API key bound to the workspace.",
 	})
 	opsGroup.WithBearerAuth()
 
 	streamGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
-		Name:        "Messages",
+		Name:        tagMessages,
 		Description: "Web form definitions, received messages, operator replies, and spam filters for the active workspace.",
 	})
 	streamGroup.WithBearerAuth()
@@ -86,7 +86,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/forms/{id:int}",
+			Path:     pathFormByID,
 			Handler:  okapi.H(r.h.form.Get),
 			Group:    opsGroup,
 			Summary:  "Get a form",
@@ -98,7 +98,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/forms/{id:int}",
+			Path:     pathFormByID,
 			Handler:  okapi.H(r.h.form.Update),
 			Group:    opsGroup,
 			Summary:  "Update a form",
@@ -111,7 +111,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/forms/{id:int}",
+			Path:    pathFormByID,
 			Handler: okapi.H(r.h.form.Delete),
 			Group:   opsGroup,
 			Summary: "Delete a form",
