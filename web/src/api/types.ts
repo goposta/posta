@@ -754,6 +754,7 @@ export interface UserProfile extends User {
   require_verified_domain: boolean
   scheduled_deletion_at: string | null
   email_verification_required: boolean
+  default_workspace_id: number | null
 }
 
 // User Data Export/Import
