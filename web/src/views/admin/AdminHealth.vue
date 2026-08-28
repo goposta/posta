@@ -99,14 +99,11 @@ const health = computed(() => {
     );
   }
 
-  if (m.users_migration_failed > 0) {
-    raise("crit");
-    reasons.push(`Workspace migration failed for ${m.users_migration_failed} user(s)`);
-  }
-
-  if (m.users_unmigrated > 0) {
+  if (m.users_without_workspace > 0) {
     raise("warn");
-    reasons.push(`${m.users_unmigrated} user(s) have not been migrated to a workspace`);
+    reasons.push(
+      `${m.users_without_workspace} user(s) belong to no workspace and land on an empty dashboard`
+    );
   }
 
   for (const meter of meters.value) {

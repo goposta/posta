@@ -26,6 +26,10 @@ func main() {
 		}
 		return nil
 	})
+	cli.Command("doctor", "Check that this install is ready to upgrade", func(cmd *okapicli.Command) error {
+		return runDoctorWorkspaces()
+	})
+
 	cli.DefaultCommand("server")
 
 	if err := cli.Execute(); err != nil {

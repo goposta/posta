@@ -20,22 +20,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   )
 
   const currentRole = computed(() => currentWorkspace.value?.role ?? null)
-  const isPersonal = computed(() => currentWorkspaceId.value === null)
   const isWorkspaceContext = computed(() => currentWorkspaceId.value !== null)
   const isWorkspaceAdmin = computed(() => currentRole.value === 'owner' || currentRole.value === 'admin')
+  // No workspace means no permissions. The pre-workspace era granted edit rights
+  // to a context with no workspace; every resource is scoped now, so a caller
+  // without one can read and write nothing.
   const canEdit = computed(() => {
-    if (!currentWorkspaceId.value) return true // personal mode
     const role = currentRole.value
     return role === 'owner' || role === 'admin' || role === 'editor'
   })
 
-  // The user's auto-provisioned personal workspace (workspace-only migration).
-  const personalWorkspace = computed(() => workspaces.value.find((w) => w.is_personal) ?? null)
-  // True when the active workspace is the user's personal one — used to hide
-  // team-only affordances (Members, Plan & Billing).
-  const currentWorkspaceIsPersonal = computed(() => currentWorkspace.value?.is_personal ?? false)
+  // Ordinary workspaces, i.e. everything the user actually works in. The system
+  // workspace is platform infrastructure and only platform admins can see it.
+  const ownWorkspaces = computed(() => workspaces.value.filter((w) => !w.system))
+  const systemWorkspace = computed(() => workspaces.value.find((w) => w.system) ?? null)
+  const currentWorkspaceIsSystem = computed(() => currentWorkspace.value?.system ?? false)
+  const hasWorkspace = computed(() => ownWorkspaces.value.length > 0)
 
-  const contextLabel = computed(() => currentWorkspace.value?.name ?? 'Personal')
+  const contextLabel = computed(() => currentWorkspace.value?.name ?? 'No workspace')
 
   function setWorkspace(wsId: number | null) {
     currentWorkspaceId.value = wsId
@@ -51,11 +53,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const res = await workspaceApi.list()
       workspaces.value = res.data.data ?? []
       const valid = currentWorkspaceId.value && workspaces.value.find((w) => w.id === currentWorkspaceId.value)
-      // After the workspace-only migration every user owns a personal workspace.
-      // Land there by default (instead of legacy header-less "personal mode") so
-      // the active context always maps to a real workspace.
+      // Land in an ordinary workspace, never the system one: a platform admin
+      // opening the dashboard wants their own work, not platform infrastructure.
       if (!valid) {
-        setWorkspace(personalWorkspace.value?.id ?? null)
+        setWorkspace(ownWorkspaces.value[0]?.id ?? null)
       }
     } catch {
       workspaces.value = []
@@ -72,12 +73,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     currentWorkspaceId,
     currentWorkspace,
     currentRole,
-    isPersonal,
     isWorkspaceContext,
     isWorkspaceAdmin,
     canEdit,
-    personalWorkspace,
-    currentWorkspaceIsPersonal,
+    ownWorkspaces,
+    systemWorkspace,
+    currentWorkspaceIsSystem,
+    hasWorkspace,
     contextLabel,
     setWorkspace,
     fetchWorkspaces,

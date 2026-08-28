@@ -14,6 +14,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/notification"
+	"github.com/goposta/posta/internal/services/workspace"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 	"gorm.io/gorm"
@@ -91,14 +92,17 @@ type DeclineInvitationRequest struct {
 }
 
 type WorkspaceResponse struct {
-	ID          uint      `json:"id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	Description string    `json:"description"`
-	OwnerID     uint      `json:"owner_id"`
-	Role        string    `json:"role"`
-	IsPersonal  bool      `json:"is_personal"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	OwnerID     uint   `json:"owner_id"`
+	Role        string `json:"role"`
+	System      bool   `json:"system"`
+	// Deprecated: the personal workspace type was removed; always false. Kept for
+	// one minor release so an older dashboard build keeps parsing the response.
+	IsPersonal bool      `json:"is_personal"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type WorkspaceMemberResponse struct {
@@ -138,6 +142,9 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 	// Validate slug format
 	if !isValidSlug(slug) {
 		return c.AbortBadRequest("slug must contain only lowercase letters, numbers, and hyphens")
+	}
+	if workspace.IsReservedSlug(slug) {
+		return c.AbortConflict("that slug is reserved by the platform")
 	}
 
 	// Check slug uniqueness
@@ -181,7 +188,7 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        string(models.WorkspaceRoleOwner),
-		IsPersonal:  ws.IsPersonal,
+		System:      ws.System,
 		CreatedAt:   ws.CreatedAt,
 	})
 }
@@ -208,7 +215,7 @@ func (h *WorkspaceHandler) List(c *okapi.Context) error {
 			Description: ws.Description,
 			OwnerID:     ws.OwnerID,
 			Role:        role,
-			IsPersonal:  ws.IsPersonal,
+			System:      ws.System,
 			CreatedAt:   ws.CreatedAt,
 		})
 	}
@@ -233,7 +240,7 @@ func (h *WorkspaceHandler) Get(c *okapi.Context) error {
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        role,
-		IsPersonal:  ws.IsPersonal,
+		System:      ws.System,
 		CreatedAt:   ws.CreatedAt,
 	})
 }
@@ -246,6 +253,9 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 		return c.AbortNotFound("workspace not found")
 	}
 
+	if ws.System && req.Body.Name != "" && strings.TrimSpace(req.Body.Name) != ws.Name {
+		return c.AbortConflict("the system workspace cannot be renamed")
+	}
 	if req.Body.Name != "" {
 		ws.Name = strings.TrimSpace(req.Body.Name)
 	}
@@ -272,7 +282,7 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        role,
-		IsPersonal:  ws.IsPersonal,
+		System:      ws.System,
 		CreatedAt:   ws.CreatedAt,
 	})
 }
@@ -284,8 +294,12 @@ func (h *WorkspaceHandler) Delete(c *okapi.Context) error {
 	if err != nil {
 		return c.AbortNotFound("workspace not found")
 	}
-	if ws.IsPersonal {
-		return c.AbortBadRequest("personal workspace cannot be deleted")
+	if ws.System {
+		return c.AbortConflict("the system workspace cannot be deleted")
+	}
+	userID := uint(c.GetInt("user_id"))
+	if h.workspaceRepo.CountNonSystemMemberships(userID) <= 1 {
+		return c.AbortBadRequest("this is your only workspace; create another before deleting this one")
 	}
 
 	if err := h.workspaceRepo.Delete(uint(wsID)); err != nil {

@@ -23,16 +23,19 @@ const (
 )
 
 type Workspace struct {
-	ID              uint      `json:"id" gorm:"primaryKey"`
-	Name            string    `json:"name" gorm:"not null"`
-	Slug            string    `json:"slug" gorm:"uniqueIndex;not null"`
-	Description     string    `json:"description"`
-	OwnerID         uint      `json:"owner_id" gorm:"index;not null"`
-	PlanID          *uint     `json:"plan_id" gorm:"index"`
-	DefaultLanguage string    `json:"default_language" gorm:"size:10;default:'en'"`
-	IsPersonal      bool      `json:"is_personal" gorm:"not null;default:false"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              uint   `json:"id" gorm:"primaryKey"`
+	Name            string `json:"name" gorm:"not null"`
+	Slug            string `json:"slug" gorm:"uniqueIndex;not null"`
+	Description     string `json:"description"`
+	OwnerID         uint   `json:"owner_id" gorm:"index;not null"`
+	PlanID          *uint  `json:"plan_id" gorm:"index"`
+	DefaultLanguage string `json:"default_language" gorm:"size:10;default:'en'"`
+	// System marks the single built-in platform workspace. It owns
+	// platform-managed resources, is created on first boot, cannot be renamed or
+	// deleted, and admits only platform admins.
+	System    bool      `json:"system" gorm:"not null;default:false"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	Owner   User              `json:"-" gorm:"foreignKey:OwnerID"`
 	Plan    Plan              `json:"-" gorm:"foreignKey:PlanID"`
@@ -64,6 +67,9 @@ type WorkspaceInvitation struct {
 	Workspace Workspace `json:"-" gorm:"foreignKey:WorkspaceID"`
 	Inviter   User      `json:"-" gorm:"foreignKey:InvitedBy"`
 }
+
+// IsSystem reports whether this is the built-in platform workspace.
+func (w *Workspace) IsSystem() bool { return w.System }
 
 // CanManageMembers returns true if the role can invite/remove members.
 func (r WorkspaceRole) CanManageMembers() bool {

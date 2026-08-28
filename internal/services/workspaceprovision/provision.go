@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Jonas Kaninda
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-package workspacemigrate
+package workspaceprovision
 
 import (
 	"errors"
@@ -37,14 +37,15 @@ type Seeder interface {
 	SeedWorkspaceDefaults(workspaceID, userID uint, userName string)
 }
 
-// Service performs personal-workspace migrations.
+// Service provisions a user's first workspace, and backfills workspaces for
+// users that predate workspace scoping.
 type Service struct {
 	planEnforcement bool
 
 	seeder Seeder
 }
 
-// New constructs a migration service.
+// New constructs a provisioning service.
 func New(planEnforcement bool) *Service {
 	return &Service{planEnforcement: planEnforcement}
 }
@@ -53,23 +54,25 @@ func (s *Service) SetSeeder(seeder Seeder) {
 	s.seeder = seeder
 }
 
-func (s *Service) MigrateUser(db *gorm.DB, userID uint) (uint, error) {
+// EnsureWorkspace gives userID a workspace if they have none, and returns the
+// id of the workspace they should land in. Idempotent.
+func (s *Service) EnsureWorkspace(db *gorm.DB, userID uint) (uint, error) {
 	var existing models.User
-	if err := db.Select("personal_workspace_id", "name").First(&existing, userID).Error; err == nil &&
-		existing.PersonalWorkspaceID != nil {
-		return *existing.PersonalWorkspaceID, nil
+	if err := db.Select("default_workspace_id", "name").First(&existing, userID).Error; err == nil &&
+		existing.DefaultWorkspaceID != nil {
+		return *existing.DefaultWorkspaceID, nil
 	}
 
 	var wsID uint
 	err := db.Transaction(func(tx *gorm.DB) error {
-		id, e := s.migrate(tx, userID)
+		id, e := s.provision(tx, userID)
 		wsID = id
 		return e
 	})
 	if err != nil {
 		var u models.User
-		if e := db.First(&u, userID).Error; e == nil && u.PersonalWorkspaceID != nil {
-			return *u.PersonalWorkspaceID, nil
+		if e := db.First(&u, userID).Error; e == nil && u.DefaultWorkspaceID != nil {
+			return *u.DefaultWorkspaceID, nil
 		}
 		return 0, err
 	}
@@ -81,25 +84,28 @@ func (s *Service) MigrateUser(db *gorm.DB, userID uint) (uint, error) {
 	return wsID, nil
 }
 
-func (s *Service) MigrateAllUnmigrated(tx *gorm.DB) error {
+// BackfillMissingWorkspaces gives every workspace-less user a workspace and
+// moves their legacy unscoped rows into it. Retained for installs upgrading from
+// before workspace scoping; a no-op once every user has one.
+func (s *Service) BackfillMissingWorkspaces(tx *gorm.DB) error {
 	var ids []uint
 	if err := tx.Model(&models.User{}).
-		Where("personal_workspace_id IS NULL").
+		Where("default_workspace_id IS NULL").
 		Order("id").
 		Pluck("id", &ids).Error; err != nil {
 		return fmt.Errorf("list unmigrated users: %w", err)
 	}
 
-	logger.Info("workspace migration: backfilling personal workspaces", "users", len(ids))
+	logger.Info("workspace backfill: provisioning workspaces", "users", len(ids))
 
 	migrated := 0
 	for _, id := range ids {
 		err := tx.Transaction(func(utx *gorm.DB) error {
-			_, e := s.migrate(utx, id)
+			_, e := s.provision(utx, id)
 			return e
 		})
 		if err != nil {
-			logger.Error("workspace migration failed for user", "user_id", id, "error", err)
+			logger.Error("workspace provisioning failed for user", "user_id", id, "error", err)
 			if uerr := tx.Model(&models.User{}).Where("id = ?", id).
 				Update("migration_error", err.Error()).Error; uerr != nil {
 				return fmt.Errorf("record migration error for user %d: %w", id, uerr)
@@ -109,19 +115,19 @@ func (s *Service) MigrateAllUnmigrated(tx *gorm.DB) error {
 		migrated++
 	}
 
-	logger.Info("workspace migration: backfill complete", "migrated", migrated, "failed", len(ids)-migrated)
+	logger.Info("workspace backfill complete", "migrated", migrated, "failed", len(ids)-migrated)
 	return nil
 }
 
-func (s *Service) migrate(tx *gorm.DB, userID uint) (uint, error) {
+func (s *Service) provision(tx *gorm.DB, userID uint) (uint, error) {
 	var user models.User
 	if err := tx.First(&user, userID).Error; err != nil {
 		return 0, fmt.Errorf("load user: %w", err)
 	}
 
-	// Already migrated — no-op.
-	if user.PersonalWorkspaceID != nil {
-		return *user.PersonalWorkspaceID, nil
+	// Already has one — no-op.
+	if user.DefaultWorkspaceID != nil {
+		return *user.DefaultWorkspaceID, nil
 	}
 
 	// Resolve the plan (NULL in OSS / non-enforcing mode).
@@ -130,20 +136,14 @@ func (s *Service) migrate(tx *gorm.DB, userID uint) (uint, error) {
 		return 0, err
 	}
 
-	// Create the personal workspace.
-	name := strings.TrimSpace(user.Name)
-	if name == "" {
-		name = "Personal"
-	}
 	ws := &models.Workspace{
-		Name:       name,
-		Slug:       personalSlug(user.ID),
-		OwnerID:    user.ID,
-		IsPersonal: true,
-		PlanID:     planID,
+		Name:    workspaceName(user.Name),
+		Slug:    workspaceSlug(user.ID),
+		OwnerID: user.ID,
+		PlanID:  planID,
 	}
 	if err := tx.Create(ws).Error; err != nil {
-		return 0, fmt.Errorf("create personal workspace: %w", err)
+		return 0, fmt.Errorf("create workspace: %w", err)
 	}
 
 	// Owner member row
@@ -168,13 +168,12 @@ func (s *Service) migrate(tx *gorm.DB, userID uint) (uint, error) {
 		}
 	}
 
-	// Mark the user migrated and clear any prior error.
 	if err := tx.Model(&models.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
-		"personal_workspace_id": ws.ID,
-		"migrated_at":           time.Now().UTC(),
-		"migration_error":       "",
+		"default_workspace_id": ws.ID,
+		"migrated_at":          time.Now().UTC(),
+		"migration_error":      "",
 	}).Error; err != nil {
-		return 0, fmt.Errorf("mark user migrated: %w", err)
+		return 0, fmt.Errorf("record default workspace: %w", err)
 	}
 
 	return ws.ID, nil
@@ -224,7 +223,20 @@ func (s *Service) copySettings(tx *gorm.DB, userID, workspaceID uint, requireVer
 	return nil
 }
 
-// personalSlug derives a stable, unique slug for a user's personal workspace.
-func personalSlug(userID uint) string {
-	return fmt.Sprintf("personal-%d", userID)
+// workspaceName labels a user's first workspace after them, so a switcher with
+// several entries reads as names rather than as "Workspace 1, Workspace 2".
+func workspaceName(userName string) string {
+	first := strings.TrimSpace(userName)
+	if idx := strings.IndexAny(first, " \t"); idx > 0 {
+		first = first[:idx]
+	}
+	if first == "" {
+		return "My workspace"
+	}
+	return first + "'s workspace"
+}
+
+// workspaceSlug derives a stable, unique slug for a user's first workspace.
+func workspaceSlug(userID uint) string {
+	return fmt.Sprintf("workspace-%d", userID)
 }

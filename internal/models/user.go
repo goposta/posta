@@ -30,9 +30,11 @@ type User struct {
 	CreatedAt             time.Time  `json:"created_at"`
 	LastLoginAt           *time.Time `json:"last_login_at"`
 
-	PersonalWorkspaceID *uint      `json:"personal_workspace_id" gorm:"index"`
-	MigratedAt          *time.Time `json:"migrated_at"`
-	MigrationError      string     `json:"migration_error,omitempty" gorm:"type:text"`
+	// DefaultWorkspaceID is where a request that names no workspace lands. It is
+	// user-settable and repaired when it points at a workspace the user has left.
+	DefaultWorkspaceID *uint      `json:"default_workspace_id" gorm:"index"`
+	MigratedAt         *time.Time `json:"-"`
+	MigrationError     string     `json:"-" gorm:"type:text"`
 
 	Plan Plan `json:"-" gorm:"foreignKey:PlanID"`
 }

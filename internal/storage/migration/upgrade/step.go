@@ -29,6 +29,18 @@ var registry = []Step{
 		ID:    "2026-06-11-api-key-scopes",
 		Apply: applyAPIKeyScopes,
 	},
+	{
+		ID:    "2026-08-28-system-workspace",
+		Apply: applySystemWorkspace,
+	},
+	{
+		ID:    "2026-08-28-personal-to-normal",
+		Apply: applyPersonalToNormal,
+	},
+	{
+		ID:    "2026-08-28-default-workspace",
+		Apply: applyDefaultWorkspace,
+	},
 }
 
 func Registry() []Step {

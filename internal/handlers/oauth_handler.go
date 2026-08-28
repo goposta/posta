@@ -18,7 +18,7 @@ import (
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/seeder"
 	sessionpkg "github.com/goposta/posta/internal/services/session"
-	"github.com/goposta/posta/internal/services/workspacemigrate"
+	"github.com/goposta/posta/internal/services/workspaceprovision"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
@@ -39,12 +39,12 @@ type OAuthHandler struct {
 	callbackBase string // e.g. "http://localhost:9000"
 	appWebURL    string // e.g. "http://localhost:9000"
 	db           *gorm.DB
-	migrator     *workspacemigrate.Service
+	migrator     *workspaceprovision.Service
 }
 
 // SetMigrator wires the personal-workspace migrator used to provision (and seed)
 // a personal workspace after OAuth user upsert. See §4.
-func (h *OAuthHandler) SetMigrator(db *gorm.DB, m *workspacemigrate.Service) {
+func (h *OAuthHandler) SetMigrator(db *gorm.DB, m *workspaceprovision.Service) {
 	h.db = db
 	h.migrator = m
 }
@@ -248,7 +248,7 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 	// Provision the personal workspace (and seed defaults for new users) before
 	// issuing the JWT. Idempotent: a no-op for already-migrated returning users.
 	if h.migrator != nil && h.db != nil {
-		if _, err := h.migrator.MigrateUser(h.db, user.ID); err != nil {
+		if _, err := h.migrator.EnsureWorkspace(h.db, user.ID); err != nil {
 			logger.Error("failed to provision personal workspace", "user_id", user.ID, "err", err)
 		}
 	}

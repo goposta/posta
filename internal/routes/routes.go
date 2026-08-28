@@ -34,7 +34,7 @@ import (
 	"github.com/goposta/posta/internal/services/verifier"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/services/workermon"
-	"github.com/goposta/posta/internal/services/workspacemigrate"
+	"github.com/goposta/posta/internal/services/workspaceprovision"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/goposta/posta/internal/web"
@@ -122,8 +122,6 @@ type routerHandlers struct {
 
 func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) *email.Service {
 
-	repositories.SetWorkspaceOnlyMode(cfg.WorkspaceOnlyMode)
-
 	// Repositories
 	userRepo := repositories.NewUserRepository(db)
 	apiKeyRepo := repositories.NewAPIKeyRepository(db)
@@ -203,7 +201,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	// Handlers
 	userSeeder := seeder.New(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo)
 
-	migrator := workspacemigrate.New(cfg.PlanEnforcement)
+	migrator := workspaceprovision.New(cfg.PlanEnforcement)
 	migrator.SetSeeder(userSeeder)
 	userHandler := handlers.NewUserHandler(userRepo, cfg.JWTSecret, userSeeder, bus)
 	userHandler.SetSettings(settingsProvider)
