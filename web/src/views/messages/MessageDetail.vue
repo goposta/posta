@@ -118,6 +118,106 @@ async function remove() {
   }
 }
 
+const BODY_KEYS = [
+  "message",
+  "body",
+  "comments",
+  "comment",
+  "content",
+  "description",
+  "your-message",
+];
+
+const SCAN_REASON_LABELS: Record<string, string> = {
+  honeypot: "Honeypot field was filled in",
+  nonce_invalid: "Anti-bot token missing, expired, or reused",
+  sender_suppressed: "Sender is on the suppression list",
+  sender_unparseable: "Sender address does not parse",
+  disposable_email: "Disposable email domain",
+  url_shortener: "Contains a URL shortener",
+  body_too_short: "Body is unusually short",
+  body_too_long: "Body is unusually long",
+  excessive_caps: "Mostly uppercase",
+  embedded_markup: "Contains HTML or BBCode markup",
+  embedded_script: "Contains a script tag or javascript: URL",
+  bot_user_agent: "Submitted by a scripted client",
+};
+
+const showRaw = ref(false);
+
+const bodyField = computed(() => {
+  const fields = message.value?.fields ?? [];
+  return fields.find((f) => BODY_KEYS.includes(f.key.trim().toLowerCase())) ?? null;
+});
+
+const detailFields = computed(() =>
+  (message.value?.fields ?? []).filter((f) => f !== bodyField.value)
+);
+
+const bodyText = computed(() => bodyField.value?.value || message.value?.body || "");
+
+const bodyLabel = computed(() =>
+  bodyField.value ? humanizeKey(bodyField.value.key) : "Message"
+);
+
+const fieldCount = computed(() => message.value?.fields?.length ?? 0);
+
+const rawFields = computed(() =>
+  JSON.stringify(
+    Object.fromEntries((message.value?.fields ?? []).map((f) => [f.key, f.value])),
+    null,
+    2
+  )
+);
+
+function humanizeKey(key: string) {
+  const cleaned = key
+    .replace(/^_+/, "")
+    .replace(/^your[-_\s]+/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+  if (!cleaned) return key;
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function valueKind(value: string): "email" | "url" | "phone" | "text" {
+  const v = value.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "email";
+  if (/^https?:\/\/\S+$/i.test(v)) return "url";
+  if (/^\+?\d[\d\s().\/-]{5,}$/.test(v)) return "phone";
+  return "text";
+}
+
+function scanReasonLabel(reason: string) {
+  if (SCAN_REASON_LABELS[reason]) return SCAN_REASON_LABELS[reason];
+  const [head, ...rest] = reason.split(":");
+  const tail = rest.join(":");
+  switch (head) {
+    case "links":
+      return `${tail} links in the message`;
+    case "repeat_ip":
+      return `${tail} submissions from this IP in the last hour`;
+    case "repeat_sender":
+      return `${tail} submissions from this sender in the last hour`;
+    case "filter":
+      return rest.length > 1
+        ? `Matched a ${rest[0]} filter: ${rest.slice(1).join(":")}`
+        : `Matched a ${tail} filter`;
+    default:
+      return reason;
+  }
+}
+
+async function copyValue(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    notify.success("Copied to clipboard.");
+  } catch {
+    notify.error("Could not copy to clipboard.");
+  }
+}
+
 const canReply = computed(
   () => !!message.value?.sender_email && message.value?.status !== "rejected"
 );
@@ -243,13 +343,13 @@ onMounted(load);
               </tr>
               <tr v-if="scanReasons.length">
                 <td style="font-weight: 600">Scan reasons</td>
-                <td>
+                <td class="scan-reasons">
                   <span
                     v-for="reason in scanReasons"
                     :key="reason"
                     class="badge badge-warning"
-                    style="margin-right: 6px"
-                  >{{ reason }}</span>
+                    :title="reason"
+                  >{{ scanReasonLabel(reason) }}</span>
                 </td>
               </tr>
             </tbody>
@@ -258,17 +358,70 @@ onMounted(load);
       </div>
 
       <div class="card" style="margin-bottom: 24px">
-        <div class="card-header"><h2>Submission</h2></div>
+        <div class="card-header">
+          <h2>Submission</h2>
+          <div class="submission-actions">
+            <span v-if="fieldCount" class="badge badge-neutral">
+              {{ fieldCount }} field{{ fieldCount === 1 ? "" : "s" }}
+            </span>
+            <button
+              v-if="fieldCount"
+              class="btn btn-secondary btn-sm"
+              @click="showRaw = !showRaw"
+            >
+              {{ showRaw ? "Formatted" : "Raw" }}
+            </button>
+          </div>
+        </div>
+
         <div class="card-body">
-          <table v-if="message.fields && message.fields.length">
-            <tbody>
-              <tr v-for="field in message.fields" :key="field.key">
-                <td style="font-weight: 600; width: 200px">{{ field.key }}</td>
-                <td style="white-space: pre-wrap">{{ field.value }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-else style="white-space: pre-wrap">{{ message.body }}</p>
+          <pre v-if="showRaw" class="raw-fields">{{ rawFields }}</pre>
+
+          <template v-else>
+            <div v-if="bodyText" class="submission-body">
+              <div class="submission-label">{{ bodyLabel }}</div>
+              <div class="submission-body-text">{{ bodyText }}</div>
+            </div>
+
+            <dl v-if="detailFields.length" class="field-grid">
+              <template v-for="(field, idx) in detailFields" :key="`${idx}-${field.key}`">
+                <dt :title="field.key">{{ humanizeKey(field.key) }}</dt>
+                <dd>
+                  <span v-if="!field.value.trim()" class="field-empty">—</span>
+
+                  <span v-else class="field-value">
+                    <a
+                      v-if="valueKind(field.value) === 'email'"
+                      :href="`mailto:${field.value.trim()}`"
+                    >{{ field.value }}</a>
+                    <a
+                      v-else-if="valueKind(field.value) === 'phone'"
+                      :href="`tel:${field.value.trim()}`"
+                    >{{ field.value }}</a>
+                    <a
+                      v-else-if="valueKind(field.value) === 'url'"
+                      :href="field.value.trim()"
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                    >{{ field.value }}</a>
+                    <span v-else>{{ field.value }}</span>
+
+                    <button
+                      class="field-copy"
+                      type="button"
+                      :title="`Copy ${humanizeKey(field.key)}`"
+                      @click="copyValue(field.value)"
+                    >Copy</button>
+                  </span>
+                </dd>
+              </template>
+            </dl>
+
+            <div v-if="!bodyText && !detailFields.length" class="empty-state">
+              <h3>Nothing was submitted</h3>
+              <p>This submission arrived with no readable fields.</p>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -359,3 +512,144 @@ onMounted(load);
     </template>
   </div>
 </template>
+
+<style scoped>
+.submission-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.submission-body {
+  margin-bottom: 20px;
+}
+
+.submission-label,
+.field-grid dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.submission-label {
+  margin-bottom: 8px;
+}
+
+.submission-body-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  line-height: 1.65;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  margin: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.field-grid dt {
+  padding: 11px 14px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-secondary);
+  overflow-wrap: anywhere;
+}
+
+.field-grid dd {
+  margin: 0;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.field-grid dt:last-of-type,
+.field-grid dd:last-of-type {
+  border-bottom: 0;
+}
+
+.field-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.field-empty {
+  color: var(--text-muted);
+}
+
+.field-copy {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.field-grid dd:hover .field-copy,
+.field-copy:focus-visible {
+  opacity: 1;
+}
+
+.field-copy:hover {
+  color: var(--primary-600);
+  text-decoration: underline;
+}
+
+.raw-fields {
+  margin: 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  overflow-x: auto;
+}
+
+.scan-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-grid dt {
+    background: transparent;
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .field-copy {
+    opacity: 1;
+  }
+}
+</style>
