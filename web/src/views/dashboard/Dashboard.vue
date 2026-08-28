@@ -19,6 +19,7 @@ import VolumeChart from "./VolumeChart.vue";
 
 const CHECKLIST_KEY = "posta_dashboard_checklist_dismissed";
 const REFRESH_MS = 60_000;
+const RECENT_EMAIL_COUNT = 15;
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -75,7 +76,7 @@ async function load(showSpinner: boolean) {
   try {
     const [statsRes, emailsRes] = await Promise.all([
       dashboardApi.getStats(),
-      emailsApi.list(0, 8),
+      emailsApi.list(0, RECENT_EMAIL_COUNT),
     ]);
     stats.value = statsRes.data.data;
     recentEmails.value = emailsRes.data.data;
