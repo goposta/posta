@@ -1,95 +1,66 @@
 name: Release
+
 on:
   push:
     tags:
-      - v0.**
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  # Stable releases (v0.11.0): publish the immutable version tag and move
-  # :latest. Release candidates are excluded here and handled by docker-rc, so a
-  # pre-release never becomes what a bare `docker pull` resolves to.
+  # One job for both channels. A stable tag (v1.2.0) publishes the immutable
+  # version plus :latest; a release candidate (v1.2.0-rc.1) publishes the version
+  # plus :rc, so a pre-release never becomes what a bare `docker pull` resolves
+  # to. Keeping this as one job means the two channels cannot drift apart.
   docker:
-    if: "!contains(github.ref, '-rc')"
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
     steps:
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      -
-        name: Login to DockerHub
-        uses: docker/login-action@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Get the tag name
-        id: get_tag_name
+
+      - name: Resolve version and channel
         run: |
-          # Extract tag name and remove "v" if present
+          set -euo pipefail
           TAG_NAME="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG_NAME#v}"
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "BUILD_TIME=$(date)" >> "$GITHUB_ENV"
-      -
-        name: Build and push
-        uses: docker/build-push-action@v6
+          if [[ "$TAG_NAME" == *-rc* ]]; then
+            CHANNEL_TAG="rc"
+          else
+            CHANNEL_TAG="latest"
+          fi
+          {
+            echo "VERSION=${VERSION}"
+            echo "CHANNEL_TAG=${CHANNEL_TAG}"
+            echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_ENV"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
         with:
           push: true
-          file: "./docker/Dockerfile"
+          file: ./docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           build-args: |
             VERSION=${{ env.VERSION }}
             BUILD_DATE=${{ env.BUILD_TIME }}
             COMMIT=${{ github.sha }}
           tags: |
-            "${{vars.BUILDKIT_IMAGE}}:${{ env.VERSION }}"
-            "${{vars.BUILDKIT_IMAGE}}:latest"
-
-
-  docker-rc:
-    if: "contains(github.ref, '-rc')"
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
-    steps:
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      -
-        name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Get the tag name
-        id: get_tag_name
-        run: |
-          # Extract tag name and remove "v" if present
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG_NAME#v}"
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "BUILD_TIME=$(date)" >> "$GITHUB_ENV"
-      -
-        name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          file: "./docker/Dockerfile"
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            VERSION=${{ env.VERSION }}
-            BUILD_DATE=${{ env.BUILD_TIME }}
-            COMMIT=${{ github.sha }}
-          tags: |
-            "${{vars.BUILDKIT_IMAGE}}:${{ env.VERSION }}"
-            "${{vars.BUILDKIT_IMAGE}}:rc"
+            ${{ vars.BUILDKIT_IMAGE }}:${{ env.VERSION }}
+            ${{ vars.BUILDKIT_IMAGE }}:${{ env.CHANNEL_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
