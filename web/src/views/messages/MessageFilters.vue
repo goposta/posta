@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { formsApi, messageFiltersApi, type FilterTestResult } from "../../api/messages";
+import { useNotificationStore } from "../../stores/notification";
+import { apiMessage } from "../../composables/apiError";
 import type { Form, MessageFilterRule } from "../../api/types";
 
+const notify = useNotificationStore();
 const loading = ref(true);
 const featureDisabled = ref(false);
 const filters = ref<MessageFilterRule[]>([]);
 const forms = ref<Form[]>([]);
-const error = ref("");
-const notice = ref("");
 const saving = ref(false);
 
 const showModal = ref(false);
@@ -39,7 +40,7 @@ async function load() {
     if (e?.response?.status === 404) {
       featureDisabled.value = true;
     } else {
-      error.value = e?.response?.data?.error?.message || "Failed to load filters";
+      notify.error(apiMessage(e, "Failed to load filters"));
     }
   } finally {
     loading.value = false;
@@ -57,14 +58,12 @@ function openCreate() {
     note: "",
   };
   testResult.value = null;
-  error.value = "";
   showModal.value = true;
 }
 
 async function create() {
   if (!draft.value.pattern.trim()) return;
   saving.value = true;
-  error.value = "";
   try {
     await messageFiltersApi.create({
       form_id: draft.value.form_id || null,
@@ -76,10 +75,10 @@ async function create() {
       note: draft.value.note,
     });
     showModal.value = false;
-    notice.value = "Filter created.";
+    notify.success("Filter created.");
     await load();
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to create filter";
+    notify.error(apiMessage(e, "Failed to create filter"));
   } finally {
     saving.value = false;
   }
@@ -89,7 +88,6 @@ async function runTest() {
   if (!draft.value.pattern.trim()) return;
   testing.value = true;
   testResult.value = null;
-  error.value = "";
   try {
     const res = await messageFiltersApi.test({
       kind: draft.value.kind,
@@ -98,7 +96,7 @@ async function runTest() {
     });
     testResult.value = res.data.data;
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Test failed";
+    notify.error(apiMessage(e, "Test failed"));
   } finally {
     testing.value = false;
   }
@@ -109,7 +107,7 @@ async function toggle(filter: MessageFilterRule) {
     const res = await messageFiltersApi.update(filter.id, { enabled: !filter.enabled });
     Object.assign(filter, res.data.data);
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to update filter";
+    notify.error(apiMessage(e, "Failed to update filter"));
   }
 }
 
@@ -119,7 +117,7 @@ async function remove(filter: MessageFilterRule) {
     await messageFiltersApi.delete(filter.id);
     filters.value = filters.value.filter((f) => f.id !== filter.id);
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to delete filter";
+    notify.error(apiMessage(e, "Failed to delete filter"));
   }
 }
 
@@ -160,9 +158,6 @@ load();
         <button class="btn btn-primary" @click="openCreate">New filter</button>
       </div>
     </div>
-
-    <div v-if="error" class="alert alert-danger">{{ error }}</div>
-    <div v-if="notice" class="alert alert-success">{{ notice }}</div>
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>

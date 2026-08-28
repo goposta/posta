@@ -2,18 +2,20 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { formsApi } from "../../api/messages";
+import { useNotificationStore } from "../../stores/notification";
+import { apiMessage } from "../../composables/apiError";
 import type { Form, FormSnippet } from "../../api/types";
 
 const route = useRoute();
 const router = useRouter();
+const notify = useNotificationStore();
 const id = Number(route.params.id);
 
 const loading = ref(true);
 const saving = ref(false);
 const form = ref<Form | null>(null);
 const snippet = ref<FormSnippet | null>(null);
-const error = ref("");
-const notice = ref("");
+const loadFailed = ref(false);
 const tab = ref<"setup" | "spam" | "notifications" | "embed">("setup");
 
 const originsText = ref("");
@@ -28,7 +30,8 @@ async function load() {
     originsText.value = (formRes.data.data.allowed_origins || []).join(", ");
     notifyText.value = (formRes.data.data.notify_emails || []).join(", ");
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to load form";
+    loadFailed.value = true;
+    notify.error(apiMessage(e, "Failed to load form"));
   } finally {
     loading.value = false;
   }
@@ -44,8 +47,6 @@ function splitList(value: string) {
 async function save() {
   if (!form.value) return;
   saving.value = true;
-  error.value = "";
-  notice.value = "";
   try {
     const res = await formsApi.update(id, {
       name: form.value.name,
@@ -71,9 +72,9 @@ async function save() {
       retention_days: form.value.retention_days,
     });
     form.value = res.data.data;
-    notice.value = "Form saved.";
+    notify.success("Form saved.");
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to save form";
+    notify.error(apiMessage(e, "Failed to save form"));
   } finally {
     saving.value = false;
   }
@@ -87,9 +88,9 @@ async function rotateKey() {
     form.value = res.data.data;
     const snippetRes = await formsApi.snippet(id);
     snippet.value = snippetRes.data.data;
-    notice.value = "Public key rotated. Update your embed code.";
+    notify.success("Public key rotated. Update your embed code.");
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to rotate key";
+    notify.error(apiMessage(e, "Failed to rotate key"));
   } finally {
     saving.value = false;
   }
@@ -101,13 +102,13 @@ async function remove() {
     await formsApi.delete(id);
     router.push("/forms");
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to delete form";
+    notify.error(apiMessage(e, "Failed to delete form"));
   }
 }
 
 function copy(text: string) {
   navigator.clipboard?.writeText(text);
-  notice.value = "Copied to clipboard.";
+  notify.success("Copied to clipboard.");
 }
 
 const endpoint = computed(() => snippet.value?.endpoint || "");
@@ -130,11 +131,16 @@ onMounted(load);
       </div>
     </div>
 
-    <div v-if="error" class="alert alert-danger">{{ error }}</div>
-    <div v-if="notice" class="alert alert-success">{{ notice }}</div>
-
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
+    </div>
+
+    <div v-else-if="loadFailed" class="card">
+      <div class="empty-state">
+        <h3>Could not load this form</h3>
+        <p>It may have been deleted, or it belongs to another workspace.</p>
+        <button class="btn btn-secondary" @click="router.push('/forms')">Back to forms</button>
+      </div>
     </div>
 
     <template v-else-if="form">

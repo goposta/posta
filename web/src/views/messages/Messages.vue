@@ -2,12 +2,15 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { formsApi, messagesApi } from "../../api/messages";
+import { useNotificationStore } from "../../stores/notification";
+import { apiMessage } from "../../composables/apiError";
 import type { Form, Message, MessageStats } from "../../api/types";
 import Pagination from "../../components/Pagination.vue";
 import { usePagination } from "../../composables/usePagination";
 
 const router = useRouter();
 const route = useRoute();
+const notify = useNotificationStore();
 const loading = ref(true);
 const featureDisabled = ref(false);
 const messages = ref<Message[]>([]);
@@ -38,7 +41,7 @@ const { pageable, goToPage } = usePagination(async (page) => {
     if (e?.response?.status === 404) {
       featureDisabled.value = true;
     } else {
-      console.error("Failed to load messages", e);
+      notify.error(apiMessage(e, "Failed to load messages"));
     }
   } finally {
     loading.value = false;

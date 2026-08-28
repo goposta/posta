@@ -2,15 +2,17 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { messagesApi } from "../../api/messages";
+import { useNotificationStore } from "../../stores/notification";
+import { apiMessage } from "../../composables/apiError";
 import type { Message } from "../../api/types";
 
 const route = useRoute();
 const router = useRouter();
+const notify = useNotificationStore();
 
 const loading = ref(true);
 const message = ref<Message | null>(null);
-const error = ref("");
-const notice = ref("");
+const loadFailed = ref(false);
 
 const replySubject = ref("");
 const replyText = ref("");
@@ -26,7 +28,8 @@ async function load() {
     message.value = res.data.data;
     replySubject.value = defaultReplySubject(res.data.data.subject);
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to load message";
+    loadFailed.value = true;
+    notify.error(apiMessage(e, "Failed to load message"));
   } finally {
     loading.value = false;
   }
@@ -41,7 +44,6 @@ function defaultReplySubject(subject: string) {
 async function sendReply() {
   if (!message.value || !replyText.value.trim()) return;
   sending.value = true;
-  error.value = "";
   try {
     await messagesApi.reply(uuid, {
       subject: replySubject.value,
@@ -49,10 +51,10 @@ async function sendReply() {
       html: textToHtml(replyText.value),
     });
     replyText.value = "";
-    notice.value = "Reply sent.";
+    notify.success("Reply sent.");
     await load();
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to send reply";
+    notify.error(apiMessage(e, "Failed to send reply"));
   } finally {
     sending.value = false;
   }
@@ -72,7 +74,7 @@ async function setState(state: string) {
     const res = await messagesApi.setState(uuid, { state });
     message.value = res.data.data;
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to update message";
+    notify.error(apiMessage(e, "Failed to update message"));
   } finally {
     busy.value = false;
   }
@@ -83,9 +85,9 @@ async function markSpam(createFilter: boolean, kind = "domain") {
   try {
     const res = await messagesApi.markSpam(uuid, { create_filter: createFilter, kind });
     message.value = res.data.data;
-    notice.value = createFilter ? "Marked as spam and filter created." : "Marked as spam.";
+    notify.success(createFilter ? "Marked as spam and filter created." : "Marked as spam.");
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to mark as spam";
+    notify.error(apiMessage(e, "Failed to mark as spam"));
   } finally {
     busy.value = false;
   }
@@ -96,9 +98,9 @@ async function markNotSpam() {
   try {
     const res = await messagesApi.markNotSpam(uuid);
     message.value = res.data.data;
-    notice.value = "Spam verdict cleared.";
+    notify.success("Spam verdict cleared.");
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to clear the spam verdict";
+    notify.error(apiMessage(e, "Failed to clear the spam verdict"));
   } finally {
     busy.value = false;
   }
@@ -111,7 +113,7 @@ async function remove() {
     await messagesApi.delete(uuid);
     router.push("/messages");
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to delete message";
+    notify.error(apiMessage(e, "Failed to delete message"));
     busy.value = false;
   }
 }
@@ -182,11 +184,16 @@ onMounted(load);
       </div>
     </div>
 
-    <div v-if="error" class="alert alert-danger">{{ error }}</div>
-    <div v-if="notice" class="alert alert-success">{{ notice }}</div>
-
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
+    </div>
+
+    <div v-else-if="loadFailed" class="card">
+      <div class="empty-state">
+        <h3>Could not load this message</h3>
+        <p>It may have been deleted, or it belongs to another workspace.</p>
+        <button class="btn btn-secondary" @click="router.push('/messages')">Back to messages</button>
+      </div>
     </div>
 
     <template v-else-if="message">

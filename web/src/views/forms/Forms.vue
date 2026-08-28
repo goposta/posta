@@ -2,15 +2,17 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { formsApi } from "../../api/messages";
+import { useNotificationStore } from "../../stores/notification";
+import { apiMessage } from "../../composables/apiError";
 import type { Form } from "../../api/types";
 import Pagination from "../../components/Pagination.vue";
 import { usePagination } from "../../composables/usePagination";
 
 const router = useRouter();
+const notify = useNotificationStore();
 const loading = ref(true);
 const featureDisabled = ref(false);
 const forms = ref<Form[]>([]);
-const error = ref("");
 
 const showCreate = ref(false);
 const creating = ref(false);
@@ -29,7 +31,7 @@ const { pageable, goToPage } = usePagination(async (page) => {
     if (e?.response?.status === 404) {
       featureDisabled.value = true;
     } else {
-      error.value = e?.response?.data?.error?.message || "Failed to load forms";
+      notify.error(apiMessage(e, "Failed to load forms"));
     }
   } finally {
     loading.value = false;
@@ -40,14 +42,12 @@ function openCreate() {
   newName.value = "";
   newOrigins.value = "";
   newNotify.value = "";
-  error.value = "";
   showCreate.value = true;
 }
 
 async function createForm() {
   if (!newName.value.trim()) return;
   creating.value = true;
-  error.value = "";
   try {
     const res = await formsApi.create({
       name: newName.value.trim(),
@@ -57,7 +57,7 @@ async function createForm() {
     showCreate.value = false;
     router.push(`/forms/${res.data.data.id}`);
   } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || "Failed to create form";
+    notify.error(apiMessage(e, "Failed to create form"));
   } finally {
     creating.value = false;
   }
@@ -96,8 +96,6 @@ function formatDate(date: string | null | undefined) {
         <button class="btn btn-primary" @click="openCreate">New form</button>
       </div>
     </div>
-
-    <div v-if="error" class="alert alert-danger">{{ error }}</div>
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>

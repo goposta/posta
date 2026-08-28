@@ -89,7 +89,7 @@ type UpdateFormRequest struct {
 		RejectThreshold     *float64  `json:"reject_threshold"`
 		NotifyEnabled       *bool     `json:"notify_enabled"`
 		NotifyEmails        *[]string `json:"notify_emails"`
-		NotifyMode          *string   `json:"notify_mode" enum:"immediate,hourly,daily,off"`
+		NotifyMode          *string   `json:"notify_mode" doc:"One of: immediate, hourly, daily, off"`
 		NotifyOnFlagged     *bool     `json:"notify_on_flagged"`
 		ReplyFrom           *string   `json:"reply_from"`
 		ReplyFromName       *string   `json:"reply_from_name"`
@@ -312,7 +312,11 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 		form.NotifyEmails = notify
 	}
 	if b.NotifyMode != nil {
-		form.NotifyMode = normalizeNotifyMode(*b.NotifyMode)
+		mode, valid := parseNotifyMode(*b.NotifyMode)
+		if !valid {
+			return c.AbortBadRequest("notify_mode must be one of: immediate, hourly, daily, off")
+		}
+		form.NotifyMode = mode
 	}
 	if b.NotifyOnFlagged != nil {
 		form.NotifyOnFlagged = *b.NotifyOnFlagged
@@ -492,17 +496,27 @@ func normalizeEmails(in []string) ([]string, error) {
 	return out, nil
 }
 
-func normalizeNotifyMode(v string) models.NotifyMode {
+func parseNotifyMode(v string) (models.NotifyMode, bool) {
 	switch models.NotifyMode(strings.ToLower(strings.TrimSpace(v))) {
+	case models.NotifyModeImmediate:
+		return models.NotifyModeImmediate, true
 	case models.NotifyModeHourly:
-		return models.NotifyModeHourly
+		return models.NotifyModeHourly, true
 	case models.NotifyModeDaily:
-		return models.NotifyModeDaily
+		return models.NotifyModeDaily, true
 	case models.NotifyModeOff:
-		return models.NotifyModeOff
+		return models.NotifyModeOff, true
 	default:
+		return models.NotifyModeImmediate, false
+	}
+}
+
+func normalizeNotifyMode(v string) models.NotifyMode {
+	if strings.TrimSpace(v) == "" {
 		return models.NotifyModeImmediate
 	}
+	mode, _ := parseNotifyMode(v)
+	return mode
 }
 
 func isHTTPURL(v string) bool {
