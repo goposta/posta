@@ -4,9 +4,11 @@
 package repositories
 
 import (
+	"errors"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/jkaninda/logger"
 	"gorm.io/gorm"
 )
 
@@ -38,15 +40,84 @@ func (r *UserRepository) FindByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
-func (r *UserRepository) PersonalWorkspaceID(userID uint) (*uint, error) {
+// DefaultWorkspace resolves where a request that names no workspace should land.
+// It verifies membership, so a stale default (the user left, or the workspace was
+// deleted) falls back to the oldest remaining membership and is repaired in place.
+// Returns (nil, "", nil) when the user belongs to no workspace at all.
+func (r *UserRepository) DefaultWorkspace(userID uint) (*models.Workspace, models.WorkspaceRole, error) {
 	var user models.User
-	if err := r.db.Model(&models.User{}).
-		Select("personal_workspace_id").
-		Where("id = ?", userID).
-		First(&user).Error; err != nil {
-		return nil, err
+	if err := r.db.Select("id", "default_workspace_id").First(&user, userID).Error; err != nil {
+		return nil, "", err
 	}
-	return user.PersonalWorkspaceID, nil
+
+	if user.DefaultWorkspaceID != nil {
+		ws, role, err := r.WorkspaceForMember(userID, *user.DefaultWorkspaceID)
+		if err == nil {
+			return ws, role, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, "", err
+		}
+	}
+
+	ws, role, err := r.oldestMembership(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if user.DefaultWorkspaceID != nil {
+				_ = r.SetDefaultWorkspace(userID, nil)
+			}
+			return nil, "", nil
+		}
+		return nil, "", err
+	}
+
+	if err := r.SetDefaultWorkspace(userID, &ws.ID); err != nil {
+		logger.Warn("failed to repair default workspace", "user_id", userID, "error", err)
+	}
+	return ws, role, nil
+}
+
+// SetDefaultWorkspace records where header-less requests land. Nil clears it.
+func (r *UserRepository) SetDefaultWorkspace(userID uint, workspaceID *uint) error {
+	return r.db.Model(&models.User{}).Where("id = ?", userID).
+		Update("default_workspace_id", workspaceID).Error
+}
+
+// WorkspaceForMember returns the workspace and the caller's role in it, or
+// gorm.ErrRecordNotFound when they are not a member.
+func (r *UserRepository) WorkspaceForMember(userID, workspaceID uint) (*models.Workspace, models.WorkspaceRole, error) {
+	var row struct {
+		models.Workspace
+		Role models.WorkspaceRole
+	}
+	err := r.db.Model(&models.Workspace{}).
+		Select("workspaces.*, workspace_members.role AS role").
+		Joins("JOIN workspace_members ON workspace_members.workspace_id = workspaces.id").
+		Where("workspaces.id = ? AND workspace_members.user_id = ?", workspaceID, userID).
+		First(&row).Error
+	if err != nil {
+		return nil, "", err
+	}
+	ws := row.Workspace
+	return &ws, row.Role, nil
+}
+
+func (r *UserRepository) oldestMembership(userID uint) (*models.Workspace, models.WorkspaceRole, error) {
+	var row struct {
+		models.Workspace
+		Role models.WorkspaceRole
+	}
+	err := r.db.Model(&models.Workspace{}).
+		Select("workspaces.*, workspace_members.role AS role").
+		Joins("JOIN workspace_members ON workspace_members.workspace_id = workspaces.id").
+		Where("workspace_members.user_id = ? AND workspaces.system = ?", userID, false).
+		Order("workspace_members.created_at ASC, workspaces.id ASC").
+		First(&row).Error
+	if err != nil {
+		return nil, "", err
+	}
+	ws := row.Workspace
+	return &ws, row.Role, nil
 }
 
 func (r *UserRepository) FindAll(search string, limit, offset int) ([]models.User, int64, error) {

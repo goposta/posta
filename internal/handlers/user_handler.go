@@ -22,7 +22,7 @@ import (
 	"github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/services/twofactor"
-	"github.com/goposta/posta/internal/services/workspacemigrate"
+	"github.com/goposta/posta/internal/services/workspaceprovision"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
@@ -41,7 +41,7 @@ type UserHandler struct {
 	emailVerifier *emailverify.Service
 	passwordReset *passwordreset.Service
 	db            *gorm.DB
-	migrator      *workspacemigrate.Service
+	migrator      *workspaceprovision.Service
 }
 
 func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder *seeder.Seeder, bus *eventbus.EventBus) *UserHandler {
@@ -53,7 +53,7 @@ func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder 
 	}
 }
 
-func (h *UserHandler) SetMigrator(db *gorm.DB, m *workspacemigrate.Service) {
+func (h *UserHandler) SetMigrator(db *gorm.DB, m *workspaceprovision.Service) {
 	h.db = db
 	h.migrator = m
 }
@@ -62,7 +62,7 @@ func (h *UserHandler) ensurePersonalWorkspace(userID uint) {
 	if h.migrator == nil || h.db == nil {
 		return
 	}
-	if _, err := h.migrator.MigrateUser(h.db, userID); err != nil {
+	if _, err := h.migrator.EnsureWorkspace(h.db, userID); err != nil {
 		logger.Error("failed to provision personal workspace", "user_id", userID, "err", err)
 	}
 }
@@ -127,7 +127,11 @@ type UserProfile struct {
 	ScheduledDeletionAt       *time.Time      `json:"scheduled_deletion_at"`
 	EmailVerifiedAt           *time.Time      `json:"email_verified_at"`
 	EmailVerificationRequired bool            `json:"email_verification_required"`
-	CreatedAt                 time.Time       `json:"created_at"`
+	DefaultWorkspaceID        *uint           `json:"default_workspace_id"`
+	// Deprecated: renamed to default_workspace_id. Mirrors it for one minor
+	// release so an older dashboard build keeps working.
+	PersonalWorkspaceID *uint     `json:"personal_workspace_id"`
+	CreatedAt           time.Time `json:"created_at"`
 }
 
 type Enable2FAResponse struct {
@@ -543,6 +547,8 @@ func (h *UserHandler) buildProfile(user *models.User) UserProfile {
 		ScheduledDeletionAt:       user.ScheduledDeletionAt,
 		EmailVerifiedAt:           user.EmailVerifiedAt,
 		EmailVerificationRequired: required,
+		DefaultWorkspaceID:        user.DefaultWorkspaceID,
+		PersonalWorkspaceID:       user.DefaultWorkspaceID,
 		CreatedAt:                 user.CreatedAt,
 	}
 }
@@ -787,4 +793,30 @@ func (h *UserHandler) CancelAccountDeletion(c *okapi.Context) error {
 	}
 
 	return ok(c, map[string]any{"message": "Account deletion cancelled"})
+}
+
+type SetDefaultWorkspaceRequest struct {
+	Body struct {
+		WorkspaceID uint `json:"workspace_id" required:"true"`
+	} `json:"body"`
+}
+
+// SetDefaultWorkspace records which workspace a request that names none lands
+// in. The caller must be a member, and the system workspace is not a valid
+// choice: landing there by default would hide the user's real work.
+func (h *UserHandler) SetDefaultWorkspace(c *okapi.Context, req *SetDefaultWorkspaceRequest) error {
+	userID := uint(c.GetInt("user_id"))
+
+	ws, _, err := h.repo.WorkspaceForMember(userID, req.Body.WorkspaceID)
+	if err != nil {
+		return c.AbortNotFound("workspace not found, or you are not a member of it")
+	}
+	if ws.System {
+		return c.AbortBadRequest("the system workspace cannot be your default")
+	}
+
+	if err := h.repo.SetDefaultWorkspace(userID, &ws.ID); err != nil {
+		return c.AbortInternalServerError("failed to update the default workspace")
+	}
+	return ok(c, dto.MessageData{Message: "Default workspace updated"})
 }

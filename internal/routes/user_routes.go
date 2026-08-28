@@ -158,6 +158,20 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[any]{},
 		},
 		{
+			Method:      http.MethodPut,
+			Path:        "/default-workspace",
+			Handler:     okapi.H(r.h.user.SetDefaultWorkspace),
+			Group:       userGroup,
+			Summary:     "Set the default workspace",
+			Description: "Chooses which workspace a request that sends no X-Posta-Workspace-Id header operates on. The caller must be a member.",
+			Request:     &handlers.SetDefaultWorkspaceRequest{},
+			Response:    &dto.Response[dto.MessageData]{},
+			Options: []okapi.RouteOption{
+				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
 			Method:      http.MethodGet,
 			Path:        "/audit-log",
 			Handler:     okapi.H(r.h.event.UserAuditLog),

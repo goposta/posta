@@ -21,17 +21,6 @@ const userMenuOpen = ref(false)
 const wsSwitcherOpen = ref(false)
 const themeModes = ['light', 'dark', 'system'] as const
 
-// One-time banner introducing the personal workspace after the workspace-only
-// migration cutover. Dismissal is remembered in localStorage.
-const PERSONAL_BANNER_KEY = 'posta_personal_ws_banner_dismissed'
-const personalBannerDismissed = ref(localStorage.getItem(PERSONAL_BANNER_KEY) === 'true')
-const showPersonalBanner = computed(
-  () => wsStore.currentWorkspaceIsPersonal && !personalBannerDismissed.value
-)
-function dismissPersonalBanner() {
-  personalBannerDismissed.value = true
-  localStorage.setItem(PERSONAL_BANNER_KEY, 'true')
-}
 
 function goWorkspaceSettings() {
   const id = wsStore.currentWorkspace?.id
@@ -109,8 +98,8 @@ interface NavItem {
   requiresWorkspace?: boolean
   /** Only show when the user is an owner or admin of the current workspace. */
   requiresWorkspaceAdmin?: boolean
-  /** Hidden when the active workspace is the user's personal one (no team). */
-  hideInPersonal?: boolean
+  /** Hidden while the active workspace is the platform's system workspace. */
+  hideInSystem?: boolean
   /** Only show when the backend exposes the OpenAPI docs. */
   requiresOpenapiDocs?: boolean
   /** Deep-link into a WorkspaceSettings tab of the current workspace. */
@@ -222,7 +211,7 @@ const navSections: NavSection[] = [
     defaultOpen: true,
     items: [
       { name: 'All Workspaces', path: '/workspaces', icon: 'layers' },
-      { name: 'Members', path: '', icon: 'users', workspaceSubpath: 'members', hideInPersonal: true },
+      { name: 'Members', path: '', icon: 'users', workspaceSubpath: 'members' },
       { name: 'Audit Log', path: '/audit-log', icon: 'history' },
       { name: 'Settings', path: '', icon: 'settings', workspaceTab: 'settings', requiresWorkspaceAdmin: true },
     ],
@@ -279,7 +268,7 @@ function sectionItems(section: NavSection): NavItem[] {
   return section.items.filter((item) => {
     if (item.requiresWorkspace && !wsStore.isWorkspaceContext) return false
     if (item.requiresWorkspaceAdmin && !wsStore.isWorkspaceAdmin) return false
-    if (item.hideInPersonal && wsStore.currentWorkspaceIsPersonal) return false
+    if (item.hideInSystem && wsStore.currentWorkspaceIsSystem) return false
     if (item.requiresOpenapiDocs && !appInfo.value?.openapi_docs) return false
     return true
   })
@@ -419,7 +408,7 @@ function getIcon(name: string): string {
               :class="{ active: wsStore.currentWorkspaceId === ws.id }" @click="switchContext(ws.id)">
               <div class="ws-avatar-sm">{{ ws.name.charAt(0).toUpperCase() }}</div>
               <span>{{ ws.name }}</span>
-              <span class="ws-role-badge">{{ ws.is_personal ? 'personal' : ws.role }}</span>
+              <span class="ws-role-badge" :class="{ 'ws-role-badge--system': ws.system }">{{ ws.system ? 'system' : ws.role }}</span>
             </div>
             <div class="ws-switcher-divider"></div>
             <div class="ws-switcher-action" @click="createWorkspace">
@@ -595,25 +584,6 @@ function getIcon(name: string): string {
               aria-label="Dismiss until the next release" @click="dismissUpdate">×</button>
           </div>
         </div>
-        <div v-if="showPersonalBanner" class="app-banner app-banner--info personal-ws-banner">
-          <svg class="app-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-          <div class="app-banner-content">
-            <p class="app-banner-title">Your personal workspace is ready</p>
-            <p class="app-banner-text">
-              Your data now lives in <strong>{{ wsStore.currentWorkspace?.name }}</strong>.
-              Invite collaborators or rename it in workspace settings.
-            </p>
-          </div>
-          <div class="app-banner-actions">
-            <button class="app-banner-btn" @click="goWorkspaceSettings">Workspace settings</button>
-            <button class="app-banner-dismiss" @click="dismissPersonalBanner" aria-label="Dismiss banner">×</button>
-          </div>
-        </div>
         <router-view />
       </main>
       <footer class="main-footer">
@@ -678,7 +648,7 @@ function getIcon(name: string): string {
                 <span class="ws-avatar">{{ ws.name?.charAt(0)?.toUpperCase() }}</span>
                 <div style="display: flex; flex-direction: column;">
                   <span>{{ ws.name }}</span>
-                  <small style="font-size: 0.75rem; opacity: 0.7;">{{ ws.is_personal ? 'personal' : ws.role }}</small>
+                  <small style="font-size: 0.75rem; opacity: 0.7;">{{ ws.system ? 'system' : ws.role }}</small>
                 </div>
               </div>
 
@@ -1355,10 +1325,9 @@ function getIcon(name: string): string {
   padding: 28px;
 }
 
-/* ─── Personal workspace intro banner ─── */
-/* Visuals come from the shared .app-banner system; only spacing is local. */
-.personal-ws-banner {
-  margin-bottom: 20px;
+.ws-role-badge--system {
+  background: var(--warning-50);
+  color: var(--warning-600);
 }
 
 /* ─── Footer ─── */

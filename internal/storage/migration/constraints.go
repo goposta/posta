@@ -65,7 +65,7 @@ func runConstraints(db *gorm.DB) {
 	END $$`)
 
 	db.Exec(`DO $$ BEGIN
-		CREATE UNIQUE INDEX IF NOT EXISTS one_personal_per_user ON workspaces (owner_id) WHERE is_personal;
+		CREATE UNIQUE INDEX IF NOT EXISTS one_system_workspace ON workspaces ((true)) WHERE system;
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 

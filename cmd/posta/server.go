@@ -30,7 +30,8 @@ import (
 	"github.com/goposta/posta/internal/services/updatecheck"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/services/workermon"
-	"github.com/goposta/posta/internal/services/workspacemigrate"
+	workspacesvc "github.com/goposta/posta/internal/services/workspace"
+	"github.com/goposta/posta/internal/services/workspaceprovision"
 	"github.com/goposta/posta/internal/storage"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/migration"
@@ -89,6 +90,15 @@ func runServer(cli *okapicli.CLI) {
 			}
 
 			seedDefaults(res.db, cfg)
+
+			// The system workspace needs an administrator to own it, so it is
+			// ensured after seeding rather than in the migration step, which may
+			// run before any admin exists.
+			if _, err := workspacesvc.EnsureSystem(res.db); err != nil {
+				logger.Error("failed to ensure the system workspace", "error", err)
+			} else if err := workspacesvc.SyncMembers(res.db); err != nil {
+				logger.Error("failed to sync system workspace members", "error", err)
+			}
 
 			// Initialize blob storage (S3 or filesystem) for attachments
 			if cfg.BlobProvider != "" {
@@ -214,9 +224,9 @@ func seedDefaults(db *gorm.DB, cfg *config.Config) {
 		repositories.NewTemplateLocalizationRepository(db),
 		repositories.NewLanguageRepository(db),
 	)
-	migrator := workspacemigrate.New(cfg.PlanEnforcement)
+	migrator := workspaceprovision.New(cfg.PlanEnforcement)
 	migrator.SetSeeder(s)
-	if _, err := migrator.MigrateUser(db, admin.ID); err != nil {
+	if _, err := migrator.EnsureWorkspace(db, admin.ID); err != nil {
 		logger.Error("failed to provision admin personal workspace", "error", err)
 	}
 }

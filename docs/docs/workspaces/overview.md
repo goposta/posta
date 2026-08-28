@@ -6,13 +6,15 @@ description: Multi-tenant workspaces, roles, and the workspace context header
 
 # Workspaces
 
-Workspaces provide multi-tenant isolation within Posta. They work like GitHub Organizations — every user has a **personal space** by default and can optionally create **workspaces** to share resources with team members.
+Workspaces provide multi-tenant isolation within Posta. Every resource — templates, SMTP servers, domains, contacts, API keys — belongs to exactly one workspace, and a workspace is shared with as many or as few people as you invite.
 
 ## Concepts
 
 ### Personal space
 
-Every user has a personal space where their resources (templates, SMTP servers, domains, contacts, API keys, etc.) live by default. No workspace is required — the platform works for a single user out of the box. The personal space is itself a workspace flagged `is_personal: true`; it is owned by the user and cannot be deleted.
+A workspace is provisioned for you when you sign up, named after you and owned by you. It is an ordinary workspace in every respect: rename it, invite people to it, or delete it once you have another. There is no separate "personal" workspace type.
+
+One workspace is special. The **system workspace** is created on first boot, owned by the first administrator, and holds platform-managed resources. It is flagged `system: true`, admits only platform administrators, and cannot be renamed or deleted.
 
 ### Workspaces
 
@@ -69,7 +71,7 @@ The header value is the numeric workspace ID. If you are not a member of that wo
 The correct header is `X-Posta-Workspace-Id`. Earlier drafts referred to `X-Workspace-ID` — that name is wrong and is not recognized by the API.
 :::
 
-To operate against your personal space, pass its workspace ID in the header (you can find it in the `GET /api/v1/workspaces` list, where `is_personal` is `true`).
+Omit the header and the request operates on your **default workspace** — the one you last set with `PUT /api/v1/users/me/default-workspace`, or the oldest one you belong to. The role you hold in that workspace applies, so a viewer stays a viewer on a header-less request.
 
 ### Workspace-scoped API keys
 
@@ -150,7 +152,7 @@ Response (`201`):
     "description": "",
     "owner_id": 42,
     "role": "owner",
-    "is_personal": false,
+    "system": false,
     "created_at": "2026-05-31T10:00:00Z"
   }
 }
@@ -164,7 +166,7 @@ Creating a workspace is subject to your plan's workspace quota; exceeding it ret
 GET /api/v1/workspaces
 ```
 
-Returns every workspace the current user is a member of, including the personal space. Each entry carries the caller's `role` in that workspace and the `is_personal` flag.
+Returns every workspace the current user is a member of. Each entry carries the caller's `role` in that workspace and a `system` flag, which is true only for the built-in platform workspace.
 
 ## Get, update, and delete the current workspace
 
@@ -184,7 +186,12 @@ DELETE /api/v1/workspaces/current
 }
 ```
 
-`DELETE` removes the workspace and returns `204`. The personal workspace cannot be deleted (`400`).
+`DELETE` removes the workspace and returns `204`.
+
+Two workspaces refuse deletion:
+
+- The **system workspace** returns `409`. It is the built-in platform workspace, created on first boot, owned by the first administrator, and holds platform-managed resources. It cannot be renamed either, and only platform administrators are members.
+- Your **last remaining workspace** returns `400`. Everything in Posta belongs to a workspace, so deleting the only one you belong to would leave you with nowhere to work. Create another first.
 
 ```bash
 curl -X PUT http://localhost:9000/api/v1/workspaces/current \

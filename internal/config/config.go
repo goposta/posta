@@ -6,6 +6,7 @@ package config
 import (
 	"crypto/tls"
 	"fmt"
+	"os"
 	"strings"
 
 	errorhandlers "github.com/goposta/posta/internal/error_handlers"
@@ -51,8 +52,7 @@ type Config struct {
 	// admins; it never upgrades anything and sends nothing about this install.
 	UpdateCheck bool
 
-	PlanEnforcement   bool
-	WorkspaceOnlyMode bool
+	PlanEnforcement bool
 
 	// WebDir overrides where the dashboard is served from. The UI is normally
 	// embedded in the binary (internal/web); setting POSTA_WEB_DIR serves it from
@@ -259,13 +259,12 @@ func New() *Config {
 		AllowDowngrade:             goutils.EnvBool("POSTA_ALLOW_DOWNGRADE", false),
 		securitySchemes:            okapi.SecuritySchemes{},
 
-		MetricsEnabled:    goutils.EnvBool("POSTA_METRICS_ENABLED", false),
-		UpdateCheck:       goutils.EnvBool("POSTA_UPDATE_CHECK", true),
-		PlanEnforcement:   goutils.EnvBool("POSTA_PLAN_ENFORCEMENT", false),
-		WorkspaceOnlyMode: goutils.EnvBool("POSTA_WORKSPACE_ONLY_MODE", false),
-		WebDir:            goutils.Env("POSTA_WEB_DIR", ""),
-		AppWebURL:         goutils.Env("POSTA_WEB_URL", ""),
-		ApiBaseURL:        goutils.Env("POSTA_API_URL", ""),
+		MetricsEnabled:  goutils.EnvBool("POSTA_METRICS_ENABLED", false),
+		UpdateCheck:     goutils.EnvBool("POSTA_UPDATE_CHECK", true),
+		PlanEnforcement: goutils.EnvBool("POSTA_PLAN_ENFORCEMENT", false),
+		WebDir:          goutils.Env("POSTA_WEB_DIR", ""),
+		AppWebURL:       goutils.Env("POSTA_WEB_URL", ""),
+		ApiBaseURL:      goutils.Env("POSTA_API_URL", ""),
 
 		CORSOrigins: goutils.Env("POSTA_CORS_ORIGINS", "*"),
 
@@ -337,7 +336,23 @@ func New() *Config {
 		SMTPRelayRateWindow:     goutils.EnvInt("POSTA_SMTP_RELAY_RATE_WINDOW", 60),
 	}
 }
+
+// removedEnvVars are settings that no longer do anything. Setting one is not an
+// error, but it is worth telling the operator so they can clean up.
+var removedEnvVars = map[string]string{
+	"POSTA_WORKSPACE_ONLY_MODE": "every resource is workspace-scoped unconditionally; the flag no longer does anything",
+}
+
+func warnRemovedEnvVars() {
+	for name, why := range removedEnvVars {
+		if _, ok := os.LookupEnv(name); ok {
+			logger.Warn("ignoring removed setting", "variable", name, "reason", why)
+		}
+	}
+}
+
 func (c *Config) validate() error {
+	warnRemovedEnvVars()
 	if c.MessagesEnabled && c.MessagesInboundDomain != "" && !c.InboundEnabled {
 		return fmt.Errorf("POSTA_MESSAGES_INBOUND_DOMAIN requires POSTA_INBOUND_ENABLED=true")
 	}

@@ -13,36 +13,27 @@ type ResourceScope struct {
 	WorkspaceID *uint
 }
 
-var workspaceOnlyMode bool
-
-// SetWorkspaceOnlyMode enables or disables the R6 personal-mode lock.
-func SetWorkspaceOnlyMode(enabled bool) { workspaceOnlyMode = enabled }
-
+// ApplyScope narrows a query to the caller's workspace. Every resource is
+// workspace-scoped; a scope without one matches nothing rather than falling back
+// to the pre-workspace "user_id AND workspace_id IS NULL" rows, which no longer
+// exist. UserID remains on the scope for attribution, and never selects rows.
 func ApplyScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
-	if scope.WorkspaceID != nil {
-		return db.Where("workspace_id = ?", *scope.WorkspaceID)
-	}
-	if workspaceOnlyMode {
-		logger.Warn("ApplyScope: personal-mode scope rejected (workspace-only mode)", "user_id", scope.UserID)
-		return db.Where("1 = 0")
-	}
-	return db.Where("user_id = ? AND workspace_id IS NULL", scope.UserID)
-}
-
-// OwnsResource checks whether the given resource belongs to the current scope.
-func OwnsResource(scope ResourceScope, resourceUserID uint, resourceWorkspaceID *uint) bool {
-	if scope.WorkspaceID != nil {
-		return resourceWorkspaceID != nil && *resourceWorkspaceID == *scope.WorkspaceID
-	}
-	return resourceUserID == scope.UserID && resourceWorkspaceID == nil
-}
-
-func ApplyWorkspaceScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
 	if scope.WorkspaceID == nil {
-		logger.Warn("ApplyWorkspaceScope: workspace-only resource requested without a workspace", "user_id", scope.UserID)
+		logger.Warn("ApplyScope: request has no workspace; matching nothing", "user_id", scope.UserID)
 		return db.Where("1 = 0")
 	}
 	return db.Where("workspace_id = ?", *scope.WorkspaceID)
+}
+
+// OwnsResource checks whether the given resource belongs to the current scope.
+func OwnsResource(scope ResourceScope, _ uint, resourceWorkspaceID *uint) bool {
+	return OwnsWorkspaceResource(scope, resourceWorkspaceID)
+}
+
+// ApplyWorkspaceScope is an alias for ApplyScope, kept for one release so the
+// call sites added while the two behaved differently keep compiling.
+func ApplyWorkspaceScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
+	return ApplyScope(db, scope)
 }
 
 func OwnsWorkspaceResource(scope ResourceScope, resourceWorkspaceID *uint) bool {

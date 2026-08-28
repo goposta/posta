@@ -163,6 +163,14 @@ watch(currentWorkspaceId, () => load(true));
       </div>
     </template>
 
+    <div v-else-if="!ws.hasWorkspace" class="card">
+      <div class="empty-state">
+        <h3>No workspace yet</h3>
+        <p>Everything in Posta belongs to a workspace. Create one to start sending.</p>
+        <button class="btn btn-primary" @click="router.push('/workspaces')">Create workspace</button>
+      </div>
+    </div>
+
     <div v-else class="card">
       <div class="empty-state">
         <h3>Dashboard unavailable</h3>

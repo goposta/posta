@@ -94,8 +94,11 @@ const myRole = computed(() => {
 })
 const isAdminOrOwner = computed(() => myRole.value === 'owner' || myRole.value === 'admin')
 const isOwner = computed(() => myRole.value === 'owner')
-// Personal workspaces are auto-provisioned and cannot be deleted (enforced server-side).
-const isPersonal = computed(() => ws.value?.is_personal ?? false)
+// The system workspace is platform infrastructure and cannot be deleted or
+// renamed (enforced server-side). A user's last workspace cannot be deleted
+// either, since it would leave them with nowhere to work.
+const isSystem = computed(() => ws.value?.system ?? false)
+const isLastWorkspace = computed(() => wsStore.ownWorkspaces.length <= 1)
 
 async function withWorkspace<T>(fn: () => Promise<T>): Promise<T> {
   const prevWs = wsStore.currentWorkspaceId
@@ -617,17 +620,22 @@ watch(activeTab, (value) => {
           </div>
         </div>
 
-        <div v-if="isOwner && !isPersonal" class="card-body" style="border-top: 1px solid var(--border-primary);">
+        <div v-if="isOwner && isSystem" class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <p style="font-size: 13px; color: var(--text-muted);">
+            This is the platform system workspace. It owns platform-managed resources and cannot be renamed or deleted.
+          </p>
+        </div>
+        <div v-else-if="isOwner && isLastWorkspace" class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <p style="font-size: 13px; color: var(--text-muted);">
+            This is your only workspace. Create another before deleting this one.
+          </p>
+        </div>
+        <div v-else-if="isOwner" class="card-body" style="border-top: 1px solid var(--border-primary);">
           <h4 style="color: var(--danger-600); margin-bottom: 8px;">Danger Zone</h4>
           <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
             Deleting this workspace will permanently remove all its resources. This cannot be undone.
           </p>
           <button class="btn btn-danger" @click="deleteWorkspace">Delete Workspace</button>
-        </div>
-        <div v-else-if="isOwner && isPersonal" class="card-body" style="border-top: 1px solid var(--border-primary);">
-          <p style="font-size: 13px; color: var(--text-muted);">
-            This is your personal workspace and cannot be deleted. It is removed only if you delete your account.
-          </p>
         </div>
       </div>
 

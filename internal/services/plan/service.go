@@ -169,8 +169,12 @@ func (s *Service) CheckWorkspaceQuota(db *gorm.DB, userID uint) error {
 		return nil // unlimited
 	}
 
+	// The system workspace is platform infrastructure, not tenant capacity, so it
+	// never counts against the admin who happens to own it.
 	var count int64
-	if err := db.Model(&models.Workspace{}).Where("owner_id = ?", userID).Count(&count).Error; err != nil {
+	if err := db.Model(&models.Workspace{}).
+		Where("owner_id = ? AND system = ?", userID, false).
+		Count(&count).Error; err != nil {
 		return fmt.Errorf("failed to count workspaces: %w", err)
 	}
 

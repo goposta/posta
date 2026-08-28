@@ -115,7 +115,11 @@ func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string
 	if userName == "" {
 		userName = "Jonas"
 	}
-	templates, total, err := s.templateRepo.FindByUserID(userID, 1, 0)
+	// Scoped to the workspace being seeded, not to the user. A user's second
+	// workspace needs its own defaults, and a re-run against an already-seeded
+	// workspace must not duplicate them.
+	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: &workspaceID}
+	templates, total, err := s.templateRepo.FindByScope(scope, "", 1, 0)
 	if err != nil || total > 0 || len(templates) > 0 {
 		return
 	}

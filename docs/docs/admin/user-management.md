@@ -28,7 +28,7 @@ POST /api/v1/admin/users
 | `user` | Standard user — can send emails, manage own resources |
 | `admin` | Administrator — full platform access |
 
-Returns `409 Conflict` if the email already exists. A personal workspace is automatically provisioned for the new user.
+Returns `409 Conflict` if the email already exists. A workspace is automatically provisioned for the new user, named after them and owned by them like any other.
 
 ## List Users
 

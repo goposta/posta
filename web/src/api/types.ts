@@ -543,8 +543,7 @@ export interface AdminMetrics {
   failed_logins_last_24h: number
   two_factor_adoption_rate: number
   two_factor_users: number
-  users_unmigrated: number
-  users_migration_failed: number
+  users_without_workspace: number
 }
 
 export interface WorkerStatus {
@@ -878,7 +877,7 @@ export interface Workspace {
   description: string
   owner_id: number
   role: WorkspaceRole
-  is_personal: boolean
+  system: boolean
   created_at: string
 }
 
