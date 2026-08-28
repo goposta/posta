@@ -13,13 +13,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// labelStatus is the Prometheus label shared by the request, email, and
+// message counters.
+const labelStatus = "status"
+
 var (
 	httpRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "posta_http_requests_total",
 			Help: "Total number of HTTP requests",
 		},
-		[]string{"method", "path", "status"},
+		[]string{"method", "path", labelStatus},
 	)
 
 	httpRequestDuration = prometheus.NewHistogramVec(
@@ -64,7 +68,7 @@ var (
 			Name: "posta_webhook_deliveries_total",
 			Help: "Total number of webhook delivery attempts by status",
 		},
-		[]string{"status"},
+		[]string{labelStatus},
 	)
 
 	webhookDeliveryDuration = prometheus.NewHistogram(
@@ -103,7 +107,7 @@ var (
 			Name: "posta_form_messages_received_total",
 			Help: "Total number of web form messages stored, by scan status",
 		},
-		[]string{"status"},
+		[]string{labelStatus},
 	)
 
 	messageNotificationsTotal = prometheus.NewCounter(

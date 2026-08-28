@@ -10,6 +10,9 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
+// recordTypeTXT is the DNS record type every verification check reads.
+const recordTypeTXT = "TXT"
+
 // VerificationResult holds the outcome of DNS record checks.
 type VerificationResult struct {
 	OwnershipVerified bool   `json:"ownership_verified"`
@@ -39,12 +42,12 @@ type DNSRecord struct {
 func RequiredRecords(d *models.Domain) *DNSRecords {
 	return &DNSRecords{
 		Verification: DNSRecord{
-			Type:  "TXT",
+			Type:  recordTypeTXT,
 			Host:  d.Domain,
 			Value: "posta-verification=" + d.VerificationToken,
 		},
 		SPF: DNSRecord{
-			Type:  "TXT",
+			Type:  recordTypeTXT,
 			Host:  d.Domain,
 			Value: "v=spf1 include:_spf.posta ~all",
 		},
@@ -54,7 +57,7 @@ func RequiredRecords(d *models.Domain) *DNSRecords {
 			Value: "posta._domainkey.posta",
 		},
 		DMARC: DNSRecord{
-			Type:  "TXT",
+			Type:  recordTypeTXT,
 			Host:  "_dmarc." + d.Domain,
 			Value: "v=DMARC1; p=none; rua=mailto:dmarc@" + d.Domain,
 		},

@@ -788,11 +788,11 @@ func (h *WorkspaceHandler) logAudit(c *okapi.Context, workspaceID uint, action, 
 func (h *WorkspaceHandler) GetPlan(c *okapi.Context) error {
 	wsID := uint(c.GetInt("workspace_id"))
 	if h.planService == nil {
-		return ok(c, okapi.M{"plan": nil, "source": "global_settings"})
+		return ok(c, okapi.M{"plan": nil, "source": planSourceGlobalSettings})
 	}
 	plan := h.planService.EffectivePlan(&wsID)
 	if plan == nil {
-		return ok(c, okapi.M{"plan": nil, "source": "global_settings"})
+		return ok(c, okapi.M{"plan": nil, "source": planSourceGlobalSettings})
 	}
 	return ok(c, plan)
 }

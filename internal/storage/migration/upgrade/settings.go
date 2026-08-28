@@ -46,7 +46,7 @@ func upsertSetting(tx *gorm.DB, key, value string) error {
 	var existing models.Setting
 	err := tx.Where("key = ?", key).First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return tx.Create(&models.Setting{Key: key, Value: value, Type: "string"}).Error
+		return tx.Create(&models.Setting{Key: key, Value: value, Type: models.SettingTypeString}).Error
 	}
 	if err != nil {
 		return err
@@ -66,5 +66,5 @@ func ensureSetting(tx *gorm.DB, key, value string) error {
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	return tx.Create(&models.Setting{Key: key, Value: value, Type: "string"}).Error
+	return tx.Create(&models.Setting{Key: key, Value: value, Type: models.SettingTypeString}).Error
 }

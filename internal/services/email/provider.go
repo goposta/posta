@@ -8,68 +8,84 @@ import (
 	"strings"
 )
 
-const ProviderOther = "Other"
+// Mailbox provider names, as reported by deliverability analytics. Named so the
+// domain table below cannot drift into "Outlook" in one row and "outlook" in
+// another, which would split one provider into two buckets in the breakdown.
+const (
+	ProviderAOL             = "AOL"
+	ProviderAppleICloud     = "Apple iCloud"
+	ProviderFastmail        = "Fastmail"
+	ProviderGMX             = "GMX"
+	ProviderGmail           = "Gmail"
+	ProviderGoogleWorkspace = "Google Workspace"
+	ProviderOutlook         = "Outlook"
+	ProviderProton          = "Proton"
+	ProviderYahoo           = "Yahoo"
+	ProviderYandex          = "Yandex"
+	ProviderZoho            = "Zoho"
+	ProviderOther           = "Other"
+)
 
 var providerByDomain = map[string]string{
 	// Gmail (consumer)
-	"gmail.com":      "Gmail",
-	"googlemail.com": "Gmail",
+	"gmail.com":      ProviderGmail,
+	"googlemail.com": ProviderGmail,
 
 	// Google Workspace primary domain
-	"google.com": "Google Workspace",
+	"google.com": ProviderGoogleWorkspace,
 
 	// Outlook / Microsoft consumer
-	"outlook.com":   "Outlook",
-	"hotmail.com":   "Outlook",
-	"live.com":      "Outlook",
-	"msn.com":       "Outlook",
-	"outlook.co.uk": "Outlook",
-	"hotmail.co.uk": "Outlook",
-	"live.co.uk":    "Outlook",
-	"hotmail.fr":    "Outlook",
-	"outlook.fr":    "Outlook",
-	"live.fr":       "Outlook",
+	"outlook.com":   ProviderOutlook,
+	"hotmail.com":   ProviderOutlook,
+	"live.com":      ProviderOutlook,
+	"msn.com":       ProviderOutlook,
+	"outlook.co.uk": ProviderOutlook,
+	"hotmail.co.uk": ProviderOutlook,
+	"live.co.uk":    ProviderOutlook,
+	"hotmail.fr":    ProviderOutlook,
+	"outlook.fr":    ProviderOutlook,
+	"live.fr":       ProviderOutlook,
 
 	// Yahoo
-	"yahoo.com":      "Yahoo",
-	"yahoo.co.uk":    "Yahoo",
-	"yahoo.fr":       "Yahoo",
-	"yahoo.de":       "Yahoo",
-	"yahoo.co.jp":    "Yahoo",
-	"yahoo.ca":       "Yahoo",
-	"ymail.com":      "Yahoo",
-	"rocketmail.com": "Yahoo",
+	"yahoo.com":      ProviderYahoo,
+	"yahoo.co.uk":    ProviderYahoo,
+	"yahoo.fr":       ProviderYahoo,
+	"yahoo.de":       ProviderYahoo,
+	"yahoo.co.jp":    ProviderYahoo,
+	"yahoo.ca":       ProviderYahoo,
+	"ymail.com":      ProviderYahoo,
+	"rocketmail.com": ProviderYahoo,
 
 	// Apple iCloud
-	"icloud.com": "Apple iCloud",
-	"me.com":     "Apple iCloud",
-	"mac.com":    "Apple iCloud",
+	"icloud.com": ProviderAppleICloud,
+	"me.com":     ProviderAppleICloud,
+	"mac.com":    ProviderAppleICloud,
 
 	// Proton
-	"proton.me":      "Proton",
-	"protonmail.com": "Proton",
-	"pm.me":          "Proton",
+	"proton.me":      ProviderProton,
+	"protonmail.com": ProviderProton,
+	"pm.me":          ProviderProton,
 
 	// AOL
-	"aol.com": "AOL",
+	"aol.com": ProviderAOL,
 
 	// GMX / mail.com
-	"gmx.com":  "GMX",
-	"gmx.net":  "GMX",
-	"gmx.de":   "GMX",
-	"mail.com": "GMX",
+	"gmx.com":  ProviderGMX,
+	"gmx.net":  ProviderGMX,
+	"gmx.de":   ProviderGMX,
+	"mail.com": ProviderGMX,
 
 	// Zoho
-	"zoho.com":     "Zoho",
-	"zohomail.com": "Zoho",
+	"zoho.com":     ProviderZoho,
+	"zohomail.com": ProviderZoho,
 
 	// Fastmail
-	"fastmail.com": "Fastmail",
-	"fastmail.fm":  "Fastmail",
+	"fastmail.com": ProviderFastmail,
+	"fastmail.fm":  ProviderFastmail,
 
 	// Yandex
-	"yandex.ru":  "Yandex",
-	"yandex.com": "Yandex",
+	"yandex.ru":  ProviderYandex,
+	"yandex.com": ProviderYandex,
 }
 
 // providerBySuffix catches subdomain-style matches (e.g. "mail.google.com").

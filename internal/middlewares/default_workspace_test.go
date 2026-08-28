@@ -98,7 +98,7 @@ func TestDefaultWorkspaceFallbackSkippedForBoundAPIKey(t *testing.T) {
 	app.Get("/t", func(c *okapi.Context) error {
 		gotWorkspace = c.GetInt(CtxWorkspaceID)
 		return c.JSON(http.StatusOK, okapi.M{"ok": true})
-	}).Use(stashAPIKey(1, 7, models.ScopeAll), OptionalWorkspaceMiddleware(nil, resolver))
+	}).Use(stashAPIKey(7, models.ScopeAll), OptionalWorkspaceMiddleware(nil, resolver))
 
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/t", nil))

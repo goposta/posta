@@ -54,6 +54,10 @@ type templateDef struct {
 
 // seedTemplate creates a single template with a version and one localization
 // per seedLanguages entry, loading each localized body from the embedded files.
+// sampleBrand fills the {{ company }} and {{ product }} placeholders in the
+// seeded templates' preview data.
+const sampleBrand = "Posta"
+
 func (s *Seeder) seedTemplate(workspaceID, userID uint, ssID uint, def templateDef) {
 	b, _ := json.MarshalIndent(def.SampleData, "", "  ")
 	sampleData := string(b)
@@ -179,8 +183,8 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "Welcome email introducing Posta and its features",
 			SampleData: okapi.M{
 				"name":    userName,
-				"product": "Posta",
-				"company": "Posta",
+				"product": sampleBrand,
+				"company": sampleBrand,
 				"year":    year,
 				"docs":    docsURL,
 				"features": []string{
@@ -219,7 +223,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "Transactional email for password reset requests",
 			SampleData: okapi.M{
 				"name":      userName,
-				"company":   "Posta",
+				"company":   sampleBrand,
 				"year":      year,
 				"resetLink": "https://example.com/reset?token=abc123",
 				"expiry":    "1 hour",
@@ -237,7 +241,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "Order confirmation email with item details and total",
 			SampleData: okapi.M{
 				"name":        userName,
-				"company":     "Posta",
+				"company":     sampleBrand,
 				"year":        year,
 				"orderNumber": "10042",
 				"orderDate":   "April 21, 2026",
@@ -260,7 +264,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "Monthly newsletter with articles and unsubscribe link",
 			SampleData: okapi.M{
 				"name":    userName,
-				"company": "Posta",
+				"company": sampleBrand,
 				"year":    year,
 				"month":   "April",
 				"articles": []map[string]string{
@@ -295,7 +299,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "Confirm a new account's email address with a link and code",
 			SampleData: okapi.M{
 				"name":       userName,
-				"company":    "Posta",
+				"company":    sampleBrand,
 				"year":       year,
 				"verifyLink": "https://example.com/verify?token=abc123",
 				"code":       "492018",
@@ -314,7 +318,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "One-time passcode / magic-link login email",
 			SampleData: okapi.M{
 				"name":      userName,
-				"company":   "Posta",
+				"company":   sampleBrand,
 				"year":      year,
 				"code":      "731924",
 				"loginLink": "https://example.com/login?token=abc123",
@@ -333,7 +337,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "Payment receipt with line items, subtotal, tax, and total",
 			SampleData: okapi.M{
 				"name":          userName,
-				"company":       "Posta",
+				"company":       sampleBrand,
 				"year":          year,
 				"invoiceNumber": "INV-2042",
 				"invoiceDate":   "April 21, 2026",
@@ -359,7 +363,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 			Description: "Invite a user to a workspace with an accept link and role",
 			SampleData: okapi.M{
 				"name":          userName,
-				"company":       "Posta",
+				"company":       sampleBrand,
 				"year":          year,
 				"inviterName":   "Jonas",
 				"workspaceName": "Acme Marketing",

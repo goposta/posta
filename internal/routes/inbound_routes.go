@@ -15,7 +15,7 @@ import (
 // Protected by opaque secret/token — no JWT.
 func (r *Router) inboundWebhookRoutes() []okapi.RouteDefinition {
 	inboundGroup := r.app.Group("/api/v1/inbound").WithTagInfo(okapi.GroupTag{
-		Name:        "Inbound",
+		Name:        tagInbound,
 		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events.",
 	})
 	return []okapi.RouteDefinition{
@@ -44,7 +44,7 @@ func (r *Router) inboundWorkspaceRoutes() []okapi.RouteDefinition {
 	// header, but it does send the session cookie, which r.mw.auth reads. Machine
 	// clients may stream with an API key via `?token=psk_…`.
 	userGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
-		Name:        "Inbound",
+		Name:        tagInbound,
 		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events. Public ingest endpoints use opaque secrets; user endpoints use a dashboard session or an API key.",
 	})
 	userGroup.WithBearerAuth()

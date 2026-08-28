@@ -112,9 +112,11 @@ func rebuildUniqueIndexes(db *gorm.DB) {
 		column  string
 	}
 
+	const colName = "name"
+
 	indexes := []indexDef{
-		{"templates", "idx_user_template", "idx_workspace_template", "name"},
-		{"style_sheets", "idx_user_stylesheet", "idx_workspace_stylesheet", "name"},
+		{"templates", "idx_user_template", "idx_workspace_template", colName},
+		{"style_sheets", "idx_user_stylesheet", "idx_workspace_stylesheet", colName},
 		{"contacts", "idx_user_email", "idx_workspace_email", "email"},
 		{"domains", "idx_user_domain", "idx_workspace_domain", "domain"},
 		{"languages", "idx_user_language", "idx_workspace_language", "code"},
