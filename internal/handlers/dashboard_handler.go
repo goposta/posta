@@ -17,6 +17,13 @@ type DashboardHandler struct {
 	db             *gorm.DB
 	cache          *cache.Cache
 	whDeliveryRepo *repositories.WebhookDeliveryRepository
+	features       DashboardFeatures
+}
+
+type DashboardFeatures struct {
+	Messages bool `json:"messages"`
+	Inbound  bool `json:"inbound"`
+	Relay    bool `json:"relay"`
 }
 
 type DashboardStats struct {
@@ -40,6 +47,20 @@ type DashboardStats struct {
 	FailedInbound     int64         `json:"failed_inbound"`
 	DailyVolume       []DailyVolume `json:"daily_volume"`
 
+	UnverifiedDomains int64   `json:"unverified_domains"`
+	ExpiringAPIKeys   int64   `json:"expiring_api_keys"`
+	BounceRate        float64 `json:"bounce_rate"`
+
+	TotalForms      int64 `json:"total_forms"`
+	TotalMessages   int64 `json:"total_messages"`
+	UnreadMessages  int64 `json:"unread_messages"`
+	SpamMessages    int64 `json:"spam_messages"`
+	TotalTemplates  int64 `json:"total_templates"`
+	TotalCampaigns  int64 `json:"total_campaigns"`
+	TotalSubscriber int64 `json:"total_subscribers"`
+
+	Features DashboardFeatures `json:"features"`
+
 	// Webhook delivery stats
 	WebhookDeliveries *repositories.WebhookDeliveryStats `json:"webhook_deliveries"`
 }
@@ -53,6 +74,8 @@ type DailyVolume struct {
 func NewDashboardHandler(db *gorm.DB, c *cache.Cache, whDeliveryRepo *repositories.WebhookDeliveryRepository) *DashboardHandler {
 	return &DashboardHandler{db: db, cache: c, whDeliveryRepo: whDeliveryRepo}
 }
+
+func (h *DashboardHandler) SetFeatures(f DashboardFeatures) { h.features = f }
 
 func (h *DashboardHandler) Stats(c *okapi.Context) error {
 	scope := getScope(c)
@@ -83,11 +106,16 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 
 	// Infrastructure counts
 	applyScope(&models.Domain{}).Count(&stats.TotalDomains)
+	applyScope(&models.Domain{}).Where("ownership_verified = false").Count(&stats.UnverifiedDomains)
 	applyScope(&models.SMTPServer{}).Count(&stats.TotalSmtpServers)
 
 	// API keys
+	now := time.Now()
 	applyScope(&models.APIKey{}).Count(&stats.TotalAPIKeys)
-	applyScope(&models.APIKey{}).Where("revoked = false AND (expires_at IS NULL OR expires_at > ?)", time.Now()).Count(&stats.ActiveAPIKeys)
+	applyScope(&models.APIKey{}).Where("revoked = false AND (expires_at IS NULL OR expires_at > ?)", now).Count(&stats.ActiveAPIKeys)
+	applyScope(&models.APIKey{}).
+		Where("revoked = false AND expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?", now, now.AddDate(0, 0, 7)).
+		Count(&stats.ExpiringAPIKeys)
 
 	// Contacts & deliverability
 	applyScope(&models.Contact{}).Count(&stats.TotalContacts)
@@ -100,10 +128,34 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 	applyScope(&models.InboundEmail{}).Where("status = ?", models.InboundStatusForwarded).Count(&stats.ForwardedInbound)
 	applyScope(&models.InboundEmail{}).Where("status = ?", models.InboundStatusFailed).Count(&stats.FailedInbound)
 
-	// Failure rate
+	// Content and audience counts
+	applyScope(&models.Template{}).Count(&stats.TotalTemplates)
+	applyScope(&models.Campaign{}).Count(&stats.TotalCampaigns)
+	applyScope(&models.Subscriber{}).Count(&stats.TotalSubscriber)
+
+	// Web form messages
+	if h.features.Messages {
+		applyScope(&models.Form{}).Count(&stats.TotalForms)
+		applyScope(&models.Message{}).
+			Where("status <> ? AND deleted_at IS NULL", models.MessageStatusRejected).
+			Count(&stats.TotalMessages)
+		applyScope(&models.Message{}).
+			Where("read_at IS NULL AND deleted_at IS NULL AND status IN ?",
+				[]models.MessageStatus{models.MessageStatusReceived, models.MessageStatusFlagged}).
+			Count(&stats.UnreadMessages)
+		applyScope(&models.Message{}).
+			Where("deleted_at IS NULL AND status IN ?",
+				[]models.MessageStatus{models.MessageStatusQuarantined, models.MessageStatusRejected}).
+			Count(&stats.SpamMessages)
+	}
+
+	// Failure and bounce rates
 	if stats.TotalEmails > 0 {
 		stats.FailureRate = float64(stats.FailedEmails) / float64(stats.TotalEmails) * 100
+		stats.BounceRate = float64(stats.TotalBounces) / float64(stats.TotalEmails) * 100
 	}
+
+	stats.Features = h.features
 
 	// Webhook delivery stats
 	if whStats, err := h.whDeliveryRepo.StatsByScope(scope); err == nil {

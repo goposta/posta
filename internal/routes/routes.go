@@ -303,6 +303,12 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	passwordResetSvc := passwordreset.NewService(userRepo, repositories.NewPasswordResetRepository(db), notif, cfg.AppWebURL)
 	r.h.user.SetPasswordReset(passwordResetSvc)
 
+	r.h.dashboard.SetFeatures(handlers.DashboardFeatures{
+		Messages: cfg.MessagesEnabled,
+		Inbound:  cfg.InboundEnabled,
+		Relay:    cfg.SMTPRelayEnabled,
+	})
+
 	// Email content privacy
 	r.h.email.SetSettings(settingsProvider)
 	r.h.admin.SetEmailSettings(settingsProvider)
