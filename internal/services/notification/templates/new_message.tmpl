@@ -23,6 +23,10 @@
   {{ end }}
 </table>
 
+{{ if .SenderPhone }}
+<p style="margin: 0 0 16px;">Phone: <a href="tel:{{ .SenderPhone }}" style="color: #7c3aed;">{{ .SenderPhone }}</a></p>
+{{ end }}
+
 {{ if .Body }}
 <p style="margin: 0 0 8px; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Message</p>
 <div style="padding: 14px 16px; border-radius: 10px; margin: 0 0 20px; font-size: 14px; line-height: 1.6; background-color: #f9fafb; border: 1px solid #eceef2; color: #111827; white-space: pre-wrap;">{{ .Body }}</div>

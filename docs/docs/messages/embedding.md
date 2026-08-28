@@ -18,6 +18,9 @@ The **Embed** tab of a form gives you paste-ready code. Both variants below post
   <label for="posta-email">Email</label>
   <input id="posta-email" type="email" name="email" required>
 
+  <label for="posta-phone">Phone (optional)</label>
+  <input id="posta-phone" type="tel" name="phone" autocomplete="tel">
+
   <label for="posta-message">Message</label>
   <textarea id="posta-message" name="message" required></textarea>
 
@@ -42,6 +45,7 @@ const res = await fetch('https://posta.example.com/api/v1/f/YOUR_PUBLIC_KEY', {
   body: JSON.stringify({
     name: form.name.value,
     email: form.email.value,
+    phone: form.phone.value,
     message: form.message.value,
   }),
 })
@@ -114,9 +118,12 @@ Posta extracts well-known fields case-insensitively:
 |--------|--------------------------|
 | Sender email | `email`, `e-mail`, `_replyto`, `reply_to`, `replyto`, `from`, `sender_email`, `your-email` |
 | Sender name | `name`, `full_name`, `fullname`, `your-name`, `sender_name`, or `first_name` + `last_name` |
+| Phone | `phone`, `phone_number`, `phonenumber`, `tel`, `telephone`, `mobile`, `cell`, `your-phone`, `sender_phone` |
 | Subject | `_subject`, `subject`, `topic`, `your-subject` |
 | Body | `message`, `body`, `comments`, `comment`, `content`, `description`, `your-message` |
 
 If nothing matches, Posta falls back to the first value that parses as an email address and the longest value as the body. Every field is stored regardless, in the order it was submitted.
+
+The phone number is optional and has no fallback: if none of those keys are present, `sender_phone` is empty. Submitted values are normalised down to digits and the separators `+ - ( ) . /` — enough to keep `+33 6 12 34 56 78` and `(555) 010-9999` readable, while dropping anything that could reach an email header. A value with no digits at all is discarded.
 
 A message with no usable address is still stored and notified — but it cannot be replied to, and the dashboard says so.

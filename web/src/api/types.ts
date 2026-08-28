@@ -1187,6 +1187,7 @@ export interface Message {
   form_id: number
   sender_email: string
   sender_name: string
+  sender_phone: string
   subject: string
   body: string
   client_ip?: string

@@ -94,7 +94,9 @@ func (r *MessageRepository) FindByScopeFiltered(scope ResourceScope, f MessageFi
 		}
 		if f.Query != "" {
 			like := "%" + strings.ToLower(f.Query) + "%"
-			q = q.Where("LOWER(subject) LIKE ? OR LOWER(body) LIKE ? OR LOWER(sender_email) LIKE ? OR LOWER(sender_name) LIKE ?", like, like, like, like)
+			q = q.Where(
+				"LOWER(subject) LIKE ? OR LOWER(body) LIKE ? OR LOWER(sender_email) LIKE ? OR LOWER(sender_name) LIKE ? OR sender_phone LIKE ?",
+				like, like, like, like, like)
 		}
 		if f.From != nil {
 			q = q.Where("created_at >= ?", *f.From)

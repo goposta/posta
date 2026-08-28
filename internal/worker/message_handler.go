@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/services/webhook"
 	"github.com/goposta/posta/internal/storage/repositories"
@@ -26,6 +27,7 @@ type MessageWebhookPayload struct {
 	FormName    string                `json:"form_name"`
 	SenderEmail string                `json:"sender_email,omitempty"`
 	SenderName  string                `json:"sender_name,omitempty"`
+	SenderPhone string                `json:"sender_phone,omitempty"`
 	Subject     string                `json:"subject,omitempty"`
 	Body        string                `json:"body,omitempty"`
 	Fields      []models.MessageField `json:"fields,omitempty"`
@@ -141,6 +143,7 @@ func (h *MessageProcessHandler) dispatch(msg *models.Message, form *models.Form)
 		FormName:    form.Name,
 		SenderEmail: msg.SenderEmail,
 		SenderName:  msg.SenderName,
+		SenderPhone: msg.SenderPhone,
 		Subject:     msg.Subject,
 		Body:        msg.Body,
 		Fields:      fields,
@@ -182,12 +185,13 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form) e
 	}
 
 	data := map[string]any{
-		"FormName":   form.Name,
-		"Fields":     notifiableFields(msg, fields),
-		"Body":       msg.Body,
-		"Flagged":    msg.Status == models.MessageStatusFlagged,
-		"SpamScore":  fmt.Sprintf("%.1f", msg.SpamScore),
-		"MessageURL": h.messageURL(msg.UUID),
+		"FormName":    form.Name,
+		"SenderPhone": msg.SenderPhone,
+		"Fields":      notifiableFields(msg, fields),
+		"Body":        msg.Body,
+		"Flagged":     msg.Status == models.MessageStatusFlagged,
+		"SpamScore":   fmt.Sprintf("%.1f", msg.SpamScore),
+		"MessageURL":  h.messageURL(msg.UUID),
 	}
 	if workspaceName != "" {
 		data["WorkspaceName"] = workspaceName
@@ -222,13 +226,25 @@ func (h *MessageProcessHandler) messageURL(uuid string) string {
 	return fmt.Sprintf("%s/messages/%s", h.appURL, uuid)
 }
 
+var summarizedFieldKeys = func() map[string]bool {
+	set := map[string]bool{"message": true, "body": true}
+	for _, k := range messages.SummarizedKeys() {
+		set[strings.ToLower(k)] = true
+	}
+	return set
+}()
+
 func notifiableFields(msg *models.Message, fields []models.MessageField) []models.MessageField {
 	out := []models.MessageField{
 		{Key: "From", Value: displaySender(msg)},
-		{Key: "Subject", Value: msg.Subject},
 	}
+	if msg.SenderPhone != "" {
+		out = append(out, models.MessageField{Key: "Phone", Value: msg.SenderPhone})
+	}
+	out = append(out, models.MessageField{Key: "Subject", Value: msg.Subject})
+
 	for _, f := range fields {
-		if strings.EqualFold(f.Key, "message") || strings.EqualFold(f.Key, "body") {
+		if summarizedFieldKeys[strings.ToLower(strings.TrimSpace(f.Key))] {
 			continue
 		}
 		if len(out) >= 12 {

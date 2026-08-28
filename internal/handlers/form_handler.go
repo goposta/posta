@@ -552,6 +552,9 @@ func buildHTMLSnippet(endpoint string, form *models.Form) string {
   <label for="posta-email">Email</label>
   <input id="posta-email" type="email" name="email" required>
 
+  <label for="posta-phone">Phone (optional)</label>
+  <input id="posta-phone" type="tel" name="phone" autocomplete="tel">
+
   <label for="posta-message">Message</label>
   <textarea id="posta-message" name="message" required></textarea>
 
@@ -570,6 +573,7 @@ func buildFetchSnippet(endpoint string) string {
   body: JSON.stringify({
     name: form.name.value,
     email: form.email.value,
+    phone: form.phone.value,
     message: form.message.value,
   }),
 })`, endpoint)

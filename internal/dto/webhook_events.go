@@ -72,6 +72,7 @@ type MessageWebhookEvent struct {
 	FormName    string                `json:"form_name"`
 	SenderEmail string                `json:"sender_email,omitempty"`
 	SenderName  string                `json:"sender_name,omitempty"`
+	SenderPhone string                `json:"sender_phone,omitempty"`
 	Subject     string                `json:"subject,omitempty"`
 	Body        string                `json:"body,omitempty"`
 	Fields      []MessageWebhookField `json:"fields,omitempty"`

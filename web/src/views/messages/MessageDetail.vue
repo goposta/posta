@@ -212,6 +212,10 @@ onMounted(load);
                 <td style="font-weight: 600; width: 160px">From</td>
                 <td>{{ senderLabel(message) }}</td>
               </tr>
+              <tr v-if="message.sender_phone">
+                <td style="font-weight: 600">Phone</td>
+                <td><a :href="`tel:${message.sender_phone}`">{{ message.sender_phone }}</a></td>
+              </tr>
               <tr>
                 <td style="font-weight: 600">Form</td>
                 <td>

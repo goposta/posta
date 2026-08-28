@@ -156,11 +156,13 @@ For configuring inbound routing and managing received messages, see the Inbound 
   "form_name": "Contact form",
   "sender_email": "ada@example.com",
   "sender_name": "Ada Lovelace",
+  "sender_phone": "+1 555 010 9999",
   "subject": "Question about pricing",
   "body": "How does per-seat billing work?",
   "fields": [
     { "key": "name", "value": "Ada Lovelace" },
     { "key": "email", "value": "ada@example.com" },
+    { "key": "phone", "value": "+1 555 010 9999" },
     { "key": "message", "value": "How does per-seat billing work?" }
   ],
   "status": "received",
@@ -171,6 +173,6 @@ For configuring inbound routing and managing received messages, see the Inbound 
 }
 ```
 
-`status` is `received` or `flagged` for `message.received`, and `quarantined` for `message.spam`. Submissions scored past the reject threshold are stored for audit but never dispatched.
+`sender_phone` is present only when the form submitted one. `status` is `received` or `flagged` for `message.received`, and `quarantined` for `message.spam`. Submissions scored past the reject threshold are stored for audit but never dispatched.
 
 For configuring forms and replying to submissions, see the Forms & Messages section in the sidebar.

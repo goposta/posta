@@ -33,6 +33,12 @@ var (
 	nameKeys    = []string{"name", "full_name", "fullname", "your-name", "sender_name"}
 	subjectKeys = []string{"_subject", "subject", "topic", "your-subject"}
 	bodyKeys    = []string{"message", "body", "comments", "comment", "content", "description", "your-message"}
+	phoneKeys   = []string{"phone", "phone_number", "phonenumber", "tel", "telephone", "mobile", "cell", "your-phone", "sender_phone"}
+)
+
+const (
+	maxPhoneRunes   = 40
+	phoneEdgeCutset = " -.,/"
 )
 
 func IsReserved(key string) bool {
@@ -78,6 +84,7 @@ func SanitizeHeaderValue(value string) string {
 type Extracted struct {
 	Email   string
 	Name    string
+	Phone   string
 	Subject string
 	Body    string
 }
@@ -87,6 +94,7 @@ func Extract(fields []models.MessageField) Extracted {
 
 	out.Email = SanitizeHeaderValue(pick(fields, emailKeys))
 	out.Name = SanitizeHeaderValue(pick(fields, nameKeys))
+	out.Phone = NormalizePhone(pick(fields, phoneKeys))
 	out.Subject = SanitizeHeaderValue(pick(fields, subjectKeys))
 	out.Body = pick(fields, bodyKeys)
 
@@ -158,4 +166,45 @@ func NormalizeEmail(email string) string {
 		return strings.ToLower(addr.Address)
 	}
 	return strings.ToLower(email)
+}
+
+func NormalizePhone(v string) string {
+	v = SanitizeHeaderValue(v)
+	if v == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	for _, r := range v {
+		switch {
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '+' && b.Len() == 0:
+			b.WriteRune(r)
+		case r == ' ', r == '-', r == '(', r == ')', r == '.', r == '/':
+			b.WriteRune(r)
+		}
+	}
+
+	out := strings.Join(strings.Fields(b.String()), " ")
+	out = strings.TrimLeft(strings.TrimRight(out, phoneEdgeCutset), phoneEdgeCutset)
+	if !strings.ContainsAny(out, "0123456789") {
+		return ""
+	}
+	if runes := []rune(out); len(runes) > maxPhoneRunes {
+		out = strings.TrimSpace(string(runes[:maxPhoneRunes]))
+	}
+	return out
+}
+
+func PhoneAliases() []string { return phoneKeys }
+
+func SummarizedKeys() []string {
+	keys := make([]string, 0, len(emailKeys)+len(nameKeys)+len(subjectKeys)+len(phoneKeys)+4)
+	keys = append(keys, emailKeys...)
+	keys = append(keys, nameKeys...)
+	keys = append(keys, subjectKeys...)
+	keys = append(keys, phoneKeys...)
+	keys = append(keys, "first_name", "firstname", "last_name", "lastname")
+	return keys
 }

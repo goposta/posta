@@ -113,3 +113,48 @@ func TestMessageIsSpam(t *testing.T) {
 		}
 	}
 }
+
+func TestNotifiableFieldsIncludesPhoneAndDropsSummarizedAliases(t *testing.T) {
+	msg := &models.Message{
+		SenderName:  "Ada",
+		SenderEmail: "ada@example.com",
+		SenderPhone: "+1 555 010 9999",
+		Subject:     "Hi",
+	}
+	fields := []models.MessageField{
+		{Key: "name", Value: "Ada"},
+		{Key: "email", Value: "ada@example.com"},
+		{Key: "phone", Value: "+1 555 010 9999"},
+		{Key: "subject", Value: "Hi"},
+		{Key: "message", Value: "long body"},
+		{Key: "company", Value: "Acme"},
+	}
+
+	got := notifiableFields(msg, fields)
+
+	keys := make([]string, 0, len(got))
+	for _, f := range got {
+		keys = append(keys, f.Key)
+	}
+	want := []string{"From", "Phone", "Subject", "company"}
+	if len(keys) != len(want) {
+		t.Fatalf("keys = %v, want %v", keys, want)
+	}
+	for i := range want {
+		if keys[i] != want[i] {
+			t.Fatalf("keys = %v, want %v", keys, want)
+		}
+	}
+	if got[1].Value != "+1 555 010 9999" {
+		t.Fatalf("phone value = %q", got[1].Value)
+	}
+}
+
+func TestNotifiableFieldsOmitsPhoneRowWhenAbsent(t *testing.T) {
+	msg := &models.Message{SenderEmail: "ada@example.com", Subject: "Hi"}
+	for _, f := range notifiableFields(msg, nil) {
+		if f.Key == "Phone" {
+			t.Fatal("a Phone row should not appear when no phone was submitted")
+		}
+	}
+}

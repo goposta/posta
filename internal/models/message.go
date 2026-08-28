@@ -49,6 +49,7 @@ type Message struct {
 
 	SenderEmail string `json:"sender_email" gorm:"index"`
 	SenderName  string `json:"sender_name"`
+	SenderPhone string `json:"sender_phone"`
 	Subject     string `json:"subject"`
 	Body        string `json:"body" gorm:"type:text"`
 

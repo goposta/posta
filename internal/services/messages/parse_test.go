@@ -125,3 +125,71 @@ func TestNormalizeEmail(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractPhone(t *testing.T) {
+	cases := []struct {
+		name   string
+		fields []models.MessageField
+		want   string
+	}{
+		{"phone", []models.MessageField{{Key: "phone", Value: "+1 555 010 9999"}}, "+1 555 010 9999"},
+		{"tel alias", []models.MessageField{{Key: "Tel", Value: "0612345678"}}, "0612345678"},
+		{"mobile alias", []models.MessageField{{Key: "mobile", Value: "(555) 010-9999"}}, "(555) 010-9999"},
+		{"phone_number alias", []models.MessageField{{Key: "phone_number", Value: "555.010.9999"}}, "555.010.9999"},
+		{"absent", []models.MessageField{{Key: "email", Value: "a@b.com"}}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Extract(tc.fields).Phone; got != tc.want {
+				t.Fatalf("Phone = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizePhone(t *testing.T) {
+	cases := map[string]string{
+		"+33 6 12 34 56 78":  "+33 6 12 34 56 78",
+		"  0612345678  ":     "0612345678",
+		"(555) 010-9999":     "(555) 010-9999",
+		"555.010.9999 ext 4": "555.010.9999 4",
+		"call me":            "",
+		"":                   "",
+		"tel:+15550109999":   "+15550109999",
+		"+1\r\nBcc: a@b.com": "+1",
+		"12  34":             "12 34",
+	}
+	for in, want := range cases {
+		if got := NormalizePhone(in); got != want {
+			t.Fatalf("NormalizePhone(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestNormalizePhoneCapsLength(t *testing.T) {
+	got := NormalizePhone(strings.Repeat("1", 200))
+	if len([]rune(got)) != maxPhoneRunes {
+		t.Fatalf("got %d runes, want %d", len([]rune(got)), maxPhoneRunes)
+	}
+}
+
+func TestNormalizePhoneStripsInjection(t *testing.T) {
+	got := NormalizePhone("555\r\nBcc: victim@example.com")
+	if strings.ContainsAny(got, "\r\n") || strings.Contains(got, "@") {
+		t.Fatalf("phone was not sanitized: %q", got)
+	}
+}
+
+func TestSummarizedKeysCoversEveryAlias(t *testing.T) {
+	set := map[string]bool{}
+	for _, k := range SummarizedKeys() {
+		set[k] = true
+	}
+	for _, group := range [][]string{emailKeys, nameKeys, subjectKeys, phoneKeys} {
+		for _, k := range group {
+			if !set[k] {
+				t.Fatalf("SummarizedKeys is missing alias %q", k)
+			}
+		}
+	}
+}

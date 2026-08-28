@@ -4,6 +4,7 @@
 package notification
 
 import (
+	"html"
 	"html/template"
 	"strings"
 	"testing"
@@ -24,6 +25,11 @@ func renderOnly(t *testing.T, name string, data map[string]any) string {
 	return sb.String()
 }
 
+func renderedText(t *testing.T, name string, data map[string]any) string {
+	t.Helper()
+	return html.UnescapeString(renderOnly(t, name, data))
+}
+
 func TestEveryRegisteredTemplateParses(t *testing.T) {
 	s := &Service{templates: map[string]*template.Template{}}
 	s.loadTemplates()
@@ -36,7 +42,7 @@ func TestEveryRegisteredTemplateParses(t *testing.T) {
 }
 
 func TestNewMessageTemplateRenders(t *testing.T) {
-	out := renderOnly(t, TemplateNewMessage, map[string]any{
+	out := renderedText(t, TemplateNewMessage, map[string]any{
 		"Subject":       "New message on Contact form",
 		"UserName":      "Ada",
 		"FormName":      "Contact form",
@@ -83,7 +89,7 @@ func TestMessageDigestTemplateRenders(t *testing.T) {
 		Subject string
 		Flagged bool
 	}
-	out := renderOnly(t, TemplateMessageDigest, map[string]any{
+	out := renderedText(t, TemplateMessageDigest, map[string]any{
 		"Subject":  "Hourly digest",
 		"UserName": "Ada",
 		"Period":   "Hourly",
@@ -100,5 +106,35 @@ func TestMessageDigestTemplateRenders(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("rendered digest is missing %q", want)
 		}
+	}
+}
+
+func TestNewMessageTemplateRendersPhone(t *testing.T) {
+	out := renderedText(t, TemplateNewMessage, map[string]any{
+		"Subject":     "New message",
+		"UserName":    "Ada",
+		"FormName":    "Contact form",
+		"SenderPhone": "+1 555 010 9999",
+		"Fields":      []models.MessageField{{Key: "From", Value: "ada@example.com"}},
+		"Body":        "hello",
+	})
+	if !strings.Contains(out, "+1 555 010 9999") {
+		t.Fatal("rendered template is missing the phone number")
+	}
+	if !strings.Contains(out, `href="tel:`) {
+		t.Fatal("the phone number should be a tel: link")
+	}
+}
+
+func TestNewMessageTemplateOmitsPhoneWhenAbsent(t *testing.T) {
+	out := renderedText(t, TemplateNewMessage, map[string]any{
+		"Subject":  "New message",
+		"UserName": "Ada",
+		"FormName": "Contact form",
+		"Fields":   []models.MessageField{{Key: "From", Value: "ada@example.com"}},
+		"Body":     "hello",
+	})
+	if strings.Contains(out, "tel:") {
+		t.Fatal("no phone row should render when no phone was submitted")
 	}
 }
