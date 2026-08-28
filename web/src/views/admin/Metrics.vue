@@ -2,7 +2,25 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { adminApi } from '../../api/admin'
 import { analyticsApi } from '../../api/analytics'
+import { useNotificationStore } from '../../stores/notification'
+import { apiMessage } from '../../composables/apiError'
+import AdminHealth from './AdminHealth.vue'
+import AdminQuickLinks from './AdminQuickLinks.vue'
 import type { AdminMetrics, WorkerStatus, SystemStatus, AnalyticsResponse, DashboardAnalyticsResponse } from '../../api/types'
+
+const notify = useNotificationStore()
+
+const TREND_POINTS = 20
+const trends = ref<{ memory: number[]; goroutines: number[]; workers: number[] }>({
+  memory: [],
+  goroutines: [],
+  workers: [],
+})
+
+function pushTrend(series: number[], value: number) {
+  series.push(value)
+  if (series.length > TREND_POINTS) series.shift()
+}
 
 const loading = ref(true)
 const metrics = ref<AdminMetrics | null>(null)
@@ -21,8 +39,11 @@ onMounted(async () => {
     metrics.value = metricsRes.data.data
     analytics.value = analyticsRes.data.data
     dashAnalytics.value = dashRes.data.data
-  } catch (e) {
-    console.error('Failed to load metrics', e)
+    pushTrend(trends.value.memory, metrics.value.current_memory_usage)
+    pushTrend(trends.value.goroutines, metrics.value.current_goroutines)
+    pushTrend(trends.value.workers, metrics.value.active_workers)
+  } catch (e: any) {
+    notify.error(apiMessage(e, 'Failed to load platform metrics'))
   } finally {
     loading.value = false
   }
@@ -46,6 +67,7 @@ function startWorkerStream() {
       if (metrics.value) {
         metrics.value.active_workers = status.active_workers
       }
+      pushTrend(trends.value.workers, status.active_workers)
     } catch {
       // ignore parse errors
     }
@@ -58,6 +80,8 @@ function startWorkerStream() {
         metrics.value.server_uptime_seconds = status.server_uptime_seconds
         metrics.value.current_goroutines = status.current_goroutines
         metrics.value.current_memory_usage = status.current_memory_usage
+        pushTrend(trends.value.memory, status.current_memory_usage)
+        pushTrend(trends.value.goroutines, status.current_goroutines)
       }
     } catch {
       // ignore parse errors
@@ -198,7 +222,14 @@ const avgDeliveryRate = computed(() => {
 <template>
   <div>
     <div class="page-header">
-      <h1>Platform Metrics</h1>
+      <div>
+        <h1>Platform Metrics</h1>
+        <p class="page-subtitle">Platform health and activity at a glance</p>
+      </div>
+      <div class="live-indicator" :class="{ 'is-live': activeWorkers > 0 }">
+        <span class="live-dot"></span>
+        <span>Live</span>
+      </div>
     </div>
 
     <div v-if="loading" class="loading-page">
@@ -206,6 +237,16 @@ const avgDeliveryRate = computed(() => {
     </div>
 
     <template v-else-if="metrics">
+      <AdminQuickLinks :metrics="metrics" />
+
+      <AdminHealth
+        :metrics="metrics"
+        :worker-status="workerStatus"
+        :active-workers="activeWorkers"
+        :trends="trends"
+        style="margin-bottom: 28px"
+      />
+
       <!-- Overview -->
       <div class="metrics-section-label">Overview</div>
       <div class="stats-grid">
@@ -752,6 +793,44 @@ const avgDeliveryRate = computed(() => {
 </template>
 
 <style scoped>
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+
+.live-indicator.is-live { color: var(--success-600); }
+.live-indicator.is-live .live-dot {
+  background: var(--success-500);
+  animation: live-blink 1.8s ease-in-out infinite;
+}
+
+@keyframes live-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45); }
+  50% { opacity: 0.55; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-indicator.is-live .live-dot { animation: none; }
+}
+
 .metrics-section-label {
   font-size: 12px;
   font-weight: 700;

@@ -483,11 +483,28 @@ export interface DashboardStats {
   total_suppressions: number
   total_webhooks: number
   total_contact_lists: number
-  total_inbound?: number
-  forwarded_inbound?: number
-  failed_inbound?: number
+  total_inbound: number
+  forwarded_inbound: number
+  failed_inbound: number
   daily_volume: DailyVolume[]
   webhook_deliveries: WebhookDeliveryStats | null
+  unverified_domains: number
+  expiring_api_keys: number
+  bounce_rate: number
+  total_forms: number
+  total_messages: number
+  unread_messages: number
+  spam_messages: number
+  total_templates: number
+  total_campaigns: number
+  total_subscribers: number
+  features: DashboardFeatures
+}
+
+export interface DashboardFeatures {
+  messages: boolean
+  inbound: boolean
+  relay: boolean
 }
 
 export interface DailyVolume {
@@ -526,6 +543,8 @@ export interface AdminMetrics {
   failed_logins_last_24h: number
   two_factor_adoption_rate: number
   two_factor_users: number
+  users_unmigrated: number
+  users_migration_failed: number
 }
 
 export interface WorkerStatus {
