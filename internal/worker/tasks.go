@@ -15,6 +15,7 @@ const (
 	TypeCampaignBatch  = "campaign:batch"
 	TypeInboundParse   = "inbound:parse"
 	TypeInboundProcess = "inbound:process"
+	TypeMessageProcess = "message:process"
 
 	QueueTransactional = "transactional"
 	QueueBulk          = "bulk"
@@ -80,4 +81,16 @@ func NewInboundParseTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeInboundParse, payload, opts...), nil
+}
+
+type MessageProcessPayload struct {
+	MessageID uint `json:"message_id"`
+}
+
+func NewMessageProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(MessageProcessPayload{MessageID: id})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeMessageProcess, payload, opts...), nil
 }

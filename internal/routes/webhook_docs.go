@@ -40,6 +40,10 @@ func (r *Router) registerWebhookDocs() {
 	// Inbound mail — full parsed message.
 	webhook("email.inbound", "Fired when an inbound email is received and parsed", dto.InboundWebhookEvent{})
 
+	// Web form messages — full submission plus the scan verdict.
+	webhook("message.received", "Fired when a web form submission passes scanning", dto.MessageWebhookEvent{})
+	webhook("message.spam", "Fired when a web form submission is quarantined or rejected by scanning", dto.MessageWebhookEvent{})
+
 	// Campaign lifecycle — {event, campaign_id, name, timestamp} payload.
 	webhook("campaign.started", "Fired when a campaign begins sending", dto.CampaignWebhookEvent{})
 	webhook("campaign.completed", "Fired when a campaign finishes sending", dto.CampaignWebhookEvent{})

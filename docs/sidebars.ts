@@ -122,6 +122,17 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Forms & Messages',
+      items: [
+        'messages/overview',
+        'messages/creating-a-form',
+        'messages/embedding',
+        'messages/spam-filtering',
+        'messages/replying',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Analytics & Monitoring',
       items: [
         'analytics/dashboard',

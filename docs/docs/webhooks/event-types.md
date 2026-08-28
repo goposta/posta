@@ -16,6 +16,13 @@ description: Available webhook event types
 | `email.complained` | Recipient filed a spam complaint |
 | `email.inbound` | An inbound email was received (see [Inbound Email](#inbound-email)) |
 
+## Web Form Message Events
+
+| Event | Description |
+|-------|-------------|
+| `message.received` | A web form submission passed scanning (see [Web Form Messages](#web-form-messages)) |
+| `message.spam` | A web form submission was quarantined or rejected by scanning |
+
 ## Campaign Events
 
 | Event | Description |
@@ -135,3 +142,37 @@ The `email.inbound` event fires when Posta receives an incoming message on a ver
 ```
 
 For configuring inbound routing and managing received messages, see the Inbound Email section in the sidebar.
+
+## Web Form Messages
+
+`message.received` and `message.spam` share one payload. It carries the full submission plus the scan verdict, so a downstream system can apply its own policy without calling back:
+
+```json
+{
+  "event": "message.received",
+  "timestamp": "2026-01-01T00:00:01Z",
+  "message_id": "b0b1c2d3-...",
+  "form_id": "3f9a7d12-...",
+  "form_name": "Contact form",
+  "sender_email": "ada@example.com",
+  "sender_name": "Ada Lovelace",
+  "sender_phone": "+1 555 010 9999",
+  "subject": "Question about pricing",
+  "body": "How does per-seat billing work?",
+  "fields": [
+    { "key": "name", "value": "Ada Lovelace" },
+    { "key": "email", "value": "ada@example.com" },
+    { "key": "phone", "value": "+1 555 010 9999" },
+    { "key": "message", "value": "How does per-seat billing work?" }
+  ],
+  "status": "received",
+  "spam_score": 0,
+  "scan_reasons": [],
+  "client_ip": "203.0.113.7",
+  "received_at": "2026-01-01T00:00:00Z"
+}
+```
+
+`sender_phone` is present only when the form submitted one. `status` is `received` or `flagged` for `message.received`, and `quarantined` for `message.spam`. Submissions scored past the reject threshold are stored for audit but never dispatched.
+
+For configuring forms and replying to submissions, see the Forms & Messages section in the sidebar.

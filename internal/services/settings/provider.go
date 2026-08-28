@@ -123,6 +123,12 @@ func (p *Provider) EmailAttachmentRetentionDays() int {
 	return p.GetInt("email_attachment_retention_days", p.RetentionDays())
 }
 func (p *Provider) AuditLogRetentionDays() int { return p.GetInt("audit_log_retention_days", 90) }
+func (p *Provider) MessageRetentionDays() int {
+	return p.GetInt("message_retention_days", 365)
+}
+func (p *Provider) MessageSpamRetentionDays() int {
+	return p.GetInt("message_spam_retention_days", 30)
+}
 func (p *Provider) WebhookDeliveryRetentionDays() int {
 	return p.GetInt("webhook_delivery_retention_days", 30)
 }

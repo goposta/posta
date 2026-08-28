@@ -142,6 +142,24 @@ func (p *Producer) EnqueueInboundParse(inboundEmailID uint) error {
 	return nil
 }
 
+func (p *Producer) EnqueueMessageProcess(messageID uint) error {
+	task, err := NewMessageProcessTask(messageID,
+		asynq.Queue(QueueTransactional),
+		asynq.MaxRetry(p.maxRetries),
+		asynq.TaskID(fmt.Sprintf("message:process:%d", messageID)),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create message task: %w", err)
+	}
+	if _, err := p.client.Enqueue(task); err != nil {
+		if errors.Is(err, asynq.ErrTaskIDConflict) {
+			return nil
+		}
+		return fmt.Errorf("failed to enqueue message task: %w", err)
+	}
+	return nil
+}
+
 // Close closes the underlying Asynq client.
 func (p *Producer) Close() error {
 	return p.client.Close()

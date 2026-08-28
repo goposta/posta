@@ -36,3 +36,15 @@ func OwnsResource(scope ResourceScope, resourceUserID uint, resourceWorkspaceID 
 	}
 	return resourceUserID == scope.UserID && resourceWorkspaceID == nil
 }
+
+func ApplyWorkspaceScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
+	if scope.WorkspaceID == nil {
+		logger.Warn("ApplyWorkspaceScope: workspace-only resource requested without a workspace", "user_id", scope.UserID)
+		return db.Where("1 = 0")
+	}
+	return db.Where("workspace_id = ?", *scope.WorkspaceID)
+}
+
+func OwnsWorkspaceResource(scope ResourceScope, resourceWorkspaceID *uint) bool {
+	return scope.WorkspaceID != nil && resourceWorkspaceID != nil && *scope.WorkspaceID == *resourceWorkspaceID
+}

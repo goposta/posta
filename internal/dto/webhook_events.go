@@ -62,3 +62,29 @@ type InboundWebhookAttachment struct {
 	Size        int64  `json:"size"`
 	URL         string `json:"url,omitempty"`
 }
+
+// MessageWebhookEvent is the payload for message.received and message.spam.
+type MessageWebhookEvent struct {
+	Event       string                `json:"event"`
+	Timestamp   string                `json:"timestamp"`
+	MessageID   string                `json:"message_id"`
+	FormID      string                `json:"form_id"`
+	FormName    string                `json:"form_name"`
+	SenderEmail string                `json:"sender_email,omitempty"`
+	SenderName  string                `json:"sender_name,omitempty"`
+	SenderPhone string                `json:"sender_phone,omitempty"`
+	Subject     string                `json:"subject,omitempty"`
+	Body        string                `json:"body,omitempty"`
+	Fields      []MessageWebhookField `json:"fields,omitempty"`
+	Status      string                `json:"status"`
+	SpamScore   float64               `json:"spam_score"`
+	ScanReasons []string              `json:"scan_reasons,omitempty"`
+	ClientIP    string                `json:"client_ip,omitempty"`
+	ReceivedAt  string                `json:"received_at"`
+}
+
+// MessageWebhookField is one submitted form field in a MessageWebhookEvent.
+type MessageWebhookField struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}

@@ -98,6 +98,21 @@ var (
 		[]string{"source"},
 	)
 
+	messagesReceivedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "posta_form_messages_received_total",
+			Help: "Total number of web form messages stored, by scan status",
+		},
+		[]string{"status"},
+	)
+
+	messageNotificationsTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "posta_form_message_notifications_total",
+			Help: "Total number of web form message notifications delivered",
+		},
+	)
+
 	inboundForwardedTotal = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "posta_inbound_messages_forwarded_total",
@@ -160,6 +175,8 @@ func init() {
 	prometheus.MustRegister(inboundRejectedTotal)
 	prometheus.MustRegister(inboundBytesTotal)
 	prometheus.MustRegister(inboundIngestDuration)
+	prometheus.MustRegister(messagesReceivedTotal)
+	prometheus.MustRegister(messageNotificationsTotal)
 	prometheus.MustRegister(activeWorkers)
 }
 
@@ -207,6 +224,16 @@ func IncrementBounce(bounceType string) {
 // IncrementSuppression increments the suppression counter.
 func IncrementSuppression() {
 	suppressionsTotal.Inc()
+}
+
+// IncrementMessageReceived increments the web form message counter for the given scan status.
+func IncrementMessageReceived(status string) {
+	messagesReceivedTotal.WithLabelValues(status).Inc()
+}
+
+// IncrementMessageNotification increments the web form notification counter.
+func IncrementMessageNotification() {
+	messageNotificationsTotal.Inc()
 }
 
 // IncrementInboundReceived increments the inbound received counter for the given source.

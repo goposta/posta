@@ -34,6 +34,7 @@ type UpdateUserSettingsRequest struct {
 		NotifyBounceAlerts      *bool `json:"notify_bounce_alerts"`
 		NotifyAPIKeyExpiry      *bool `json:"notify_api_key_expiry"`
 		NotifyWorkspaceActivity *bool `json:"notify_workspace_activity"`
+		NotifyNewMessage        *bool `json:"notify_new_message"`
 	} `json:"body"`
 }
 
@@ -93,6 +94,9 @@ func (h *UserSettingHandler) UpdateSettings(c *okapi.Context, req *UpdateUserSet
 	}
 	if req.Body.NotifyAPIKeyExpiry != nil {
 		settings.NotifyAPIKeyExpiry = *req.Body.NotifyAPIKeyExpiry
+	}
+	if req.Body.NotifyNewMessage != nil {
+		settings.NotifyNewMessage = *req.Body.NotifyNewMessage
 	}
 	if req.Body.NotifyWorkspaceActivity != nil {
 		settings.NotifyWorkspaceActivity = *req.Body.NotifyWorkspaceActivity

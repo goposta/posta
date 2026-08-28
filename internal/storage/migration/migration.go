@@ -57,6 +57,10 @@ func Run(db *gorm.DB) error {
 		&models.CampaignMessage{},
 		&models.TrackedLink{},
 		&models.TrackingEvent{},
+		&models.Form{},
+		&models.Message{},
+		&models.MessageReply{},
+		&models.MessageFilter{},
 		&models.UpgradeStep{},
 		&models.UpdateStatus{},
 	); err != nil {

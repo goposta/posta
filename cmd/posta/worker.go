@@ -188,6 +188,19 @@ func runWorker() error {
 		mux.HandleFunc(worker.TypeInboundParse, parseHandler.ProcessTask)
 	}
 
+	if cfg.MessagesEnabled {
+		messageHandler := worker.NewMessageProcessHandler(
+			repositories.NewMessageRepository(db),
+			repositories.NewFormRepository(db),
+			repositories.NewWorkspaceRepository(db),
+			newWebhookDispatcher(db, cfg),
+			notifier,
+			cfg.AppWebURL,
+		)
+		messageHandler.OnNotified(metrics.IncrementMessageNotification)
+		mux.HandleFunc(worker.TypeMessageProcess, messageHandler.ProcessTask)
+	}
+
 	// Publish worker's build info
 	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
 

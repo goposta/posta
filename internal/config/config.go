@@ -115,6 +115,17 @@ type Config struct {
 	InboundSMTPRateLimit  int // per-IP max sessions per window; 0 disables
 	InboundSMTPRateWindow int // rate-limit window in seconds
 
+	// Web form message settings
+	MessagesEnabled           bool
+	MessagesMaxBodyBytes      int64
+	MessagesMaxAttachSize     int64
+	MessagesIPRateLimit       int
+	MessagesIPRateWindow      int
+	MessagesPerFormHourly     int
+	MessagesPerEmailHourly    int
+	MessagesPerWorkspaceDaily int
+	MessagesInboundDomain     string
+
 	// SMTP Relay settings. No TLS by design.
 	SMTPRelayEnabled        bool
 	SMTPRelayHost           string
@@ -307,6 +318,16 @@ func New() *Config {
 		InboundSMTPRateLimit:  goutils.EnvInt("POSTA_INBOUND_SMTP_RATE_LIMIT", 60),
 		InboundSMTPRateWindow: goutils.EnvInt("POSTA_INBOUND_SMTP_RATE_WINDOW", 60),
 
+		MessagesEnabled:           goutils.EnvBool("POSTA_MESSAGES_ENABLED", false),
+		MessagesMaxBodyBytes:      int64(goutils.EnvInt("POSTA_MESSAGES_MAX_BODY_BYTES", 65536)),
+		MessagesMaxAttachSize:     int64(goutils.EnvInt("POSTA_MESSAGES_MAX_ATTACH_SIZE", 5242880)),
+		MessagesIPRateLimit:       goutils.EnvInt("POSTA_MESSAGES_IP_RATE_LIMIT", 20),
+		MessagesIPRateWindow:      goutils.EnvInt("POSTA_MESSAGES_IP_RATE_WINDOW", 3600),
+		MessagesPerFormHourly:     goutils.EnvInt("POSTA_MESSAGES_PER_FORM_HOURLY", 200),
+		MessagesPerEmailHourly:    goutils.EnvInt("POSTA_MESSAGES_PER_EMAIL_HOURLY", 5),
+		MessagesPerWorkspaceDaily: goutils.EnvInt("POSTA_MESSAGES_PER_WORKSPACE_DAILY", 1000),
+		MessagesInboundDomain:     goutils.Env("POSTA_MESSAGES_INBOUND_DOMAIN", ""),
+
 		SMTPRelayEnabled:        goutils.EnvBool("POSTA_SMTP_RELAY_ENABLED", false),
 		SMTPRelayHost:           goutils.Env("POSTA_SMTP_RELAY_HOST", "0.0.0.0"),
 		SMTPRelayPort:           goutils.EnvInt("POSTA_SMTP_RELAY_PORT", 2526),
@@ -317,6 +338,9 @@ func New() *Config {
 	}
 }
 func (c *Config) validate() error {
+	if c.MessagesEnabled && c.MessagesInboundDomain != "" && !c.InboundEnabled {
+		return fmt.Errorf("POSTA_MESSAGES_INBOUND_DOMAIN requires POSTA_INBOUND_ENABLED=true")
+	}
 	if c.InboundEnabled && c.InboundTLSMode != "" && c.InboundTLSMode != "none" {
 		if c.InboundTLSMode != "starttls" {
 			return fmt.Errorf("unsupported POSTA_INBOUND_TLS_MODE %q (use none or starttls)", c.InboundTLSMode)

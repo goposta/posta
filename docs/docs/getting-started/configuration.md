@@ -158,6 +158,20 @@ Where email attachments are stored. Leave `POSTA_BLOB_PROVIDER` empty to disable
 | `POSTA_INBOUND_SMTP_RATE_LIMIT` | `60` | Per-IP max SMTP sessions per window (`0` disables) |
 | `POSTA_INBOUND_SMTP_RATE_WINDOW` | `60` | Rate-limit window in seconds |
 
+## Web Form Messages
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTA_MESSAGES_ENABLED` | `false` | Master toggle — enables the public `/api/v1/f/{key}` ingest endpoint and the messages routes |
+| `POSTA_MESSAGES_MAX_BODY_BYTES` | `65536` | Max submission body size in bytes (each form can lower it) |
+| `POSTA_MESSAGES_MAX_ATTACH_SIZE` | `5242880` | Max per-attachment size in bytes (attachments are off per form by default) |
+| `POSTA_MESSAGES_IP_RATE_LIMIT` | `20` | Per-IP submissions per window (`0` disables — leaves a public endpoint unthrottled) |
+| `POSTA_MESSAGES_IP_RATE_WINDOW` | `3600` | Rate-limit window in seconds |
+| `POSTA_MESSAGES_PER_FORM_HOURLY` | `200` | Submissions allowed per form per hour |
+| `POSTA_MESSAGES_PER_EMAIL_HOURLY` | `5` | Submissions allowed per sender address per hour, per form |
+| `POSTA_MESSAGES_PER_WORKSPACE_DAILY` | `1000` | Submissions allowed per workspace per day |
+| `POSTA_MESSAGES_INBOUND_DOMAIN` | — | Domain for `msg+<token>@` reply addressing so email answers rejoin the thread (requires `POSTA_INBOUND_ENABLED=true`) |
+
 ## Advanced
 
 | Variable | Default | Description |
