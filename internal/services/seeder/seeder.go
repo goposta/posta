@@ -6,6 +6,7 @@ package seeder
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
@@ -115,9 +116,15 @@ func workspacePtr(workspaceID uint) *uint {
 	return &workspaceID
 }
 
+// sampleRecipientName fills {{ name }} in the seeded templates' preview data
+// when the owner's name is unknown. It greets, rather than naming a person who
+// has nothing to do with the installation.
+const sampleRecipientName = "there"
+
 func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string) {
+	userName = strings.TrimSpace(userName)
 	if userName == "" {
-		userName = "Jonas"
+		userName = sampleRecipientName
 	}
 	// Scoped to the workspace being seeded, not to the user. A user's second
 	// workspace needs its own defaults, and a re-run against an already-seeded
