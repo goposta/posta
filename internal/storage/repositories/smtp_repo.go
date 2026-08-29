@@ -108,6 +108,20 @@ func (r *SMTPRepository) FindFirstByWorkspaceID(workspaceID uint) (*models.SMTPS
 	return &server, nil
 }
 
+// FindSystem returns the server provisioned from POSTA_SYSTEM_SMTP_*.
+//
+// Status is deliberately not filtered: the platform's own mail is password
+// resets and security alerts, and a dashboard toggle must not be able to lock
+// an operator out of their installation. Whether the platform sends at all is
+// governed by whether POSTA_SYSTEM_SMTP_* is configured.
+func (r *SMTPRepository) FindSystem() (*models.SMTPServer, error) {
+	var server models.SMTPServer
+	if err := r.db.Where("is_system = ?", true).Order("id").First(&server).Error; err != nil {
+		return nil, err
+	}
+	return &server, nil
+}
+
 // SetStatus updates the status, validation error, and validated_at timestamp for a server.
 func (r *SMTPRepository) SetStatus(id uint, status, validationError string) error {
 	return r.db.Model(&models.SMTPServer{}).Where("id = ?", id).Updates(map[string]interface{}{

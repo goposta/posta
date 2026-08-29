@@ -266,6 +266,11 @@ func (h *SMTPHandler) Delete(c *okapi.Context, req *DeleteSMTPRequest) error {
 	if err != nil || !ownsResource(c, server.UserID, server.WorkspaceID) {
 		return c.AbortNotFound("SMTP server not found")
 	}
+	// Provisioned from configuration, and the platform's own mail depends on it.
+	// Deleting it would be undone on the next restart anyway.
+	if server.IsSystem {
+		return c.AbortConflict("the system SMTP server is provisioned from POSTA_SYSTEM_SMTP_* and cannot be deleted")
+	}
 
 	if err := h.repo.Delete(server.ID); err != nil {
 		return c.AbortInternalServerError("failed to delete SMTP server")

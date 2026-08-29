@@ -63,6 +63,7 @@ type Service struct {
 	userRepo        *repositories.UserRepository
 	userSettingRepo *repositories.UserSettingRepository
 	workspaceRepo   *repositories.WorkspaceRepository
+	smtpRepo        *repositories.SMTPRepository
 	templates       map[string]*template.Template
 }
 
@@ -255,7 +256,19 @@ func (s *Service) render(templateName string, data map[string]any) (string, erro
 	return buf.String(), nil
 }
 
+// systemServer resolves the connection the platform sends its own mail through.
+//
+// The row provisioned into the system workspace from POSTA_SYSTEM_SMTP_* is
+// preferred, so what an operator sees in the dashboard is what the platform
+// actually uses. Configuration remains the fallback: the worker binary builds
+// this service without a repository, and on a first boot the row does not exist
+// until provisioning has run.
 func (s *Service) systemServer() *models.SMTPServer {
+	if s.smtpRepo != nil {
+		if server, err := s.smtpRepo.FindSystem(); err == nil && server.Host != "" {
+			return server
+		}
+	}
 	return &models.SMTPServer{
 		Host:       s.smtpCfg.Host,
 		Port:       s.smtpCfg.Port,
@@ -264,3 +277,7 @@ func (s *Service) systemServer() *models.SMTPServer {
 		Encryption: s.smtpCfg.Encryption,
 	}
 }
+
+// SetSMTPRepo lets the service read the provisioned system SMTP server. Without
+// it the service still works, sending straight from configuration.
+func (s *Service) SetSMTPRepo(repo *repositories.SMTPRepository) { s.smtpRepo = repo }

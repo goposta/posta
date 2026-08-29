@@ -26,9 +26,17 @@ const (
 )
 
 type SMTPServer struct {
-	ID              uint           `json:"id" gorm:"primaryKey"`
-	UserID          uint           `json:"user_id" gorm:"index;not null"`
-	WorkspaceID     *uint          `json:"workspace_id,omitempty" gorm:"index"`
+	ID          uint  `json:"id" gorm:"primaryKey"`
+	UserID      uint  `json:"user_id" gorm:"index;not null"`
+	WorkspaceID *uint `json:"workspace_id,omitempty" gorm:"index"`
+	// Name is an optional label so a workspace holding several servers can tell
+	// them apart. Existing rows keep an empty name.
+	Name string `json:"name"`
+	// IsSystem marks the server provisioned from POSTA_SYSTEM_SMTP_*. It is how
+	// that row is found again on the next boot, so a server the operator adds to
+	// the same workspace is never mistaken for it and overwritten from the
+	// environment.
+	IsSystem        bool           `json:"is_system" gorm:"not null;default:false;index"`
 	Host            string         `json:"host" gorm:"not null"`
 	Port            int            `json:"port" gorm:"not null"`
 	Username        string         `json:"username"`

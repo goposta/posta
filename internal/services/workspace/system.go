@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/models"
 	"github.com/jkaninda/logger"
 	"gorm.io/gorm"
@@ -30,9 +31,16 @@ func FindSystem(db *gorm.DB) (*models.Workspace, error) {
 }
 
 // EnsureSystem creates the built-in platform workspace when it does not exist,
-// owned by the lowest-id active administrator. Idempotent.
-func EnsureSystem(db *gorm.DB) (*models.Workspace, error) {
+// owned by the lowest-id active administrator, and provisions the SMTP server
+// described by POSTA_SYSTEM_SMTP_*. Idempotent and safe to call on every boot:
+// an existing workspace has only its SMTP connection settings re-synced.
+func EnsureSystem(db *gorm.DB, smtp config.SystemSMTPConfig) (*models.Workspace, error) {
 	if ws, err := FindSystem(db); err == nil {
+		if serr := db.Transaction(func(tx *gorm.DB) error {
+			return provisionSystemSMTP(tx, ws, ws.OwnerID, smtp)
+		}); serr != nil {
+			return nil, serr
+		}
 		return ws, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -72,7 +80,25 @@ func EnsureSystem(db *gorm.DB) (*models.Workspace, error) {
 		if err := tx.Create(member).Error; err != nil {
 			return fmt.Errorf("create system workspace owner: %w", err)
 		}
-		return nil
+
+		settings := &models.WorkspaceSetting{
+			WorkspaceID:        ws.ID,
+			Timezone:           "UTC",
+			WebhookRetryCount:  3,
+			APIKeyExpiryDays:   90,
+			BounceAutoSuppress: true,
+		}
+		// The platform's own From address is the workspace's sending default, so
+		// a test send from the dashboard uses the same identity as its mail.
+		if name, addr, perr := ParseSender(smtp.From); perr == nil {
+			settings.DefaultSenderName = name
+			settings.DefaultSenderEmail = addr
+		}
+		if err := tx.Create(settings).Error; err != nil {
+			return fmt.Errorf("create system workspace settings: %w", err)
+		}
+
+		return provisionSystemSMTP(tx, ws, owner.ID, smtp)
 	})
 	if err != nil {
 		return nil, err

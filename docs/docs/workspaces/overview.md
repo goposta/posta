@@ -16,6 +16,28 @@ A workspace is provisioned for you when you sign up, named after you and owned b
 
 One workspace is special. The **system workspace** is created on first boot, owned by the first administrator, and holds platform-managed resources. It is flagged `system: true`, admits only platform administrators, and cannot be renamed or deleted.
 
+### The system workspace
+
+Its job is to give the platform's own mail somewhere to belong. Posta sends password resets, email verification, sign-in alerts, workspace invitations, and daily reports on its own behalf; that mail needs an SMTP server that belongs to the operator rather than to a tenant.
+
+On boot, the `POSTA_SYSTEM_SMTP_*` settings are provisioned as an ordinary `SMTPServer` inside this workspace, labelled **System SMTP**. Because it is an ordinary workspace-scoped server, it appears under SMTP Servers in the dashboard, can be tested from there, and the normal delivery pipeline can send through it with no special cases.
+
+Ownership of that row is split:
+
+| Field | Owner | On restart |
+|-------|-------|------------|
+| Host, port, username, password, encryption | Configuration | Re-synced from the environment |
+| Name, status, retry and recipient limits | Operator | Left as you set them |
+
+That is what makes credential rotation a matter of changing the environment and restarting, while leaving you free to relabel the server without a restart undoing it.
+
+Two consequences worth knowing:
+
+- **The provisioned server cannot be deleted** (`409`). It is recreated from configuration on the next restart regardless, and platform mail depends on it.
+- **Disabling it does not stop platform mail.** Password resets and security alerts must reach you even when something is misconfigured, so the notification path uses the row's connection settings without consulting its status. Whether the platform sends at all is governed by whether `POSTA_SYSTEM_SMTP_*` is configured.
+
+A server you add to the system workspace yourself is left alone: the provisioned one is found by an internal marker, never by name or position.
+
 ### Workspaces
 
 A workspace is an isolated environment where team members collaborate. Resources created within a workspace are only visible to members of that workspace. Each workspace has:
