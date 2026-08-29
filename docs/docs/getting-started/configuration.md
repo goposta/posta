@@ -114,7 +114,11 @@ Controls the `POST /api/v1/emails/verify` endpoint (syntax, MX, disposable & rol
 
 ## System SMTP
 
-Outbound SMTP server used for platform notifications (daily reports, invitations, alerts). `HOST` and `FROM` must both be set for it to activate.
+Outbound SMTP server used for platform notifications (daily reports, invitations, password resets, security alerts). `HOST` and `FROM` must both be set for it to activate.
+
+On boot, Posta provisions these settings as a real SMTP server inside the built-in **Posta System** workspace, so they are visible and testable from the dashboard rather than only readable from the deployment's environment. See [Workspaces](../workspaces/overview.md#the-system-workspace).
+
+The connection fields — host, port, username, password, encryption — are re-synced from the environment on every restart, so rotating a credential means changing it here and restarting. The server's label and status belong to the operator and survive a restart.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

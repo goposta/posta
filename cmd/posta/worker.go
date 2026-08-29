@@ -141,6 +141,7 @@ func runWorker() error {
 		repositories.NewUserSettingRepository(db),
 		repositories.NewWorkspaceRepository(db),
 	)
+	notifier.SetSMTPRepo(repositories.NewSMTPRepository(db))
 	dailyReportHandler := worker.NewDailyReportHandler(
 		notifier,
 		repositories.NewAnalyticsRepository(db),

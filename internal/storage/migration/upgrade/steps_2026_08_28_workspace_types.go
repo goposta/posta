@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/services/workspace"
 	"github.com/jkaninda/logger"
 	"gorm.io/gorm"
@@ -23,7 +24,10 @@ func applySystemWorkspace(tx *gorm.DB) error {
 		return fmt.Errorf("create one_system_workspace: %w", err)
 	}
 
-	if _, err := workspace.EnsureSystem(tx); err != nil {
+	// No SMTP configuration here on purpose: this step runs before crypto.Init,
+	// so a password encrypted now would use an uninitialised key. The workspace
+	// is all this step needs; the server is provisioned at boot, after seeding.
+	if _, err := workspace.EnsureSystem(tx, config.SystemSMTPConfig{}); err != nil {
 		if errors.Is(err, workspace.ErrNoAdmin) {
 			logger.Info("system workspace deferred: no administrator yet")
 			return nil

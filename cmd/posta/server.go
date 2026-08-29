@@ -94,7 +94,7 @@ func runServer(cli *okapicli.CLI) {
 			// The system workspace needs an administrator to own it, so it is
 			// ensured after seeding rather than in the migration step, which may
 			// run before any admin exists.
-			if _, err := workspacesvc.EnsureSystem(res.db); err != nil {
+			if _, err := workspacesvc.EnsureSystem(res.db, cfg.SystemSMTP); err != nil {
 				logger.Error("failed to ensure the system workspace", "error", err)
 			} else if err := workspacesvc.SyncMembers(res.db); err != nil {
 				logger.Error("failed to sync system workspace members", "error", err)
@@ -131,6 +131,7 @@ func runServer(cli *okapicli.CLI) {
 				userRepo,
 				userSettingRepo,
 				repositories.NewWorkspaceRepository(res.db))
+			notifier.SetSMTPRepo(repositories.NewSMTPRepository(res.db))
 			if notifier.IsConfigured() {
 				logger.Info("system notification service enabled")
 			}
