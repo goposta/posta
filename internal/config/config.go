@@ -367,9 +367,8 @@ func (c *Config) validate() error {
 	return c.ValidateSecurity()
 }
 func (c *Config) validateWorker() error {
-	// The worker verifies the same JWTs the server issues, so it needs the same
-	// secret to be real.
-	return c.ValidateSecurity()
+	warnRemovedEnvVars()
+	return c.ValidateWorker()
 }
 func (c *Config) Initialize(app *okapi.Okapi) error {
 	if err := c.validate(); err != nil {
@@ -447,11 +446,8 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 func (c *Config) InitWorker() error {
 	// Initialize global logger
 	c.initLogger()
-	c.WarnInsecureConfig()
-	if err := c.validateWorker(); err != nil {
-		return err
-	}
-	return nil
+	c.WarnInsecureWorkerConfig()
+	return c.validateWorker()
 }
 func (c *Config) initLogger() *logger.Logger {
 	if c.DevMode {

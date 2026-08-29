@@ -218,3 +218,115 @@ func hasProblem(problems []secretProblem, envVar string) bool {
 	}
 	return false
 }
+
+func workerConfig() *Config {
+	return &Config{
+		Env:               "production",
+		JWTSecret:         strings.Repeat("a", MinJWTSecretLength),
+		EncryptionKey:     strings.Repeat("b", 32),
+		WorkerConcurrency: 10,
+		WorkerMaxRetries:  5,
+		Redis:             RedisConfig{Addr: "localhost:6379"},
+	}
+}
+
+func TestValidateWorkerAcceptsAUsableConfig(t *testing.T) {
+	if err := workerConfig().ValidateWorker(); err != nil {
+		t.Fatalf("ValidateWorker: %v", err)
+	}
+}
+
+// A worker with no queue or no concurrency is not degraded, it is a process
+// that looks healthy and silently does nothing, so these refuse outside
+// production too.
+func TestValidateWorkerRefusesAWorkerThatCannotWork(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*Config)
+		want   string
+	}{
+		{"no queue", func(c *Config) { c.Redis = RedisConfig{} }, "POSTA_REDIS_ADDR"},
+		{"zero concurrency", func(c *Config) { c.WorkerConcurrency = 0 }, "POSTA_WORKER_CONCURRENCY"},
+		{"negative concurrency", func(c *Config) { c.WorkerConcurrency = -1 }, "POSTA_WORKER_CONCURRENCY"},
+		{"negative retries", func(c *Config) { c.WorkerMaxRetries = -1 }, "POSTA_WORKER_MAX_RETRIES"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, env := range []string{"production", "dev"} {
+				cfg := workerConfig()
+				cfg.Env = env
+				tc.mutate(cfg)
+
+				err := cfg.ValidateWorker()
+				if err == nil {
+					t.Fatalf("env=%s: expected a refusal", env)
+				}
+				if !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("env=%s: error %q does not name %s", env, err, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// A Redis URL is an alternative to the discrete address, not a missing one.
+func TestValidateWorkerAcceptsARedisURL(t *testing.T) {
+	cfg := workerConfig()
+	cfg.Redis = RedisConfig{URL: "redis://localhost:6379/0"}
+
+	if err := cfg.ValidateWorker(); err != nil {
+		t.Fatalf("ValidateWorker: %v", err)
+	}
+}
+
+// The worker seeds no admin, serves no HTTP, and exposes no form endpoint, so
+// none of those should be able to stop it starting or clutter its logs.
+func TestWorkerProblemsDropServerOnlyChecks(t *testing.T) {
+	cfg := workerConfig()
+	cfg.AdminPassword = "admin1234"
+	cfg.CORSOrigins = "*"
+	cfg.MessagesEnabled = true
+	cfg.MessagesIPRateLimit = 0
+	cfg.SystemSMTP = SystemSMTPConfig{Host: "smtp.example.com", From: "a@b.com"}
+
+	for _, p := range cfg.workerProblems() {
+		switch p.envVar {
+		case "POSTA_ADMIN_PASSWORD", "POSTA_CORS_ORIGINS", "POSTA_MESSAGES_IP_RATE_LIMIT":
+			t.Fatalf("worker should not be checked for %s", p.envVar)
+		}
+	}
+
+	// The same values must still reach the server's list.
+	var sawCORS bool
+	for _, p := range cfg.securityProblems() {
+		if p.envVar == "POSTA_CORS_ORIGINS" {
+			sawCORS = true
+		}
+	}
+	if !sawCORS {
+		t.Fatal("the server must still be warned about a wildcard CORS policy")
+	}
+}
+
+// Messages are processed by the worker, and their notification needs system
+// SMTP. Advisory, not fatal: the submission is still stored.
+func TestWorkerWarnsWhenMessagesHaveNoNotificationPath(t *testing.T) {
+	cfg := workerConfig()
+	cfg.MessagesEnabled = true
+
+	var found bool
+	for _, p := range cfg.workerProblems() {
+		if p.envVar == "POSTA_SYSTEM_SMTP_HOST" {
+			found = true
+			if p.fatal {
+				t.Fatal("a missing notification path must not stop the worker")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected a warning about the missing system SMTP")
+	}
+	if err := cfg.ValidateWorker(); err != nil {
+		t.Fatalf("ValidateWorker should still pass: %v", err)
+	}
+}

@@ -19,6 +19,8 @@ const showCreateModal = ref(false)
 const newName = ref('')
 const newSlug = ref('')
 const newDescription = ref('')
+// On by default: an empty workspace has nothing to send and nothing to look at.
+const newSeedDefaults = ref(true)
 const creating = ref(false)
 
 async function fetchData() {
@@ -48,12 +50,18 @@ async function createWorkspace() {
   if (!newName.value.trim() || !newSlug.value.trim()) return
   creating.value = true
   try {
-    await workspaceApi.create({ name: newName.value.trim(), slug: newSlug.value.trim(), description: newDescription.value.trim() })
+    await workspaceApi.create({
+      name: newName.value.trim(),
+      slug: newSlug.value.trim(),
+      description: newDescription.value.trim(),
+      seed_defaults: newSeedDefaults.value,
+    })
     notify.success('Workspace created')
     showCreateModal.value = false
     newName.value = ''
     newSlug.value = ''
     newDescription.value = ''
+    newSeedDefaults.value = true
     await fetchData()
     await wsStore.fetchWorkspaces()
   } catch (err: any) {
@@ -245,6 +253,17 @@ if (route.query.create !== undefined) {
                 class="form-input"
                 placeholder="What is this workspace for?"
               />
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input v-model="newSeedDefaults" type="checkbox" />
+                Add starter content
+              </label>
+              <span class="form-hint">
+                A welcome template in English, French and German, a default stylesheet, and the
+                matching languages — enough to send something straight away. Turn this off for a
+                workspace you will fill from an export or the API.
+              </span>
             </div>
           </div>
           <div class="modal-footer">

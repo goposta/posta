@@ -150,11 +150,16 @@ Request body:
   "name": "Acme Inc",
   "slug": "acme",
   "description": "Marketing and transactional mail",
-  "default_language": "en"
+  "default_language": "en",
+  "seed_defaults": true
 }
 ```
 
 Only `name` is required. If `slug` is omitted it is derived from the name; slugs must contain only lowercase letters, numbers, and hyphens, and must be unique. `default_language` defaults to `en`. The caller becomes the workspace **owner**.
+
+`seed_defaults` controls whether the new workspace starts with content: a welcome template in English, French and German, a default stylesheet, and the matching languages. It defaults to `true`, so omitting it gives you a workspace you can send from immediately. Send `false` when you intend to populate the workspace from an [export](../gdpr/data-export-import.md) or the API and do not want the starter template in the way.
+
+Seeding is best effort and runs after the workspace exists, so a workspace is never left uncreated because its starter content failed.
 
 ```bash
 curl -X POST http://localhost:9000/api/v1/workspaces \

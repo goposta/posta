@@ -25,7 +25,9 @@ import (
 
 func runWorker() error {
 	cfg := config.New()
-	_ = cfg.InitWorker()
+	if err := cfg.InitWorker(); err != nil {
+		logger.Fatal("worker configuration is not usable", "error", err)
+	}
 	cfg.InitStorage()
 
 	db := cfg.Database.DB

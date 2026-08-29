@@ -28,6 +28,13 @@ type WorkspaceHandler struct {
 	notifier      *notification.Service
 	appURL        string
 	audit         *audit.Logger
+	seeder        workspaceSeeder
+}
+
+// workspaceSeeder fills a new workspace with the default templates, stylesheet,
+// and languages. Optional: without one, workspaces are simply created empty.
+type workspaceSeeder interface {
+	SeedWorkspaceDefaults(workspaceID, userID uint, userName string)
 }
 
 // planService is an optional interface for resolving workspace plans and quotas.
@@ -44,12 +51,22 @@ func NewWorkspaceHandler(workspaceRepo *repositories.WorkspaceRepository, userRe
 	}
 }
 
+// SetSeeder enables starter content on newly created workspaces. Without one,
+// workspaces are created empty and the seed_defaults flag has no effect.
+func (h *WorkspaceHandler) SetSeeder(s workspaceSeeder) { h.seeder = s }
+
 type CreateWorkspaceRequest struct {
 	Body struct {
 		Name            string `json:"name" required:"true" minLength:"1"`
 		Slug            string `json:"slug"`
 		Description     string `json:"description"`
 		DefaultLanguage string `json:"default_language"`
+		// SeedDefaults fills the new workspace with starter templates, a
+		// stylesheet, and languages. Omitted means yes: an empty workspace has
+		// nothing to send and nothing to look at, which is rarely what someone
+		// creating one wants. Send false for a workspace you intend to populate
+		// from an export or the API.
+		SeedDefaults *bool `json:"seed_defaults" doc:"Seed starter templates and a stylesheet. Defaults to true."`
 	} `json:"body"`
 }
 
@@ -179,7 +196,17 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		return c.AbortInternalServerError("failed to add workspace member")
 	}
 
-	h.logAudit(c, ws.ID, "workspace.created", "Workspace created: "+ws.Name, map[string]any{"slug": ws.Slug})
+	seeded := shouldSeedWorkspace(req.Body.SeedDefaults)
+	if seeded && h.seeder != nil {
+		// Best effort and after the audit-relevant work: a workspace that exists
+		// but has no starter content is a far better outcome than a create call
+		// that fails once the row is already committed.
+		h.seeder.SeedWorkspaceDefaults(ws.ID, uint(userID), h.ownerName(uint(userID)))
+	}
+
+	h.logAudit(c, ws.ID, "workspace.created", "Workspace created: "+ws.Name, map[string]any{
+		metaSlug: ws.Slug, "seeded": seeded,
+	})
 
 	return created(c, WorkspaceResponse{
 		ID:          ws.ID,
@@ -191,6 +218,27 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		System:      ws.System,
 		CreatedAt:   ws.CreatedAt,
 	})
+}
+
+// shouldSeedWorkspace reads the opt-out. Absent means yes: a client that
+// predates the flag, or one that simply does not care, gets the starter content
+// rather than an empty workspace.
+func shouldSeedWorkspace(flag *bool) bool {
+	return flag == nil || *flag
+}
+
+// ownerName resolves the creator's name for the seeded templates' sample data.
+// An empty result is fine: the seeder greets generically rather than naming
+// somebody.
+func (h *WorkspaceHandler) ownerName(userID uint) string {
+	if h.userRepo == nil {
+		return ""
+	}
+	user, err := h.userRepo.FindByID(userID)
+	if err != nil || user == nil {
+		return ""
+	}
+	return user.Name
 }
 
 func (h *WorkspaceHandler) List(c *okapi.Context) error {
@@ -306,7 +354,7 @@ func (h *WorkspaceHandler) Delete(c *okapi.Context) error {
 		return c.AbortInternalServerError("failed to delete workspace")
 	}
 
-	h.logAudit(c, ws.ID, "workspace.deleted", "Workspace deleted: "+ws.Name, map[string]any{"slug": ws.Slug})
+	h.logAudit(c, ws.ID, "workspace.deleted", "Workspace deleted: "+ws.Name, map[string]any{metaSlug: ws.Slug})
 
 	return noContent(c)
 }

@@ -903,6 +903,8 @@ export interface WorkspaceInput {
   name: string
   slug?: string
   description?: string
+  /** Starter templates, stylesheet and languages. Omitted means true. */
+  seed_defaults?: boolean
 }
 
 export interface WorkspaceMember {

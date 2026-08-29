@@ -91,13 +91,14 @@ func runServer(cli *okapicli.CLI) {
 
 			seedDefaults(res.db, cfg)
 
-			// The system workspace needs an administrator to own it, so it is
-			// ensured after seeding rather than in the migration step, which may
-			// run before any admin exists.
-			if _, err := workspacesvc.EnsureSystem(res.db, cfg.SystemSMTP); err != nil {
+			if ws, err := workspacesvc.EnsureSystem(res.db, cfg.SystemSMTP); err != nil {
 				logger.Error("failed to ensure the system workspace", "error", err)
-			} else if err := workspacesvc.SyncMembers(res.db); err != nil {
-				logger.Error("failed to sync system workspace members", "error", err)
+			} else {
+
+				seedWorkspace(res.db, ws.ID, ws.OwnerID)
+				if err := workspacesvc.SyncMembers(res.db); err != nil {
+					logger.Error("failed to sync system workspace members", "error", err)
+				}
 			}
 
 			// Initialize blob storage (S3 or filesystem) for attachments
@@ -212,19 +213,33 @@ func checkDefaultPlan(db *gorm.DB, cfg *config.Config) {
 	}
 }
 
-func seedDefaults(db *gorm.DB, cfg *config.Config) {
-	userRepo := repositories.NewUserRepository(db)
-	admin, err := userRepo.FindByEmail(cfg.AdminEmail)
-	if err != nil || admin == nil {
-		return
-	}
-	s := seeder.New(
+// newSeeder builds the default-content seeder. Cheap to construct: it holds
+// repositories and no state, so callers make one rather than threading it.
+func newSeeder(db *gorm.DB) *seeder.Seeder {
+	return seeder.New(
 		repositories.NewTemplateRepository(db),
 		repositories.NewStyleSheetRepository(db),
 		repositories.NewTemplateVersionRepository(db),
 		repositories.NewTemplateLocalizationRepository(db),
 		repositories.NewLanguageRepository(db),
 	)
+}
+
+func seedWorkspace(db *gorm.DB, workspaceID, ownerID uint) {
+	ownerName := ""
+	if owner, err := repositories.NewUserRepository(db).FindByID(ownerID); err == nil && owner != nil {
+		ownerName = owner.Name
+	}
+	newSeeder(db).SeedWorkspaceDefaults(workspaceID, ownerID, ownerName)
+}
+
+func seedDefaults(db *gorm.DB, cfg *config.Config) {
+	userRepo := repositories.NewUserRepository(db)
+	admin, err := userRepo.FindByEmail(cfg.AdminEmail)
+	if err != nil || admin == nil {
+		return
+	}
+	s := newSeeder(db)
 	migrator := workspaceprovision.New(cfg.PlanEnforcement)
 	migrator.SetSeeder(s)
 	if _, err := migrator.EnsureWorkspace(db, admin.ID); err != nil {
