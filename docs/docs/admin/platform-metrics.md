@@ -8,6 +8,8 @@ description: Platform-wide metrics and analytics
 
 Administrators can view aggregated metrics and analytics across all workspaces.
 
+In the dashboard these are rendered on **Admin → Dashboard** (`/admin/dashboard`), which leads with a derived health verdict and its reasons, then a row of inventory counts, then the per-area detail below. The endpoints on this page are what it reads; their paths are unchanged.
+
 ## Overview Metrics
 
 ```

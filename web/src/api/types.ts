@@ -530,11 +530,12 @@ export interface AdminMetrics {
   shared_smtp_servers: number
   total_domains: number
   total_workspaces: number
-  total_inbound?: number
-  forwarded_inbound?: number
-  failed_inbound?: number
-  received_inbound?: number
-  rejected_inbound?: number
+  // Always emitted by the platform metrics endpoint; zero when inbound is off.
+  total_inbound: number
+  forwarded_inbound: number
+  failed_inbound: number
+  received_inbound: number
+  rejected_inbound: number
   webhook_deliveries: WebhookDeliveryStats | null
   server_uptime_seconds: number
   current_goroutines: number

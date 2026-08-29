@@ -1,26 +1,23 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
-import type { AdminMetrics } from "../../api/types";
 
-const props = defineProps<{ metrics: AdminMetrics }>();
 const router = useRouter();
 
+// Destinations that have no number worth showing. Anything countable lives in
+// the inventory row instead, where the count is the point and the tile is also
+// the link — so no figure appears twice on this page.
 const links = [
-  { to: "/admin/users", label: "Users", count: () => props.metrics.total_users },
-  { to: "/admin/workspaces", label: "Workspaces", count: () => props.metrics.total_workspaces },
-  { to: "/admin/servers", label: "Shared SMTP", count: () => props.metrics.shared_smtp_servers },
-  { to: "/admin/plans", label: "Plans", count: () => undefined },
-  { to: "/admin/jobs", label: "Jobs", count: () => undefined },
-  { to: "/admin/events", label: "Events", count: () => undefined },
-  { to: "/admin/settings", label: "Settings", count: () => undefined },
+  { to: "/admin/plans", label: "Plans" },
+  { to: "/admin/jobs", label: "Jobs" },
+  { to: "/admin/events", label: "Events" },
+  { to: "/admin/settings", label: "Settings" },
 ];
 </script>
 
 <template>
   <div class="ql-row">
-    <button v-for="l in links" :key="l.to" class="ql" @click="router.push(l.to)">
-      <span class="ql-label">{{ l.label }}</span>
-      <span v-if="l.count() !== undefined" class="ql-count">{{ l.count()!.toLocaleString() }}</span>
+    <button v-for="l in links" :key="l.to" class="ql" type="button" @click="router.push(l.to)">
+      {{ l.label }}
     </button>
   </div>
 </template>
@@ -34,14 +31,12 @@ const links = [
 }
 
 .ql {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 13px;
+  padding: 7px 14px;
   border-radius: 8px;
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   color: var(--text-primary);
+  font: inherit;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -54,14 +49,9 @@ const links = [
   transform: translateY(-1px);
 }
 
-.ql-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  background: var(--bg-tertiary);
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
+.ql:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 @media (max-width: 719px) {

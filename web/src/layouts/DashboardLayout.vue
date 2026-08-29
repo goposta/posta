@@ -227,7 +227,7 @@ const navSections: NavSection[] = [
       { name: 'Shared Servers', path: '/admin/servers', icon: 'server' },
       { name: 'OAuth', path: '/admin/oauth', icon: 'shield' },
       { name: 'Jobs', path: '/admin/jobs', icon: 'clock' },
-      { name: 'Metrics', path: '/admin/metrics', icon: 'pie-chart' },
+      { name: 'Dashboard', path: '/admin/dashboard', icon: 'pie-chart' },
       { name: 'Events', path: '/admin/events', icon: 'zap' },
       { name: 'Platform Settings', path: '/admin/settings', icon: 'settings' },
     ],

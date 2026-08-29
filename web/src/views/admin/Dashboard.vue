@@ -5,6 +5,7 @@ import { analyticsApi } from '../../api/analytics'
 import { useNotificationStore } from '../../stores/notification'
 import { apiMessage } from '../../composables/apiError'
 import AdminHealth from './AdminHealth.vue'
+import AdminInventory from './AdminInventory.vue'
 import AdminQuickLinks from './AdminQuickLinks.vue'
 import type { AdminMetrics, WorkerStatus, SystemStatus, AnalyticsResponse, DashboardAnalyticsResponse } from '../../api/types'
 
@@ -223,8 +224,8 @@ const avgDeliveryRate = computed(() => {
   <div>
     <div class="page-header">
       <div>
-        <h1>Platform Metrics</h1>
-        <p class="page-subtitle">Platform health and activity at a glance</p>
+        <h1>Platform Dashboard</h1>
+        <p class="page-subtitle">Health, capacity, and activity across the whole installation</p>
       </div>
       <div class="live-indicator" :class="{ 'is-live': activeWorkers > 0 }">
         <span class="live-dot"></span>
@@ -237,108 +238,21 @@ const avgDeliveryRate = computed(() => {
     </div>
 
     <template v-else-if="metrics">
-      <AdminQuickLinks :metrics="metrics" />
-
+      <!-- Verdict first, then stock, then the places to go. Anything
+           countable is a tile in the inventory row, and that tile is also
+           the link, so no figure on this page is printed twice. -->
       <AdminHealth
         :metrics="metrics"
         :worker-status="workerStatus"
         :active-workers="activeWorkers"
         :trends="trends"
-        style="margin-bottom: 28px"
+        style="margin-bottom: 24px"
       />
 
-      <!-- Overview -->
-      <div class="metrics-section-label">Overview</div>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Total Users</div>
-            <div class="stat-icon stat-icon-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.total_users }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Total Emails</div>
-            <div class="stat-icon stat-icon-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.total_emails }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Active Workers</div>
-            <div class="stat-icon" :class="activeWorkers > 0 ? 'stat-icon-success' : 'stat-icon-danger'">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ activeWorkers }}</div>
-          <div class="stat-sub">{{ activeWorkers > 0 ? 'Processing emails' : 'No workers running' }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Shared SMTP Servers</div>
-            <div class="stat-icon stat-icon-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.shared_smtp_servers }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Total Domains</div>
-            <div class="stat-icon stat-icon-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.total_domains }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Total Workspaces</div>
-            <div class="stat-icon stat-icon-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.total_workspaces }}</div>
-        </div>
-      </div>
+      <AdminInventory :metrics="metrics" />
 
-      <!-- System -->
-      <div class="metrics-section-label">System Status</div>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Server Uptime</div>
-            <div class="stat-icon stat-icon-success">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ formatUptime(metrics.server_uptime_seconds) }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Current Goroutines</div>
-            <div class="stat-icon stat-icon-info">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.current_goroutines.toLocaleString() }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Current Memory Usage</div>
-            <div class="stat-icon stat-icon-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="14" x2="22" y2="14"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="14" x2="4" y2="14"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ formatBytes(metrics.current_memory_usage) }}</div>
-          <div class="stat-sub">heap allocated</div>
-        </div>
-      </div>
+      <AdminQuickLinks />
+
       <!-- Worker Details -->
       <template v-if="workerStatus && workerStatus.workers.length > 0">
         <div class="metrics-section-label">Workers</div>
@@ -420,16 +334,6 @@ const avgDeliveryRate = computed(() => {
           </div>
           <div class="stat-value" :style="{ color: failedLoginColor(metrics.failed_logins_last_24h) }">{{ metrics.failed_logins_last_24h.toLocaleString() }}</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">2FA Adoption</div>
-            <div class="stat-icon" :class="metrics.two_factor_adoption_rate >= 50 ? 'stat-icon-success' : 'stat-icon-warning'">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.two_factor_adoption_rate.toFixed(1) }}%</div>
-          <div class="stat-sub">{{ metrics.two_factor_users }} of {{ metrics.total_users }} users</div>
-        </div>
       </div>
 
       <!-- Email Delivery -->
@@ -473,15 +377,6 @@ const avgDeliveryRate = computed(() => {
           </div>
           <div class="stat-value">{{ metrics.suppressed_emails }}</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Failure Rate</div>
-            <div class="stat-icon stat-icon-warning">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            </div>
-          </div>
-          <div class="stat-value" :style="{ color: failureColor(metrics.failure_rate) }">{{ metrics.failure_rate.toFixed(1) }}%</div>
-        </div>
       </div>
 
       <!-- Inbound Email Metrics -->
@@ -494,7 +389,7 @@ const avgDeliveryRate = computed(() => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
             </div>
           </div>
-          <div class="stat-value">{{ metrics.total_inbound ?? 0 }}</div>
+          <div class="stat-value">{{ metrics.total_inbound.toLocaleString() }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-header">
@@ -503,7 +398,7 @@ const avgDeliveryRate = computed(() => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
           </div>
-          <div class="stat-value">{{ metrics.forwarded_inbound ?? 0 }}</div>
+          <div class="stat-value">{{ metrics.forwarded_inbound.toLocaleString() }}</div>
           <div class="stat-sub">Delivered to user webhooks</div>
         </div>
         <div class="stat-card">
@@ -513,7 +408,7 @@ const avgDeliveryRate = computed(() => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
             </div>
           </div>
-          <div class="stat-value">{{ metrics.failed_inbound ?? 0 }}</div>
+          <div class="stat-value">{{ metrics.failed_inbound.toLocaleString() }}</div>
           <div class="stat-sub">Webhook dispatch exhausted retries</div>
         </div>
         <div class="stat-card">
@@ -523,7 +418,7 @@ const avgDeliveryRate = computed(() => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </div>
           </div>
-          <div class="stat-value">{{ metrics.received_inbound ?? 0 }}</div>
+          <div class="stat-value">{{ metrics.received_inbound.toLocaleString() }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-header">
@@ -532,7 +427,7 @@ const avgDeliveryRate = computed(() => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
             </div>
           </div>
-          <div class="stat-value">{{ metrics.rejected_inbound ?? 0 }}</div>
+          <div class="stat-value">{{ metrics.rejected_inbound.toLocaleString() }}</div>
           <div class="stat-sub">Unverified domain / suppressed / too large</div>
         </div>
       </div>
@@ -757,18 +652,8 @@ const avgDeliveryRate = computed(() => {
       </template>
 
       <!-- API Keys & Reputation -->
-      <div class="metrics-section-label">API Keys & Reputation</div>
+      <div class="metrics-section-label">Reputation</div>
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-header">
-            <div class="stat-label">Active API Keys</div>
-            <div class="stat-icon stat-icon-success">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">{{ metrics.active_api_keys }}</div>
-          <div class="stat-sub">{{ revokedKeys }} revoked</div>
-        </div>
         <div class="stat-card">
           <div class="stat-header">
             <div class="stat-label">Total Bounces</div>
