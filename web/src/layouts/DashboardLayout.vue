@@ -222,12 +222,13 @@ const navSections: NavSection[] = [
     admin: true,
     defaultOpen: false,
     items: [
+      // The dashboard is the landing page for this section, so it leads.
+      { name: 'Dashboard', path: '/admin/dashboard', icon: 'pie-chart' },
       { name: 'Users', path: '/admin/users', icon: 'users' },
       { name: 'Plans', path: '/admin/plans', icon: 'layers' },
       { name: 'Shared Servers', path: '/admin/servers', icon: 'server' },
       { name: 'OAuth', path: '/admin/oauth', icon: 'shield' },
       { name: 'Jobs', path: '/admin/jobs', icon: 'clock' },
-      { name: 'Metrics', path: '/admin/metrics', icon: 'pie-chart' },
       { name: 'Events', path: '/admin/events', icon: 'zap' },
       { name: 'Platform Settings', path: '/admin/settings', icon: 'settings' },
     ],

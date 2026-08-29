@@ -103,7 +103,10 @@ const routes = [
       // Admin
       { path: 'admin/users', name: 'admin-users', component: () => import('../views/admin/Users.vue'), meta: { admin: true, title: 'Admin · Users' } },
       { path: 'admin/users/:id', name: 'admin-user-detail', component: () => import('../views/admin/UserDetail.vue'), meta: { admin: true, title: 'Admin · User' } },
-      { path: 'admin/metrics', name: 'admin-metrics', component: () => import('../views/admin/Metrics.vue'), meta: { admin: true, title: 'Admin · Metrics' } },
+      { path: 'admin/dashboard', name: 'admin-dashboard', component: () => import('../views/admin/Dashboard.vue'), meta: { admin: true, title: 'Admin · Dashboard' } },
+      // The page was called Metrics until it grew a health summary and quick
+      // links; keep the old path working for bookmarks and muscle memory.
+      { path: 'admin/metrics', redirect: '/admin/dashboard' },
       { path: 'admin/events', name: 'admin-events', component: () => import('../views/admin/Events.vue'), meta: { admin: true, title: 'Admin · Events' } },
       { path: 'admin/events/:id', name: 'admin-event-detail', component: () => import('../views/admin/EventDetail.vue'), meta: { admin: true, title: 'Admin · Event' } },
       { path: 'admin/plans', name: 'admin-plans', component: () => import('../views/admin/Plans.vue'), meta: { admin: true, title: 'Admin · Plans' } },
