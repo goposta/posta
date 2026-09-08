@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Self-hosted email delivery & inbound platform for developers and teams
+Self-hosted email platform for sending, receiving, and relaying email through a unified API and SMTP.
 </p>
 <p align="center">
   <a href="#overview">Overview</a> ·

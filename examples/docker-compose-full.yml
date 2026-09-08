@@ -56,14 +56,6 @@ services:
       POSTA_REDIS_ADDR: "posta-redis:6379"
       POSTA_WORKER_CONCURRENCY: "10"
       POSTA_WORKER_MAX_RETRIES: "5"
-    # The worker serves /healthz, /readyz and /metrics on the same port as the
-    # server. They are separate containers, so the shared number never collides.
-    healthcheck:
-      test: ["CMD", "posta-healthcheck"]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
     depends_on:
       posta-db:
         condition: service_healthy
