@@ -404,19 +404,35 @@ This is still self-hosted Posta — your own instance, your data, the same AGPL-
 * Go: [https://github.com/goposta/posta-go](https://github.com/goposta/posta-go)
 * PHP: [https://github.com/goposta/posta-php](https://github.com/goposta/posta-php)
 * Java: [https://github.com/goposta/posta-java](https://github.com/goposta/posta-java)
-* .NET: [https://github.com/goposta/posta-dotnet](https://github.com/goposta/posta-dotnet)
+* Node: [https://github.com/goposta/posta-node](https://github.com/goposta/posta-node)
+* .NET: [https://github.com/goposta/posta-node](https://github.com/goposta/posta-node)
 
 ### Go Example
 
 ```go
-client := posta.New("https://posta.example.com", "your-api-key")
+package main
 
-resp, err := client.SendEmail(&posta.SendEmailRequest{
-    From:    "sender@example.com",
-    To:      []string{"recipient@example.com"},
-    Subject: "Hello from Posta",
-    HTML:    "<h1>Hello!</h1>",
-})
+import (
+    "fmt"
+    "log"
+
+    posta "github.com/goposta/posta-go"
+)
+
+func main() {
+    client := posta.New("https://posta.example.com", "your-api-key")
+
+    resp, err := client.Emails.Send(&posta.SendEmailRequest{
+        From:    "sender@example.com",
+        To:      []string{"recipient@example.com"},
+        Subject: "Hello from Posta",
+        HTML:    "<h1>Hello!</h1><p>This is a test email.</p>",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Email sent: id=%s status=%s\n", resp.ID, resp.Status)
+}
 ```
 
 ---
