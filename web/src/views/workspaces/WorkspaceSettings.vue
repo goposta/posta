@@ -65,7 +65,7 @@ const saving = ref(false)
 // Operational workspace settings (timezone, sender defaults, webhook retries,
 // API-key expiry, bounce auto-suppress) — backed by /workspaces/current/settings.
 const timezones = [
-  'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Sao_Paulo',
   'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
   'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata', 'Asia/Dubai',
   'Australia/Sydney', 'Pacific/Auckland', 'Africa/Kinshasa', 'Africa/Nairobi', 'Africa/Lagos', 'Africa/Lubumbashi',
