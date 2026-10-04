@@ -1326,6 +1326,11 @@ func diffRecipients(original, filtered []string) []string {
 
 // filterCustomHeaders removes headers that could conflict with system-set
 // headers or be used for spoofing. It returns a sanitized copy.
+//
+// Date and Message-ID are deliberately allowed: buildMessage emits them only
+// when the caller has not supplied its own, so an integration that needs a
+// stable Message-ID (e.g. for threading against an external system) can set
+// one while every other message still gets a generated RFC 5322 pair.
 func filterCustomHeaders(headers map[string]string) map[string]string {
 	// Headers that are set by the system and must not be overridden.
 	reserved := map[string]bool{
