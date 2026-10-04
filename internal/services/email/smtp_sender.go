@@ -4,8 +4,10 @@
 package email
 
 import (
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"mime"
@@ -15,7 +17,9 @@ import (
 	"net/textproto"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/goposta/posta/internal/models"
 )
 
@@ -289,12 +293,54 @@ func isASCII(s string) bool {
 	return true
 }
 
+// hasHeader reports whether the caller-supplied headers already include key
+// (header names are case-insensitive per RFC 5322).
+func hasHeader(headers map[string]string, key string) bool {
+	for k := range headers {
+		if strings.EqualFold(k, key) {
+			return true
+		}
+	}
+	return false
+}
+
+// newBoundary returns a random MIME boundary. A fixed boundary shared by every
+// message would collide with quoted or nested content that happens to contain
+// the same string, and makes all Posta mail trivially fingerprintable. The
+// token stays short enough that the Content-Type header line fits in 76
+// characters even with the boundary quoted.
+func newBoundary() string {
+	var token [12]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		// crypto/rand failing is extraordinary; a UUID keeps the boundary unique.
+		return "posta-" + uuid.NewString()
+	}
+	return "posta-" + hex.EncodeToString(token[:])
+}
+
 func buildMessage(from string, to []string, subject, htmlBody, textBody string, attachments []models.Attachment, headers map[string]string, listUnsubscribeURL, listUnsubscribeMailto string, listUnsubscribePost bool) []byte {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "From: %s\r\n", from)
 	fmt.Fprintf(&b, "To: %s\r\n", strings.Join(to, ", "))
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject))
+
+	// RFC 5322 requires Date and recommends Message-ID; relays are free to
+	// forward a message without adding them, so emit both unless the caller
+	// already supplied one through custom headers.
+	if !hasHeader(headers, "Date") {
+		fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	}
+	if !hasHeader(headers, "Message-ID") {
+		domain := "posta.local"
+		if addr, err := mail.ParseAddress(from); err == nil {
+			if i := strings.LastIndex(addr.Address, "@"); i >= 0 && i+1 < len(addr.Address) {
+				domain = addr.Address[i+1:]
+			}
+		}
+		fmt.Fprintf(&b, "Message-ID: <%s@%s>\r\n", uuid.NewString(), domain)
+	}
+
 	b.WriteString("MIME-Version: 1.0\r\n")
 
 	// RFC 2369 / 8058 List-Unsubscribe. Emit mailto first, then the https URL.
@@ -321,8 +367,8 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 	hasAttachments := len(attachments) > 0
 
 	if hasAttachments {
-		mixedBoundary := "posta-mixed-boundary"
-		altBoundary := "posta-alt-boundary"
+		mixedBoundary := newBoundary()
+		altBoundary := newBoundary()
 
 		fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", mixedBoundary)
 
@@ -366,7 +412,7 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 		}
 		fmt.Fprintf(&b, "\r\n--%s--\r\n", mixedBoundary)
 	} else {
-		altBoundary := "posta-boundary-abc123"
+		altBoundary := newBoundary()
 		if htmlBody != "" && textBody != "" {
 			fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", altBoundary)
 			fmt.Fprintf(&b, "--%s\r\n", altBoundary)
