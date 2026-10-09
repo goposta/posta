@@ -16,7 +16,8 @@ Self-hosted email platform for sending, receiving, and relaying email through a 
   <a href="#dashboard">Dashboard</a> ·
   <a href="#official-sdks">SDKs</a> ·
   <a href="https://app.goposta.dev/">Live Demo</a> ·
-  <a href="https://docs.goposta.dev/">Docs</a>
+  <a href="https://docs.goposta.dev/">Docs</a> ·
+  <a href="#support-the-project">Support</a>
 </p>
 
 [![CI](https://github.com/goposta/posta/actions/workflows/ci.yml/badge.svg)](https://github.com/goposta/posta/actions/workflows/ci.yml)
@@ -434,6 +435,25 @@ func main() {
     fmt.Printf("Email sent: id=%s status=%s\n", resp.ID, resp.Status)
 }
 ```
+
+---
+
+## Support the Project
+
+Posta is free and open source, but running it in public is not. Your support helps cover:
+
+* the **`goposta.dev` domain**
+* the **server** that runs the [live demo](https://app.goposta.dev/), the [documentation](https://docs.goposta.dev/) and the [website](https://www.goposta.dev/)
+
+If Posta is useful to you or your team, a contribution helps keep these online and gives more time for new features and fixes.
+
+<a href="https://ko-fi.com/jkaninda" target="_blank"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support Posta on Ko-fi" /></a>
+
+Other ways to help, at no cost:
+
+* ⭐ Star the repository on GitHub
+* Report bugs and suggest features in [issues](https://github.com/goposta/posta/issues)
+* Share Posta with others who self-host their email
 
 ---
 
