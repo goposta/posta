@@ -33,6 +33,8 @@ When a rate limit is exceeded, the API returns `429 Too Many Requests`:
 
 Login attempts are rate-limited per IP address to prevent brute force attacks. This is enabled by default and can be toggled via the `POSTA_AUTH_RATE_LIMIT_ENABLED` environment variable.
 
+The client IP is read from `X-Forwarded-For` / `X-Real-IP`. When Posta runs behind a reverse proxy, set `POSTA_TRUSTED_PROXIES` to the proxy's address or CIDR so those headers are only accepted from it; otherwise any client can pick its own IP and sidestep the limit.
+
 ## Batch Emails
 
 Each recipient in a batch send counts toward the rate limit. A batch of 100 recipients counts as 100 emails.

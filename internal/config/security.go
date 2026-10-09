@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jkaninda/logger"
@@ -130,10 +131,17 @@ func (c *Config) securityProblems() []secretProblem {
 	if p := c.adminPasswordProblem(); p != nil {
 		problems = append(problems, *p)
 	}
-	if strings.TrimSpace(c.CORSOrigins) == "*" {
+	if slices.Contains(splitList(c.CORSOrigins), "*") {
 		problems = append(problems, secretProblem{
 			"POSTA_CORS_ORIGINS",
 			"allows every origin",
+			false,
+		})
+	}
+	if len(c.TrustedProxies) == 0 {
+		problems = append(problems, secretProblem{
+			"POSTA_TRUSTED_PROXIES",
+			"is unset, so X-Forwarded-For is trusted from any client and the IP used for rate limiting, API key allow-lists and audit logs can be spoofed",
 			false,
 		})
 	}

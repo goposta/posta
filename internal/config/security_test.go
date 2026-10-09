@@ -330,3 +330,49 @@ func TestWorkerWarnsWhenMessagesHaveNoNotificationPath(t *testing.T) {
 		t.Fatalf("ValidateWorker should still pass: %v", err)
 	}
 }
+
+// Without trusted proxies the forwarded headers are spoofable, which matters
+// for rate limiting and allow-lists but is a deployment decision, not a reason
+// to refuse to start.
+func TestTrustedProxiesAdvisory(t *testing.T) {
+	c := &Config{Env: "production", JWTSecret: strongSecret, AdminPassword: strongSecret}
+	if !hasProblem(c.securityProblems(), "POSTA_TRUSTED_PROXIES") {
+		t.Fatal("unset POSTA_TRUSTED_PROXIES not reported")
+	}
+	if err := c.ValidateSecurity(); err != nil {
+		t.Fatalf("advisory problem treated as fatal: %v", err)
+	}
+
+	c.TrustedProxies = []string{"10.0.0.0/8"}
+	if hasProblem(c.securityProblems(), "POSTA_TRUSTED_PROXIES") {
+		t.Fatal("configured POSTA_TRUSTED_PROXIES still reported")
+	}
+}
+
+// okapi trusts no proxy at all when one entry is invalid, so a typo must stop
+// the boot rather than collapse every client onto the proxy's address.
+func TestValidateRejectsInvalidTrustedProxy(t *testing.T) {
+	for _, tc := range []struct {
+		entries []string
+		wantErr bool
+	}{
+		{[]string{"10.0.0.0/8", "192.0.2.7", "::1", "fd00::/8"}, false},
+		{[]string{"10.0.0.0/33"}, true},
+		{[]string{"proxy.internal"}, true},
+	} {
+		c := &Config{Env: "dev", TrustedProxies: tc.entries}
+		if err := c.validate(); (err != nil) != tc.wantErr {
+			t.Errorf("%v: err = %v, wantErr %v", tc.entries, err, tc.wantErr)
+		}
+	}
+}
+
+func TestSplitList(t *testing.T) {
+	got := splitList(" 10.0.0.0/8 , ,192.0.2.7,")
+	if len(got) != 2 || got[0] != "10.0.0.0/8" || got[1] != "192.0.2.7" {
+		t.Fatalf("splitList = %q", got)
+	}
+	if splitList("") != nil {
+		t.Fatal("empty input should yield no entries")
+	}
+}

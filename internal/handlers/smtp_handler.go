@@ -38,14 +38,14 @@ type CreateSMTPRequest struct {
 type UpdateSMTPRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Host          string   `json:"host"`
-		Port          int      `json:"port"`
-		Username      string   `json:"username"`
-		Password      string   `json:"password"`
-		Encryption    string   `json:"encryption"`
-		MaxRetries    *int     `json:"max_retries"`
-		AllowedEmails []string `json:"allowed_emails"`
-		Status        string   `json:"status"`
+		Host          string    `json:"host"`
+		Port          int       `json:"port"`
+		Username      string    `json:"username"`
+		Password      string    `json:"password"`
+		Encryption    string    `json:"encryption"`
+		MaxRetries    *int      `json:"max_retries"`
+		AllowedEmails *[]string `json:"allowed_emails"`
+		Status        string    `json:"status"`
 	} `json:"body"`
 }
 type GetSMTPRequest struct {
@@ -201,10 +201,10 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 		server.MaxRetries = *req.Body.MaxRetries
 	}
 	if req.Body.AllowedEmails != nil {
-		if err := h.validateAllowedEmails(repositories.ResourceScope{UserID: server.UserID, WorkspaceID: server.WorkspaceID}, req.Body.AllowedEmails); err != nil {
+		if err := h.validateAllowedEmails(repositories.ResourceScope{UserID: server.UserID, WorkspaceID: server.WorkspaceID}, *req.Body.AllowedEmails); err != nil {
 			return c.AbortBadRequest(err.Error())
 		}
-		server.AllowedEmails = req.Body.AllowedEmails
+		server.AllowedEmails = *req.Body.AllowedEmails
 	}
 
 	// Handle status changes

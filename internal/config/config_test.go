@@ -5,6 +5,7 @@ package config
 
 import (
 	"os"
+	"slices"
 	"testing"
 )
 
@@ -118,5 +119,25 @@ func TestNewRedisConfigTLS(t *testing.T) {
 	}
 	if rc.AsynqRedisOpt().TLSConfig == nil {
 		t.Fatal("AsynqRedisOpt().TLSConfig is nil")
+	}
+}
+
+func TestAllowedCORSOrigins(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cfg  Config
+		want []string
+	}{
+		{"explicit wins", Config{CORSOrigins: " https://a.test , https://b.test", AppWebURL: "https://web.test"}, []string{"https://a.test", "https://b.test"}},
+		{"derived from urls", Config{AppWebURL: "https://web.test/app/", ApiBaseURL: "https://api.test:8443/v1"}, []string{"https://web.test", "https://api.test:8443"}},
+		{"duplicate origin once", Config{AppWebURL: "https://posta.test", ApiBaseURL: "https://posta.test/api"}, []string{"https://posta.test"}},
+		{"nothing configured", Config{}, nil},
+		{"unparseable url skipped", Config{AppWebURL: "posta.test"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.AllowedCORSOrigins(); !slices.Equal(got, tc.want) {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

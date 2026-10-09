@@ -11,7 +11,13 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-func TestOkapiAutoRegistersOptionsPerPath(t *testing.T) {
+// The global CORS preflight only answers for POSTA_CORS_ORIGINS. A customer
+// site embedding a form is never on that list, so its preflight gets no
+// Access-Control-Allow-Origin and ingest must stay reachable with simple
+// requests (see the test below). Since okapi v1.0.0 an explicit OPTIONS route
+// can be registered alongside CORS, so per-form preflight is possible if JSON
+// submissions from customer origins are ever needed.
+func TestGlobalPreflightIgnoresUnlistedOrigins(t *testing.T) {
 	app := okapi.New()
 	app.WithCORS(okapi.Cors{AllowedOrigins: []string{"https://dashboard.test"}})
 
@@ -23,23 +29,15 @@ func TestOkapiAutoRegistersOptionsPerPath(t *testing.T) {
 		Group:   group,
 	})
 
-	panicked := func() (p bool) {
-		defer func() {
-			if recover() != nil {
-				p = true
-			}
-		}()
-		app.Register(okapi.RouteDefinition{
-			Method:  http.MethodOptions,
-			Path:    "/{key}",
-			Handler: func(c *okapi.Context) error { return nil },
-			Group:   group,
-		})
-		return false
-	}()
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/f/abc", nil)
+	req.Header.Set("Origin", "https://customer.test")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set("Access-Control-Request-Headers", "content-type")
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
 
-	if !panicked {
-		t.Fatal("okapi no longer auto-registers OPTIONS per path; the ingest route may now own its own preflight handler")
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("preflight from an unlisted origin was allowed: %q", got)
 	}
 }
 
