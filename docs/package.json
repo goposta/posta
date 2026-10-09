@@ -22,14 +22,14 @@
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
     "prism-react-renderer": "^2.3.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
-    "typescript": "~5.9.3"
+    "typescript": "~7.0.2"
   },
   "browserslist": {
     "production": [
@@ -50,6 +50,9 @@
     "serialize-javascript": ">=7.0.5",
     "sockjs": {
       "uuid": ">=11.1.1"
-    }
+    },
+    "tinypool": ">=2.2.0",
+    "katex": ">=0.19.0",
+    "postcss-selector-parser": ">=7.1.6"
   }
 }
