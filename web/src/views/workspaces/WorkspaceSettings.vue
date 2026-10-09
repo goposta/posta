@@ -8,6 +8,7 @@ import type { Workspace, Plan, OAuthProviderInfo, WorkspaceSSOConfig, WorkspaceS
 import { useNotificationStore } from '../../stores/notification'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useConfirm } from '../../composables/useConfirm'
+import { timezoneOptions } from '../../composables/timezones'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,12 +65,6 @@ const saving = ref(false)
 
 // Operational workspace settings (timezone, sender defaults, webhook retries,
 // API-key expiry, bounce auto-suppress) — backed by /workspaces/current/settings.
-const timezones = [
-  'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
-  'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata', 'Asia/Dubai',
-  'Australia/Sydney', 'Pacific/Auckland', 'Africa/Kinshasa', 'Africa/Nairobi', 'Africa/Lagos', 'Africa/Lubumbashi',
-]
 const wsSettings = ref<Partial<WorkspaceSettings>>({
   timezone: 'UTC',
   default_sender_name: '',
@@ -79,6 +74,7 @@ const wsSettings = ref<Partial<WorkspaceSettings>>({
   bounce_auto_suppress: true,
   require_verified_domain: false,
 })
+const timezones = computed(() => timezoneOptions(wsSettings.value.timezone))
 const wsSettingsLoading = ref(false)
 const wsSettingsSaving = ref(false)
 
@@ -545,7 +541,7 @@ watch(activeTab, (value) => {
             <div class="form-group">
               <label class="form-label">Timezone</label>
               <select v-model="wsSettings.timezone" class="form-select">
-                <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
+                <option v-for="tz in timezones" :key="tz.value" :value="tz.value">{{ tz.label }}</option>
               </select>
             </div>
             <div class="form-group">

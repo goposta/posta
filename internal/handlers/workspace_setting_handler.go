@@ -18,7 +18,7 @@ func NewWorkspaceSettingHandler(repo *repositories.WorkspaceSettingRepository) *
 
 type UpdateWorkspaceSettingsRequest struct {
 	Body struct {
-		Timezone              *string `json:"timezone"`
+		Timezone              *string `json:"timezone" format:"timezone" minLength:"1" example:"Africa/Kinshasa" doc:"IANA timezone name"`
 		DefaultSenderName     *string `json:"default_sender_name"`
 		DefaultSenderEmail    *string `json:"default_sender_email"`
 		WebhookRetryCount     *int    `json:"webhook_retry_count"`

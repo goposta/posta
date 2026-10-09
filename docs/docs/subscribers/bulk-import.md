@@ -51,12 +51,15 @@ Response:
   "data": {
     "created": 2,
     "skipped": 0,
-    "total": 2
+    "total": 2,
+    "invalid_timezones": 0
   }
 }
 ```
 
 Duplicate emails (already existing) are skipped, not updated.
+
+`timezone` must be an IANA name such as `Europe/London` or `America/New_York`. A subscriber with an unrecognised timezone is still imported, without a timezone, and counted in `invalid_timezones`. Creating or updating a single subscriber with an invalid timezone returns `400 Bad Request`.
 
 ## CSV Import
 
@@ -89,7 +92,7 @@ Map CSV columns to subscriber fields using a JSON object where keys are column i
 }
 ```
 
-Custom fields use dot notation: `custom_fields.field_name`.
+Supported fields are `email`, `name`, `status`, `language`, `timezone` (IANA name, see [JSON Import](#json-import)) and custom fields, which use dot notation: `custom_fields.field_name`.
 
 ### Example
 

@@ -531,10 +531,13 @@ func importSubscribers(data []ExportSubscriber, userID uint, workspaceID *uint, 
 		if status == "" {
 			status = models.SubscriberStatusSubscribed
 		}
+		// Backups predate timezone validation; drop a bad value rather than
+		// carry it into the restored workspace.
+		tz, _ := subscriberTimezone(sub.Timezone)
 		if err := db.Create(&models.Subscriber{
 			UserID: userID, WorkspaceID: workspaceID,
 			Email: sub.Email, Name: sub.Name, Status: status,
-			CustomFields: sub.CustomFields, Timezone: sub.Timezone, Language: sub.Language,
+			CustomFields: sub.CustomFields, Timezone: tz, Language: sub.Language,
 		}).Error; err != nil {
 			continue
 		}
