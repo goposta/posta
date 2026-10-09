@@ -48,7 +48,8 @@ Posta is configured via environment variables. All variables are prefixed with `
 | `POSTA_JWT_SECRET` | — | **Required.** JWT signing key. Must be changed in production. |
 | `POSTA_ADMIN_EMAIL` | `admin@example.com` | Initial admin account email |
 | `POSTA_ADMIN_PASSWORD` | `admin1234` | Initial admin account password |
-| `POSTA_CORS_ORIGINS` | `*` | Comma-separated allowed CORS origins |
+| `POSTA_CORS_ORIGINS` | origins of `POSTA_WEB_URL` / `POSTA_API_URL` | Comma-separated allowed CORS origins. When unset, the origins of `POSTA_WEB_URL` and `POSTA_API_URL` are allowed; with neither set, only same-origin requests are served. `*` allows every origin (without credentials) and is reported as insecure. |
+| `POSTA_TRUSTED_PROXIES` | — | Comma-separated CIDR blocks or IPs of the reverse proxies in front of Posta (e.g. `10.0.0.0/8,192.0.2.7`). `X-Forwarded-For` and `X-Real-IP` are only honoured on connections from these peers. When empty, the headers are trusted from any client, so the IP used for rate limiting, API key IP allow-lists and audit logs can be spoofed. An invalid entry stops the server from starting. |
 | `POSTA_ENCRYPTION_KEY` | — | AES-256-GCM key used to encrypt stored SMTP passwords. Falls back to base64 encoding only when empty. |
 | `POSTA_EMAIL_VERIFICATION_REQUIRED` | `false` | Require new users to confirm their email address before they can sign in |
 
@@ -207,6 +208,7 @@ POSTA_JWT_SECRET=your-very-long-random-secret-key
 POSTA_ADMIN_EMAIL=admin@yourdomain.com
 POSTA_ADMIN_PASSWORD=strong-admin-password
 POSTA_CORS_ORIGINS=https://dashboard.yourdomain.com
+POSTA_TRUSTED_PROXIES=10.0.0.0/8
 
 # Features
 POSTA_METRICS_ENABLED=true

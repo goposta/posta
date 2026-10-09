@@ -43,16 +43,16 @@ type CreateServerRequest struct {
 type UpdateServerRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name           string   `json:"name"`
-		Host           string   `json:"host"`
-		Port           int      `json:"port"`
-		Username       string   `json:"username"`
-		Password       string   `json:"password"`
-		Encryption     string   `json:"encryption"`
-		MaxRetries     *int     `json:"max_retries"`
-		Status         string   `json:"status"`
-		AllowedDomains []string `json:"allowed_domains"`
-		SecurityMode   string   `json:"security_mode" enum:"permissive,strict"`
+		Name           string    `json:"name"`
+		Host           string    `json:"host"`
+		Port           int       `json:"port"`
+		Username       string    `json:"username"`
+		Password       string    `json:"password"`
+		Encryption     string    `json:"encryption"`
+		MaxRetries     *int      `json:"max_retries"`
+		Status         string    `json:"status"`
+		AllowedDomains *[]string `json:"allowed_domains"`
+		SecurityMode   string    `json:"security_mode" enum:"permissive,strict"`
 	} `json:"body"`
 }
 
@@ -173,7 +173,7 @@ func (h *ServerHandler) Update(c *okapi.Context, req *UpdateServerRequest) error
 		server.MaxRetries = *req.Body.MaxRetries
 	}
 	if req.Body.AllowedDomains != nil {
-		server.AllowedDomains = req.Body.AllowedDomains
+		server.AllowedDomains = *req.Body.AllowedDomains
 	}
 	switch req.Body.SecurityMode {
 	case models.ServerSecurityModeStrict:

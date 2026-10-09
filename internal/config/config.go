@@ -6,7 +6,10 @@ package config
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
 
 	errorhandlers "github.com/goposta/posta/internal/error_handlers"
@@ -57,10 +60,19 @@ type Config struct {
 	// WebDir overrides where the dashboard is served from. The UI is normally
 	// embedded in the binary (internal/web); setting POSTA_WEB_DIR serves it from
 	// this directory instead, for frontend development or a customized build.
-	WebDir      string
-	AppWebURL   string
-	ApiBaseURL  string
+	WebDir     string
+	AppWebURL  string
+	ApiBaseURL string
+	// CORSOrigins is POSTA_CORS_ORIGINS as given. When empty, the allowed
+	// origins are derived from AppWebURL and ApiBaseURL; see AllowedCORSOrigins.
 	CORSOrigins string
+
+	// TrustedProxies lists the CIDR blocks or addresses of the reverse proxies
+	// in front of Posta. X-Forwarded-For and X-Real-IP are honoured only on
+	// connections from one of them. Left empty, the headers are trusted from
+	// any peer, so a client can choose the IP that rate limits, API key IP
+	// allow-lists and the audit log see.
+	TrustedProxies []string
 
 	// Worker settings
 	EmbeddedWorker    bool
@@ -279,7 +291,8 @@ func New() *Config {
 		AppWebURL:       goutils.Env("POSTA_WEB_URL", ""),
 		ApiBaseURL:      goutils.Env("POSTA_API_URL", ""),
 
-		CORSOrigins: goutils.Env("POSTA_CORS_ORIGINS", "*"),
+		CORSOrigins:    goutils.Env("POSTA_CORS_ORIGINS", ""),
+		TrustedProxies: splitList(goutils.Env("POSTA_TRUSTED_PROXIES", "")),
 
 		EmbeddedWorker:       goutils.EnvBool("POSTA_EMBEDDED_WORKER", false),
 		WorkerConcurrency:    goutils.EnvInt("POSTA_WORKER_CONCURRENCY", 10),
@@ -379,6 +392,13 @@ func (c *Config) validate() error {
 			return fmt.Errorf("POSTA_INBOUND_TLS_MODE=%s requires POSTA_INBOUND_TLS_CERT_FILE and POSTA_INBOUND_TLS_KEY_FILE", c.InboundTLSMode)
 		}
 	}
+	// okapi drops an invalid list and trusts no proxy, which would quietly
+	// collapse every client onto the proxy's address. Refuse to start instead.
+	for _, entry := range c.TrustedProxies {
+		if !validProxyEntry(entry) {
+			return fmt.Errorf("invalid POSTA_TRUSTED_PROXIES entry %q (expected a CIDR block or IP address)", entry)
+		}
+	}
 	return c.ValidateSecurity()
 }
 func (c *Config) validateWorker() error {
@@ -399,11 +419,9 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	// Set Port
 	app.WithPort(c.Port)
 	app.WithLogger(l.Logger)
+	app.WithTrustedProxies(c.TrustedProxies...)
+	app.WithMaxRequestBody(maxRequestBody)
 	_ = goutils.SetEnv("ENV", c.Env)
-	corsOrigins := strings.Split(c.CORSOrigins, ",")
-	for i := range corsOrigins {
-		corsOrigins[i] = strings.TrimSpace(corsOrigins[i])
-	}
 	apiServers := okapi.Servers{}
 	if c.AppWebURL != "" {
 		apiServers = append(apiServers, okapi.Server{URL: c.AppWebURL})
@@ -412,7 +430,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 		apiServers = append(apiServers, okapi.Server{URL: c.ApiBaseURL})
 	}
 	app.WithCORS(okapi.Cors{
-		AllowedOrigins:   corsOrigins,
+		AllowedOrigins:   c.AllowedCORSOrigins(),
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Request-ID", "X-Posta-Workspace-Id"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowCredentials: true,
@@ -490,4 +508,49 @@ func (c *Config) InitStorage() {
 	}
 	c.Redis.Client = redisClient
 
+}
+
+// AllowedCORSOrigins returns POSTA_CORS_ORIGINS when set, otherwise the origins
+// of POSTA_WEB_URL and POSTA_API_URL. With none of them set the list is empty
+// and only same-origin requests (the embedded dashboard) are served.
+func (c *Config) AllowedCORSOrigins() []string {
+	if origins := splitList(c.CORSOrigins); len(origins) > 0 {
+		return origins
+	}
+	var origins []string
+	for _, raw := range []string{c.AppWebURL, c.ApiBaseURL} {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			continue
+		}
+		origin := u.Scheme + "://" + u.Host
+		if !slices.Contains(origins, origin) {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
+}
+
+// maxRequestBody caps JSON request bodies. okapi's 8 MB default is below what
+// the send API accepts: email.DefaultMaxTotalSize allows 25 MB of attachments,
+// which arrive base64-encoded (~33 MB), plus the message bodies themselves.
+const maxRequestBody = 40 << 20
+
+// splitList parses a comma-separated env value, dropping blank entries.
+func splitList(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+// validProxyEntry mirrors what okapi.WithTrustedProxies accepts.
+func validProxyEntry(entry string) bool {
+	if _, _, err := net.ParseCIDR(entry); err == nil {
+		return true
+	}
+	return net.ParseIP(entry) != nil
 }
