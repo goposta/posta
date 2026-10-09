@@ -30,7 +30,7 @@ type CreateSubscriberRequest struct {
 		Name         string                 `json:"name"`
 		Status       string                 `json:"status"`
 		CustomFields map[string]interface{} `json:"custom_fields"`
-		Timezone     string                 `json:"timezone"`
+		Timezone     string                 `json:"timezone" format:"timezone" maxLength:"50" doc:"IANA timezone name; empty for none"`
 		Language     string                 `json:"language"`
 	} `json:"body"`
 }
@@ -41,7 +41,7 @@ type UpdateSubscriberRequest struct {
 		Name         string                 `json:"name"`
 		Status       string                 `json:"status"`
 		CustomFields map[string]interface{} `json:"custom_fields"`
-		Timezone     string                 `json:"timezone"`
+		Timezone     string                 `json:"timezone" format:"timezone" maxLength:"50" doc:"IANA timezone name; empty for none"`
 		Language     string                 `json:"language"`
 	} `json:"body"`
 }
@@ -79,6 +79,26 @@ type BulkImportResult struct {
 	Created int `json:"created"`
 	Skipped int `json:"skipped"`
 	Total   int `json:"total"`
+	// InvalidTimezones counts imported subscribers whose timezone was not an
+	// IANA name. They are still imported, with no timezone.
+	InvalidTimezones int `json:"invalid_timezones"`
+}
+
+// subscriberTimezone returns tz when it is an IANA name (the check okapi's
+// format:"timezone" applies), and "" otherwise. Imports and restores use it
+// so one bad value drops the field instead of failing the whole batch.
+func subscriberTimezone(tz string) (string, bool) {
+	tz = strings.TrimSpace(tz)
+	if tz == "" {
+		return "", true
+	}
+	if tz == "Local" || len(tz) > 50 {
+		return "", false
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		return "", false
+	}
+	return tz, true
 }
 
 func (h *SubscriberHandler) Create(c *okapi.Context, req *CreateSubscriberRequest) error {
@@ -193,17 +213,22 @@ func (h *SubscriberHandler) BulkImportJSON(c *okapi.Context, req *BulkImportSubs
 
 	now := time.Now()
 	var subscribers []models.Subscriber
+	invalidTZ := 0
 	for _, entry := range req.Body.Subscribers {
 		email := strings.ToLower(strings.TrimSpace(entry.Email))
 		if email == "" {
 			continue
+		}
+		tz, valid := subscriberTimezone(entry.Timezone)
+		if !valid {
+			invalidTZ++
 		}
 		subscribers = append(subscribers, models.Subscriber{
 			UserID:       scope.UserID,
 			WorkspaceID:  scope.WorkspaceID,
 			Email:        email,
 			Name:         strings.TrimSpace(entry.Name),
-			Timezone:     strings.TrimSpace(entry.Timezone),
+			Timezone:     tz,
 			Language:     strings.TrimSpace(entry.Language),
 			Status:       models.SubscriberStatusSubscribed,
 			CustomFields: entry.CustomFields,
@@ -217,9 +242,10 @@ func (h *SubscriberHandler) BulkImportJSON(c *okapi.Context, req *BulkImportSubs
 	}
 
 	return ok(c, BulkImportResult{
-		Created: created,
-		Skipped: skipped,
-		Total:   len(subscribers),
+		Created:          created,
+		Skipped:          skipped,
+		Total:            len(subscribers),
+		InvalidTimezones: invalidTZ,
 	})
 }
 
@@ -262,6 +288,7 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 
 	now := time.Now()
 	var subscribers []models.Subscriber
+	invalidTZ := 0
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -293,6 +320,12 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 				s.Status = models.SubscriberStatus(val)
 			case "language":
 				s.Language = val
+			case "timezone":
+				tz, valid := subscriberTimezone(val)
+				if !valid {
+					invalidTZ++
+				}
+				s.Timezone = tz
 			default:
 				if strings.HasPrefix(field, "custom_fields.") {
 					key := strings.TrimPrefix(field, "custom_fields.")
@@ -313,8 +346,9 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 	}
 
 	return ok(c, BulkImportResult{
-		Created: createdCount,
-		Skipped: skipped,
-		Total:   len(subscribers),
+		Created:          createdCount,
+		Skipped:          skipped,
+		Total:            len(subscribers),
+		InvalidTimezones: invalidTZ,
 	})
 }

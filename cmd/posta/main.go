@@ -4,6 +4,10 @@
 package main
 
 import (
+	// Embed the tz database so timezone validation and scheduling behave the
+	// same on hosts without /usr/share/zoneinfo.
+	_ "time/tzdata"
+
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 	"github.com/jkaninda/okapi/okapicli"

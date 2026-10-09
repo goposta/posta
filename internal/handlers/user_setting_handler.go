@@ -19,7 +19,7 @@ func NewUserSettingHandler(repo *repositories.UserSettingRepository) *UserSettin
 
 type UpdateUserSettingsRequest struct {
 	Body struct {
-		Timezone           *string `json:"timezone"`
+		Timezone           *string `json:"timezone" format:"timezone" minLength:"1" example:"Africa/Kinshasa" doc:"IANA timezone name"`
 		DefaultSenderName  *string `json:"default_sender_name"`
 		DefaultSenderEmail *string `json:"default_sender_email"`
 		EmailNotifications *bool   `json:"email_notifications"`

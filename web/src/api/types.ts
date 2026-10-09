@@ -1079,6 +1079,8 @@ export interface BulkImportResult {
   created: number
   skipped: number
   total: number
+  // Imported anyway, with no timezone.
+  invalid_timezones?: number
 }
 
 // Campaigns

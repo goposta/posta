@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { subscribersApi } from '../../api/subscribers'
-import type { Subscriber, SubscriberStatus } from '../../api/types'
+import type { BulkImportResult, Subscriber, SubscriberStatus } from '../../api/types'
 import Pagination from '../../components/Pagination.vue'
 import { usePagination } from '../../composables/usePagination'
 import { useNotificationStore } from '../../stores/notification'
@@ -95,6 +95,14 @@ function openImportJson() {
   showImportJsonModal.value = true
 }
 
+function importSummary(prefix: string, result: BulkImportResult): string {
+  let msg = `${prefix}: ${result.created} created, ${result.skipped} skipped out of ${result.total}`
+  if (result.invalid_timezones) {
+    msg += ` (${result.invalid_timezones} with an unrecognised timezone, imported without one)`
+  }
+  return msg
+}
+
 async function importJson() {
   if (!importJsonText.value.trim()) return
   importing.value = true
@@ -103,7 +111,7 @@ async function importJson() {
     const subscribers = Array.isArray(data) ? data : [data]
     const res = await subscribersApi.bulkImportJSON(subscribers)
     const result = res.data.data
-    notify.success(`Import complete: ${result.created} created, ${result.skipped} skipped out of ${result.total}`)
+    notify.success(importSummary('Import complete', result))
     showImportJsonModal.value = false
     await goToPage(pageable.value.current_page)
   } catch (e: any) {
@@ -129,7 +137,7 @@ async function onCsvFileSelected(event: Event) {
   try {
     const res = await subscribersApi.bulkImportCSV(file)
     const result = res.data.data
-    notify.success(`CSV import complete: ${result.created} created, ${result.skipped} skipped out of ${result.total}`)
+    notify.success(importSummary('CSV import complete', result))
     await goToPage(pageable.value.current_page)
   } catch (e: any) {
     notify.error(e?.response?.data?.error?.message || 'Failed to import CSV')
