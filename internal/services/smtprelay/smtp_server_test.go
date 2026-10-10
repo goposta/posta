@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
+// SPDX-FileCopyrightText: 2026 Anas DADI
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package smtprelay
