@@ -4,6 +4,7 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -364,6 +365,32 @@ func TestValidateRejectsInvalidTrustedProxy(t *testing.T) {
 		if err := c.validate(); (err != nil) != tc.wantErr {
 			t.Errorf("%v: err = %v, wantErr %v", tc.entries, err, tc.wantErr)
 		}
+	}
+}
+
+func TestValidateSMTPRelayTLS(t *testing.T) {
+	t.Setenv("POSTA_SMTP_RELAY_TLS_MODE", "")
+	_ = os.Unsetenv("POSTA_SMTP_RELAY_TLS_MODE")
+	if got := New().SMTPRelayTLSMode; got != "none" {
+		t.Fatalf("unset relay TLS mode = %q, want none", got)
+	}
+	for _, tc := range []struct {
+		name, mode, cert, key string
+		wantErr               bool
+	}{
+		{"plain default", "none", "", "", false},
+		{"starttls", "starttls", "cert.pem", "key.pem", false},
+		{"missing certificate", "starttls", "", "key.pem", true},
+		{"missing key", "starttls", "cert.pem", "", true},
+		{"unknown mode", "ssl", "cert.pem", "key.pem", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Config{Env: "dev", SMTPRelayEnabled: true, SMTPRelayTLSMode: tc.mode,
+				SMTPRelayTLSCertFile: tc.cert, SMTPRelayTLSKeyFile: tc.key}
+			if err := c.validate(); (err != nil) != tc.wantErr {
+				t.Fatalf("validate() error = %v, wantErr %t", err, tc.wantErr)
+			}
+		})
 	}
 }
 
