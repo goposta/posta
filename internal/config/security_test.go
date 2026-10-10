@@ -367,6 +367,27 @@ func TestValidateRejectsInvalidTrustedProxy(t *testing.T) {
 	}
 }
 
+func TestValidateSMTPRelayTLS(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode, cert, key string
+		wantErr               bool
+	}{
+		{"plain default", "none", "", "", false},
+		{"starttls", "starttls", "cert.pem", "key.pem", false},
+		{"missing certificate", "starttls", "", "key.pem", true},
+		{"missing key", "starttls", "cert.pem", "", true},
+		{"unknown mode", "ssl", "cert.pem", "key.pem", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Config{Env: "dev", SMTPRelayEnabled: true, SMTPRelayTLSMode: tc.mode,
+				SMTPRelayTLSCertFile: tc.cert, SMTPRelayTLSKeyFile: tc.key}
+			if err := c.validate(); (err != nil) != tc.wantErr {
+				t.Fatalf("validate() error = %v, wantErr %t", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestSplitList(t *testing.T) {
 	got := splitList(" 10.0.0.0/8 , ,192.0.2.7,")
 	if len(got) != 2 || got[0] != "10.0.0.0/8" || got[1] != "192.0.2.7" {

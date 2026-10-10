@@ -164,6 +164,7 @@ export interface SMTPCredentialCreateResponse {
   password: string
   host: string
   port: number
+  encryption: 'none' | 'starttls'
   created_at: string
   message: string
 }

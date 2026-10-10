@@ -174,7 +174,7 @@ func runServer(cli *okapicli.CLI) {
 
 			if cfg.SMTPRelayEnabled && !cfg.DevMode {
 				if srv, err := startSMTPRelayServer(res.db, cfg, emailSvc); err != nil {
-					logger.Error("failed to start SMTP relay server", "error", err)
+					logger.Fatal("failed to start SMTP relay server", "error", err)
 				} else {
 					res.smtpRelay = srv
 				}
@@ -364,6 +364,9 @@ func startSMTPRelayServer(db *gorm.DB, cfg *config.Config, emailSvc *email.Servi
 		Port:           cfg.SMTPRelayPort,
 		Hostname:       cfg.SMTPRelayHostname,
 		MaxMessageSize: cfg.SMTPRelayMaxMessageSize,
+		TLSMode:        cfg.SMTPRelayTLSMode,
+		TLSCertFile:    cfg.SMTPRelayTLSCertFile,
+		TLSKeyFile:     cfg.SMTPRelayTLSKeyFile,
 	})
 	if err != nil {
 		return nil, err

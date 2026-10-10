@@ -148,11 +148,14 @@ type Config struct {
 	MessagesPerWorkspaceDaily int
 	MessagesInboundDomain     string
 
-	// SMTP Relay settings. No TLS by design.
+	// SMTP Relay settings.
 	SMTPRelayEnabled        bool
 	SMTPRelayHost           string
 	SMTPRelayPort           int
 	SMTPRelayHostname       string
+	SMTPRelayTLSMode        string
+	SMTPRelayTLSCertFile    string
+	SMTPRelayTLSKeyFile     string
 	SMTPRelayMaxMessageSize int64
 	SMTPRelayRateLimit      int
 	SMTPRelayRateWindow     int
@@ -359,6 +362,9 @@ func New() *Config {
 		SMTPRelayHost:           goutils.Env("POSTA_SMTP_RELAY_HOST", "0.0.0.0"),
 		SMTPRelayPort:           goutils.EnvInt("POSTA_SMTP_RELAY_PORT", 2526),
 		SMTPRelayHostname:       goutils.Env("POSTA_SMTP_RELAY_HOSTNAME", "posta.local"),
+		SMTPRelayTLSMode:        goutils.Env("POSTA_SMTP_RELAY_TLS_MODE", "none"),
+		SMTPRelayTLSCertFile:    goutils.Env("POSTA_SMTP_RELAY_TLS_CERT_FILE", ""),
+		SMTPRelayTLSKeyFile:     goutils.Env("POSTA_SMTP_RELAY_TLS_KEY_FILE", ""),
 		SMTPRelayMaxMessageSize: int64(goutils.EnvInt("POSTA_SMTP_RELAY_MAX_MESSAGE_SIZE", 26214400)),
 		SMTPRelayRateLimit:      goutils.EnvInt("POSTA_SMTP_RELAY_RATE_LIMIT", 60),
 		SMTPRelayRateWindow:     goutils.EnvInt("POSTA_SMTP_RELAY_RATE_WINDOW", 60),
@@ -390,6 +396,17 @@ func (c *Config) validate() error {
 		}
 		if c.InboundTLSCertFile == "" || c.InboundTLSKeyFile == "" {
 			return fmt.Errorf("POSTA_INBOUND_TLS_MODE=%s requires POSTA_INBOUND_TLS_CERT_FILE and POSTA_INBOUND_TLS_KEY_FILE", c.InboundTLSMode)
+		}
+	}
+	if c.SMTPRelayEnabled {
+		switch c.SMTPRelayTLSMode {
+		case "", "none":
+		case "starttls":
+			if c.SMTPRelayTLSCertFile == "" || c.SMTPRelayTLSKeyFile == "" {
+				return fmt.Errorf("POSTA_SMTP_RELAY_TLS_MODE=starttls requires POSTA_SMTP_RELAY_TLS_CERT_FILE and POSTA_SMTP_RELAY_TLS_KEY_FILE")
+			}
+		default:
+			return fmt.Errorf("unsupported POSTA_SMTP_RELAY_TLS_MODE %q (use none or starttls)", c.SMTPRelayTLSMode)
 		}
 	}
 	// okapi drops an invalid list and trusts no proxy, which would quietly

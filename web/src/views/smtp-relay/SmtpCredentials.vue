@@ -109,7 +109,7 @@ async function deleteCredential(cred: SMTPCredential) {
 function copyCredential() {
   if (!createdCredential.value) return
   const c = createdCredential.value
-  const text = `Host: ${c.host}\nPort: ${c.port}\nUsername: ${c.username}\nPassword: ${c.password}`
+  const text = `Host: ${c.host}\nPort: ${c.port}\nEncryption: ${c.encryption}\nUsername: ${c.username}\nPassword: ${c.password}`
   navigator.clipboard.writeText(text)
   copied.value = true
   setTimeout(() => (copied.value = false), 2000)
@@ -287,6 +287,10 @@ onMounted(() => {
           <div class="form-group">
             <label class="form-label">Port</label>
             <div class="code-block">{{ createdCredential?.port }}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Encryption</label>
+            <div class="code-block">{{ createdCredential?.encryption === 'starttls' ? 'STARTTLS (required)' : 'None — private network only' }}</div>
           </div>
           <div class="form-group">
             <label class="form-label">Username</label>

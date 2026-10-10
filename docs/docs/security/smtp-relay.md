@@ -20,20 +20,24 @@ The SMTP Relay is off by default. Enable it with configuration:
 | `POSTA_SMTP_RELAY_HOST` | `0.0.0.0` | Bind address for the built-in SMTP relay listener. |
 | `POSTA_SMTP_RELAY_PORT` | `2526` | Listener port. Separate from `POSTA_INBOUND_SMTP_PORT` — the two listeners never share a port or process state. |
 | `POSTA_SMTP_RELAY_HOSTNAME` | `posta.local` | Hostname announced in the SMTP `EHLO` greeting. |
+| `POSTA_SMTP_RELAY_TLS_MODE` | `none` | Set to `starttls` to advertise STARTTLS and require TLS before AUTH. |
+| `POSTA_SMTP_RELAY_TLS_CERT_FILE` | — | PEM certificate chain; required with `starttls`. |
+| `POSTA_SMTP_RELAY_TLS_KEY_FILE` | — | PEM private key; required with `starttls`. |
 | `POSTA_SMTP_RELAY_MAX_MESSAGE_SIZE` | `26214400` (25 MiB) | Maximum raw message size in bytes. Larger messages are rejected with `552`. |
 | `POSTA_SMTP_RELAY_RATE_LIMIT` | `60` | Per-IP maximum SMTP sessions per window; `0` disables the limit. |
 | `POSTA_SMTP_RELAY_RATE_WINDOW` | `60` | Rate-limit window, in seconds. |
 
-:::danger No TLS
-The Relay listener does **not** support TLS or STARTTLS, by design — it is a minimal, plaintext-AUTH migration aid, not a hardened public MTA. Credentials and message content travel unencrypted. Only expose `POSTA_SMTP_RELAY_PORT` on a private network, over a VPN, or to `localhost` — never bind it directly to the public internet. If you need Relay access from outside your private network, put a TLS-terminating TCP proxy (e.g. stunnel, an SMTP-aware load balancer) in front of it; Posta itself will never decrypt or negotiate TLS on this listener.
+:::warning Transport security
+The default `none` mode preserves the legacy plaintext-AUTH relay. Set `POSTA_SMTP_RELAY_TLS_MODE=starttls` and provide a certificate/key to advertise STARTTLS and withhold AUTH until TLS is established (minimum TLS 1.2). Clients must require STARTTLS and verify the certificate against the relay hostname; opportunistic TLS can silently fall back to plaintext. Keep either mode on a private network or VPN; STARTTLS does not make this listener a public MTA.
 :::
 
 ## How It Works
 
 ```
-your SMTP client                POSTA_SMTP_RELAY_PORT (no TLS)
+your SMTP client                POSTA_SMTP_RELAY_PORT
        │                                  │
-       ├── EHLO / AUTH PLAIN ────────────►│  verify SMTPCredential (workspace-scoped)
+       ├── EHLO / STARTTLS (if enabled) ─►│  require TLS before AUTH
+       ├── AUTH PLAIN ───────────────────►│  verify SMTPCredential (workspace-scoped)
        │                                  │
        └── MAIL FROM / RCPT TO / DATA ───►│  parse message
                                            │
@@ -80,6 +84,7 @@ Response (`201`):
     "password": "8b1c...e02f",
     "host": "posta.local",
     "port": 2526,
+    "encryption": "starttls",
     "created_at": "2026-07-20T00:00:00Z",
     "message": "Save this password securely. It will not be shown again."
   }
@@ -120,25 +125,26 @@ Permanently removes the credential record.
 
 ## Connecting Your SMTP Client
 
-Point your existing SMTP client at the Relay host and port, with the generated username/password and no encryption:
+Point your existing SMTP client at the Relay host and port with the generated username/password. Match the client encryption setting to the listener configuration:
 
 | Setting | Value |
 |---|---|
 | Host | `POSTA_SMTP_RELAY_HOST` (or wherever it's reachable from your app) |
 | Port | `POSTA_SMTP_RELAY_PORT` (default `2526`) |
-| Encryption | None — do not configure TLS or STARTTLS on the client |
+| Encryption | `starttls` when enabled (required and certificate-verified); otherwise `none` only on a trusted private path |
 | Auth mechanism | `PLAIN` |
 | Username / Password | From the credential creation response |
 
 ```bash
 swaks --server localhost --port 2526 \
+  --tls --tls-verify \
   --auth PLAIN --auth-user smtp_9f3c2a1b7e4d5601 --auth-password 8b1c...e02f \
   --from sender@yourdomain.com --to recipient@example.com \
   --header "Subject: Hello from the SMTP Relay" \
   --body "This message was relayed through Posta's outbound pipeline."
 ```
 
-`AUTH PLAIN` is the only mechanism the Relay advertises; clients that default to `LOGIN` or `CRAM-MD5` should be configured to use `PLAIN` explicitly. The listener accepts up to 50 recipients per message.
+The example assumes STARTTLS mode and a trusted relay certificate. In `none` mode, omit the `--tls` flags and restrict access to a trusted private path. `AUTH PLAIN` is the only mechanism the Relay advertises; clients that default to `LOGIN` or `CRAM-MD5` should be configured to use `PLAIN` explicitly. The listener accepts up to 50 recipients per message.
 
 ## Send Outcomes
 
