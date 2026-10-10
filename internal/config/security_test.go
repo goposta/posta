@@ -4,6 +4,7 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -368,6 +369,11 @@ func TestValidateRejectsInvalidTrustedProxy(t *testing.T) {
 }
 
 func TestValidateSMTPRelayTLS(t *testing.T) {
+	t.Setenv("POSTA_SMTP_RELAY_TLS_MODE", "")
+	_ = os.Unsetenv("POSTA_SMTP_RELAY_TLS_MODE")
+	if got := New().SMTPRelayTLSMode; got != "none" {
+		t.Fatalf("unset relay TLS mode = %q, want none", got)
+	}
 	for _, tc := range []struct {
 		name, mode, cert, key string
 		wantErr               bool

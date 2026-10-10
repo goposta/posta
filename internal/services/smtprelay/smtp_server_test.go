@@ -62,9 +62,11 @@ func TestSMTPRelaySTARTTLS(t *testing.T) {
 }
 
 func TestSMTPRelayTLSConfiguration(t *testing.T) {
-	plain, err := NewSMTPServer(nil, SMTPConfig{TLSMode: "none"})
-	if err != nil || plain.TLSConfig != nil || !plain.AllowInsecureAuth {
-		t.Fatalf("plaintext relay changed: server=%+v error=%v", plain, err)
+	for _, cfg := range []SMTPConfig{{}, {TLSMode: "none"}} {
+		plain, err := NewSMTPServer(nil, cfg)
+		if err != nil || plain.TLSConfig != nil || !plain.AllowInsecureAuth {
+			t.Fatalf("plaintext relay changed for %+v: server=%+v error=%v", cfg, plain, err)
+		}
 	}
 	for _, cfg := range []SMTPConfig{{TLSMode: "starttls"}, {TLSMode: "unexpected"}} {
 		if _, err := NewSMTPServer(nil, cfg); err == nil {
