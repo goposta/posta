@@ -33,6 +33,7 @@ const (
 	TypeInboundParse   = "inbound:parse"
 	TypeInboundProcess = "inbound:process"
 	TypeMessageProcess = "message:process"
+	TypeMessageReply   = "message:reply"
 
 	QueueTransactional = queues.Transactional
 	QueueBulk          = queues.Bulk
@@ -110,4 +111,18 @@ func NewMessageProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeMessageProcess, payload, opts...), nil
+}
+
+// MessageReplyPayload names one thread reply, outbound or inbound, whose
+// webhook (and, for inbound replies, notification) is still to be sent.
+type MessageReplyPayload struct {
+	ReplyID uint `json:"reply_id"`
+}
+
+func NewMessageReplyTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(MessageReplyPayload{ReplyID: id})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeMessageReply, payload, opts...), nil
 }

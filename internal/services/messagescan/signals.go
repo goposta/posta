@@ -155,10 +155,10 @@ func signalRepeatIP(s *Scanner, in Input) (float64, string) {
 }
 
 func signalRepeatSender(s *Scanner, in Input) (float64, string) {
-	if s.lookup == nil || in.SenderEmail == "" || in.Form == nil {
+	if s.lookup == nil || in.SenderEmail == "" || in.Policy == nil {
 		return 0, ""
 	}
-	n := s.lookup.SubmissionsFromSender(in.Form.ID, in.SenderEmail, time.Now().Add(-time.Hour))
+	n := s.lookup.SubmissionsFromSender(in.Policy.ScanSource(), in.SenderEmail, time.Now().Add(-time.Hour))
 	if n >= 3 {
 		return 2, fmt.Sprintf("repeat_sender:%d", n)
 	}

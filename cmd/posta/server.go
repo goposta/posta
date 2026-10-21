@@ -37,7 +37,9 @@ import (
 	"github.com/goposta/posta/internal/services/email"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/inbound"
+	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/services/notification"
+	"github.com/goposta/posta/internal/services/realtime"
 	"github.com/goposta/posta/internal/services/retry"
 	"github.com/goposta/posta/internal/services/seeder"
 	"github.com/goposta/posta/internal/services/settings"
@@ -299,7 +301,24 @@ func newInboundServiceForWorker(db *gorm.DB,
 	if bus != nil {
 		svc.SetEventBus(bus)
 	}
+	attachThreadRouter(svc, db, cfg, producer)
 	return svc
+}
+
+// attachThreadRouter routes replies sent to form thread addresses
+// (msg+<token>@POSTA_MESSAGES_INBOUND_DOMAIN) onto their message instead of
+// the generic inbound pipeline. Every inbound service that parses mail needs
+// it; otherwise a reply parsed by that process would be handled as loose mail.
+func attachThreadRouter(svc *inbound.Service, db *gorm.DB, cfg *config.Config, producer *worker.Producer) {
+	if !cfg.MessagesEnabled || cfg.MessagesInboundDomain == "" {
+		return
+	}
+	router := messages.NewThreadRouter(repositories.NewMessageRepository(db), cfg.MessagesInboundDomain)
+	router.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
+	if producer != nil {
+		router.SetEnqueuer(producer)
+	}
+	svc.SetThreadRouter(router)
 }
 
 // startInboundSMTPServer configures and launches the built-in SMTP receiver.
@@ -525,7 +544,9 @@ func startEmbeddedWorker(db *gorm.DB,
 			cfg.AppWebURL,
 		)
 		messageHandler.OnNotified(metrics.IncrementMessageNotification)
+		messageHandler.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
 		mux.HandleFunc(worker.TypeMessageProcess, messageHandler.ProcessTask)
+		mux.HandleFunc(worker.TypeMessageReply, messageHandler.ProcessReplyTask)
 	}
 
 	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
@@ -599,6 +620,7 @@ func initCronManager(
 	retentionJob.SetNotificationRepo(repositories.NewNotificationRepository(db))
 	if cfg.MessagesEnabled {
 		retentionJob.SetMessageRepo(repositories.NewMessageRepository(db))
+		retentionJob.SetFormRepo(repositories.NewFormRepository(db))
 		manager.Register(jobs.NewMessageDigestJob(
 			notifier,
 			repositories.NewFormRepository(db),

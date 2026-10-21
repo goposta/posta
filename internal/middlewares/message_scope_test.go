@@ -69,3 +69,22 @@ func TestReadScopeCannotReachFormConfig(t *testing.T) {
 		t.Fatal("a read-only key must not be able to enumerate form configuration")
 	}
 }
+
+// GDPR erasure is destructive tenant administration. A workspace-bound key
+// resolves as owner, so without the admin scope a write-only key could erase
+// every contact in the workspace.
+func TestGDPRRoutesRequireAdminScope(t *testing.T) {
+	for _, path := range []string{
+		"/api/v1/workspaces/current/gdpr/delete-contacts",
+		"/api/v1/workspaces/current/gdpr/delete-email-logs",
+		"/api/v1/workspaces/current/gdpr/delete-messages",
+	} {
+		if got := workspaceScopeFor(http.MethodPost, path); got != models.ScopeAdmin {
+			t.Fatalf("workspaceScopeFor(POST %s) = %s, want admin", path, got)
+		}
+	}
+	key := &models.APIKey{Scopes: []string{models.ScopeRead, models.ScopeWrite}}
+	if key.HasScope(workspaceScopeFor(http.MethodPost, "/api/v1/workspaces/current/gdpr/delete-contacts")) {
+		t.Fatal("a read/write key must not reach GDPR erasure")
+	}
+}

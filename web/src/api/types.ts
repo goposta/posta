@@ -1284,13 +1284,14 @@ export interface MessageReply {
   uuid: string
   message_id: number
   kind: MessageReplyKind
-  author_id: number
+  author_id?: number | null
   from_addr: string
   to_addr: string
   subject: string
   html_body: string
   text_body: string
   email_uuid?: string
+  sender_mismatch?: boolean
   created_at: string
   author?: { id: number; name: string; email: string } | null
 }

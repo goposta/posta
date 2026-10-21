@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { messagesApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
@@ -32,6 +32,36 @@ async function load() {
     notify.error(apiMessage(e, "Failed to load message"));
   } finally {
     loading.value = false;
+  }
+}
+
+// refresh reloads the thread in place when a live event names this message,
+// keeping whatever the operator has typed in the composer.
+async function refresh() {
+  try {
+    const res = await messagesApi.get(uuid);
+    message.value = res.data.data;
+  } catch {
+    /* the next event or a manual reload will try again */
+  }
+}
+
+let sse: EventSource | null = null;
+function watchThread() {
+  try {
+    sse = new EventSource(messagesApi.streamUrl(), { withCredentials: true });
+    const onEvent = (e: MessageEvent) => {
+      try {
+        if (JSON.parse(e.data)?.message_id === uuid) refresh();
+      } catch {
+        /* ignore malformed events */
+      }
+    };
+    for (const type of ["message.updated", "message.replied", "message.reply_received"]) {
+      sse.addEventListener(type, onEvent as EventListener);
+    }
+  } catch {
+    /* SSE not supported */
   }
 }
 
@@ -252,7 +282,13 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  watchThread();
+});
+onBeforeUnmount(() => {
+  if (sse) sse.close();
+});
 </script>
 
 <template>
@@ -460,7 +496,15 @@ onMounted(load);
             style="border-bottom: 1px solid var(--border); padding: 12px 0"
           >
             <div style="display: flex; justify-content: space-between; gap: 12px">
-              <strong>{{ reply.author?.name || reply.from_addr }}</strong>
+              <span style="display: flex; gap: 8px; align-items: center">
+                <strong>{{ reply.author?.name || reply.from_addr }}</strong>
+                <span v-if="reply.kind === 'inbound'" class="badge">Replied by email</span>
+                <span
+                  v-if="reply.sender_mismatch"
+                  class="badge badge-warning"
+                  title="This reply came from a different address than the original message: a forward, or someone using the thread's reply address."
+                >Different sender</span>
+              </span>
               <span class="muted">{{ formatDate(reply.created_at) }}</span>
             </div>
             <div class="muted" style="font-size: 13px">{{ reply.subject }}</div>

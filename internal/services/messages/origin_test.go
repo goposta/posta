@@ -49,7 +49,8 @@ func TestOriginAllowed(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			form := &models.Form{AllowedOrigins: pq.StringArray(tc.origins), StrictOrigin: tc.strict}
-			if got := OriginAllowed(form, tc.origin); got != tc.want {
+			allowlist, strict := form.OriginPolicy()
+			if got := OriginAllowed(allowlist, strict, tc.origin); got != tc.want {
 				t.Fatalf("OriginAllowed(%q) = %v, want %v", tc.origin, got, tc.want)
 			}
 		})
@@ -71,7 +72,7 @@ func TestRedirectAllowedRejectsOpenRedirects(t *testing.T) {
 		{"", false},
 	}
 	for _, tc := range cases {
-		if got := RedirectAllowed(form, tc.target); got != tc.want {
+		if got := RedirectAllowed(form.AllowedOrigins, form.RedirectURL, tc.target); got != tc.want {
 			t.Fatalf("RedirectAllowed(%q) = %v, want %v", tc.target, got, tc.want)
 		}
 	}
@@ -79,14 +80,14 @@ func TestRedirectAllowedRejectsOpenRedirects(t *testing.T) {
 
 func TestRedirectAllowedWithoutAllowlistRejects(t *testing.T) {
 	form := &models.Form{}
-	if RedirectAllowed(form, "https://anywhere.test/thanks") {
+	if RedirectAllowed(form.AllowedOrigins, form.RedirectURL, "https://anywhere.test/thanks") {
 		t.Fatal("a form with no allowlist must not honour an arbitrary redirect target")
 	}
 }
 
 func TestRedirectAllowedMatchesConfiguredRedirectHost(t *testing.T) {
 	form := &models.Form{RedirectURL: "https://example.com/thanks"}
-	if !RedirectAllowed(form, "https://example.com/other") {
+	if !RedirectAllowed(form.AllowedOrigins, form.RedirectURL, "https://example.com/other") {
 		t.Fatal("a target on the configured redirect host should be allowed")
 	}
 }

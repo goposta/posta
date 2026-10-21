@@ -60,3 +60,21 @@ func TestMinDays(t *testing.T) {
 		}
 	}
 }
+
+// formRetentionDays encodes "a form can shorten retention, never extend it".
+func TestFormRetentionDays(t *testing.T) {
+	cases := []struct {
+		form, platform, want int
+	}{
+		{form: 7, platform: 90, want: 7},    // form shorter → form wins
+		{form: 365, platform: 90, want: 90}, // form longer → clamped to the platform ceiling
+		{form: 30, platform: 0, want: 30},   // platform keeps forever → form bounds
+		{form: 0, platform: 90, want: 0},    // form sets nothing → no per-form pass
+		{form: -1, platform: 90, want: 0},   // nonsense → no per-form pass
+	}
+	for _, c := range cases {
+		if got := formRetentionDays(c.form, c.platform); got != c.want {
+			t.Errorf("formRetentionDays(%d, %d) = %d, want %d", c.form, c.platform, got, c.want)
+		}
+	}
+}

@@ -176,6 +176,26 @@ func (p *Producer) EnqueueMessageProcess(messageID uint) error {
 	return nil
 }
 
+// EnqueueMessageReply schedules the follow-up for a thread reply. The task ID
+// makes a second enqueue of the same reply a no-op.
+func (p *Producer) EnqueueMessageReply(replyID uint) error {
+	task, err := NewMessageReplyTask(replyID,
+		asynq.Queue(QueueTransactional),
+		asynq.MaxRetry(p.maxRetries),
+		asynq.TaskID(fmt.Sprintf("message:reply:%d", replyID)),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create message reply task: %w", err)
+	}
+	if _, err := p.client.Enqueue(task); err != nil {
+		if errors.Is(err, asynq.ErrTaskIDConflict) {
+			return nil
+		}
+		return fmt.Errorf("failed to enqueue message reply task: %w", err)
+	}
+	return nil
+}
+
 // Close closes the underlying Asynq client.
 func (p *Producer) Close() error {
 	return p.client.Close()

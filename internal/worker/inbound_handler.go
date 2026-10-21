@@ -112,11 +112,22 @@ func (h *InboundParseHandler) ProcessTask(ctx context.Context, t *asynq.Task) er
 		return nil
 	}
 
+	// ApplyParsed replaces the envelope recipients with the To header; keep them,
+	// since a thread address may only appear in the envelope (Bcc, aliases).
+	envelope := append([]string(nil), rec.Recipients...)
+
 	if aerr := h.svc.ApplyParsed(ctx, rec, parsed); aerr != nil {
 		if errors.Is(aerr, inbound.ErrDuplicate) {
 			return nil
 		}
 		return fmt.Errorf("apply parsed inbound: %w", aerr)
+	}
+
+	if h.svc.RouteThread(ctx, rec, envelope, rec.Recipients, parsed.Cc) {
+		if h.onParsed != nil {
+			h.onParsed()
+		}
+		return nil
 	}
 
 	if h.producer != nil {

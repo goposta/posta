@@ -25,6 +25,8 @@ import (
 
 	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 	"gorm.io/gorm"
@@ -46,7 +48,15 @@ type WorkspaceDataHandler struct {
 	domainRepo         *repositories.DomainRepository
 	subscriberRepo     *repositories.SubscriberRepository
 	subscriberListRepo *repositories.SubscriberListRepository
+	blobStore          blob.Store
+	audit              *audit.Logger
 }
+
+// SetBlobStore lets GDPR erasure remove stored attachments and raw emails.
+func (h *WorkspaceDataHandler) SetBlobStore(bs blob.Store) { h.blobStore = bs }
+
+// SetAuditLogger records destructive data operations in the audit log.
+func (h *WorkspaceDataHandler) SetAuditLogger(l *audit.Logger) { h.audit = l }
 
 func NewWorkspaceDataHandler(
 	db *gorm.DB,

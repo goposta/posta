@@ -32,6 +32,7 @@ import (
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/notification"
+	"github.com/goposta/posta/internal/services/realtime"
 	"github.com/goposta/posta/internal/services/tracking"
 	"github.com/goposta/posta/internal/services/workermon"
 	"github.com/goposta/posta/internal/storage/blob"
@@ -201,6 +202,7 @@ func runWorker() error {
 		}
 		parseSvc.SetEnqueuer(parseProducer)
 		parseSvc.SetEventBus(parseBus)
+		attachThreadRouter(parseSvc, db, cfg, parseProducer)
 		parseHandler := worker.NewInboundParseHandler(
 			repositories.NewInboundEmailRepository(db),
 			parseSvc,
@@ -219,7 +221,9 @@ func runWorker() error {
 			cfg.AppWebURL,
 		)
 		messageHandler.OnNotified(metrics.IncrementMessageNotification)
+		messageHandler.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
 		mux.HandleFunc(worker.TypeMessageProcess, messageHandler.ProcessTask)
+		mux.HandleFunc(worker.TypeMessageReply, messageHandler.ProcessReplyTask)
 	}
 
 	// Publish worker's build info

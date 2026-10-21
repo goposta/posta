@@ -36,10 +36,12 @@ type stubLookup struct {
 	filterError error
 }
 
-func (s *stubLookup) IsSuppressed(uint, string) bool                      { return s.suppressed }
-func (s *stubLookup) SubmissionsFromIP(string, time.Time) int64           { return s.fromIP }
-func (s *stubLookup) SubmissionsFromSender(uint, string, time.Time) int64 { return s.fromSender }
-func (s *stubLookup) ActiveFilters(uint, uint) ([]models.MessageFilter, error) {
+func (s *stubLookup) IsSuppressed(uint, string) bool            { return s.suppressed }
+func (s *stubLookup) SubmissionsFromIP(string, time.Time) int64 { return s.fromIP }
+func (s *stubLookup) SubmissionsFromSender(models.ScanSource, string, time.Time) int64 {
+	return s.fromSender
+}
+func (s *stubLookup) ActiveFilters(uint, models.ScanSource) ([]models.MessageFilter, error) {
 	return s.filters, s.filterError
 }
 
@@ -57,7 +59,7 @@ func testForm() *models.Form {
 
 func TestHoneypotRejectsImmediately(t *testing.T) {
 	s := New(&stubLookup{})
-	v := s.Scan(Input{Form: testForm(), HoneypotHit: true})
+	v := s.Scan(Input{Policy: testForm(), HoneypotHit: true})
 	if v.Action != ActionReject {
 		t.Fatalf("Action = %s, want reject", v.Action)
 	}
@@ -68,7 +70,7 @@ func TestHoneypotRejectsImmediately(t *testing.T) {
 
 func TestNonceFailureRejectsImmediately(t *testing.T) {
 	s := New(&stubLookup{})
-	v := s.Scan(Input{Form: testForm(), NonceFailed: true})
+	v := s.Scan(Input{Policy: testForm(), NonceFailed: true})
 	if v.Action != ActionReject {
 		t.Fatalf("Action = %s, want reject", v.Action)
 	}
@@ -78,7 +80,7 @@ func TestScanDisabledAllows(t *testing.T) {
 	form := testForm()
 	form.ScanEnabled = false
 	s := New(&stubLookup{suppressed: true})
-	v := s.Scan(Input{Form: form, SenderEmail: "spam@mailinator.com", Body: strings.Repeat("BUY NOW ", 40)})
+	v := s.Scan(Input{Policy: form, SenderEmail: "spam@mailinator.com", Body: strings.Repeat("BUY NOW ", 40)})
 	if v.Action != ActionAllow || v.Score != 0 {
 		t.Fatalf("Action = %s score = %v, want allow/0", v.Action, v.Score)
 	}
@@ -113,7 +115,7 @@ func TestAllowlistShortCircuits(t *testing.T) {
 		},
 	})
 	v := s.Scan(Input{
-		Form:        testForm(),
+		Policy:      testForm(),
 		SenderEmail: "vip@partner.com",
 		Body:        strings.Repeat("http://spam.test ", 20),
 	})
@@ -131,7 +133,7 @@ func TestFilterActionSetsFloorRegardlessOfScore(t *testing.T) {
 			{ID: 1, Kind: models.FilterKindKeyword, Pattern: "casino", Action: models.FilterActionReject, Score: 0},
 		},
 	})
-	v := s.Scan(Input{Form: testForm(), Body: "come to our casino"})
+	v := s.Scan(Input{Policy: testForm(), Body: "come to our casino"})
 	if v.Action != ActionReject {
 		t.Fatalf("Action = %s, want reject", v.Action)
 	}
@@ -144,7 +146,7 @@ func TestFilterScoreAccumulates(t *testing.T) {
 			{ID: 2, Kind: models.FilterKindKeyword, Pattern: "ranking", Action: models.FilterActionScore, Score: 2},
 		},
 	})
-	v := s.Scan(Input{Form: testForm(), Body: "improve your seo and ranking"})
+	v := s.Scan(Input{Policy: testForm(), Body: "improve your seo and ranking"})
 	if v.Score < 4 {
 		t.Fatalf("Score = %v, want at least 4", v.Score)
 	}
@@ -159,10 +161,10 @@ func TestKeywordMatchesWholeWordOnly(t *testing.T) {
 			{ID: 1, Kind: models.FilterKindKeyword, Pattern: "cat", Action: models.FilterActionScore, Score: 5},
 		},
 	})
-	if v := s.Scan(Input{Form: testForm(), Body: "concatenate these"}); len(v.FilterHits) != 0 {
+	if v := s.Scan(Input{Policy: testForm(), Body: "concatenate these"}); len(v.FilterHits) != 0 {
 		t.Fatal("keyword filter must not match inside a longer word")
 	}
-	if v := s.Scan(Input{Form: testForm(), Body: "the cat sat"}); len(v.FilterHits) != 1 {
+	if v := s.Scan(Input{Policy: testForm(), Body: "the cat sat"}); len(v.FilterHits) != 1 {
 		t.Fatal("keyword filter should match a standalone word")
 	}
 }
@@ -173,7 +175,7 @@ func TestPhraseMatchesSubstring(t *testing.T) {
 			{ID: 1, Kind: models.FilterKindPhrase, Pattern: "cat", Action: models.FilterActionScore, Score: 5},
 		},
 	})
-	if v := s.Scan(Input{Form: testForm(), Body: "concatenate these"}); len(v.FilterHits) != 1 {
+	if v := s.Scan(Input{Policy: testForm(), Body: "concatenate these"}); len(v.FilterHits) != 1 {
 		t.Fatal("phrase filter should match inside a longer word")
 	}
 }
@@ -184,7 +186,7 @@ func TestCaseSensitivity(t *testing.T) {
 			{ID: 1, Kind: models.FilterKindKeyword, Pattern: "Casino", Action: models.FilterActionScore, Score: 5, CaseSensitive: true},
 		},
 	})
-	if v := sensitive.Scan(Input{Form: testForm(), Body: "visit our casino"}); len(v.FilterHits) != 0 {
+	if v := sensitive.Scan(Input{Policy: testForm(), Body: "visit our casino"}); len(v.FilterHits) != 0 {
 		t.Fatal("case-sensitive filter matched a differently-cased word")
 	}
 
@@ -193,7 +195,7 @@ func TestCaseSensitivity(t *testing.T) {
 			{ID: 1, Kind: models.FilterKindKeyword, Pattern: "Casino", Action: models.FilterActionScore, Score: 5},
 		},
 	})
-	if v := insensitive.Scan(Input{Form: testForm(), Body: "visit our casino"}); len(v.FilterHits) != 1 {
+	if v := insensitive.Scan(Input{Policy: testForm(), Body: "visit our casino"}); len(v.FilterHits) != 1 {
 		t.Fatal("case-insensitive filter should have matched")
 	}
 }
@@ -204,10 +206,10 @@ func TestDomainFilterMatchesSubdomains(t *testing.T) {
 			{ID: 1, Kind: models.FilterKindDomain, Pattern: "@spam.test", Action: models.FilterActionScore, Score: 5},
 		},
 	})
-	if v := s.Scan(Input{Form: testForm(), SenderEmail: "a@mail.spam.test"}); len(v.FilterHits) != 1 {
+	if v := s.Scan(Input{Policy: testForm(), SenderEmail: "a@mail.spam.test"}); len(v.FilterHits) != 1 {
 		t.Fatal("domain filter should match a subdomain")
 	}
-	if v := s.Scan(Input{Form: testForm(), SenderEmail: "a@notspam.test"}); len(v.FilterHits) != 0 {
+	if v := s.Scan(Input{Policy: testForm(), SenderEmail: "a@notspam.test"}); len(v.FilterHits) != 0 {
 		t.Fatal("domain filter must not match an unrelated host ending in the same suffix")
 	}
 }
@@ -222,10 +224,10 @@ func TestFilterFieldScoping(t *testing.T) {
 			},
 		},
 	})
-	if v := s.Scan(Input{Form: testForm(), Body: "urgent request"}); len(v.FilterHits) != 0 {
+	if v := s.Scan(Input{Policy: testForm(), Body: "urgent request"}); len(v.FilterHits) != 0 {
 		t.Fatal("subject-scoped filter must not match the body")
 	}
-	if v := s.Scan(Input{Form: testForm(), Subject: "urgent request"}); len(v.FilterHits) != 1 {
+	if v := s.Scan(Input{Policy: testForm(), Subject: "urgent request"}); len(v.FilterHits) != 1 {
 		t.Fatal("subject-scoped filter should match the subject")
 	}
 }
@@ -253,7 +255,7 @@ func TestBuiltinSignals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := New(tc.lookup)
 			in := tc.input
-			in.Form = testForm()
+			in.Policy = testForm()
 			v := s.Scan(in)
 			for _, r := range v.Reasons {
 				if r == tc.reason {
@@ -267,7 +269,7 @@ func TestBuiltinSignals(t *testing.T) {
 
 func TestLinkCountScoreIsCapped(t *testing.T) {
 	s := New(&stubLookup{})
-	v := s.Scan(Input{Form: testForm(), Body: strings.Repeat("https://x.test ", 60)})
+	v := s.Scan(Input{Policy: testForm(), Body: strings.Repeat("https://x.test ", 60)})
 	for _, r := range v.Reasons {
 		if strings.HasPrefix(r, "links:") {
 			if v.Score > 20 {
@@ -300,7 +302,7 @@ func TestRegexFilterIgnoresOverlongPattern(t *testing.T) {
 			{ID: 1, Kind: models.FilterKindRegex, Pattern: strings.Repeat("a", 600), Action: models.FilterActionReject},
 		},
 	})
-	if v := s.Scan(Input{Form: testForm(), Body: strings.Repeat("a", 600)}); v.Action == ActionReject {
+	if v := s.Scan(Input{Policy: testForm(), Body: strings.Repeat("a", 600)}); v.Action == ActionReject {
 		t.Fatal("an overlong regex pattern must not be compiled or matched")
 	}
 }

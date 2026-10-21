@@ -319,7 +319,12 @@ type SendRequest struct {
 	Text        string              `json:"text"`
 	Attachments []models.Attachment `json:"attachments,omitempty" doc:"Optional file attachments. Each must include filename, content_type, and base64-encoded content. Subject to per-attachment and total size limits set by your plan."`
 	Headers     map[string]string   `json:"headers,omitempty"`
-	Unsubscribe *Unsubscribe        `json:"unsubscribe,omitempty"`
+	// SystemHeaders are headers Posta itself sets on internal sends, such as the
+	// Message-ID, In-Reply-To, and Reply-To that thread a form reply. They are
+	// never accepted from API callers and apply whether or not the platform
+	// allows custom headers.
+	SystemHeaders map[string]string `json:"-"`
+	Unsubscribe   *Unsubscribe      `json:"unsubscribe,omitempty"`
 	// Deprecated: use Unsubscribe. Kept for one minor release; mapped onto
 	// Unsubscribe{URL, OneClick} in resolveUnsubscribe.
 	ListUnsubscribeURL  string     `json:"list_unsubscribe_url,omitempty" deprecated:"true"`
@@ -734,14 +739,14 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		req.Text = HTMLToText(req.HTML)
 	}
 
-	// Serialize custom headers for storage (only when the setting is enabled)
+	// Resolve the headers once; the async worker reads them back from the row
+	// and the sync path sends them directly, so both paths agree.
+	customEnabled := s.settings != nil && s.settings.CustomHeadersEnabled()
+	req.Headers = outboundHeaders(req, customEnabled)
 	var headersJSON string
-	if len(req.Headers) > 0 && s.settings != nil && s.settings.CustomHeadersEnabled() {
-		filtered := filterCustomHeaders(req.Headers)
-		if len(filtered) > 0 {
-			b, _ := json.Marshal(filtered)
-			headersJSON = string(b)
-		}
+	if len(req.Headers) > 0 {
+		b, _ := json.Marshal(req.Headers)
+		headersJSON = string(b)
 	}
 
 	var apiKeyPtr *uint
@@ -1338,6 +1343,30 @@ func diffRecipients(original, filtered []string) []string {
 		}
 	}
 	return diff
+}
+
+// outboundHeaders returns the headers a message is sent with: the caller's
+// custom headers, filtered, when the platform allows them, plus the system
+// headers Posta set itself, which always apply and win on conflict.
+func outboundHeaders(req *SendRequest, customEnabled bool) map[string]string {
+	out := map[string]string{}
+	if customEnabled {
+		for k, v := range filterCustomHeaders(req.Headers) {
+			out[k] = v
+		}
+	}
+	for k, v := range req.SystemHeaders {
+		for existing := range out {
+			if strings.EqualFold(existing, k) {
+				delete(out, existing)
+			}
+		}
+		out[k] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // filterCustomHeaders removes headers that could conflict with system-set

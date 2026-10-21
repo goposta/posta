@@ -92,6 +92,11 @@ type Message struct {
 	RepliedAt    *time.Time `json:"replied_at,omitempty"`
 	ReplyCount   int        `json:"reply_count" gorm:"default:0;not null"`
 
+	// WebhookDispatchedAt records that message:process handed the submission to
+	// the webhook dispatcher, so a retried task never fires the webhook twice.
+	// Delivery itself is tracked in webhook_deliveries.
+	WebhookDispatchedAt *time.Time `json:"-"`
+
 	CreatedAt time.Time      `json:"created_at" gorm:"index"`
 	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
@@ -99,9 +104,12 @@ type Message struct {
 	Fields      []MessageField          `json:"fields,omitempty" gorm:"-"`
 	Attachments []InboundAttachmentMeta `json:"attachments,omitempty" gorm:"-"`
 
-	Form       *Form          `json:"form,omitempty" gorm:"foreignKey:FormID;constraint:false"`
+	// GORM creates these foreign keys whatever the tag (only "constraint:-"
+	// skips one), so declare the cascade the schema relies on: deleting a form
+	// or a message must take its messages or replies with it.
+	Form       *Form          `json:"form,omitempty" gorm:"foreignKey:FormID;constraint:OnDelete:CASCADE"`
 	AssignedTo *ActorRef      `json:"assigned_to,omitempty" gorm:"->;foreignKey:AssignedToID;references:ID;constraint:false"`
-	Replies    []MessageReply `json:"replies,omitempty" gorm:"foreignKey:MessageID"`
+	Replies    []MessageReply `json:"replies,omitempty" gorm:"foreignKey:MessageID;constraint:OnDelete:CASCADE"`
 }
 
 func (m *Message) IsSpam() bool {
@@ -119,7 +127,9 @@ type MessageReply struct {
 	WorkspaceID *uint            `json:"workspace_id,omitempty" gorm:"index;not null"`
 	Kind        MessageReplyKind `json:"kind" gorm:"type:varchar(16);not null"`
 
-	AuthorID uint   `json:"author_id" gorm:"index"`
+	// AuthorID is the operator who wrote an outbound reply; nil for an inbound
+	// reply. It must stay nullable: author_id carries a foreign key to users.
+	AuthorID *uint  `json:"author_id,omitempty" gorm:"index"`
 	FromAddr string `json:"from_addr"`
 	ToAddr   string `json:"to_addr"`
 	Subject  string `json:"subject"`
@@ -128,6 +138,13 @@ type MessageReply struct {
 
 	EmailUUID      string `json:"email_uuid,omitempty" gorm:"index"`
 	InboundEmailID *uint  `json:"inbound_email_id,omitempty" gorm:"index"`
+
+	// MessageIDHeader is the RFC 5322 Message-ID this reply was sent or received
+	// with. Later replies chain to it through In-Reply-To and References.
+	MessageIDHeader string `json:"-"`
+	// SenderMismatch marks an inbound reply whose sender is not the original
+	// submitter: a forward, or a spoof using a leaked thread address.
+	SenderMismatch bool `json:"sender_mismatch,omitempty" gorm:"default:false;not null"`
 
 	CreatedAt time.Time `json:"created_at"`
 

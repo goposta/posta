@@ -42,6 +42,7 @@ type RetentionCleanupJob struct {
 	trackingRepo     *repositories.TrackingRepository
 	inboundEmailRepo *repositories.InboundEmailRepository
 	messageRepo      *repositories.MessageRepository
+	formRepo         *repositories.FormRepository
 	notificationRepo *repositories.NotificationRepository
 	blobStore        blob.Store
 	settings         *settings.Provider
@@ -71,6 +72,11 @@ func (j *RetentionCleanupJob) SetInboundEmailRepo(r *repositories.InboundEmailRe
 
 func (j *RetentionCleanupJob) SetMessageRepo(r *repositories.MessageRepository) {
 	j.messageRepo = r
+}
+
+// SetFormRepo enables per-form message retention (Form.RetentionDays).
+func (j *RetentionCleanupJob) SetFormRepo(r *repositories.FormRepository) {
+	j.formRepo = r
 }
 
 // SetNotificationRepo enables pruning of the in-app inbox. Only settled items
@@ -381,6 +387,15 @@ func (j *RetentionCleanupJob) cleanupMessages() {
 
 	if days := j.settings.MessageSpamRetentionDays(); days > 0 {
 		before := time.Now().AddDate(0, 0, -days)
+		if j.blobStore != nil {
+			if jsons, err := j.messageRepo.SpamAttachmentKeysOlderThan(before); err == nil {
+				if n := j.deleteInboundAttachmentBlobs(jsons); n > 0 {
+					logger.Info("retention cleanup: deleted spam message attachment blobs", "count", n)
+				}
+			} else {
+				logger.Error("retention cleanup: failed to enumerate spam message attachments", "error", err)
+			}
+		}
 		if deleted, err := j.messageRepo.DeleteSpamOlderThan(before); err != nil {
 			logger.Error("retention cleanup: failed to delete spam messages", "error", err)
 		} else if deleted > 0 {
@@ -389,6 +404,7 @@ func (j *RetentionCleanupJob) cleanupMessages() {
 	}
 
 	days := j.settings.MessageRetentionDays()
+	j.cleanupFormMessages(days)
 	if days <= 0 {
 		return
 	}
@@ -408,5 +424,48 @@ func (j *RetentionCleanupJob) cleanupMessages() {
 		logger.Error("retention cleanup: failed to delete old messages", "error", err)
 	} else if deleted > 0 {
 		logger.Info("retention cleanup: deleted old messages", "count", deleted, "older_than_days", days)
+	}
+}
+
+// formRetentionDays is the window that applies to one form's messages. A form
+// can shorten retention below the platform setting but never extend it past
+// that ceiling; 0 means the form sets no window of its own.
+func formRetentionDays(form, platform int) int {
+	if form <= 0 {
+		return 0
+	}
+	return minDays(form, platform)
+}
+
+// cleanupFormMessages applies each form's own retention window before the
+// platform-wide pass.
+func (j *RetentionCleanupJob) cleanupFormMessages(platformDays int) {
+	if j.formRepo == nil {
+		return
+	}
+	forms, err := j.formRepo.FindWithRetention()
+	if err != nil {
+		logger.Error("retention cleanup: failed to list forms with retention", "error", err)
+		return
+	}
+	for _, form := range forms {
+		days := formRetentionDays(form.RetentionDays, platformDays)
+		if days <= 0 {
+			continue
+		}
+		before := time.Now().AddDate(0, 0, -days)
+		if j.blobStore != nil {
+			if jsons, err := j.messageRepo.AttachmentKeysByFormOlderThan(form.ID, before); err == nil {
+				j.deleteInboundAttachmentBlobs(jsons)
+			} else {
+				logger.Error("retention cleanup: failed to enumerate form message attachments", "form_id", form.ID, "error", err)
+				continue
+			}
+		}
+		if deleted, err := j.messageRepo.DeleteByFormOlderThan(form.ID, before); err != nil {
+			logger.Error("retention cleanup: failed to delete form messages", "form_id", form.ID, "error", err)
+		} else if deleted > 0 {
+			logger.Info("retention cleanup: deleted form messages", "form_id", form.ID, "count", deleted, "older_than_days", days)
+		}
 	}
 }

@@ -48,6 +48,23 @@ type FormHandler struct {
 	domainRepo  *repositories.DomainRepository
 	audit       *audit.Logger
 	apiBaseURL  string
+	keyCache    FormKeyInvalidator
+}
+
+// FormKeyInvalidator drops cached public-key lookups; *messages.Service
+// implements it.
+type FormKeyInvalidator interface {
+	InvalidateFormKey(keys ...string)
+}
+
+// SetKeyCache makes form edits take effect on the public endpoint immediately
+// instead of after the lookup cache expires.
+func (h *FormHandler) SetKeyCache(c FormKeyInvalidator) { h.keyCache = c }
+
+func (h *FormHandler) invalidate(keys ...string) {
+	if h.keyCache != nil {
+		h.keyCache.InvalidateFormKey(keys...)
+	}
 }
 
 func NewFormHandler(
@@ -361,6 +378,7 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	if err := h.repo.Update(form); err != nil {
 		return c.AbortInternalServerError("failed to update form")
 	}
+	h.invalidate(form.PublicKey)
 
 	h.log(c, "form.updated", fmt.Sprintf("Form %s updated", form.Name), map[string]any{metaFormID: form.ID})
 	return ok(c, form)
@@ -377,6 +395,7 @@ func (h *FormHandler) Delete(c *okapi.Context, req *FormIDRequest) error {
 	if err := h.repo.Delete(form.ID); err != nil {
 		return c.AbortInternalServerError("failed to delete form")
 	}
+	h.invalidate(form.PublicKey)
 	h.log(c, "form.deleted", fmt.Sprintf("Form %s deleted", form.Name), map[string]any{metaFormID: form.ID})
 	return noContent(c)
 }
@@ -394,11 +413,13 @@ func (h *FormHandler) RotateKey(c *okapi.Context, req *FormIDRequest) error {
 		return c.AbortInternalServerError("failed to generate form key")
 	}
 	now := time.Now()
+	oldKey := form.PublicKey
 	form.PublicKey = key
 	form.UpdatedAt = &now
 	if err := h.repo.Update(form); err != nil {
 		return c.AbortInternalServerError("failed to rotate form key")
 	}
+	h.invalidate(oldKey, key)
 	h.log(c, "form.key_rotated", fmt.Sprintf("Form %s key rotated", form.Name), map[string]any{metaFormID: form.ID})
 	return ok(c, form)
 }

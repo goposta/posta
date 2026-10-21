@@ -79,10 +79,13 @@ onMounted(async () => {
   await loadSidebarData();
   try {
     sse = new EventSource(messagesApi.streamUrl(), { withCredentials: true });
-    sse.addEventListener("message.received", () => {
+    const refresh = () => {
       goToPage(pageable.value?.current_page ?? 0);
       loadSidebarData();
-    });
+    };
+    for (const type of ["message.received", "message.updated", "message.replied", "message.reply_received"]) {
+      sse.addEventListener(type, refresh);
+    }
     sse.onerror = () => {
       /* reconnects are handled by the browser */
     };

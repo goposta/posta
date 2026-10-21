@@ -225,8 +225,11 @@ onMounted(load);
             <input v-model="form.reply_from_name" class="form-input" placeholder="Acme Support" />
           </div>
           <div class="form-group">
-            <label class="form-label">Retention (days, 0 uses the workspace default)</label>
+            <label class="form-label">Retention (days, 0 uses the platform default)</label>
             <input v-model.number="form.retention_days" type="number" class="form-input" min="0" />
+            <p class="muted" style="font-size: 12px; margin: 4px 0 0">
+              Shortens how long this form's messages are kept. It cannot extend retention past the platform setting.
+            </p>
           </div>
         </div>
       </div>

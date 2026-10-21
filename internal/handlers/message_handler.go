@@ -31,6 +31,7 @@ import (
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/messages"
+	"github.com/goposta/posta/internal/services/realtime"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
@@ -50,6 +51,7 @@ type MessageHandler struct {
 	svc        *messages.Service
 	blobStore  blob.Store
 	bus        *eventbus.EventBus
+	realtime   realtime.Bus
 	audit      *audit.Logger
 }
 
@@ -65,6 +67,9 @@ func NewMessageHandler(
 
 func (h *MessageHandler) SetBlobStore(bs blob.Store)       { h.blobStore = bs }
 func (h *MessageHandler) SetEventBus(b *eventbus.EventBus) { h.bus = b }
+
+// SetRealtime configures the cross-process bus behind the live message stream.
+func (h *MessageHandler) SetRealtime(b realtime.Bus) { h.realtime = b }
 
 type MessageListRequest struct {
 	Page     int    `query:"page" default:"0"`
@@ -179,13 +184,14 @@ func (h *MessageHandler) Get(c *okapi.Context, req *MessageIDRequest) error {
 
 	if msg.ReadAt == nil {
 		now := time.Now()
+		if err := h.repo.MarkRead(msg.ID, now); err != nil {
+			return c.AbortInternalServerError("failed to update message")
+		}
 		msg.ReadAt = &now
 		if msg.State == models.MessageStateNew {
 			msg.State = models.MessageStateOpen
 		}
-		if err := h.repo.Update(msg); err != nil {
-			return c.AbortInternalServerError("failed to update message")
-		}
+		h.publish(c, messages.EventUpdated, msg)
 	}
 	return ok(c, msg)
 }
@@ -256,7 +262,7 @@ func (h *MessageHandler) Reply(c *okapi.Context, req *ReplyMessageRequest) error
 			metaMessageID: msg.UUID, metaEmailUUID: reply.EmailUUID,
 		})
 	}
-	h.publish(c, "message.replied", msg)
+	h.publish(c, messages.EventReplied, msg)
 	return created(c, reply)
 }
 
@@ -278,19 +284,23 @@ func (h *MessageHandler) UpdateState(c *okapi.Context, req *UpdateMessageStateRe
 	}
 
 	now := time.Now()
+	fields := map[string]any{"state": state, "updated_at": now}
 	msg.State = state
 	msg.UpdatedAt = &now
 	if req.Body.Read != nil {
 		if *req.Body.Read {
 			msg.ReadAt = &now
+			fields["read_at"] = now
 		} else {
 			msg.ReadAt = nil
+			fields["read_at"] = nil
 		}
 	}
-	if err := h.repo.Update(msg); err != nil {
+	if err := h.repo.UpdateFields(msg.ID, fields); err != nil {
 		return c.AbortInternalServerError("failed to update message")
 	}
 	hydrate(msg)
+	h.publish(c, messages.EventUpdated, msg)
 	return ok(c, msg)
 }
 
@@ -305,10 +315,11 @@ func (h *MessageHandler) Assign(c *okapi.Context, req *AssignMessageRequest) err
 	now := time.Now()
 	msg.AssignedToID = req.Body.UserID
 	msg.UpdatedAt = &now
-	if err := h.repo.Update(msg); err != nil {
+	if err := h.repo.UpdateFields(msg.ID, map[string]any{"assigned_to_id": req.Body.UserID, "updated_at": now}); err != nil {
 		return c.AbortInternalServerError("failed to assign message")
 	}
 	hydrate(msg)
+	h.publish(c, messages.EventUpdated, msg)
 	return ok(c, msg)
 }
 
@@ -326,9 +337,12 @@ func (h *MessageHandler) MarkSpam(c *okapi.Context, req *MarkSpamRequest) error 
 	msg.Status = models.MessageStatusQuarantined
 	msg.State = models.MessageStateSpam
 	msg.UpdatedAt = &now
-	if err := h.repo.Update(msg); err != nil {
+	if err := h.repo.UpdateFields(msg.ID, map[string]any{
+		"status": msg.Status, "state": msg.State, "updated_at": now,
+	}); err != nil {
 		return c.AbortInternalServerError("failed to update message")
 	}
+	h.publish(c, messages.EventUpdated, msg)
 
 	if req.Body.CreateFilter {
 		kind := models.FilterKind(req.Body.Kind)
@@ -375,13 +389,18 @@ func (h *MessageHandler) MarkNotSpam(c *okapi.Context, req *MessageIDRequest) er
 	msg.SpamScore = 0
 	msg.ScanReasons = nil
 	msg.UpdatedAt = &now
+	fields := map[string]any{
+		"status": msg.Status, "spam_score": 0, "scan_reasons": nil, "updated_at": now,
+	}
 	if msg.State == models.MessageStateSpam {
 		msg.State = models.MessageStateOpen
+		fields["state"] = msg.State
 	}
-	if err := h.repo.Update(msg); err != nil {
+	if err := h.repo.UpdateFields(msg.ID, fields); err != nil {
 		return c.AbortInternalServerError("failed to update message")
 	}
 	hydrate(msg)
+	h.publish(c, messages.EventUpdated, msg)
 	return ok(c, msg)
 }
 
@@ -444,7 +463,7 @@ func (h *MessageHandler) DownloadAttachment(c *okapi.Context, req *MessageAttach
 }
 
 func (h *MessageHandler) Stream(c *okapi.Context) error {
-	if h.bus == nil {
+	if h.realtime == nil {
 		return c.AbortNotFound("message stream not configured")
 	}
 	ctx := c.Request().Context()
@@ -454,7 +473,7 @@ func (h *MessageHandler) Stream(c *okapi.Context) error {
 	}
 	workspaceID := *scope.WorkspaceID
 
-	ch, unsub := h.bus.Subscribe()
+	ch, unsub := h.realtime.Subscribe(ctx, realtime.WorkspaceTopic(workspaceID))
 	defer unsub()
 
 	msgCh := make(chan okapi.Message, 4)
@@ -479,11 +498,12 @@ func (h *MessageHandler) Stream(c *okapi.Context) error {
 				if !strings.HasPrefix(evt.Type, "message.") {
 					continue
 				}
-				if evt.WorkspaceID == nil || *evt.WorkspaceID != workspaceID {
+				// Topics are per workspace already; this is defence in depth.
+				if evt.WorkspaceID != workspaceID {
 					continue
 				}
 				select {
-				case msgCh <- okapi.Message{Event: evt.Type, Data: evt}:
+				case msgCh <- okapi.Message{Event: evt.Type, Data: evt.Data}:
 				case <-ctx.Done():
 					return
 				}
@@ -497,8 +517,11 @@ func (h *MessageHandler) Stream(c *okapi.Context) error {
 	})
 }
 
+// publish sends a message event to the live stream and, for operator actions
+// worth keeping, to the persisted activity log.
 func (h *MessageHandler) publish(c *okapi.Context, eventType string, msg *models.Message) {
-	if h.bus == nil {
+	messages.PublishEvent(c.Request().Context(), h.realtime, eventType, msg)
+	if h.bus == nil || eventType != messages.EventReplied {
 		return
 	}
 	actor := uint(c.GetInt("user_id"))

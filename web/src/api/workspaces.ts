@@ -88,4 +88,7 @@ export const workspaceApi = {
   deleteEmailLogs(olderThanDays: number) {
     return api.post<ApiResponse<GDPRDeleteResult>>('/workspaces/current/gdpr/delete-email-logs', { older_than_days: olderThanDays })
   },
+  deleteMessages(email: string) {
+    return api.post<ApiResponse<GDPRDeleteResult>>('/workspaces/current/gdpr/delete-messages', { email })
+  },
 }

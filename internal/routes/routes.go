@@ -42,6 +42,7 @@ import (
 	"github.com/goposta/posta/internal/services/passwordreset"
 	planpkg "github.com/goposta/posta/internal/services/plan"
 	"github.com/goposta/posta/internal/services/ratelimit"
+	"github.com/goposta/posta/internal/services/realtime"
 	"github.com/goposta/posta/internal/services/seeder"
 	sessionpkg "github.com/goposta/posta/internal/services/session"
 	"github.com/goposta/posta/internal/services/settings"
@@ -409,6 +410,14 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			inboundSvc.SetEnqueuer(producer)
 		}
 		inboundSvc.SetEventBus(bus)
+		if cfg.MessagesEnabled && cfg.MessagesInboundDomain != "" {
+			router := messages.NewThreadRouter(repositories.NewMessageRepository(db), cfg.MessagesInboundDomain)
+			router.SetRealtime(realtime.NewRedis(redisClient))
+			if producer != nil {
+				router.SetEnqueuer(producer)
+			}
+			inboundSvc.SetThreadRouter(router)
+		}
 		inboundSvc.OnReceived(func(src models.InboundSource) { metrics.IncrementInboundReceived(string(src)) })
 		inboundSvc.OnRejected(metrics.IncrementInboundRejected)
 		inboundSvc.OnBytes(metrics.AddInboundBytes)
@@ -447,7 +456,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			[]byte(cfg.JWTSecret),
 		)
 		messageSvc.SetEmailService(emailService)
-		messageSvc.SetEventBus(bus)
 		if producer != nil {
 			messageSvc.SetEnqueuer(producer)
 		}
@@ -459,8 +467,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		})
 
 		r.h.form = handlers.NewFormHandler(formRepo, messageRepo, domainRepo, auditLogger, cfg.ApiBaseURL)
+		r.h.form.SetKeyCache(messageSvc)
 		r.h.message = handlers.NewMessageHandler(messageRepo, formRepo, messageFilterRepo, messageSvc, auditLogger)
 		r.h.message.SetEventBus(bus)
+		r.h.message.SetRealtime(realtime.NewRedis(redisClient))
 		r.h.messageFilter = handlers.NewMessageFilterHandler(messageFilterRepo, messageRepo, formRepo, messageSvc.Scanner())
 		r.h.formIngest = handlers.NewFormIngestHandler(
 			messageSvc,
@@ -487,6 +497,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		webhookRepo, suppressionRepo, smtpRepo, domainRepo,
 		subscriberRepo, subscriberListRepo,
 	)
+	r.h.workspaceData.SetAuditLogger(auditLogger)
+	if blobStore != nil {
+		r.h.workspaceData.SetBlobStore(blobStore)
+	}
 
 	// Auto-seed Google provider if configured
 	if cfg.GoogleOAuthClientID != "" {

@@ -45,22 +45,7 @@ func (r *Router) registerWebhookDocs() {
 		)
 	}
 
-	// Email lifecycle — generic {event, email_id, timestamp} payload.
-	webhook("email.sent", "Fired when a message is accepted by the destination MTA", dto.WebhookEvent{})
-	webhook("email.failed", "Fired when a message permanently fails after retries", dto.WebhookEvent{})
-
-	// Reputation signals — richer recipient-scoped payloads.
-	webhook("email.complained", "Fired when a recipient marks a message as spam", dto.ComplaintWebhookEvent{})
-	webhook("email.unsubscribed", "Fired when a recipient opts out via one-click unsubscribe", dto.UnsubscribeWebhookEvent{})
-
-	// Inbound mail — full parsed message.
-	webhook("email.inbound", "Fired when an inbound email is received and parsed", dto.InboundWebhookEvent{})
-
-	// Web form messages — full submission plus the scan verdict.
-	webhook("message.received", "Fired when a web form submission passes scanning", dto.MessageWebhookEvent{})
-	webhook("message.spam", "Fired when a web form submission is quarantined or rejected by scanning", dto.MessageWebhookEvent{})
-
-	// Campaign lifecycle — {event, campaign_id, name, timestamp} payload.
-	webhook("campaign.started", "Fired when a campaign begins sending", dto.CampaignWebhookEvent{})
-	webhook("campaign.completed", "Fired when a campaign finishes sending", dto.CampaignWebhookEvent{})
+	for _, e := range dto.WebhookEvents {
+		webhook(e.Name, e.Description, e.Payload)
+	}
 }

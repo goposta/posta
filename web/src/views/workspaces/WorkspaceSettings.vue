@@ -81,6 +81,8 @@ const wsSettingsSaving = ref(false)
 // Data Management (GDPR) — scoped to this workspace.
 const gdprEmail = ref('')
 const gdprDays = ref(90)
+const gdprMessagesEmail = ref('')
+const deletingMessages = ref(false)
 const deletingContacts = ref(false)
 const deletingEmails = ref(false)
 
@@ -211,6 +213,28 @@ async function deleteWorkspaceEmailLogs() {
     notify.error(e.response?.data?.error?.message || 'Failed to delete email logs')
   } finally {
     deletingEmails.value = false
+  }
+}
+
+async function deleteWorkspaceMessages() {
+  const target = gdprMessagesEmail.value.trim()
+  if (!target) return
+  const confirmed = await confirm({
+    title: 'Delete Message Data',
+    message: `Delete every web form message from "${target}", with its thread replies and attachments? This cannot be undone.`,
+    confirmText: 'Delete',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+  deletingMessages.value = true
+  try {
+    const res = await withWorkspace(() => workspaceApi.deleteMessages(target))
+    notify.success(res.data.data.message)
+    gdprMessagesEmail.value = ''
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to delete messages')
+  } finally {
+    deletingMessages.value = false
   }
 }
 
@@ -640,7 +664,7 @@ watch(activeTab, (value) => {
         <div class="card-header"><span>Data Management (GDPR)</span></div>
         <div class="card-body">
           <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
-            Manage this workspace's data for GDPR compliance. Delete specific contacts or purge old email logs.
+            Manage this workspace's data for GDPR compliance. Delete specific contacts or messages, or purge old email logs.
           </p>
 
           <div>
@@ -652,6 +676,19 @@ watch(activeTab, (value) => {
               <input v-model="gdprEmail" type="email" class="form-input" placeholder="email@example.com (or leave empty for all)" style="flex: 1" />
               <button class="btn btn-danger" :disabled="deletingContacts" @click="deleteWorkspaceContacts">
                 {{ deletingContacts ? 'Deleting...' : 'Delete' }}
+              </button>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Delete Message Data</h4>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+              Erase every web form message submitted from an address, including thread replies, the emails they arrived as, and attachments.
+            </p>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input v-model="gdprMessagesEmail" type="email" class="form-input" placeholder="email@example.com" style="flex: 1" />
+              <button class="btn btn-danger" :disabled="deletingMessages || !gdprMessagesEmail.trim()" @click="deleteWorkspaceMessages">
+                {{ deletingMessages ? 'Deleting...' : 'Delete' }}
               </button>
             </div>
           </div>

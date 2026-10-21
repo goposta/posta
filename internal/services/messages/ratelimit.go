@@ -27,46 +27,49 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/goposta/posta/internal/services/ratelimit"
 )
 
 var ErrRateLimited = errors.New("too many submissions")
 
-type quota struct {
-	key    string
-	limit  int
-	window time.Duration
+// quotaChecker is satisfied by *ratelimit.Quotas.
+type quotaChecker interface {
+	Check(ctx context.Context, quotas []ratelimit.Quota) error
 }
 
-func (s *Service) checkQuotas(ctx context.Context, formID, workspaceID uint, ip, email string) error {
-	if s.redis == nil {
-		return nil
-	}
-
-	quotas := []quota{
-		{fmt.Sprintf("form:q:ip:%d:%s", formID, ip), s.cfg.PerIPHourly, time.Hour},
-		{fmt.Sprintf("form:q:form:%d", formID), s.cfg.PerFormHourly, time.Hour},
-		{fmt.Sprintf("form:q:ws:%d", workspaceID), s.cfg.PerWorkspaceDaily, 24 * time.Hour},
-	}
-	if email != "" {
-		quotas = append(quotas, quota{
-			fmt.Sprintf("form:q:email:%d:%s", formID, hashKey(email)), s.cfg.PerEmailHourly, time.Hour,
+// submissionQuotas lists the counters one submission is charged to. A
+// honeypot hit is charged to its IP only: bot traffic must not use up the
+// shared per-form, per-workspace, or per-address budget that real visitors
+// draw on, or a botnet spread across IPs could lock a form.
+func (s *Service) submissionQuotas(formID, workspaceID uint, ip, email string, honeypot bool) []ratelimit.Quota {
+	var quotas []ratelimit.Quota
+	if ip != "" {
+		quotas = append(quotas, ratelimit.Quota{
+			Key: fmt.Sprintf("form:q:ip:%d:%s", formID, ip), Limit: s.cfg.PerIPHourly, Window: time.Hour,
 		})
 	}
+	if honeypot {
+		return quotas
+	}
+	quotas = append(quotas,
+		ratelimit.Quota{Key: fmt.Sprintf("form:q:form:%d", formID), Limit: s.cfg.PerFormHourly, Window: time.Hour},
+		ratelimit.Quota{Key: fmt.Sprintf("form:q:ws:%d", workspaceID), Limit: s.cfg.PerWorkspaceDaily, Window: 24 * time.Hour},
+	)
+	if email != "" {
+		quotas = append(quotas, ratelimit.Quota{
+			Key: fmt.Sprintf("form:q:email:%d:%s", formID, hashKey(email)), Limit: s.cfg.PerEmailHourly, Window: time.Hour,
+		})
+	}
+	return quotas
+}
 
-	for _, q := range quotas {
-		if q.limit <= 0 || strings.HasSuffix(q.key, ":") {
-			continue
-		}
-		count, err := s.redis.Incr(ctx, q.key).Result()
-		if err != nil {
-			return ErrRateLimited
-		}
-		if count == 1 {
-			s.redis.Expire(ctx, q.key, q.window)
-		}
-		if count > int64(q.limit) {
-			return ErrRateLimited
-		}
+func (s *Service) checkQuotas(ctx context.Context, formID, workspaceID uint, ip, email string, honeypot bool) error {
+	if s.quotas == nil {
+		return nil
+	}
+	if err := s.quotas.Check(ctx, s.submissionQuotas(formID, workspaceID, ip, email, honeypot)); err != nil {
+		return ErrRateLimited
 	}
 	return nil
 }

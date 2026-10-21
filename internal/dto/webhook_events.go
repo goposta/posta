@@ -99,6 +99,27 @@ type MessageWebhookEvent struct {
 	ReceivedAt  string                `json:"received_at"`
 }
 
+// MessageReplyWebhookEvent is the payload for message.replied (an operator
+// answered from the dashboard) and message.reply_received (the submitter
+// answered the thread by email).
+type MessageReplyWebhookEvent struct {
+	Event          string `json:"event"`
+	Timestamp      string `json:"timestamp"`
+	MessageID      string `json:"message_id"`
+	ReplyID        string `json:"reply_id"`
+	FormID         string `json:"form_id"`
+	FormName       string `json:"form_name"`
+	Kind           string `json:"kind" enum:"operator,inbound"`
+	From           string `json:"from"`
+	To             string `json:"to"`
+	Subject        string `json:"subject,omitempty"`
+	TextBody       string `json:"text_body,omitempty"`
+	HTMLBody       string `json:"html_body,omitempty"`
+	EmailID        string `json:"email_id,omitempty" doc:"The outbound email carrying an operator reply, for delivery status."`
+	SenderMismatch bool   `json:"sender_mismatch,omitempty" doc:"An inbound reply came from an address other than the original submitter."`
+	CreatedAt      string `json:"created_at"`
+}
+
 // MessageWebhookField is one submitted form field in a MessageWebhookEvent.
 type MessageWebhookField struct {
 	Key   string `json:"key"`

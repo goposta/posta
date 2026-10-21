@@ -116,6 +116,31 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
+	// One thread reply per inbound email, so a retried parse task cannot attach
+	// the same answer twice. Its own block: a failure must not skip the others.
+	db.Exec(`DO $$ BEGIN
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_message_replies_inbound ON message_replies (inbound_email_id) WHERE inbound_email_id IS NOT NULL;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
+	// AutoMigrate used to create fk_messages_form and fk_messages_replies from
+	// the model associations without ON DELETE CASCADE, which made every delete
+	// of a replied message (retention, GDPR erasure) fail. Replace a
+	// non-cascading copy in place; the blocks below then find it present.
+	db.Exec(`DO $$ BEGIN
+		IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_messages_replies' AND confdeltype <> 'c') THEN
+			ALTER TABLE message_replies DROP CONSTRAINT fk_messages_replies;
+			ALTER TABLE message_replies ADD CONSTRAINT fk_messages_replies
+				FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE;
+		END IF;
+		IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_messages_form' AND confdeltype <> 'c') THEN
+			ALTER TABLE messages DROP CONSTRAINT fk_messages_form;
+			ALTER TABLE messages ADD CONSTRAINT fk_messages_form
+				FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE;
+		END IF;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
 	db.Exec(`DO $$ BEGIN
 		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_messages_form') THEN
 			ALTER TABLE messages ADD CONSTRAINT fk_messages_form

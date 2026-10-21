@@ -69,12 +69,23 @@ func (v Verdict) Status() models.MessageStatus {
 type Lookup interface {
 	IsSuppressed(workspaceID uint, email string) bool
 	SubmissionsFromIP(ip string, since time.Time) int64
-	SubmissionsFromSender(formID uint, email string, since time.Time) int64
-	ActiveFilters(workspaceID uint, formID uint) ([]models.MessageFilter, error)
+	SubmissionsFromSender(src models.ScanSource, email string, since time.Time) int64
+	ActiveFilters(workspaceID uint, src models.ScanSource) ([]models.MessageFilter, error)
+}
+
+// Policy is the per-endpoint scanning configuration: whether to scan, where
+// the score thresholds sit, and which source's filters apply. *models.Form
+// implements it; a chat widget will too.
+type Policy interface {
+	ScanningEnabled() bool
+	// ScanThresholds returns the flag, quarantine, and reject scores. A
+	// non-positive value means the default for that rung.
+	ScanThresholds() (flag, quarantine, reject float64)
+	ScanSource() models.ScanSource
 }
 
 type Input struct {
-	Form        *models.Form
+	Policy      Policy
 	WorkspaceID uint
 	SenderEmail string
 	SenderName  string
@@ -114,14 +125,14 @@ func (s *Scanner) Scan(in Input) Verdict {
 		return v
 	}
 
-	if in.Form != nil && !in.Form.ScanEnabled {
+	if in.Policy != nil && !in.Policy.ScanningEnabled() {
 		return v
 	}
 
 	floor := ActionAllow
 
 	if s.lookup != nil {
-		hits, err := s.lookup.ActiveFilters(in.WorkspaceID, formID(in.Form))
+		hits, err := s.lookup.ActiveFilters(in.WorkspaceID, source(in.Policy))
 		if err == nil {
 			for i := range hits {
 				f := &hits[i]
@@ -157,24 +168,25 @@ func (s *Scanner) Scan(in Input) Verdict {
 		}
 	}
 
-	v.Action = resolveAction(in.Form, v.Score)
+	v.Action = resolveAction(in.Policy, v.Score)
 	if actionRank[floor] > actionRank[v.Action] {
 		v.Action = floor
 	}
 	return v
 }
 
-func resolveAction(form *models.Form, score float64) Action {
+func resolveAction(p Policy, score float64) Action {
 	flag, quarantine, reject := 3.0, 6.0, 10.0
-	if form != nil {
-		if form.FlagThreshold > 0 {
-			flag = form.FlagThreshold
+	if p != nil {
+		f, q, r := p.ScanThresholds()
+		if f > 0 {
+			flag = f
 		}
-		if form.QuarantineThreshold > 0 {
-			quarantine = form.QuarantineThreshold
+		if q > 0 {
+			quarantine = q
 		}
-		if form.RejectThreshold > 0 {
-			reject = form.RejectThreshold
+		if r > 0 {
+			reject = r
 		}
 	}
 	switch {
@@ -202,11 +214,11 @@ func filterAction(a models.FilterAction) Action {
 	}
 }
 
-func formID(f *models.Form) uint {
-	if f == nil {
-		return 0
+func source(p Policy) models.ScanSource {
+	if p == nil {
+		return models.ScanSource{}
 	}
-	return f.ID
+	return p.ScanSource()
 }
 
 func (s *Scanner) matchFilter(f *models.MessageFilter, in Input) (bool, string) {

@@ -98,6 +98,38 @@ type Form struct {
 
 func (f *Form) IsActive() bool { return f.Status == FormStatusActive }
 
+// ScanSource identifies what a submission arrived through, so the scanner can
+// apply that source's filters and count repeat submissions per source.
+type ScanSource struct {
+	Kind string `json:"kind"`
+	ID   uint   `json:"id"`
+}
+
+// ScanSourceForm is the ScanSource kind of a web form.
+const ScanSourceForm = "form"
+
+// ScanningEnabled, ScanThresholds, and ScanSource make a Form a
+// messagescan.Policy. A nil Form scans with the defaults.
+func (f *Form) ScanningEnabled() bool { return f == nil || f.ScanEnabled }
+
+func (f *Form) ScanThresholds() (flag, quarantine, reject float64) {
+	if f == nil {
+		return 0, 0, 0
+	}
+	return f.FlagThreshold, f.QuarantineThreshold, f.RejectThreshold
+}
+
+func (f *Form) ScanSource() ScanSource {
+	if f == nil {
+		return ScanSource{}
+	}
+	return ScanSource{Kind: ScanSourceForm, ID: f.ID}
+}
+
+// OriginPolicy returns the origin allowlist and whether a missing Origin is
+// refused, for messages.OriginAllowed and RedirectAllowed.
+func (f *Form) OriginPolicy() ([]string, bool) { return f.AllowedOrigins, f.StrictOrigin }
+
 func (f *Form) Honeypot() string {
 	if f.HoneypotField == "" {
 		return DefaultHoneypotField

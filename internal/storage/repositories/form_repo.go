@@ -120,3 +120,10 @@ func (r *FormRepository) FindActiveWithDigest(mode models.NotifyMode) ([]models.
 		Find(&items).Error
 	return items, err
 }
+
+// FindWithRetention returns the forms that set their own message retention.
+func (r *FormRepository) FindWithRetention() ([]models.Form, error) {
+	var items []models.Form
+	err := r.db.Where("retention_days > 0").Find(&items).Error
+	return items, err
+}

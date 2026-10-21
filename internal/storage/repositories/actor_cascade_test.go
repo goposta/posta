@@ -115,7 +115,7 @@ func TestMessageUpdateDoesNotCascadeIntoUsers(t *testing.T) {
 	}
 	if err := repo.AddReply(&models.MessageReply{
 		MessageID: msg.ID, WorkspaceID: &wsID, Kind: models.MessageReplyKindOperator,
-		AuthorID: userID, FromAddr: "support@example.com", ToAddr: "ada@example.com",
+		AuthorID: &userID, FromAddr: "support@example.com", ToAddr: "ada@example.com",
 	}); err != nil {
 		t.Fatalf("add reply: %v", err)
 	}

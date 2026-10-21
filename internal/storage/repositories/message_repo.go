@@ -51,8 +51,63 @@ func (r *MessageRepository) Create(m *models.Message) error {
 	return r.db.Create(m).Error
 }
 
+// Update writes every column of m. It must not be used after a slow operation
+// (sending mail, calling out): the row may have changed in the meantime, and a
+// full-row save would silently undo those changes. Use UpdateFields instead.
 func (r *MessageRepository) Update(m *models.Message) error {
 	return r.db.Omit(clause.Associations).Save(m).Error
+}
+
+// UpdateFields writes only the given columns, so concurrent changes to other
+// columns of the same message survive.
+func (r *MessageRepository) UpdateFields(id uint, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	return r.db.Model(&models.Message{}).Where("id = ?", id).Updates(fields).Error
+}
+
+// RecordReply applies the effects of an operator reply atomically: it bumps the
+// reply count, stamps replied_at, marks the message read if it was not, and
+// moves it to replied unless an operator has already closed it.
+func (r *MessageRepository) RecordReply(id uint, at time.Time) error {
+	return r.db.Model(&models.Message{}).Where("id = ?", id).Updates(map[string]any{
+		"replied_at":  at,
+		"updated_at":  at,
+		"reply_count": gorm.Expr("reply_count + 1"),
+		"read_at":     gorm.Expr("COALESCE(read_at, ?)", at),
+		"state": gorm.Expr("CASE WHEN state = ? THEN state ELSE ? END",
+			models.MessageStateClosed, models.MessageStateReplied),
+	}).Error
+}
+
+// MarkRead stamps read_at if unset and moves a new message to open, without
+// touching any other column.
+func (r *MessageRepository) MarkRead(id uint, at time.Time) error {
+	return r.db.Model(&models.Message{}).Where("id = ? AND read_at IS NULL", id).Updates(map[string]any{
+		"read_at": at,
+		"state": gorm.Expr("CASE WHEN state = ? THEN ? ELSE state END",
+			models.MessageStateNew, models.MessageStateOpen),
+	}).Error
+}
+
+// SetRootMessageID records the Message-ID of a thread's first reply. It only
+// writes when none is set, so two concurrent first replies cannot both claim it.
+func (r *MessageRepository) SetRootMessageID(id uint, messageID string) error {
+	return r.db.Model(&models.Message{}).
+		Where("id = ? AND (root_message_id IS NULL OR root_message_id = '')", id).
+		Update("root_message_id", messageID).Error
+}
+
+// ReplyMessageIDs returns the Message-ID headers of a thread's replies, oldest
+// first, skipping replies recorded before Message-IDs were stored.
+func (r *MessageRepository) ReplyMessageIDs(messageID uint) ([]string, error) {
+	var ids []string
+	err := r.db.Model(&models.MessageReply{}).
+		Where("message_id = ? AND message_id_header <> ''", messageID).
+		Order("created_at ASC, id ASC").
+		Pluck("message_id_header", &ids).Error
+	return ids, err
 }
 
 func (r *MessageRepository) FindByID(id uint) (*models.Message, error) {
@@ -199,6 +254,19 @@ func (r *MessageRepository) AddReply(reply *models.MessageReply) error {
 	return r.db.Create(reply).Error
 }
 
+// AddInboundReply stores an inbound reply unless the same inbound email is
+// already attached (the unique index on inbound_email_id), so a retried parse
+// task cannot add it twice. It reports whether a row was created.
+func (r *MessageRepository) AddInboundReply(reply *models.MessageReply) (bool, error) {
+	if err := r.db.Create(reply).Error; err != nil {
+		if IsDuplicateName(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *MessageRepository) FindReplyByID(id uint) (*models.MessageReply, error) {
 	var reply models.MessageReply
 	if err := r.db.First(&reply, id).Error; err != nil {
@@ -224,6 +292,30 @@ func (r *MessageRepository) DeleteSpamOlderThan(before time.Time) (int64, error)
 			[]models.MessageStatus{models.MessageStatusQuarantined, models.MessageStatusRejected}).
 		Delete(&models.Message{})
 	return result.RowsAffected, result.Error
+}
+
+// DeleteByFormOlderThan hard-deletes one form's messages received before the
+// cutoff; replies go with them through the ON DELETE CASCADE foreign key.
+func (r *MessageRepository) DeleteByFormOlderThan(formID uint, before time.Time) (int64, error) {
+	result := r.db.Unscoped().Where("form_id = ? AND created_at < ?", formID, before).Delete(&models.Message{})
+	return result.RowsAffected, result.Error
+}
+
+func (r *MessageRepository) AttachmentKeysByFormOlderThan(formID uint, before time.Time) ([]string, error) {
+	var payloads []string
+	err := r.db.Unscoped().Model(&models.Message{}).
+		Where("form_id = ? AND created_at < ? AND attachments_json <> ''", formID, before).
+		Pluck("attachments_json", &payloads).Error
+	return payloads, err
+}
+
+func (r *MessageRepository) SpamAttachmentKeysOlderThan(before time.Time) ([]string, error) {
+	var payloads []string
+	err := r.db.Unscoped().Model(&models.Message{}).
+		Where("created_at < ? AND attachments_json <> '' AND status IN ?", before,
+			[]models.MessageStatus{models.MessageStatusQuarantined, models.MessageStatusRejected}).
+		Pluck("attachments_json", &payloads).Error
+	return payloads, err
 }
 
 func (r *MessageRepository) AttachmentKeysOlderThan(before time.Time) ([]string, error) {

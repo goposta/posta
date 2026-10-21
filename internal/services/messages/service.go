@@ -28,19 +28,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/cache"
 	"github.com/goposta/posta/internal/services/email"
-	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/messagescan"
+	"github.com/goposta/posta/internal/services/ratelimit"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
 
 var (
@@ -68,6 +70,7 @@ type Config struct {
 
 type Enqueuer interface {
 	EnqueueMessageProcess(messageID uint) error
+	EnqueueMessageReply(replyID uint) error
 }
 
 type Service struct {
@@ -78,8 +81,9 @@ type Service struct {
 	emailService    *email.Service
 	scanner         *messagescan.Scanner
 	redis           *redis.Client
+	quotas          quotaChecker
+	formCache       formKeyCache
 	blobStore       blob.Store
-	bus             *eventbus.EventBus
 	enqueuer        Enqueuer
 	cfg             Config
 	hmacKey         []byte
@@ -105,6 +109,10 @@ func NewService(
 		cfg:             cfg,
 		hmacKey:         hmacKey,
 	}
+	if redisClient != nil {
+		s.quotas = ratelimit.NewQuotas(redisClient)
+		s.formCache = cache.New(redisClient)
+	}
 	s.scanner = messagescan.New(&lookup{
 		messageRepo:     messageRepo,
 		filterRepo:      filterRepo,
@@ -115,32 +123,24 @@ func NewService(
 
 func (s *Service) SetEmailService(es *email.Service)        { s.emailService = es }
 func (s *Service) SetBlobStore(bs blob.Store)               { s.blobStore = bs }
-func (s *Service) SetEventBus(b *eventbus.EventBus)         { s.bus = b }
 func (s *Service) SetEnqueuer(e Enqueuer)                   { s.enqueuer = e }
 func (s *Service) OnReceived(fn func(models.MessageStatus)) { s.onReceived = fn }
 
 func (s *Service) Scanner() *messagescan.Scanner { return s.scanner }
 
-func (s *Service) FindFormByKey(key string) (*models.Form, error) {
-	f, err := s.formRepo.FindByPublicKey(key)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrFormNotFound
-		}
-		return nil, err
-	}
-	return f, nil
-}
-
-func OriginAllowed(form *models.Form, origin string) bool {
+// OriginAllowed reports whether a browser Origin may post to an endpoint with
+// this allowlist. An empty allowlist accepts any origin; "*" does explicitly.
+// A missing Origin (curl, server-to-server, a native app) is accepted unless
+// strict is set. The allowlist slows spam; it is not authentication.
+func OriginAllowed(allowlist []string, strict bool, origin string) bool {
 	origin = strings.TrimSpace(origin)
 	if origin == "" {
-		return !form.StrictOrigin
+		return !strict
 	}
-	if len(form.AllowedOrigins) == 0 {
+	if len(allowlist) == 0 {
 		return true
 	}
-	for _, allowed := range form.AllowedOrigins {
+	for _, allowed := range allowlist {
 		allowed = strings.TrimSpace(allowed)
 		if allowed == "*" {
 			return true
@@ -152,7 +152,10 @@ func OriginAllowed(form *models.Form, origin string) bool {
 	return false
 }
 
-func RedirectAllowed(form *models.Form, target string) bool {
+// RedirectAllowed reports whether target is a safe post-submit redirect: on
+// the host of the endpoint's configured redirect, or on an explicitly allowed
+// origin. Anything else would be an open redirect on a trusted domain.
+func RedirectAllowed(allowlist []string, fixedRedirect, target string) bool {
 	if target == "" {
 		return false
 	}
@@ -164,12 +167,12 @@ func RedirectAllowed(form *models.Form, target string) bool {
 		return false
 	}
 	candidate := u.Scheme + "://" + u.Host
-	if form.RedirectURL != "" {
-		if ru, err := url.Parse(form.RedirectURL); err == nil && strings.EqualFold(ru.Host, u.Host) {
+	if fixedRedirect != "" {
+		if ru, err := url.Parse(fixedRedirect); err == nil && strings.EqualFold(ru.Host, u.Host) {
 			return true
 		}
 	}
-	return OriginAllowed(form, candidate) && len(form.AllowedOrigins) > 0
+	return OriginAllowed(allowlist, false, candidate) && len(allowlist) > 0
 }
 
 type SubmitRequest struct {
@@ -218,7 +221,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 	extracted := Extract(fields)
 	senderEmail := NormalizeEmail(extracted.Email)
 
-	if err := s.checkQuotas(ctx, form.ID, *form.WorkspaceID, req.ClientIP, senderEmail); err != nil {
+	if err := s.checkQuotas(ctx, form.ID, *form.WorkspaceID, req.ClientIP, senderEmail, req.HoneypotHit); err != nil {
 		return nil, err
 	}
 
@@ -228,7 +231,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 	}
 
 	verdict := s.scanner.Scan(messagescan.Input{
-		Form:        form,
+		Policy:      form,
 		WorkspaceID: *form.WorkspaceID,
 		SenderEmail: senderEmail,
 		SenderName:  extracted.Name,
@@ -333,23 +336,29 @@ func (s *Service) Reply(ctx context.Context, actorID, apiKeyID uint, actorEmail 
 		subject = replySubject(msg.Subject)
 	}
 
-	headers := map[string]string{}
+	messageID := newMessageID(msg.UUID, from)
+	headers := map[string]string{"Message-ID": messageID}
 	if msg.RootMessageID != "" {
-		headers["In-Reply-To"] = msg.RootMessageID
-		headers["References"] = msg.RootMessageID
+		prior, err := s.messageRepo.ReplyMessageIDs(msg.ID)
+		if err != nil {
+			logger.Warn("failed to load thread message ids", "message_id", msg.ID, "error", err)
+		}
+		inReplyTo, references := threadHeaders(msg.RootMessageID, prior)
+		headers["In-Reply-To"] = inReplyTo
+		headers["References"] = references
 	}
 	if replyTo := s.threadReplyTo(msg); replyTo != "" {
 		headers["Reply-To"] = replyTo
 	}
 
 	sendReq := &email.SendRequest{
-		From:        from,
-		To:          []string{msg.SenderEmail},
-		Subject:     subject,
-		HTML:        req.HTML,
-		Text:        req.Text,
-		Attachments: req.Attachments,
-		Headers:     headers,
+		From:          from,
+		To:            []string{msg.SenderEmail},
+		Subject:       subject,
+		HTML:          req.HTML,
+		Text:          req.Text,
+		Attachments:   req.Attachments,
+		SystemHeaders: headers,
 	}
 
 	resp, err := s.emailService.Send(ctx, actorID, apiKeyID, msg.WorkspaceID, actorEmail, sendReq)
@@ -357,23 +366,44 @@ func (s *Service) Reply(ctx context.Context, actorID, apiKeyID uint, actorEmail 
 		return nil, err
 	}
 
+	var authorID *uint
+	if actorID != 0 {
+		authorID = &actorID
+	}
 	reply := &models.MessageReply{
-		MessageID:   msg.ID,
-		WorkspaceID: msg.WorkspaceID,
-		Kind:        models.MessageReplyKindOperator,
-		AuthorID:    actorID,
-		FromAddr:    from,
-		ToAddr:      msg.SenderEmail,
-		Subject:     subject,
-		HTMLBody:    req.HTML,
-		TextBody:    req.Text,
-		EmailUUID:   resp.ID,
+		MessageID:       msg.ID,
+		WorkspaceID:     msg.WorkspaceID,
+		Kind:            models.MessageReplyKindOperator,
+		AuthorID:        authorID,
+		FromAddr:        from,
+		ToAddr:          msg.SenderEmail,
+		Subject:         subject,
+		HTMLBody:        req.HTML,
+		TextBody:        req.Text,
+		EmailUUID:       resp.ID,
+		MessageIDHeader: messageID,
 	}
 	if err := s.messageRepo.AddReply(reply); err != nil {
 		return nil, err
 	}
+	if s.enqueuer != nil {
+		if err := s.enqueuer.EnqueueMessageReply(reply.ID); err != nil {
+			logger.Error("failed to enqueue message reply webhook", "reply_id", reply.ID, "error", err)
+		}
+	}
+
+	if msg.RootMessageID == "" {
+		if err := s.messageRepo.SetRootMessageID(msg.ID, messageID); err != nil {
+			logger.Error("failed to record thread root message id", "message_id", msg.ID, "error", err)
+		} else {
+			msg.RootMessageID = messageID
+		}
+	}
 
 	now := time.Now()
+	if err := s.messageRepo.RecordReply(msg.ID, now); err != nil {
+		logger.Error("failed to update message after reply", "message_id", msg.ID, "error", err)
+	}
 	msg.RepliedAt = &now
 	msg.UpdatedAt = &now
 	msg.ReplyCount++
@@ -382,9 +412,6 @@ func (s *Service) Reply(ctx context.Context, actorID, apiKeyID uint, actorEmail 
 	}
 	if msg.ReadAt == nil {
 		msg.ReadAt = &now
-	}
-	if err := s.messageRepo.Update(msg); err != nil {
-		logger.Error("failed to update message after reply", "message_id", msg.ID, "error", err)
 	}
 
 	return reply, nil
@@ -398,6 +425,41 @@ func (s *Service) threadReplyTo(msg *models.Message) string {
 }
 
 func (s *Service) ThreadReplyTo(msg *models.Message) string { return s.threadReplyTo(msg) }
+
+// maxReferences caps the References header at the thread root plus the most
+// recent replies; RFC 5322 §3.6.4 lets a long thread trim the middle.
+const maxReferences = 10
+
+// threadHeaders returns the In-Reply-To and References values for a new reply
+// on a thread whose first reply was root and whose later replies are prior,
+// oldest first.
+func threadHeaders(root string, prior []string) (inReplyTo, references string) {
+	chain := make([]string, 0, maxReferences+1)
+	chain = append(chain, root)
+	recent := make([]string, 0, len(prior))
+	for _, id := range prior {
+		if id != "" && id != root {
+			recent = append(recent, id)
+		}
+	}
+	if len(recent) > maxReferences {
+		recent = recent[len(recent)-maxReferences:]
+	}
+	chain = append(chain, recent...)
+	return chain[len(chain)-1], strings.Join(chain, " ")
+}
+
+// newMessageID builds an RFC 5322 Message-ID on the sending domain, so it is
+// covered by the same DKIM signature as the rest of the message.
+func newMessageID(messageUUID, from string) string {
+	domain := "posta.local"
+	if addr, err := mail.ParseAddress(from); err == nil {
+		if at := strings.LastIndex(addr.Address, "@"); at >= 0 && at+1 < len(addr.Address) {
+			domain = strings.ToLower(addr.Address[at+1:])
+		}
+	}
+	return fmt.Sprintf("<%s.%s@%s>", uuid.NewString(), messageUUID, domain)
+}
 
 func defaultSubject(form *models.Form) string {
 	return fmt.Sprintf("New submission on %s", form.Name)
@@ -453,10 +515,19 @@ func (l *lookup) SubmissionsFromIP(ip string, since time.Time) int64 {
 	return l.messageRepo.CountByIPSince(ip, since)
 }
 
-func (l *lookup) SubmissionsFromSender(formID uint, email string, since time.Time) int64 {
-	return l.messageRepo.CountBySenderSince(formID, email, since)
+func (l *lookup) SubmissionsFromSender(src models.ScanSource, email string, since time.Time) int64 {
+	if src.Kind != models.ScanSourceForm {
+		return 0
+	}
+	return l.messageRepo.CountBySenderSince(src.ID, email, since)
 }
 
-func (l *lookup) ActiveFilters(workspaceID uint, formID uint) ([]models.MessageFilter, error) {
+// ActiveFilters returns the workspace-wide filters plus those scoped to the
+// source. Only forms carry source-scoped filters today.
+func (l *lookup) ActiveFilters(workspaceID uint, src models.ScanSource) ([]models.MessageFilter, error) {
+	var formID uint
+	if src.Kind == models.ScanSourceForm {
+		formID = src.ID
+	}
 	return l.filterRepo.FindActive(workspaceID, formID)
 }

@@ -22,6 +22,8 @@ description: Available webhook event types
 |-------|-------------|
 | `message.received` | A web form submission passed scanning (see [Web Form Messages](#web-form-messages)) |
 | `message.spam` | A web form submission was quarantined or rejected by scanning |
+| `message.replied` | An operator replied to a web form message |
+| `message.reply_received` | The sender answered a web form thread by email |
 
 ## Campaign Events
 
@@ -174,5 +176,29 @@ For configuring inbound routing and managing received messages, see the Inbound 
 ```
 
 `sender_phone` is present only when the form submitted one. `status` is `received` or `flagged` for `message.received`, and `quarantined` for `message.spam`. Submissions scored past the reject threshold are stored for audit but never dispatched.
+
+### `message.replied` and `message.reply_received`
+
+Both carry one thread reply. `kind` is `operator` for `message.replied` and `inbound` for `message.reply_received`:
+
+```json
+{
+  "event": "message.reply_received",
+  "timestamp": "2026-01-02T09:00:01Z",
+  "message_id": "b0b1c2d3-...",
+  "reply_id": "7c1e9a40-...",
+  "form_id": "3f9a7d12-...",
+  "form_name": "Contact form",
+  "kind": "inbound",
+  "from": "ada@example.com",
+  "to": "msg+k3j2...@reply.example.com",
+  "subject": "Re: Question about pricing",
+  "text_body": "Thanks, that answers it.",
+  "sender_mismatch": false,
+  "created_at": "2026-01-02T09:00:00Z"
+}
+```
+
+`message_id` is the thread's original submission. An operator reply also carries `email_id`, the outbound email whose delivery status is in the email log. `sender_mismatch` is `true` when an emailed answer came from an address other than the original submitter.
 
 For configuring forms and replying to submissions, see the Forms & Messages section in the sidebar.

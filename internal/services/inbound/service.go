@@ -62,6 +62,13 @@ type Enqueuer interface {
 	EnqueueInboundParse(inboundEmailID uint) error
 }
 
+// ThreadRouter attaches an inbound email to an existing conversation (a web
+// form thread) when one of its recipients is that conversation's reply
+// address. It reports false when no recipient matched.
+type ThreadRouter interface {
+	RouteReply(ctx context.Context, rec *models.InboundEmail, recipients []string) (bool, error)
+}
+
 type Service struct {
 	repo            *repositories.InboundEmailRepository
 	domainRepo      *repositories.DomainRepository
@@ -69,6 +76,7 @@ type Service struct {
 	blobStore       blob.Store
 	producer        Enqueuer
 	bus             *eventbus.EventBus
+	threadRouter    ThreadRouter
 	maxMsgSize      int64
 	maxAttachSize   int64
 	onReceived      func(source models.InboundSource)
@@ -107,6 +115,49 @@ func (s *Service) SetEnqueuer(eq Enqueuer) { s.producer = eq }
 
 // SetEventBus configures the event bus used to publish inbound.received events.
 func (s *Service) SetEventBus(b *eventbus.EventBus) { s.bus = b }
+
+// SetThreadRouter enables routing replies to thread addresses onto their
+// conversation instead of the generic inbound pipeline.
+func (s *Service) SetThreadRouter(r ThreadRouter) { s.threadRouter = r }
+
+// RouteThread offers rec to the thread router. When the email is attached to a
+// thread it is marked forwarded and the caller must not run the generic
+// email.inbound processing for it. A router failure is logged and the email
+// falls back to ordinary inbound handling, so it is never lost.
+func (s *Service) RouteThread(ctx context.Context, rec *models.InboundEmail, candidates ...[]string) bool {
+	if s.threadRouter == nil || rec == nil {
+		return false
+	}
+	routed, err := s.threadRouter.RouteReply(ctx, rec, uniqueAddresses(candidates...))
+	if err != nil {
+		logger.Error("thread routing failed; handling as ordinary inbound", "inbound_id", rec.UUID, "error", err)
+		return false
+	}
+	if !routed {
+		return false
+	}
+	rec.Status = models.InboundStatusForwarded
+	if err := s.repo.Update(rec); err != nil {
+		logger.Error("failed to mark thread reply forwarded", "inbound_id", rec.UUID, "error", err)
+	}
+	return true
+}
+
+func uniqueAddresses(lists ...[]string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, list := range lists {
+		for _, a := range list {
+			key := strings.ToLower(strings.TrimSpace(a))
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, a)
+		}
+	}
+	return out
+}
 
 // OnReceived sets a callback invoked after each successfully ingested inbound message.
 func (s *Service) OnReceived(fn func(source models.InboundSource)) { s.onReceived = fn }
@@ -242,7 +293,9 @@ func (s *Service) Ingest(ctx context.Context, p *ParsedEmail, source models.Inbo
 		}
 	}
 
-	if s.producer != nil {
+	routed := s.RouteThread(ctx, rec, recipients, p.Cc)
+
+	if s.producer != nil && !routed {
 		if err := s.producer.EnqueueInboundProcess(rec.ID); err != nil {
 			logger.Error("failed to enqueue inbound:process", "inbound_id", rec.ID, "error", err)
 		}

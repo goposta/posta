@@ -319,6 +319,18 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/gdpr/delete-messages",
+			Handler:     okapi.H(r.h.workspaceData.DeleteMessages),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Delete a person's web form messages (GDPR)",
+			Description: "Erase every web form message submitted from an address, with its thread replies, the inbound emails those replies arrived as, and all stored attachments.",
+			Request:     &handlers.GDPRDeleteMessagesRequest{},
+			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
 	}...)
 
 	// User-level invitation actions (no workspace context needed)

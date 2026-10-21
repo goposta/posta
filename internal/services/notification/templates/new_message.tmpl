@@ -1,8 +1,17 @@
 {{ define "content" }}
-<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">New message on {{ .FormName }}</h2>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">{{ if .Reply }}New reply on {{ .FormName }}{{ else }}New message on {{ .FormName }}{{ end }}</h2>
 <p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
 
+{{ if .Reply }}
+<p style="margin: 0 0 16px;">The sender answered a <strong>{{ .FormName }}</strong> conversation{{ if .WorkspaceName }} in <strong>{{ .WorkspaceName }}</strong>{{ end }} by email.</p>
+{{ if .SenderMismatch }}
+<div class="alert-box alert-warning" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e;">
+  This reply came from a different address than the original message. It may be a forward, or someone using the thread's reply address.
+</div>
+{{ end }}
+{{ else }}
 <p style="margin: 0 0 16px;">{{ if .WorkspaceName }}<strong>{{ .WorkspaceName }}</strong> received{{ else }}You received{{ end }} a new message through the <strong>{{ .FormName }}</strong> form.</p>
+{{ end }}
 
 {{ if .Flagged }}
 <div class="alert-box alert-warning" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e;">

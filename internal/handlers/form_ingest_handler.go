@@ -96,7 +96,8 @@ func (h *FormIngestHandler) Submit(c *okapi.Context) error {
 	}
 
 	origin := req.Header.Get("Origin")
-	if !messages.OriginAllowed(form, origin) {
+	allowlist, strict := form.OriginPolicy()
+	if !messages.OriginAllowed(allowlist, strict, origin) {
 		return h.respond(c, form, nil, http.StatusForbidden, "origin_not_allowed", "This origin is not allowed to submit to this form.")
 	}
 	h.applyCORS(c, form)
@@ -154,7 +155,7 @@ func (h *FormIngestHandler) Submit(c *okapi.Context) error {
 		return h.respond(c, form, nil, http.StatusInternalServerError, "error", "Submission could not be stored.")
 	}
 
-	if redirect != "" && messages.RedirectAllowed(form, redirect) {
+	if redirect != "" && messages.RedirectAllowed(form.AllowedOrigins, form.RedirectURL, redirect) {
 		c.Redirect(http.StatusSeeOther, redirect)
 		return nil
 	}
@@ -274,7 +275,8 @@ func (h *FormIngestHandler) parseMultipart(c *okapi.Context, form *models.Form, 
 
 func (h *FormIngestHandler) applyCORS(c *okapi.Context, form *models.Form) {
 	origin := c.Request().Header.Get("Origin")
-	if origin == "" || !messages.OriginAllowed(form, origin) {
+	allowlist, strict := form.OriginPolicy()
+	if origin == "" || !messages.OriginAllowed(allowlist, strict, origin) {
 		return
 	}
 	w := c.ResponseWriter()
