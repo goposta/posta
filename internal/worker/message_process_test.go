@@ -109,9 +109,11 @@ func newTestHandler(store *fakeMessageStore, form *models.Form) (*MessageProcess
 	return h, d, n
 }
 
-func processTask(t *testing.T, id uint) *asynq.Task {
+// processTask builds the message:process task for message 1, the ID every
+// fakeMessageStore fixture uses.
+func processTask(t *testing.T) *asynq.Task {
 	t.Helper()
-	payload, _ := json.Marshal(MessageProcessPayload{MessageID: id})
+	payload, _ := json.Marshal(MessageProcessPayload{MessageID: 1})
 	return asynq.NewTask(TypeMessageProcess, payload)
 }
 
@@ -125,7 +127,7 @@ func TestProcessTaskReturnsNotifyErrorSoAsynqRetries(t *testing.T) {
 	h, _, n := newTestHandler(store, immediateForm())
 	n.err = errors.New("smtp down")
 
-	if err := h.ProcessTask(context.Background(), processTask(t, 1)); err == nil {
+	if err := h.ProcessTask(context.Background(), processTask(t)); err == nil {
 		t.Fatal("a failed notification must fail the task so it is retried")
 	}
 	if store.notified != 0 {
@@ -139,9 +141,9 @@ func TestProcessTaskRetryDoesNotRedispatchWebhook(t *testing.T) {
 	h, d, n := newTestHandler(store, immediateForm())
 
 	n.err = errors.New("smtp down")
-	_ = h.ProcessTask(context.Background(), processTask(t, 1))
+	_ = h.ProcessTask(context.Background(), processTask(t))
 	n.err = nil
-	if err := h.ProcessTask(context.Background(), processTask(t, 1)); err != nil {
+	if err := h.ProcessTask(context.Background(), processTask(t)); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 
@@ -162,7 +164,7 @@ func TestProcessTaskPublishesReceivedToRealtime(t *testing.T) {
 	ch, unsub := bus.Subscribe(context.Background(), realtime.WorkspaceTopic(ws))
 	defer unsub()
 
-	if err := h.ProcessTask(context.Background(), processTask(t, 1)); err != nil {
+	if err := h.ProcessTask(context.Background(), processTask(t)); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -180,7 +182,7 @@ func TestProcessTaskQuarantinedFiresSpamWebhookWithoutNotifying(t *testing.T) {
 	store := &fakeMessageStore{msg: &models.Message{ID: 1, FormID: 1, WorkspaceID: &ws, Status: models.MessageStatusQuarantined}}
 	h, d, n := newTestHandler(store, immediateForm())
 
-	if err := h.ProcessTask(context.Background(), processTask(t, 1)); err != nil {
+	if err := h.ProcessTask(context.Background(), processTask(t)); err != nil {
 		t.Fatal(err)
 	}
 	if len(d.events) != 1 || d.events[0] != "message.spam" {
@@ -191,9 +193,11 @@ func TestProcessTaskQuarantinedFiresSpamWebhookWithoutNotifying(t *testing.T) {
 	}
 }
 
-func replyTask(t *testing.T, id uint) *asynq.Task {
+// replyTask builds the message:reply task for reply 5, the ID every reply
+// fixture uses.
+func replyTask(t *testing.T) *asynq.Task {
 	t.Helper()
-	payload, _ := json.Marshal(MessageReplyPayload{ReplyID: id})
+	payload, _ := json.Marshal(MessageReplyPayload{ReplyID: 5})
 	return asynq.NewTask(TypeMessageReply, payload)
 }
 
@@ -205,7 +209,7 @@ func TestReplyTaskInboundNotifiesAssignee(t *testing.T) {
 	}
 	h, d, n := newTestHandler(store, immediateForm())
 
-	if err := h.ProcessReplyTask(context.Background(), replyTask(t, 5)); err != nil {
+	if err := h.ProcessReplyTask(context.Background(), replyTask(t)); err != nil {
 		t.Fatal(err)
 	}
 	if len(d.events) != 1 || d.events[0] != messages.EventReplyReceived {
@@ -226,7 +230,7 @@ func TestReplyTaskInboundWithoutAssigneeUsesFormRecipients(t *testing.T) {
 	}
 	h, _, n := newTestHandler(store, form)
 
-	if err := h.ProcessReplyTask(context.Background(), replyTask(t, 5)); err != nil {
+	if err := h.ProcessReplyTask(context.Background(), replyTask(t)); err != nil {
 		t.Fatal(err)
 	}
 	if len(n.sent) != 1 || n.sent[0] != "to:team@example.com" {
@@ -242,7 +246,7 @@ func TestReplyTaskOperatorFiresRepliedWithoutNotifying(t *testing.T) {
 	}
 	h, d, n := newTestHandler(store, immediateForm())
 
-	if err := h.ProcessReplyTask(context.Background(), replyTask(t, 5)); err != nil {
+	if err := h.ProcessReplyTask(context.Background(), replyTask(t)); err != nil {
 		t.Fatal(err)
 	}
 	if len(d.events) != 1 || d.events[0] != messages.EventReplied {
@@ -262,7 +266,7 @@ func TestReplyTaskRetrySkipsWebhook(t *testing.T) {
 	h, d, _ := newTestHandler(store, immediateForm())
 	h.retryCount = func(context.Context) int { return 1 }
 
-	if err := h.ProcessReplyTask(context.Background(), replyTask(t, 5)); err != nil {
+	if err := h.ProcessReplyTask(context.Background(), replyTask(t)); err != nil {
 		t.Fatal(err)
 	}
 	if len(d.events) != 0 {
@@ -278,7 +282,7 @@ func TestReplyTaskSkipsSpamThreads(t *testing.T) {
 	}
 	h, _, n := newTestHandler(store, immediateForm())
 
-	if err := h.ProcessReplyTask(context.Background(), replyTask(t, 5)); err != nil {
+	if err := h.ProcessReplyTask(context.Background(), replyTask(t)); err != nil {
 		t.Fatal(err)
 	}
 	if len(n.sent) != 0 {

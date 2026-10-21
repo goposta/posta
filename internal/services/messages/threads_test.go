@@ -69,7 +69,8 @@ func TestNewMessageIDUsesSendingDomain(t *testing.T) {
 	if !regexp.MustCompile(`^<[0-9a-f-]{36}\.msg-uuid@acme\.example>$`).MatchString(id) {
 		t.Fatalf("Message-ID = %q", id)
 	}
-	if newMessageID("u", "support@acme.example") == newMessageID("u", "support@acme.example") {
+	first, second := newMessageID("u", "support@acme.example"), newMessageID("u", "support@acme.example")
+	if first == second {
 		t.Fatal("Message-IDs must be unique per reply")
 	}
 }
@@ -143,7 +144,9 @@ func (f *fakeReplyEnqueuer) EnqueueMessageReply(id uint) error {
 	return nil
 }
 
-func routerFixture(wsOfMessage uint) (*ThreadRouter, *fakeThreadStore, *fakeReplyEnqueuer, string) {
+// routerFixture builds a router whose one thread belongs to workspace 1.
+func routerFixture() (*ThreadRouter, *fakeThreadStore, *fakeReplyEnqueuer, string) {
+	wsOfMessage := uint(1)
 	token := newThreadToken()
 	store := &fakeThreadStore{msgs: map[string]*models.Message{
 		token: {ID: 7, UUID: "m-7", WorkspaceID: &wsOfMessage, SenderEmail: "ada@example.com", State: models.MessageStateReplied},
@@ -160,7 +163,7 @@ func inboundFrom(ws uint, sender string) *models.InboundEmail {
 }
 
 func TestRouteReplyIgnoresNonThreadRecipients(t *testing.T) {
-	r, store, _, _ := routerFixture(1)
+	r, store, _, _ := routerFixture()
 	routed, err := r.RouteReply(context.Background(), inboundFrom(1, "ada@example.com"), []string{"support@reply.example.com"})
 	if err != nil || routed || len(store.replies) != 0 {
 		t.Fatalf("routed = %v, err = %v, replies = %d", routed, err, len(store.replies))
@@ -168,7 +171,7 @@ func TestRouteReplyIgnoresNonThreadRecipients(t *testing.T) {
 }
 
 func TestRouteReplyIgnoresUnknownToken(t *testing.T) {
-	r, store, _, _ := routerFixture(1)
+	r, store, _, _ := routerFixture()
 	unknown := "msg+" + newThreadToken() + "@reply.example.com"
 	routed, err := r.RouteReply(context.Background(), inboundFrom(1, "ada@example.com"), []string{unknown})
 	if err != nil || routed || len(store.replies) != 0 {
@@ -177,7 +180,7 @@ func TestRouteReplyIgnoresUnknownToken(t *testing.T) {
 }
 
 func TestRouteReplyRefusesOtherWorkspace(t *testing.T) {
-	r, store, enq, addr := routerFixture(1)
+	r, store, enq, addr := routerFixture()
 	routed, err := r.RouteReply(context.Background(), inboundFrom(2, "ada@example.com"), []string{addr})
 	if err != nil || routed {
 		t.Fatalf("routed = %v, err = %v; a token must not cross workspaces", routed, err)
@@ -188,7 +191,7 @@ func TestRouteReplyRefusesOtherWorkspace(t *testing.T) {
 }
 
 func TestRouteReplyAttachesAndReopens(t *testing.T) {
-	r, store, enq, addr := routerFixture(1)
+	r, store, enq, addr := routerFixture()
 	bus := realtime.NewMemory()
 	r.SetRealtime(bus)
 	ch, unsub := bus.Subscribe(context.Background(), realtime.WorkspaceTopic(1))
@@ -231,7 +234,7 @@ func TestRouteReplyAttachesAndReopens(t *testing.T) {
 }
 
 func TestRouteReplyFlagsSenderMismatch(t *testing.T) {
-	r, store, _, addr := routerFixture(1)
+	r, store, _, addr := routerFixture()
 	if routed, _ := r.RouteReply(context.Background(), inboundFrom(1, "mallory@evil.test"), []string{addr}); !routed {
 		t.Fatal("a mismatched sender is still attached, flagged")
 	}
@@ -241,7 +244,7 @@ func TestRouteReplyFlagsSenderMismatch(t *testing.T) {
 }
 
 func TestRouteReplyDuplicateIsDoneWithoutSideEffects(t *testing.T) {
-	r, store, enq, addr := routerFixture(1)
+	r, store, enq, addr := routerFixture()
 	store.dupe = true
 	routed, err := r.RouteReply(context.Background(), inboundFrom(1, "ada@example.com"), []string{addr})
 	if err != nil || !routed {
@@ -253,7 +256,7 @@ func TestRouteReplyDuplicateIsDoneWithoutSideEffects(t *testing.T) {
 }
 
 func TestRouteReplyKeepsSpamThreadState(t *testing.T) {
-	r, store, _, addr := routerFixture(1)
+	r, store, _, addr := routerFixture()
 	for _, m := range store.msgs {
 		m.State = models.MessageStateSpam
 	}
