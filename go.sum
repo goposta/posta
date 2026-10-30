@@ -96,8 +96,8 @@ github.com/jkaninda/logger v0.0.5 h1:fTHKgDsHtuN8rkSBvwe6QStfi8yIdm8O3r0g99dRDTY
 github.com/jkaninda/logger v0.0.5/go.mod h1:ZUXJ2BdxDPG6e8t6mbKhc2ZFaFi2Iuy/4ukquFrPkFE=
 github.com/jkaninda/njia v0.0.3 h1:7DBKbp/Y/r5DYTEZd7z7oWuNDfnxAzifs2EZ2ux5WNg=
 github.com/jkaninda/njia v0.0.3/go.mod h1:YZe9FDA9bqnvKJ/PC3nT8LDOOa6a29KQtLF6XVSRODg=
-github.com/jkaninda/okapi v1.1.0 h1:xEwUiWVjMpWmTjhnB/YMCjDnqZ5a0fvkVUCNFxW+ejU=
-github.com/jkaninda/okapi v1.1.0/go.mod h1:Ru9pmaFnmfR9DIAVLrm/O5lq313f12uFZ0alpk1RikU=
+github.com/jkaninda/okapi v1.2.0 h1:YP5ceJGqitCKgU++m9YE5m38I+MRfbYTF3xyypQqbwo=
+github.com/jkaninda/okapi v1.2.0/go.mod h1:Ru9pmaFnmfR9DIAVLrm/O5lq313f12uFZ0alpk1RikU=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
 github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
 github.com/klauspost/compress v1.20.1 h1:T7kKElXUMXrUJ2E9QhQhxFtcK5rPyLdsGZvdbLMPdiQ=
