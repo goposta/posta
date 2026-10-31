@@ -25,7 +25,7 @@ require (
 	github.com/vanng822/go-premailer v1.37.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/mod v0.42.0
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/text v0.43.0
 	gorm.io/driver/postgres v1.6.3
