@@ -514,6 +514,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Path:        "/workspaces/{id:int}/plan",
 			Handler:     okapi.H(r.h.plan.GetWorkspacePlan),
 			Group:       adminGroup,
+			OperationId: "admin-get-workspace-plan",
 			Summary:     "Get workspace plan",
 			Description: "Get the effective plan for a workspace",
 			Response:    &dto.Response[models.Plan]{},
