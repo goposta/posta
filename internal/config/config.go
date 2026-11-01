@@ -438,6 +438,7 @@ func (c *Config) validateWorker() error {
 	warnRemovedEnvVars()
 	return c.ValidateWorker()
 }
+
 // OpenAPISecuritySchemes are the security schemes the API documentation
 // declares. Routes reference them by name with WithSecurity.
 func OpenAPISecuritySchemes() okapi.SecuritySchemes {

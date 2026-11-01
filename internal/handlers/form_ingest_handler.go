@@ -98,6 +98,56 @@ type WidgetConfig struct {
 	RequireNonce   bool            `json:"require_nonce,omitempty"`
 	MinFillSeconds int             `json:"min_fill_seconds,omitempty" doc:"Seconds that must pass between issuing the nonce and submitting; the widget waits them out instead of letting the submission be rejected"`
 	Nonce          *messages.Nonce `json:"nonce,omitempty" doc:"Submission nonce, present only when require_nonce is true"`
+	Fields         []WidgetField   `json:"fields,omitempty" doc:"The form's questions, when it has a schema. Without them the widget shows its built-in contact fields."`
+}
+
+// WidgetField is the public view of a schema field: what a browser needs to
+// render and pre-check it, without internal flags such as PII or roles.
+// Defaults are resolved, so the widget does not repeat them.
+type WidgetField struct {
+	Key         string               `json:"key"`
+	Label       string               `json:"label"`
+	Type        models.FieldType     `json:"type"`
+	Required    bool                 `json:"required,omitempty"`
+	MinLen      *int                 `json:"min_len,omitempty"`
+	MaxLen      *int                 `json:"max_len,omitempty"`
+	Min         *float64             `json:"min,omitempty"`
+	Max         *float64             `json:"max,omitempty"`
+	Pattern     string               `json:"pattern,omitempty"`
+	Options     []models.FieldOption `json:"options,omitempty"`
+	Display     models.FieldDisplay  `json:"display,omitempty"`
+	MinLabel    string               `json:"min_label,omitempty"`
+	MaxLabel    string               `json:"max_label,omitempty"`
+	Placeholder string               `json:"placeholder,omitempty"`
+	Help        string               `json:"help,omitempty"`
+}
+
+func widgetFields(defs models.FieldDefs) []WidgetField {
+	active := defs.Active()
+	out := make([]WidgetField, 0, len(active))
+	for i := range active {
+		f := &active[i]
+		wf := WidgetField{
+			Key: f.Key, Label: f.Label, Type: f.Type, Required: f.Required,
+			MinLen: f.MinLen, Min: f.Min, Max: f.Max, Pattern: f.Pattern,
+			Options: f.Options, Display: f.Display, MinLabel: f.MinLabel, MaxLabel: f.MaxLabel,
+			Placeholder: f.Placeholder, Help: f.Help,
+		}
+		switch f.Type {
+		case models.FieldText, models.FieldTextarea, models.FieldHidden:
+			maxLen := messages.MaxLen(f)
+			wf.MaxLen = &maxLen
+		case models.FieldScale:
+			lo, hi := messages.ScaleRange(f)
+			low, high := float64(lo), float64(hi)
+			wf.Min, wf.Max = &low, &high
+		case models.FieldRating:
+			stars := float64(messages.RatingStars(f))
+			wf.Min, wf.Max = nil, &stars
+		}
+		out = append(out, wf)
+	}
+	return out
 }
 
 // widgetConfig decides what the widget on origin may see of form. A nil form
@@ -117,6 +167,9 @@ func widgetConfig(form *models.Form, origin string) WidgetConfig {
 	}
 	if form.RequireNonce {
 		cfg.MinFillSeconds = form.MinFillSeconds
+	}
+	if form.HasSchema() {
+		cfg.Fields = widgetFields(form.Fields)
 	}
 	return cfg
 }
@@ -230,6 +283,10 @@ func (h *FormIngestHandler) Submit(c *okapi.Context) error {
 		NonceFailed: nonceFailed,
 	})
 	if err != nil {
+		var invalid *messages.ValidationError
+		if errors.As(err, &invalid) {
+			return h.respondInvalid(c, form, invalid)
+		}
 		if errors.Is(err, messages.ErrRateLimited) {
 			return h.respond(c, form, nil, http.StatusTooManyRequests, "rate_limited", "Too many submissions. Try again later.")
 		}
@@ -273,11 +330,22 @@ func (h *FormIngestHandler) parseBody(c *okapi.Context, form *models.Form) ([]mo
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return nil, nil, "", err
 		}
+		if len(raw) > form.FieldLimit() {
+			return nil, nil, "", messages.ErrTooManyFields
+		}
 		fields := make([]models.MessageField, 0, len(raw))
 		for k, v := range raw {
+			// An array is a multi-value answer: keep its values apart so a
+			// multi-select can be validated value by value.
+			if items, isArray := v.([]any); isArray && len(items) > 0 {
+				for _, item := range items {
+					fields = append(fields, models.MessageField{Key: k, Value: stringify(item)})
+				}
+				continue
+			}
 			fields = append(fields, models.MessageField{Key: k, Value: stringify(v)})
 		}
-		if len(fields) > form.FieldLimit() {
+		if messages.DistinctKeys(fields) > form.FieldLimit() {
 			return nil, nil, "", messages.ErrTooManyFields
 		}
 		return fields, nil, redirectFrom(raw), nil
@@ -287,7 +355,7 @@ func (h *FormIngestHandler) parseBody(c *okapi.Context, form *models.Form) ([]mo
 			return nil, nil, "", err
 		}
 		fields, redirect := valuesToFields(req.PostForm)
-		if len(fields) > form.FieldLimit() {
+		if messages.DistinctKeys(fields) > form.FieldLimit() {
 			return nil, nil, "", messages.ErrTooManyFields
 		}
 		return fields, nil, redirect, nil
@@ -312,7 +380,7 @@ func (h *FormIngestHandler) parseMultipart(c *okapi.Context, form *models.Form, 
 	}
 
 	fields, redirect := valuesToFields(req.MultipartForm.Value)
-	if len(fields) > form.FieldLimit() {
+	if messages.DistinctKeys(fields) > form.FieldLimit() {
 		return nil, nil, "", messages.ErrTooManyFields
 	}
 
@@ -388,6 +456,57 @@ func (h *FormIngestHandler) respond(c *okapi.Context, form *models.Form, msg *mo
 	return c.JSON(status, ingestResponse{Success: status < 400, Data: data})
 }
 
+// respondInvalid answers a submission that does not match the form's schema:
+// 422 with per-field errors for scripts, or for a plain HTML form a redirect
+// to the form's error page or a minimal page listing the errors.
+func (h *FormIngestHandler) respondInvalid(c *okapi.Context, form *models.Form, invalid *messages.ValidationError) error {
+	h.applyCORS(c, form)
+	if wantsJSON(c.Request()) {
+		return c.JSON(http.StatusUnprocessableEntity, validationResponse{
+			Success: false,
+			Error: validationError{
+				Code:    "validation_failed",
+				Message: "Some fields need attention.",
+				Fields:  invalid.Fields,
+			},
+		})
+	}
+	if form.ErrorRedirectURL != "" {
+		// The URL is set by the form's admin, and the query only carries a
+		// fixed code and a schema key, never a submitted value.
+		target, err := url.Parse(form.ErrorRedirectURL)
+		if err == nil {
+			q := target.Query()
+			q.Set("posta_error", "validation_failed")
+			q.Set("field", invalid.Fields[0].Key)
+			target.RawQuery = q.Encode()
+			c.Redirect(http.StatusSeeOther, target.String())
+			return nil
+		}
+	}
+	lines := make([]string, 0, len(invalid.Fields))
+	for _, f := range invalid.Fields {
+		name := f.Label
+		if name == "" {
+			name = f.Key
+		}
+		lines = append(lines, name+": "+f.Message)
+	}
+	return trackingNotice(c, http.StatusUnprocessableEntity, "Message not sent",
+		strings.Join(lines, " ")+" Go back to correct the form and send it again.", "error")
+}
+
+type validationResponse struct {
+	Success bool            `json:"success"`
+	Error   validationError `json:"error"`
+}
+
+type validationError struct {
+	Code    string                `json:"code"`
+	Message string                `json:"message"`
+	Fields  []messages.FieldError `json:"fields"`
+}
+
 func wantsJSON(req *http.Request) bool {
 	contentType := req.Header.Get("Content-Type")
 	if strings.Contains(contentType, "application/json") || strings.Contains(contentType, "text/plain") {
@@ -400,6 +519,8 @@ func wantsJSON(req *http.Request) bool {
 	return !strings.Contains(accept, "text/html") && accept != ""
 }
 
+// valuesToFields keeps every value of a repeated key as its own field, which
+// is how checkboxes sharing a name submit a multi-select.
 func valuesToFields(values url.Values) ([]models.MessageField, string) {
 	fields := make([]models.MessageField, 0, len(values))
 	redirect := ""
@@ -407,12 +528,13 @@ func valuesToFields(values url.Values) ([]models.MessageField, string) {
 		if len(vals) == 0 {
 			continue
 		}
-		value := strings.Join(vals, ", ")
 		if strings.EqualFold(key, "_redirect") || strings.EqualFold(key, "_next") {
-			redirect = value
+			redirect = strings.Join(vals, ", ")
 			continue
 		}
-		fields = append(fields, models.MessageField{Key: key, Value: value})
+		for _, v := range vals {
+			fields = append(fields, models.MessageField{Key: key, Value: v})
+		}
 	}
 	return fields, redirect
 }

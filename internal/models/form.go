@@ -66,6 +66,12 @@ type Form struct {
 	MaxFields        int            `json:"max_fields" gorm:"default:40;not null"`
 	AllowAttachments bool           `json:"allow_attachments" gorm:"default:false;not null"`
 
+	// Fields is the form's schema. Nil accepts any fields (schemaless).
+	Fields           FieldDefs           `json:"fields" gorm:"type:jsonb"`
+	SchemaVersion    int                 `json:"schema_version" gorm:"default:0;not null"`
+	UnknownFields    UnknownFieldsPolicy `json:"unknown_fields" gorm:"type:varchar(8);default:'keep';not null"`
+	ErrorRedirectURL string              `json:"error_redirect_url"`
+
 	HoneypotField  string `json:"honeypot_field" gorm:"default:'_gotcha';not null"`
 	RequireNonce   bool   `json:"require_nonce" gorm:"default:false;not null"`
 	MinFillSeconds int    `json:"min_fill_seconds" gorm:"default:3;not null"`
@@ -97,6 +103,18 @@ type Form struct {
 }
 
 func (f *Form) IsActive() bool { return f.Status == FormStatusActive }
+
+// HasSchema reports whether submissions are validated against Fields.
+func (f *Form) HasSchema() bool { return f != nil && len(f.Fields.Active()) > 0 }
+
+// UnknownFieldsPolicy returns the policy for undeclared keys, keep by default.
+func (f *Form) UnknownFieldsPolicy() UnknownFieldsPolicy {
+	switch f.UnknownFields {
+	case UnknownFieldsDrop, UnknownFieldsReject:
+		return f.UnknownFields
+	}
+	return UnknownFieldsKeep
+}
 
 // ScanSource identifies what a submission arrived through, so the scanner can
 // apply that source's filters and count repeat submissions per source.

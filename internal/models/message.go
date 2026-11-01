@@ -69,8 +69,12 @@ type Message struct {
 	Subject     string `json:"subject"`
 	Body        string `json:"body" gorm:"type:text"`
 
-	FieldsJSON      string `json:"-" gorm:"type:text"`
-	AttachmentsJSON string `json:"-" gorm:"type:text"`
+	FieldsJSON string `json:"-" gorm:"type:text"`
+	// Data holds the typed answers of a form with a schema; FieldsJSON stays
+	// the display copy. SchemaVersion is the form schema it was validated by.
+	Data            SubmissionData `json:"data,omitempty" gorm:"type:jsonb"`
+	SchemaVersion   int            `json:"schema_version" gorm:"default:0;not null"`
+	AttachmentsJSON string         `json:"-" gorm:"type:text"`
 
 	ClientIP  string `json:"client_ip,omitempty" gorm:"size:45"`
 	UserAgent string `json:"user_agent,omitempty"`

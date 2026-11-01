@@ -21,6 +21,8 @@
       subject: "Subject",
       message: "Message",
       optional: "optional",
+      required: "This field is required.",
+      choose: "Choose…",
       button: "Send message",
       sending: "Sending…",
       success: "Thanks — your message has been received.",
@@ -38,6 +40,8 @@
       subject: "Objet",
       message: "Message",
       optional: "facultatif",
+      required: "Ce champ est obligatoire.",
+      choose: "Choisir…",
       button: "Envoyer",
       sending: "Envoi…",
       success: "Merci, votre message a bien été reçu.",
@@ -55,7 +59,7 @@
   var BUILTIN_FIELDS = {
     name: { type: "text", autocomplete: "name", required: true },
     email: { type: "email", autocomplete: "email", required: true },
-    phone: { type: "tel", autocomplete: "tel", required: false },
+    phone: { type: "phone", autocomplete: "tel", required: false },
     subject: { type: "text", required: false },
     message: { type: "textarea", required: true },
   };
@@ -81,11 +85,28 @@
     ".pf .f{margin:0 0 12px}" +
     ".pf label{display:block;margin:0 0 4px;font-weight:600;font-size:.9em}" +
     ".pf .opt{font-weight:400;color:var(--mut)}" +
+    ".pf fieldset{border:0;padding:0;min-width:0}" +
+    ".pf legend{display:block;padding:0;margin:0 0 6px;font-weight:600;font-size:.9em}" +
+    ".pf .help{margin:-2px 0 6px;font-size:.85em;color:var(--mut)}" +
+    ".pf select{display:block;width:100%;margin:0;padding:9px 11px;font:inherit;color:var(--fg);background:var(--in);border:1px solid var(--bd);border-radius:var(--r)}" +
+    ".pf .opts{display:grid;gap:6px}" +
+    ".pf .opt-item,.pf .tick{display:flex;align-items:center;gap:8px;font-weight:400;font-size:1em;margin:0;cursor:pointer}" +
+    ".pf .opt-item input,.pf .tick input{width:auto;margin:0;accent-color:var(--a)}" +
+    ".pf .scale{display:flex;flex-wrap:wrap;align-items:center;gap:6px}" +
+    ".pf .scale .end{font-size:.85em;color:var(--mut)}" +
+    ".pf .scale .opt-item{position:relative;justify-content:center;min-width:38px;height:38px;border:1px solid var(--bd);border-radius:var(--r);background:var(--in)}" +
+    ".pf .scale .opt-item input{position:absolute;opacity:0;width:100%;height:100%;cursor:pointer}" +
+    ".pf .scale .opt-item:has(input:checked){background:var(--a);border-color:var(--a);color:#fff}" +
+    ".pf .scale .opt-item:has(input:focus-visible){outline:2px solid var(--a);outline-offset:2px}" +
+    ".pf .rating .opt-item{border:0;background:none;min-width:30px;font-size:1.5em;color:var(--bd)}" +
+    ".pf .rating .opt-item.on,.pf .rating .opt-item:has(input:checked){background:none;color:#F5A524}" +
+    ".pf .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}" +
     ".pf input,.pf textarea{display:block;width:100%;margin:0;padding:9px 11px;font:inherit;color:var(--fg);" +
     "background:var(--in);border:1px solid var(--bd);border-radius:var(--r);transition:border-color .15s,box-shadow .15s}" +
     ".pf textarea{min-height:120px;resize:vertical}" +
     ".pf input:focus,.pf textarea:focus{outline:none;border-color:var(--a);box-shadow:0 0 0 3px color-mix(in srgb,var(--a) 25%,transparent)}" +
     ".pf [aria-invalid=true]{border-color:var(--err)}" +
+    ".pf .opts[aria-invalid=true],.pf .scale[aria-invalid=true]{outline:1px solid var(--err);outline-offset:4px;border-radius:2px}" +
     ".pf .ferr{margin:4px 0 0;font-size:.85em;color:var(--err)}" +
     ".pf .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}" +
     ".pf button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;font:inherit;font-weight:600;" +
@@ -232,6 +253,159 @@
       }
     );
 
+    // buildField renders one field and returns how to read it, focus it and
+    // show an error on it.
+    function buildField(f, fid) {
+      var errId = fid + "-err";
+      var helpId = fid + "-help";
+      var type = f.type || "text";
+      var preset = el.getAttribute("data-value-" + f.key) || "";
+
+      if (type === "hidden") {
+        var hidden = h("input", { type: "hidden", name: f.key, value: preset });
+        return { row: hidden, get: function () { return hidden.value; }, focus: function () {}, mark: function () {}, clear: function () {} };
+      }
+
+      var grouped = type === "scale" || type === "rating" || type === "multiselect" && f.display !== "list" ||
+        type === "select" && (f.display === "radio" || !f.display && (f.options || []).length <= 6);
+      var row = h(grouped ? "fieldset" : "div", { class: "f" });
+      var caption = h(grouped ? "legend" : "label", grouped ? null : { for: fid }, type === "checkbox" ? "" : f.label || f.key);
+      if (type !== "checkbox") {
+        if (!f.required) {
+          caption.appendChild(document.createTextNode(" "));
+          caption.appendChild(h("span", { class: "opt" }, "(" + t.optional + ")"));
+        }
+        row.appendChild(caption);
+      }
+      var help = f.help ? h("p", { class: "help", id: helpId }, f.help) : null;
+      if (help) row.appendChild(help);
+      var describedBy = help ? helpId : null;
+
+      var focusEl, get, marked = [];
+      var requiredGroup = false;
+
+      if (type === "textarea") {
+        focusEl = h("textarea", { id: fid, name: f.key, required: !!f.required, maxlength: f.max_len, minlength: f.min_len, placeholder: f.placeholder, "aria-describedby": describedBy });
+        focusEl.value = preset;
+        row.appendChild(focusEl);
+        get = function () { return focusEl.value; };
+        marked = [focusEl];
+      } else if (type === "checkbox") {
+        focusEl = h("input", { id: fid, type: "checkbox", name: f.key, required: !!f.required, "aria-describedby": describedBy });
+        var tick = h("label", { class: "tick", for: fid });
+        tick.appendChild(focusEl);
+        tick.appendChild(h("span", null, f.label || f.key));
+        if (help) row.insertBefore(tick, help);
+        else row.appendChild(tick);
+        get = function () { return focusEl.checked; };
+        marked = [focusEl];
+      } else if (type === "select" && !grouped) {
+        focusEl = h("select", { id: fid, name: f.key, required: !!f.required, "aria-describedby": describedBy });
+        focusEl.appendChild(h("option", { value: "" }, t.choose));
+        (f.options || []).forEach(function (o) { focusEl.appendChild(h("option", { value: o.value }, o.label || o.value)); });
+        row.appendChild(focusEl);
+        get = function () { return focusEl.value; };
+        marked = [focusEl];
+      } else if (type === "multiselect" && !grouped) {
+        focusEl = h("select", { id: fid, name: f.key, multiple: true, size: Math.min((f.options || []).length, 6), "aria-describedby": describedBy });
+        (f.options || []).forEach(function (o) { focusEl.appendChild(h("option", { value: o.value }, o.label || o.value)); });
+        row.appendChild(focusEl);
+        get = function () {
+          return Array.prototype.filter.call(focusEl.options, function (o) { return o.selected; }).map(function (o) { return o.value; });
+        };
+        requiredGroup = !!f.required;
+        marked = [focusEl];
+      } else if (grouped) {
+        var choices = [];
+        if (type === "scale" || type === "rating") {
+          var lo = type === "rating" ? 1 : f.min != null ? f.min : 1;
+          var hi = f.max != null ? f.max : 5;
+          for (var n = lo; n <= hi; n++) choices.push({ value: String(n), label: type === "rating" ? "★" : String(n), title: String(n) });
+        } else {
+          choices = (f.options || []).map(function (o) { return { value: o.value, label: o.label || o.value }; });
+        }
+        var multi = type === "multiselect";
+        var list = h("div", { class: type === "scale" || type === "rating" ? "scale " + type : "opts", role: multi ? "group" : "radiogroup", "aria-describedby": describedBy });
+        if (type === "scale" && f.min_label) list.appendChild(h("span", { class: "end" }, f.min_label));
+        var boxes = choices.map(function (ch, i) {
+          var cid = fid + "-" + i;
+          var box = h("input", { id: cid, type: multi ? "checkbox" : "radio", name: f.key, value: ch.value, required: !multi && !!f.required });
+          var item = h("label", { class: "opt-item", for: cid, title: ch.title || null });
+          item.appendChild(box);
+          item.appendChild(h("span", type === "rating" ? { "aria-hidden": "true" } : null, ch.label));
+          if (type === "rating") item.appendChild(h("span", { class: "sr" }, ch.title + " / " + hi));
+          list.appendChild(item);
+          return box;
+        });
+        if (type === "scale" && f.max_label) list.appendChild(h("span", { class: "end" }, f.max_label));
+        if (type === "rating") {
+          list.addEventListener("change", function () {
+            var picked = 0;
+            boxes.forEach(function (b, i) { if (b.checked) picked = i + 1; });
+            boxes.forEach(function (b, i) { b.parentNode.classList.toggle("on", i < picked); });
+          });
+        }
+        row.appendChild(list);
+        focusEl = boxes[0];
+        get = multi
+          ? function () { return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; }); }
+          : function () { var b = boxes.filter(function (b) { return b.checked; })[0]; return b ? b.value : ""; };
+        requiredGroup = multi && !!f.required;
+        marked = [list];
+      } else {
+        var inputType = { phone: "tel", email: "email", number: "number", url: "url", date: "date", time: "time" }[type] || "text";
+        focusEl = h("input", {
+          id: fid,
+          name: f.key,
+          type: inputType,
+          required: !!f.required,
+          autocomplete: f.autocomplete || { email: "email", tel: "tel" }[inputType],
+          maxlength: f.max_len,
+          minlength: f.min_len,
+          min: inputType === "number" ? f.min : null,
+          max: inputType === "number" ? f.max : null,
+          step: inputType === "number" ? "any" : null,
+          placeholder: f.placeholder,
+          "aria-describedby": describedBy,
+        });
+        focusEl.value = preset;
+        row.appendChild(focusEl);
+        get = function () { return focusEl.value; };
+        marked = [focusEl];
+      }
+
+      var err = h("p", { class: "ferr", id: errId, hidden: true });
+      row.appendChild(err);
+      var control = {
+        row: row,
+        get: get,
+        requiredGroup: requiredGroup,
+        focus: function () { focusEl.focus(); },
+        mark: function (text) {
+          err.textContent = text;
+          err.hidden = false;
+          marked.forEach(function (m) {
+            m.setAttribute("aria-invalid", "true");
+            m.setAttribute("aria-describedby", describedBy ? describedBy + " " + errId : errId);
+          });
+        },
+        clear: function () {
+          err.hidden = true;
+          err.textContent = "";
+          marked.forEach(function (m) {
+            m.removeAttribute("aria-invalid");
+            if (describedBy) m.setAttribute("aria-describedby", describedBy);
+            else m.removeAttribute("aria-describedby");
+          });
+        },
+      };
+      // An error describes the value that was sent; once the visitor
+      // changes the field it no longer applies.
+      row.addEventListener("input", function () { if (!err.hidden) control.clear(); });
+      row.addEventListener("change", function () { if (!err.hidden) control.clear(); });
+      return control;
+    }
+
     function render(cfg, fields) {
       body.textContent = "";
       var nonce = cfg.nonce ? cfg.nonce.nonce : "";
@@ -247,36 +421,13 @@
       if (description) body.appendChild(h("p", { class: "desc" }, description));
 
       var form = h("form", { "aria-label": title || null });
-      var inputs = {};
-      var errors = {};
+
+      var controls = {};
 
       fields.forEach(function (f) {
-        var fid = id + "-" + f.key;
-        var row = h("div", { class: "f" });
-        var label = h("label", { for: fid }, f.label || f.key);
-        if (!f.required) {
-          label.appendChild(document.createTextNode(" "));
-          label.appendChild(h("span", { class: "opt" }, "(" + t.optional + ")"));
-        }
-        row.appendChild(label);
-        var input =
-          f.type === "textarea"
-            ? h("textarea", { id: fid, name: f.key, required: !!f.required, maxlength: f.max_len })
-            : h("input", {
-                id: fid,
-                name: f.key,
-                type: f.type || "text",
-                required: !!f.required,
-                autocomplete: f.autocomplete,
-                maxlength: f.max_len,
-                placeholder: f.placeholder,
-              });
-        row.appendChild(input);
-        var err = h("p", { class: "ferr", id: fid + "-err", hidden: true });
-        row.appendChild(err);
-        inputs[f.key] = input;
-        errors[f.key] = err;
-        form.appendChild(row);
+        var c = buildField(f, id + "-" + f.key);
+        controls[f.key] = c;
+        form.appendChild(c.row);
       });
 
       var hpWrap = h("div", { class: "hp", "aria-hidden": "true" });
@@ -294,12 +445,7 @@
       function clearErrors() {
         status.textContent = "";
         status.className = "st";
-        Object.keys(errors).forEach(function (k) {
-          errors[k].hidden = true;
-          errors[k].textContent = "";
-          inputs[k].removeAttribute("aria-invalid");
-          inputs[k].removeAttribute("aria-describedby");
-        });
+        Object.keys(controls).forEach(function (k) { controls[k].clear(); });
       }
 
       function fail(text) {
@@ -322,7 +468,21 @@
         e.preventDefault();
         clearErrors();
         var payload = {};
-        Object.keys(inputs).forEach(function (k) { payload[k] = inputs[k].value; });
+        var missing = null;
+        Object.keys(controls).forEach(function (k) {
+          var c = controls[k];
+          payload[k] = c.get();
+          if (c.requiredGroup && !payload[k].length) {
+            c.mark(t.required);
+            missing = missing || c;
+          }
+        });
+        // Native validation covers single inputs; a required group of
+        // checkboxes has no native check.
+        if (missing) {
+          missing.focus();
+          return;
+        }
         payload[honeypot.name] = honeypot.value;
         if (nonce) payload._nonce = nonce;
 
@@ -359,14 +519,12 @@
               var fieldErrs = (res.body && res.body.error && res.body.error.fields) || [];
               var first = null;
               fieldErrs.forEach(function (fe) {
-                if (!inputs[fe.key]) return;
-                errors[fe.key].textContent = fe.message || fe.code;
-                errors[fe.key].hidden = false;
-                inputs[fe.key].setAttribute("aria-invalid", "true");
-                inputs[fe.key].setAttribute("aria-describedby", errors[fe.key].id);
-                first = first || inputs[fe.key];
+                var c = controls[fe.key];
+                if (!c) return;
+                c.mark(fe.message || fe.code);
+                first = first || c;
               });
-              var message = data.message || (res.body && res.body.message) || t.error;
+              var message = data.message || (res.body && res.body.error && res.body.error.message) || (res.body && res.body.message) || t.error;
               if (!first) fail(message);
               else first.focus();
               var code = data.status || (res.body && res.body.error && res.body.error.code) || "error";

@@ -21,6 +21,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"html"
 	"math/big"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
@@ -98,36 +100,43 @@ type CreateFormRequest struct {
 		NotifyMode       string   `json:"notify_mode" enum:"immediate,hourly,daily,off"`
 		ReplyFrom        string   `json:"reply_from"`
 		ReplyFromName    string   `json:"reply_from_name"`
+
+		Fields           models.FieldDefs `json:"fields" doc:"Optional schema. Submissions are validated against it and stored with typed data."`
+		UnknownFields    string           `json:"unknown_fields" enum:"keep,drop,reject" doc:"What happens to submitted keys the schema does not declare. Default keep."`
+		ErrorRedirectURL string           `json:"error_redirect_url" doc:"Where a plain HTML form is sent when validation fails, with ?posta_error=validation_failed&field=<key>."`
 	} `json:"body"`
 }
 
 type UpdateFormRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name                string    `json:"name"`
-		Slug                string    `json:"slug"`
-		Description         string    `json:"description"`
-		Status              string    `json:"status" enum:"active,paused,archived"`
-		AllowedOrigins      *[]string `json:"allowed_origins"`
-		StrictOrigin        *bool     `json:"strict_origin"`
-		RedirectURL         *string   `json:"redirect_url"`
-		MaxBodyBytes        *int64    `json:"max_body_bytes"`
-		MaxFields           *int      `json:"max_fields"`
-		AllowAttachments    *bool     `json:"allow_attachments"`
-		HoneypotField       *string   `json:"honeypot_field"`
-		RequireNonce        *bool     `json:"require_nonce"`
-		MinFillSeconds      *int      `json:"min_fill_seconds"`
-		ScanEnabled         *bool     `json:"scan_enabled"`
-		FlagThreshold       *float64  `json:"flag_threshold"`
-		QuarantineThreshold *float64  `json:"quarantine_threshold"`
-		RejectThreshold     *float64  `json:"reject_threshold"`
-		NotifyEnabled       *bool     `json:"notify_enabled"`
-		NotifyEmails        *[]string `json:"notify_emails"`
-		NotifyMode          *string   `json:"notify_mode" doc:"One of: immediate, hourly, daily, off"`
-		NotifyOnFlagged     *bool     `json:"notify_on_flagged"`
-		ReplyFrom           *string   `json:"reply_from"`
-		ReplyFromName       *string   `json:"reply_from_name"`
-		RetentionDays       *int      `json:"retention_days"`
+		Name                string            `json:"name"`
+		Slug                string            `json:"slug"`
+		Description         string            `json:"description"`
+		Status              string            `json:"status" enum:"active,paused,archived"`
+		AllowedOrigins      *[]string         `json:"allowed_origins"`
+		StrictOrigin        *bool             `json:"strict_origin"`
+		RedirectURL         *string           `json:"redirect_url"`
+		MaxBodyBytes        *int64            `json:"max_body_bytes"`
+		MaxFields           *int              `json:"max_fields"`
+		AllowAttachments    *bool             `json:"allow_attachments"`
+		HoneypotField       *string           `json:"honeypot_field"`
+		RequireNonce        *bool             `json:"require_nonce"`
+		MinFillSeconds      *int              `json:"min_fill_seconds"`
+		ScanEnabled         *bool             `json:"scan_enabled"`
+		FlagThreshold       *float64          `json:"flag_threshold"`
+		QuarantineThreshold *float64          `json:"quarantine_threshold"`
+		RejectThreshold     *float64          `json:"reject_threshold"`
+		NotifyEnabled       *bool             `json:"notify_enabled"`
+		NotifyEmails        *[]string         `json:"notify_emails"`
+		Fields              *models.FieldDefs `json:"fields" doc:"Replaces the schema. Keys already saved cannot be removed; set archived instead."`
+		UnknownFields       *string           `json:"unknown_fields" doc:"keep, drop or reject"`
+		ErrorRedirectURL    *string           `json:"error_redirect_url"`
+		NotifyMode          *string           `json:"notify_mode" doc:"One of: immediate, hourly, daily, off"`
+		NotifyOnFlagged     *bool             `json:"notify_on_flagged"`
+		ReplyFrom           *string           `json:"reply_from"`
+		ReplyFromName       *string           `json:"reply_from_name"`
+		RetentionDays       *int              `json:"retention_days"`
 	} `json:"body"`
 }
 
@@ -219,6 +228,14 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		ReplyFrom:           replyFrom,
 		ReplyFromName:       strings.TrimSpace(req.Body.ReplyFromName),
 		LastEditedByID:      &userID,
+	}
+
+	var fields *models.FieldDefs
+	if req.Body.Fields != nil {
+		fields = &req.Body.Fields
+	}
+	if err := applySchema(form, fields, optionalString(req.Body.UnknownFields), optionalString(req.Body.ErrorRedirectURL)); err != nil {
+		return c.AbortBadRequest(err.Error())
 	}
 
 	if err := h.repo.Create(form); err != nil {
@@ -370,6 +387,9 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	}
 	if b.RetentionDays != nil {
 		form.RetentionDays = clampInt(*b.RetentionDays, 0, 3650)
+	}
+	if err := applySchema(form, b.Fields, b.UnknownFields, b.ErrorRedirectURL); err != nil {
+		return c.AbortBadRequest(err.Error())
 	}
 
 	userID := uint(c.GetInt("user_id"))
@@ -582,6 +602,63 @@ func clampInt64(v, lo, hi int64) int64 {
 		return hi
 	}
 	return v
+}
+
+// applySchema sets a form's schema settings from a create or update request.
+// Nil arguments leave the setting as it is. A changed schema gets the next
+// version, so each submission records which schema validated it.
+func applySchema(form *models.Form, fields *models.FieldDefs, unknownFields, errorRedirect *string) error {
+	if unknownFields != nil {
+		switch policy := models.UnknownFieldsPolicy(strings.TrimSpace(*unknownFields)); policy {
+		case models.UnknownFieldsKeep, models.UnknownFieldsDrop, models.UnknownFieldsReject:
+			form.UnknownFields = policy
+		default:
+			return fmt.Errorf("unknown_fields must be one of: keep, drop, reject")
+		}
+	}
+	if errorRedirect != nil {
+		target := strings.TrimSpace(*errorRedirect)
+		if target != "" && !isHTTPURL(target) {
+			return fmt.Errorf("error_redirect_url must be an absolute http(s) URL")
+		}
+		form.ErrorRedirectURL = target
+	}
+	if fields != nil {
+		next := append(models.FieldDefs{}, (*fields)...)
+		if err := messages.CheckSchema(next, form.Fields, form.Honeypot()); err != nil {
+			return err
+		}
+		// The honeypot, _nonce and _redirect count towards max_fields too.
+		if active := len(next.Active()); active+3 > form.FieldLimit() {
+			return fmt.Errorf("the schema has %d fields but max_fields is %d; raise max_fields to at least %d", active, form.FieldLimit(), active+3)
+		}
+		if schemaChanged(form.Fields, next) {
+			form.Fields = next
+			form.SchemaVersion++
+		}
+	}
+	for _, f := range form.Fields {
+		if strings.EqualFold(f.Key, form.Honeypot()) {
+			return fmt.Errorf("the honeypot field %q is also a schema field", f.Key)
+		}
+	}
+	return nil
+}
+
+func schemaChanged(prev, next models.FieldDefs) bool {
+	if len(prev) == 0 && len(next) == 0 {
+		return false
+	}
+	a, _ := json.Marshal(prev)
+	b, _ := json.Marshal(next)
+	return string(a) != string(b)
+}
+
+func optionalString(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 func buildHTMLSnippet(endpoint string, form *models.Form) string {

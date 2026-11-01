@@ -22,6 +22,7 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -55,7 +56,7 @@ func TestWidgetConfig(t *testing.T) {
 		{"fill time only with a nonce", active(func(f *models.Form) { f.MinFillSeconds = 3 }), "https://site.test", WidgetConfig{Enabled: true, HoneypotField: "_gotcha"}},
 	}
 	for _, tc := range cases {
-		if got := widgetConfig(tc.form, tc.origin); got != tc.want {
+		if got := widgetConfig(tc.form, tc.origin); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: widgetConfig = %+v, want %+v", tc.name, got, tc.want)
 		}
 	}
