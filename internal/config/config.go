@@ -438,6 +438,29 @@ func (c *Config) validateWorker() error {
 	warnRemovedEnvVars()
 	return c.ValidateWorker()
 }
+// OpenAPISecuritySchemes are the security schemes the API documentation
+// declares. Routes reference them by name with WithSecurity.
+func OpenAPISecuritySchemes() okapi.SecuritySchemes {
+	return okapi.SecuritySchemes{
+		// Dashboard / JWT-authenticated endpoints.
+		{
+			Name:         "BearerAuth",
+			Description:  "Bearer token issued by /auth/login. Send as: `Authorization: Bearer <JWT>`.",
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "JWT",
+		},
+		// API-key authenticated endpoints.
+		{
+			Name:         "ApiKeyAuth",
+			Description:  "Long-lived API key. Send as: `Authorization: Bearer <API_KEY>`. Manage keys under Settings → API Keys.",
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "Posta API Key",
+		},
+	}
+}
+
 func (c *Config) Initialize(app *okapi.Okapi) error {
 	if err := c.validate(); err != nil {
 		return err
@@ -470,22 +493,7 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	})
 
 	if c.OpenAPIDocs {
-		// Dashboard / JWT-authenticated endpoints.
-		c.securitySchemes = append(c.securitySchemes, okapi.SecurityScheme{
-			Name:         "BearerAuth",
-			Description:  "Bearer token issued by /auth/login. Send as: `Authorization: Bearer <JWT>`.",
-			Type:         "http",
-			Scheme:       "bearer",
-			BearerFormat: "JWT",
-		})
-		// API-key authenticated endpoints.
-		c.securitySchemes = append(c.securitySchemes, okapi.SecurityScheme{
-			Name:         "ApiKeyAuth",
-			Description:  "Long-lived API key. Send as: `Authorization: Bearer <API_KEY>`. Manage keys under Settings → API Keys.",
-			Type:         "http",
-			Scheme:       "bearer",
-			BearerFormat: "Posta API Key",
-		})
+		c.securitySchemes = append(c.securitySchemes, OpenAPISecuritySchemes()...)
 		app.WithOpenAPIDocs(okapi.OpenAPI{
 			Title:       "Posta API",
 			Version:     Version,
