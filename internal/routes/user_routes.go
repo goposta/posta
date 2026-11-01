@@ -74,7 +74,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Description: "Issue a fresh verification email for the authenticated user",
 			Response:    &dto.Response[dto.MessageData]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -152,7 +152,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[any]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Session ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -183,8 +183,8 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.SetDefaultWorkspaceRequest{},
 			Response:    &dto.Response[dto.MessageData]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{

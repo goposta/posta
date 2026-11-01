@@ -38,7 +38,7 @@ func (r *Router) registerWebhookDocs() {
 	webhook := func(name, summary string, body any) {
 		r.app.Webhook(name, http.MethodPost,
 			okapi.DocSummary(summary),
-			okapi.DocTags("Webhooks"),
+			okapi.Tags("Webhooks"),
 			sigHeader, uaHeader,
 			okapi.DocRequestBody(body),
 			received,

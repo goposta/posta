@@ -95,7 +95,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.Email]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Email UUID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -108,7 +108,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.EmailStatusResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Email UUID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -121,8 +121,8 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[email.SendResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Email UUID"),
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -135,7 +135,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.PreviewEmailRequest{},
 			Response:    &dto.Response[handlers.PreviewEmailResponse]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -149,7 +149,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.CreateAPIKeyRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[dto.APIKeyCreatedData]{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -170,7 +170,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request:  &handlers.GetAPIKeyRequest{},
 			Response: &dto.Response[models.APIKey]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -182,7 +182,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[dto.MessageData]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "API key ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -194,7 +194,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[dto.MessageData]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "API key ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 	}
@@ -212,7 +212,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 				Request: &handlers.CreateSMTPCredentialRequest{},
 				Options: []okapi.RouteOption{
 					okapi.DocResponse(201, &dto.Response[dto.SMTPCredentialCreatedData]{}),
-					okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+					okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 				},
 			},
 			okapi.RouteDefinition{
@@ -233,7 +233,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 				Request:  &handlers.GetSMTPCredentialRequest{},
 				Response: &dto.Response[models.SMTPCredential]{},
 				Options: []okapi.RouteOption{
-					okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+					okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 				},
 			},
 			okapi.RouteDefinition{
@@ -246,7 +246,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 				Response: &dto.Response[dto.MessageData]{},
 				Options: []okapi.RouteOption{
 					okapi.DocPathParam("id", "integer", "SMTP credential ID"),
-					okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+					okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 				},
 			},
 			okapi.RouteDefinition{
@@ -259,7 +259,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 				Response: &dto.Response[dto.MessageData]{},
 				Options: []okapi.RouteOption{
 					okapi.DocPathParam("id", "integer", "SMTP credential ID"),
-					okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+					okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 				},
 			},
 		)
@@ -276,7 +276,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request: &handlers.CreateTemplateRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Template]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -298,7 +298,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.Template]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -311,7 +311,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.Template]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -324,7 +324,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -348,7 +348,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[email.SendResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -361,7 +361,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.TemplateExport]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -374,7 +374,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ImportTemplateRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Template]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -387,7 +387,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Description: "Upload an .html file to create a template. CSS from <style> blocks is extracted into a separate stylesheet.",
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Template]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -400,7 +400,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[[]models.TemplateVersion]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -414,7 +414,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocResponse(201, &dto.Response[models.TemplateVersion]{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -429,7 +429,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocPathParam("versionId", "integer", "Version ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -443,7 +443,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocPathParam("versionId", "integer", "Version ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -457,7 +457,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocPathParam("versionId", "integer", "Version ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -471,7 +471,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocPathParam("versionId", "integer", "Version ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -486,8 +486,8 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocPathParam("versionId", "integer", "Version ID"),
 				okapi.DocResponse(201, &dto.Response[models.TemplateLocalization]{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -501,7 +501,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.TemplateLocalization]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("localizationId", "integer", "Localization ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -514,7 +514,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("localizationId", "integer", "Localization ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -530,7 +530,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Template ID"),
 				okapi.DocPathParam("versionId", "integer", "Version ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -543,7 +543,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request: &handlers.CreateLanguageRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Language]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -567,7 +567,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.Language]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Language ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -580,7 +580,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Language ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -593,7 +593,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request: &handlers.CreateStyleSheetRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.StyleSheet]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -615,7 +615,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.StyleSheet]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "StyleSheet ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -628,7 +628,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "StyleSheet ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -662,7 +662,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.SMTPServer]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "SMTP server ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -675,7 +675,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.SMTPServer]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "SMTP server ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -688,7 +688,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "SMTP server ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -700,7 +700,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[dto.MessageData]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "SMTP server ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -734,7 +734,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Webhook ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -756,7 +756,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.CreateDomainRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[handlers.DomainWithRecords]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -777,7 +777,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[handlers.DomainWithRecords]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Domain ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -790,7 +790,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Domain ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -803,7 +803,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[any]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Domain ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -837,7 +837,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request: &handlers.CreateSuppressionRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Suppression]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -871,7 +871,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Request: &handlers.CreateUnsubscribeListRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.UnsubscribeList]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{

@@ -15,7 +15,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jkaninda/go-utils v0.1.4
 	github.com/jkaninda/logger v0.0.5
-	github.com/jkaninda/okapi v1.1.0
+	github.com/jkaninda/okapi v1.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
 	github.com/pquerna/otp v1.5.0
