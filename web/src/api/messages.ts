@@ -3,6 +3,8 @@ import type {
   ApiResponse,
   PaginatedResponse,
   Form,
+  FormAppearance,
+  FormField,
   FormSnippet,
   Message,
   MessageFilterRule,
@@ -42,6 +44,15 @@ export interface FormPayload {
   reply_from?: string
   reply_from_name?: string
   retention_days?: number
+  fields?: FormField[]
+  unknown_fields?: 'keep' | 'drop' | 'reject'
+  error_redirect_url?: string
+  confirmation_message?: string
+  closed_message?: string
+  close_at?: string
+  max_responses?: number
+  allow_another_response?: boolean
+  appearance?: FormAppearance
 }
 
 export interface MessageListParams {

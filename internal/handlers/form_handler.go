@@ -104,6 +104,13 @@ type CreateFormRequest struct {
 		Fields           models.FieldDefs `json:"fields" doc:"Optional schema. Submissions are validated against it and stored with typed data."`
 		UnknownFields    string           `json:"unknown_fields" enum:"keep,drop,reject" doc:"What happens to submitted keys the schema does not declare. Default keep."`
 		ErrorRedirectURL string           `json:"error_redirect_url" doc:"Where a plain HTML form is sent when validation fails, with ?posta_error=validation_failed&field=<key>."`
+
+		ConfirmationMessage  *string                `json:"confirmation_message" doc:"Shown after a successful submission"`
+		ClosedMessage        *string                `json:"closed_message" doc:"Shown while the form is paused, past close_at, or at max_responses"`
+		CloseAt              *string                `json:"close_at" doc:"RFC 3339 time after which the form stops accepting responses; empty clears it"`
+		MaxResponses         *int                   `json:"max_responses" doc:"Stop accepting responses after this many non-spam submissions; 0 means no limit"`
+		AllowAnotherResponse *bool                  `json:"allow_another_response" doc:"Offer a link to submit another response after submitting"`
+		Appearance           *models.FormAppearance `json:"appearance" doc:"Accent colour (#RRGGBB), theme (light, dark, auto) and https header image for the hosted page and widget"`
 	} `json:"body"`
 }
 
@@ -132,11 +139,18 @@ type UpdateFormRequest struct {
 		Fields              *models.FieldDefs `json:"fields" doc:"Replaces the schema. Keys already saved cannot be removed; set archived instead."`
 		UnknownFields       *string           `json:"unknown_fields" doc:"keep, drop or reject"`
 		ErrorRedirectURL    *string           `json:"error_redirect_url"`
-		NotifyMode          *string           `json:"notify_mode" doc:"One of: immediate, hourly, daily, off"`
-		NotifyOnFlagged     *bool             `json:"notify_on_flagged"`
-		ReplyFrom           *string           `json:"reply_from"`
-		ReplyFromName       *string           `json:"reply_from_name"`
-		RetentionDays       *int              `json:"retention_days"`
+
+		ConfirmationMessage  *string                `json:"confirmation_message" doc:"Shown after a successful submission"`
+		ClosedMessage        *string                `json:"closed_message" doc:"Shown while the form is paused, past close_at, or at max_responses"`
+		CloseAt              *string                `json:"close_at" doc:"RFC 3339 time after which the form stops accepting responses; empty clears it"`
+		MaxResponses         *int                   `json:"max_responses" doc:"Stop accepting responses after this many non-spam submissions; 0 means no limit"`
+		AllowAnotherResponse *bool                  `json:"allow_another_response" doc:"Offer a link to submit another response after submitting"`
+		Appearance           *models.FormAppearance `json:"appearance" doc:"Accent colour (#RRGGBB), theme (light, dark, auto) and https header image for the hosted page and widget"`
+		NotifyMode           *string                `json:"notify_mode" doc:"One of: immediate, hourly, daily, off"`
+		NotifyOnFlagged      *bool                  `json:"notify_on_flagged"`
+		ReplyFrom            *string                `json:"reply_from"`
+		ReplyFromName        *string                `json:"reply_from_name"`
+		RetentionDays        *int                   `json:"retention_days"`
 	} `json:"body"`
 }
 
@@ -150,6 +164,7 @@ type FormSnippetResponse struct {
 	HTML      string `json:"html"`
 	Fetch     string `json:"fetch"`
 	Widget    string `json:"widget" doc:"Website widget embed: a placeholder element and the script tag"`
+	ShareURL  string `json:"share_url" doc:"The form's hosted page, a link that works without a website"`
 }
 
 func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
@@ -235,6 +250,12 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		fields = &req.Body.Fields
 	}
 	if err := applySchema(form, fields, optionalString(req.Body.UnknownFields), optionalString(req.Body.ErrorRedirectURL)); err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	b := req.Body
+	if err := applyResponseSettings(form, responseSettings{
+		b.ConfirmationMessage, b.ClosedMessage, b.CloseAt, b.MaxResponses, b.AllowAnotherResponse, b.Appearance,
+	}); err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
 
@@ -391,6 +412,11 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	if err := applySchema(form, b.Fields, b.UnknownFields, b.ErrorRedirectURL); err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
+	if err := applyResponseSettings(form, responseSettings{
+		b.ConfirmationMessage, b.ClosedMessage, b.CloseAt, b.MaxResponses, b.AllowAnotherResponse, b.Appearance,
+	}); err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
 
 	userID := uint(c.GetInt("user_id"))
 	now := time.Now()
@@ -458,6 +484,7 @@ func (h *FormHandler) Snippet(c *okapi.Context, req *FormIDRequest) error {
 		HTML:      buildHTMLSnippet(endpoint, form),
 		Fetch:     buildFetchSnippet(endpoint),
 		Widget:    buildWidgetSnippet(h.apiBaseURL, form),
+		ShareURL:  h.apiBaseURL + "/f/" + url.PathEscape(form.PublicKey),
 	})
 }
 
@@ -641,6 +668,81 @@ func applySchema(form *models.Form, fields *models.FieldDefs, unknownFields, err
 		if strings.EqualFold(f.Key, form.Honeypot()) {
 			return fmt.Errorf("the honeypot field %q is also a schema field", f.Key)
 		}
+	}
+	return nil
+}
+
+const maxFormMessageLength = 500
+
+var accentPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// responseSettings are the optional response and appearance settings of a
+// create or update request. Nil leaves a setting as it is.
+type responseSettings struct {
+	confirmation, closed, closeAt *string
+	maxResponses                  *int
+	allowAnother                  *bool
+	appearance                    *models.FormAppearance
+}
+
+func applyResponseSettings(form *models.Form, s responseSettings) error {
+	if s.confirmation != nil {
+		msg := strings.TrimSpace(*s.confirmation)
+		if len([]rune(msg)) > maxFormMessageLength {
+			return fmt.Errorf("confirmation_message must be at most %d characters", maxFormMessageLength)
+		}
+		form.ConfirmationMessage = msg
+	}
+	if s.closed != nil {
+		msg := strings.TrimSpace(*s.closed)
+		if len([]rune(msg)) > maxFormMessageLength {
+			return fmt.Errorf("closed_message must be at most %d characters", maxFormMessageLength)
+		}
+		form.ClosedMessage = msg
+	}
+	if s.closeAt != nil {
+		raw := strings.TrimSpace(*s.closeAt)
+		if raw == "" {
+			form.CloseAt = nil
+		} else {
+			at, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				return fmt.Errorf("close_at must be an RFC 3339 time, such as 2026-12-31T23:59:00Z")
+			}
+			at = at.UTC()
+			form.CloseAt = &at
+		}
+	}
+	if s.maxResponses != nil {
+		if *s.maxResponses < 0 || *s.maxResponses > 1000000 {
+			return fmt.Errorf("max_responses must be between 0 and 1000000")
+		}
+		form.MaxResponses = *s.maxResponses
+	}
+	if s.allowAnother != nil {
+		form.AllowAnotherResponse = *s.allowAnother
+	}
+	if s.appearance != nil {
+		a := models.FormAppearance{
+			Accent:         strings.TrimSpace(s.appearance.Accent),
+			Theme:          strings.TrimSpace(s.appearance.Theme),
+			HeaderImageURL: strings.TrimSpace(s.appearance.HeaderImageURL),
+		}
+		if a.Accent != "" && !accentPattern.MatchString(a.Accent) {
+			return fmt.Errorf("appearance.accent must be a colour like #9333ea")
+		}
+		switch a.Theme {
+		case "", "light", "dark", "auto":
+		default:
+			return fmt.Errorf("appearance.theme must be light, dark or auto")
+		}
+		if a.HeaderImageURL != "" {
+			u, err := url.Parse(a.HeaderImageURL)
+			if err != nil || u.Scheme != "https" || u.Host == "" || len(a.HeaderImageURL) > 2000 {
+				return fmt.Errorf("appearance.header_image_url must be an https URL")
+			}
+		}
+		form.Appearance = a
 	}
 	return nil
 }

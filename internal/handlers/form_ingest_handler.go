@@ -36,6 +36,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/messages"
+	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/web/widget"
 	"github.com/jkaninda/logger"
@@ -45,6 +46,9 @@ import (
 const genericAcceptMessage = "Thanks — your message has been received."
 
 type FormIngestHandler struct {
+	settings      *settings.Provider
+	abuseFallback string
+
 	svc       *messages.Service
 	blobStore blob.Store
 	limiter   *inbound.IPRateLimiter
@@ -88,7 +92,40 @@ func (h *FormIngestHandler) Nonce(c *okapi.Context) error {
 const (
 	widgetReasonUnavailable      = "unavailable"
 	widgetReasonOriginNotAllowed = "origin_not_allowed"
+	widgetReasonClosed           = "closed"
 )
+
+const defaultClosedMessage = "This form is no longer accepting responses."
+
+func closedMessage(form *models.Form) string {
+	if form.ClosedMessage != "" {
+		return form.ClosedMessage
+	}
+	return defaultClosedMessage
+}
+
+// isSelfOrigin reports whether a request comes from a page Posta serves
+// itself, such as a form's hosted page. Browsers send no Origin on a
+// same-origin GET, so Sec-Fetch-Site stands in for it there.
+func isSelfOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return r.Header.Get("Sec-Fetch-Site") == "same-origin"
+	}
+	u, err := url.Parse(origin)
+	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
+}
+
+// originAllowed applies the form's allowlist to other websites. The
+// allowlist decides which sites may embed a form; Posta's own hosted page is
+// always allowed.
+func originAllowed(r *http.Request, form *models.Form) bool {
+	if isSelfOrigin(r) {
+		return true
+	}
+	allowlist, strict := form.OriginPolicy()
+	return messages.OriginAllowed(allowlist, strict, r.Header.Get("Origin"))
+}
 
 // WidgetConfig is what the website widget needs before it renders a form.
 type WidgetConfig struct {
@@ -99,6 +136,11 @@ type WidgetConfig struct {
 	MinFillSeconds int             `json:"min_fill_seconds,omitempty" doc:"Seconds that must pass between issuing the nonce and submitting; the widget waits them out instead of letting the submission be rejected"`
 	Nonce          *messages.Nonce `json:"nonce,omitempty" doc:"Submission nonce, present only when require_nonce is true"`
 	Fields         []WidgetField   `json:"fields,omitempty" doc:"The form's questions, when it has a schema. Without them the widget shows its built-in contact fields."`
+
+	ClosedMessage        string                 `json:"closed_message,omitempty" doc:"Shown instead of the form when reason is closed"`
+	ConfirmationMessage  string                 `json:"confirmation_message,omitempty" doc:"Shown after a successful submission"`
+	AllowAnotherResponse bool                   `json:"allow_another_response,omitempty"`
+	Appearance           *models.FormAppearance `json:"appearance,omitempty"`
 }
 
 // WidgetField is the public view of a schema field: what a browser needs to
@@ -152,18 +194,26 @@ func widgetFields(defs models.FieldDefs) []WidgetField {
 
 // widgetConfig decides what the widget on origin may see of form. A nil form
 // is an unknown key.
-func widgetConfig(form *models.Form, origin string) WidgetConfig {
-	if form == nil || !form.IsActive() {
+func widgetConfig(form *models.Form, originOK bool, now time.Time) WidgetConfig {
+	if form == nil || form.Status == models.FormStatusArchived {
 		return WidgetConfig{Reason: widgetReasonUnavailable}
 	}
-	allowlist, strict := form.OriginPolicy()
-	if !messages.OriginAllowed(allowlist, strict, origin) {
+	if !originOK {
 		return WidgetConfig{Reason: widgetReasonOriginNotAllowed}
 	}
+	if form.Closed(now) {
+		return WidgetConfig{Reason: widgetReasonClosed, ClosedMessage: closedMessage(form)}
+	}
 	cfg := WidgetConfig{
-		Enabled:       true,
-		HoneypotField: form.Honeypot(),
-		RequireNonce:  form.RequireNonce,
+		Enabled:              true,
+		HoneypotField:        form.Honeypot(),
+		RequireNonce:         form.RequireNonce,
+		ConfirmationMessage:  form.ConfirmationMessage,
+		AllowAnotherResponse: form.AllowAnotherResponse,
+	}
+	if form.Appearance != (models.FormAppearance{}) {
+		appearance := form.Appearance
+		cfg.Appearance = &appearance
 	}
 	if form.RequireNonce {
 		cfg.MinFillSeconds = form.MinFillSeconds
@@ -185,7 +235,7 @@ func (h *FormIngestHandler) WidgetConfig(c *okapi.Context) error {
 	if err != nil {
 		form = nil
 	}
-	cfg := widgetConfig(form, origin)
+	cfg := widgetConfig(form, form != nil && originAllowed(c.Request(), form), time.Now())
 	if !cfg.Enabled {
 		// A disabled answer carries no form data, so any origin may read it.
 		if origin != "" {
@@ -229,16 +279,20 @@ func (h *FormIngestHandler) Submit(c *okapi.Context) error {
 	}
 
 	form, err := h.svc.FindFormByKey(key)
-	if err != nil || !form.IsActive() {
+	if err != nil || form.Status == models.FormStatusArchived {
 		return h.respond(c, nil, nil, http.StatusAccepted, "received", genericAcceptMessage)
 	}
 
 	origin := req.Header.Get("Origin")
-	allowlist, strict := form.OriginPolicy()
-	if !messages.OriginAllowed(allowlist, strict, origin) {
+	if !originAllowed(req, form) {
 		return h.respond(c, form, nil, http.StatusForbidden, "origin_not_allowed", "This origin is not allowed to submit to this form.")
 	}
 	h.applyCORS(c, form)
+	// A closed form says so: the visitor is real enough to have reached it,
+	// and the form's owner chose the message.
+	if form.Closed(time.Now()) {
+		return h.respond(c, form, nil, http.StatusForbidden, "closed", closedMessage(form))
+	}
 
 	fields, attachments, redirect, err := h.parseBody(c, form)
 	if err != nil {

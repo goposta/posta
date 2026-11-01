@@ -63,6 +63,12 @@ func (r *Router) formIngestRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
+			Path:    "/f/{key}",
+			Handler: r.h.formIngest.HostedPage,
+			Options: []okapi.RouteOption{okapi.DocHide()},
+		},
+		{
+			Method:  http.MethodGet,
 			Path:    "/posta-form.js",
 			Handler: r.h.formIngest.FormScript,
 			Group:   r.app.Group("/widget/v1"),

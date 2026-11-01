@@ -57,6 +57,8 @@ func SeedDefaultSettings(repo *repositories.SettingRepository) {
 		{Key: "email_content_visibility", Value: models.SettingFalse, Type: models.SettingTypeBool},
 		{Key: "custom_headers_enabled", Value: models.SettingFalse, Type: models.SettingTypeBool},
 		{Key: "password_reset_enabled", Value: models.SettingFalse, Type: models.SettingTypeBool},
+		{Key: "hosted_forms_enabled", Value: models.SettingTrue, Type: models.SettingTypeBool},
+		{Key: "abuse_report_email", Value: "", Type: models.SettingTypeString},
 	}
 
 	for i := range defaults {

@@ -322,6 +322,11 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 	}
 
 	_ = s.formRepo.RecordSubmission(form.ID, msg.IsSpam(), msg.CreatedAt)
+	// The response limit reads the counts from the cached form; drop it so
+	// the next request sees this submission instead of waiting out the TTL.
+	if form.MaxResponses > 0 && !msg.IsSpam() {
+		s.InvalidateFormKey(form.PublicKey)
+	}
 	if len(verdict.FilterHits) > 0 {
 		_ = s.filterRepo.RecordHits(verdict.FilterHits, time.Now())
 	}
