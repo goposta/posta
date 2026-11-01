@@ -29,7 +29,8 @@ Set these as attributes on the placeholder element:
 
 | Attribute | Default | Notes |
 |---|---|---|
-| `data-fields` | `name,email,message` | Any of `name`, `email`, `phone`, `subject`, `message`. Email and message are always included. |
+| `data-fields` | `name,email,message` | Any of `name`, `email`, `phone`, `subject`, `message`. Email and message are always included. Ignored when the form has a [schema](./fields-and-validation.md): the widget then shows the schema's questions. |
+| `data-value-<key>` | none | Value for a `hidden` schema field, for example `data-value-source="pricing-page"` |
 | `data-title` | none | Heading above the form |
 | `data-description` | none | One line under the heading |
 | `data-button` | `Send message` | |

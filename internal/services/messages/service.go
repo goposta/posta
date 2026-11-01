@@ -201,7 +201,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 	if !form.IsActive() {
 		return nil, ErrFormInactive
 	}
-	if len(req.Fields) > form.FieldLimit() {
+	if DistinctKeys(req.Fields) > form.FieldLimit() {
 		return nil, ErrTooManyFields
 	}
 	if form.WorkspaceID == nil {
@@ -218,11 +218,39 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 		fields = append(fields, models.MessageField{Key: key, Value: Sanitize(f.Value)})
 	}
 
-	extracted := Extract(fields)
+	// Validate only what may be a person: a honeypot or nonce failure is
+	// rejected silently, so it must not learn about the schema from a 422.
+	var (
+		extracted     Extracted
+		data          models.SubmissionData
+		schemaVersion int
+		invalid       []FieldError
+	)
+	if form.HasSchema() && !req.HoneypotHit && !req.NonceFailed {
+		validated, errs := Validate(form, fields)
+		if errs != nil {
+			invalid = errs
+			extracted = Extract(JoinRepeated(fields))
+		} else {
+			fields = validated.Fields
+			data = validated.Data
+			schemaVersion = form.SchemaVersion
+			extracted = ExtractWithRoles(validated.Roles, form.Fields, fields)
+		}
+	} else {
+		fields = JoinRepeated(fields)
+		extracted = Extract(fields)
+	}
 	senderEmail := NormalizeEmail(extracted.Email)
 
+	// Quotas come before the 422, so a rate-limited client cannot probe the
+	// schema; validation comes before dedup and scanning, so invalid input
+	// never counts towards them.
 	if err := s.checkQuotas(ctx, form.ID, *form.WorkspaceID, req.ClientIP, senderEmail, req.HoneypotHit); err != nil {
 		return nil, err
+	}
+	if invalid != nil {
+		return nil, &ValidationError{Fields: invalid}
 	}
 
 	hash := dedupHash(form.ID, senderEmail, extracted.Body)
@@ -271,6 +299,8 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 		Subject:         subject,
 		Body:            extracted.Body,
 		FieldsJSON:      string(fieldsJSON),
+		Data:            data,
+		SchemaVersion:   schemaVersion,
 		AttachmentsJSON: attachmentsJSON,
 		ClientIP:        req.ClientIP,
 		UserAgent:       truncate(req.UserAgent, 400),
