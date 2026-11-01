@@ -45,8 +45,8 @@ func (r *Router) formIngestRoutes() []okapi.RouteDefinition {
 			Description: "Accepts application/json, text/plain holding JSON, application/x-www-form-urlencoded, and multipart/form-data. Always answers 202 for a stored or silently rejected submission so spam clients learn nothing.",
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("key", "string", "Form public key"),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -88,7 +88,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.CreateFormRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Form]{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -109,7 +109,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.Form]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Form ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.Form]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Form ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -133,7 +133,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Summary: "Delete a form",
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Form ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -196,7 +196,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[models.Message]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Message UUID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -207,7 +207,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Summary: "Delete a message",
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Message UUID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -221,8 +221,8 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Message UUID"),
 				okapi.DocResponse(201, &dto.Response[models.MessageReply]{}),
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -298,7 +298,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Request: &handlers.CreateMessageFilterRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.MessageFilter]{}),
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 		{

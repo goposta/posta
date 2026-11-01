@@ -51,8 +51,8 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.CreateWorkspaceRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[handlers.WorkspaceResponse]{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -171,7 +171,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				workspaceHeaderRequired,
 				okapi.DocResponse(201, &dto.Response[handlers.InvitationResponse]{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{

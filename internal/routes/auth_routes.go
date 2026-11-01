@@ -90,8 +90,8 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.LoginRequest{},
 			Response:    &dto.Response[handlers.AuthResponse]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -104,8 +104,8 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.RegisterRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[handlers.AuthResponse]{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(409, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(409, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -127,7 +127,7 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.VerifyEmailRequest{},
 			Response:    &dto.Response[any]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -140,8 +140,8 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ForgotPasswordRequest{},
 			Response:    &dto.Response[any]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -154,7 +154,7 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ResetPasswordRequest{},
 			Response:    &dto.Response[any]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 	}
@@ -199,9 +199,9 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.SendEmailRequest{},
 			Response:    &dto.Response[email.SendResponse]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -214,9 +214,9 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.VerifyAddressRequest{},
 			Response:    &dto.Response[verifier.Result]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -229,9 +229,9 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.SendTemplateEmailRequest{},
 			Response:    &dto.Response[email.SendResponse]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -244,9 +244,9 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.SendBatchEmailRequest{},
 			Response:    &dto.Response[email.BatchResponse]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(429, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(429, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -259,7 +259,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.PreviewEmailRequest{},
 			Response:    &dto.Response[handlers.PreviewEmailResponse]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -272,7 +272,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.EmailStatusResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Email UUID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -285,8 +285,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[email.SendResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Email UUID"),
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 
@@ -301,7 +301,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "List ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -315,7 +315,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "List ID"),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -328,7 +328,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ListSubscribeRequest{},
 			Response:    &dto.Response[handlers.ListSubscribeResponse]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
 			},
 		},
 
@@ -343,8 +343,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ListRequest{},
 			Response:    &dto.PageableResponse[models.Email]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -357,8 +357,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[models.Email]{},
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Email UUID"),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -371,8 +371,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ListRequest{},
 			Response:    &dto.PageableResponse[models.Bounce]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -385,8 +385,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ListRequest{},
 			Response:    &dto.PageableResponse[models.WebhookDelivery]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 
@@ -401,8 +401,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ListRequest{},
 			Response:    &dto.PageableResponse[models.Webhook]{},
 			Options: []okapi.RouteOption{
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -415,8 +415,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.CreateWebhookRequest{},
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Webhook]{}),
-				okapi.DocErrorResponse(401, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
 			},
 		},
 		{
@@ -429,8 +429,8 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "integer", "Webhook ID"),
 				okapi.DocResponse(204, nil),
-				okapi.DocErrorResponse(403, &dto.ErrorResponseBody{}),
-				okapi.DocErrorResponse(404, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
 	}
