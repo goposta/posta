@@ -33,6 +33,8 @@ const settingMeta: Record<string, { label: string; description: string; category
   audit_log_retention_days: { label: 'Audit Log Retention (days)', description: 'How long to keep audit/event logs.', category: 'Retention' },
   webhook_delivery_retention_days: { label: 'Webhook Delivery Retention (days)', description: 'How long to keep webhook delivery logs.', category: 'Retention' },
   email_content_visibility: { label: 'Email Content Visibility', description: 'When enabled, email body content (HTML/Text) is visible in the dashboard. When disabled, content is redacted for privacy.', category: 'Privacy' },
+  hosted_forms_enabled: { label: 'Hosted Form Pages', description: 'Give each form a public share page at /f/{key}. Turn off to stop serving them, for example if forms are abused for phishing.', category: 'Security' },
+  abuse_report_email: { label: 'Abuse Report Email', description: 'Where the "Report abuse" link on hosted form pages sends reports. Empty uses the admin email.', category: 'Security' },
   custom_headers_enabled: { label: 'Custom Email Headers', description: 'Allow users to include custom headers when sending emails. When disabled, custom headers are silently ignored.', category: 'Security' },
 }
 

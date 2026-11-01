@@ -162,6 +162,30 @@ func (d *SubmissionData) Scan(value any) error {
 	return json.Unmarshal(raw, d)
 }
 
+// FormAppearance is a form's saved look, used by its hosted page and as the
+// widget's default. Attributes on an embed take precedence.
+type FormAppearance struct {
+	Accent         string `json:"accent,omitempty"`           // #RRGGBB
+	Theme          string `json:"theme,omitempty"`            // light, dark or auto
+	HeaderImageURL string `json:"header_image_url,omitempty"` // https only
+}
+
+func (a FormAppearance) Value() (driver.Value, error) {
+	if a == (FormAppearance{}) {
+		return nil, nil
+	}
+	return json.Marshal(a)
+}
+
+func (a *FormAppearance) Scan(value any) error {
+	raw, err := jsonBytes(value)
+	if err != nil || raw == nil {
+		*a = FormAppearance{}
+		return err
+	}
+	return json.Unmarshal(raw, a)
+}
+
 func jsonBytes(value any) ([]byte, error) {
 	switch v := value.(type) {
 	case nil:

@@ -24,6 +24,7 @@
       required: "This field is required.",
       choose: "Choose…",
       button: "Send message",
+      another: "Submit another response",
       sending: "Sending…",
       success: "Thanks — your message has been received.",
       loading: "Loading…",
@@ -43,6 +44,7 @@
       required: "Ce champ est obligatoire.",
       choose: "Choisir…",
       button: "Envoyer",
+      another: "Envoyer une autre réponse",
       sending: "Envoi…",
       success: "Merci, votre message a bien été reçu.",
       loading: "Chargement…",
@@ -118,6 +120,7 @@
     ".pf .st:empty{display:none}" +
     ".pf .st.err{color:var(--err)}" +
     ".pf .done{margin:4px 0;color:var(--ok);font-weight:600}" +
+    ".pf button.again{margin-top:10px;background:none;color:var(--a);padding:0;min-height:0;text-decoration:underline}" +
     ".pf .brand{display:flex;justify-content:flex-end;margin-top:16px;padding-top:10px;border-top:1px solid var(--bd)}" +
     ".pf .brand a{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--mut);text-decoration:none}" +
     ".pf .brand a:hover{color:var(--fg)}" +
@@ -174,6 +177,15 @@
     return node;
   }
 
+  function safeList(raw) {
+    try {
+      var v = JSON.parse(raw);
+      return Array.isArray(v) ? v.map(String) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   function emit(el, name, detail) {
     el.dispatchEvent(new CustomEvent("posta:" + name, { bubbles: true, composed: true, detail: detail }));
   }
@@ -204,10 +216,17 @@
     style.textContent = STYLE;
     root.appendChild(style);
 
-    var theme = el.getAttribute("data-theme");
-    var wrap = h("div", { class: "pf", "data-theme": theme === "dark" || theme === "auto" ? theme : "light", part: "form" });
-    var accent = el.getAttribute("data-accent");
-    if (accent && window.CSS && CSS.supports && CSS.supports("color", accent)) wrap.style.setProperty("--pf-accent", accent);
+    var wrap = h("div", { class: "pf", part: "form" });
+    // The form's saved appearance is the default; the embed's own attributes
+    // win, so one form can look different on different pages.
+    function applyLook(appearance) {
+      var a = appearance || {};
+      var theme = el.getAttribute("data-theme") || a.theme;
+      wrap.setAttribute("data-theme", theme === "dark" || theme === "auto" ? theme : "light");
+      var accent = el.getAttribute("data-accent") || a.accent;
+      if (accent && window.CSS && CSS.supports && CSS.supports("color", accent)) wrap.style.setProperty("--pf-accent", accent);
+    }
+    applyLook(null);
     root.appendChild(wrap);
 
     var body = h("div");
@@ -223,35 +242,40 @@
     brand.appendChild(link);
     wrap.appendChild(brand);
 
-    var loading = h("p", { class: "st" }, t.loading);
-    body.appendChild(loading);
-
-    function showNotice(text) {
+    function showNotice(text, isError) {
       body.textContent = "";
-      body.appendChild(h("p", { class: "st err", role: "status" }, text));
+      body.appendChild(h("p", { class: isError === false ? "st" : "st err", role: "status" }, text));
     }
 
-    getJSON(base + "/" + encodeURIComponent(key) + "/config").then(
-      function (res) {
-        var cfg = res.body && res.body.data;
-        if (!cfg || !cfg.enabled) {
-          var reason = (cfg && cfg.reason) || "unavailable";
-          if (reason === "origin_not_allowed") {
-            console.warn("[posta] " + location.origin + " is not in this form's allowed origins. Add it on the form's Setup tab in Posta.");
-            showNotice(t.originDenied);
-          } else {
-            showNotice(t.unavailable);
+    function load() {
+      body.textContent = "";
+      body.appendChild(h("p", { class: "st" }, t.loading));
+      getJSON(base + "/" + encodeURIComponent(key) + "/config").then(
+        function (res) {
+          var cfg = res.body && res.body.data;
+          if (!cfg || !cfg.enabled) {
+            var reason = (cfg && cfg.reason) || "unavailable";
+            if (reason === "origin_not_allowed") {
+              console.warn("[posta] " + location.origin + " is not in this form's allowed origins. Add it on the form's Setup tab in Posta.");
+              showNotice(t.originDenied);
+            } else if (reason === "closed") {
+              showNotice(cfg.closed_message || t.unavailable, false);
+            } else {
+              showNotice(t.unavailable);
+            }
+            emit(el, "error", { key: key, status: res.status, code: reason, message: reason });
+            return;
           }
-          emit(el, "error", { key: key, status: res.status, code: reason, message: reason });
-          return;
+          applyLook(cfg.appearance);
+          render(cfg, cfg.fields && cfg.fields.length ? cfg.fields : fieldList(el, t));
+        },
+        function () {
+          showNotice(t.network);
+          emit(el, "error", { key: key, status: 0, code: "network", message: t.network });
         }
-        render(cfg, cfg.fields && cfg.fields.length ? cfg.fields : fieldList(el, t));
-      },
-      function () {
-        showNotice(t.network);
-        emit(el, "error", { key: key, status: 0, code: "network", message: t.network });
-      }
-    );
+      );
+    }
+    load();
 
     // buildField renders one field and returns how to read it, focus it and
     // show an error on it.
@@ -260,6 +284,9 @@
       var helpId = fid + "-help";
       var type = f.type || "text";
       var preset = el.getAttribute("data-value-" + f.key) || "";
+      // A multi-value preset is a JSON array (from a hosted page link) or a
+      // comma-separated list (written by hand).
+      var presets = preset.charAt(0) === "[" ? safeList(preset) : preset ? preset.split(",").map(function (v) { return v.trim(); }) : [];
 
       if (type === "hidden") {
         var hidden = h("input", { type: "hidden", name: f.key, value: preset });
@@ -293,6 +320,7 @@
       } else if (type === "checkbox") {
         focusEl = h("input", { id: fid, type: "checkbox", name: f.key, required: !!f.required, "aria-describedby": describedBy });
         var tick = h("label", { class: "tick", for: fid });
+        focusEl.checked = /^(true|1|on|yes)$/i.test(preset);
         tick.appendChild(focusEl);
         tick.appendChild(h("span", null, f.label || f.key));
         if (help) row.insertBefore(tick, help);
@@ -303,12 +331,16 @@
         focusEl = h("select", { id: fid, name: f.key, required: !!f.required, "aria-describedby": describedBy });
         focusEl.appendChild(h("option", { value: "" }, t.choose));
         (f.options || []).forEach(function (o) { focusEl.appendChild(h("option", { value: o.value }, o.label || o.value)); });
+        focusEl.value = preset;
+        if (focusEl.value !== preset) focusEl.value = "";
         row.appendChild(focusEl);
         get = function () { return focusEl.value; };
         marked = [focusEl];
       } else if (type === "multiselect" && !grouped) {
         focusEl = h("select", { id: fid, name: f.key, multiple: true, size: Math.min((f.options || []).length, 6), "aria-describedby": describedBy });
-        (f.options || []).forEach(function (o) { focusEl.appendChild(h("option", { value: o.value }, o.label || o.value)); });
+        (f.options || []).forEach(function (o) {
+          focusEl.appendChild(h("option", { value: o.value, selected: presets.indexOf(o.value) >= 0 }, o.label || o.value));
+        });
         row.appendChild(focusEl);
         get = function () {
           return Array.prototype.filter.call(focusEl.options, function (o) { return o.selected; }).map(function (o) { return o.value; });
@@ -330,6 +362,7 @@
         var boxes = choices.map(function (ch, i) {
           var cid = fid + "-" + i;
           var box = h("input", { id: cid, type: multi ? "checkbox" : "radio", name: f.key, value: ch.value, required: !multi && !!f.required });
+          box.checked = multi ? presets.indexOf(ch.value) >= 0 : ch.value === preset;
           var item = h("label", { class: "opt-item", for: cid, title: ch.title || null });
           item.appendChild(box);
           item.appendChild(h("span", type === "rating" ? { "aria-hidden": "true" } : null, ch.label));
@@ -339,11 +372,13 @@
         });
         if (type === "scale" && f.max_label) list.appendChild(h("span", { class: "end" }, f.max_label));
         if (type === "rating") {
-          list.addEventListener("change", function () {
+          var paint = function () {
             var picked = 0;
             boxes.forEach(function (b, i) { if (b.checked) picked = i + 1; });
             boxes.forEach(function (b, i) { b.parentNode.classList.toggle("on", i < picked); });
-          });
+          };
+          list.addEventListener("change", paint);
+          paint();
         }
         row.appendChild(list);
         focusEl = boxes[0];
@@ -512,7 +547,13 @@
               var data = (res.body && res.body.data) || {};
               if (res.status >= 200 && res.status < 300) {
                 body.textContent = "";
-                body.appendChild(h("p", { class: "done", role: "status" }, el.getAttribute("data-success") || data.message || t.success));
+                var done = el.getAttribute("data-success") || cfg.confirmation_message || data.message || t.success;
+                body.appendChild(h("p", { class: "done", role: "status" }, done));
+                if (cfg.allow_another_response) {
+                  var again = h("button", { type: "button", class: "again" }, t.another);
+                  again.addEventListener("click", load);
+                  body.appendChild(again);
+                }
                 emit(el, "success", { key: key, id: data.id || null });
                 return;
               }

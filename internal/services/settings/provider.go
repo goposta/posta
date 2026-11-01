@@ -121,7 +121,14 @@ func (p *Provider) RequireEmailVerification() bool {
 func (p *Provider) RequireDomainVerification() bool {
 	return p.GetBool("require_domain_verification", true)
 }
-func (p *Provider) TwoFactorRequired() bool     { return p.GetBool("two_factor_required", false) }
+func (p *Provider) TwoFactorRequired() bool { return p.GetBool("two_factor_required", false) }
+
+// HostedFormsEnabled reports whether forms get a public share page at /f/{key}.
+func (p *Provider) HostedFormsEnabled() bool { return p.GetBool("hosted_forms_enabled", true) }
+
+// AbuseReportEmail is the contact behind the "Report abuse" link on hosted
+// form pages. Empty falls back to the admin email.
+func (p *Provider) AbuseReportEmail() string    { return p.GetString("abuse_report_email", "") }
 func (p *Provider) DefaultRateLimitHourly() int { return p.GetInt("default_rate_limit_hourly", 100) }
 func (p *Provider) DefaultRateLimitDaily() int  { return p.GetInt("default_rate_limit_daily", 1000) }
 func (p *Provider) MaxBatchSize() int           { return p.GetInt("max_batch_size", 100) }

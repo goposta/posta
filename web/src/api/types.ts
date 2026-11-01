@@ -1267,11 +1267,53 @@ export interface Form {
   reply_from: string
   reply_from_name: string
   retention_days: number
+  fields?: FormField[] | null
+  schema_version: number
+  unknown_fields: 'keep' | 'drop' | 'reject'
+  error_redirect_url: string
+  confirmation_message: string
+  closed_message: string
+  close_at?: string | null
+  max_responses: number
+  allow_another_response: boolean
+  appearance?: FormAppearance | null
   message_count: number
   spam_count: number
   last_message_at?: string | null
   created_at: string
   updated_at?: string | null
+}
+
+export interface FormFieldOption {
+  value: string
+  label?: string
+}
+
+export interface FormField {
+  key: string
+  label: string
+  type: string
+  required?: boolean
+  role?: string
+  pii?: boolean
+  min_len?: number
+  max_len?: number
+  min?: number
+  max?: number
+  pattern?: string
+  options?: FormFieldOption[]
+  display?: string
+  min_label?: string
+  max_label?: string
+  placeholder?: string
+  help?: string
+  archived?: boolean
+}
+
+export interface FormAppearance {
+  accent?: string
+  theme?: '' | 'light' | 'dark' | 'auto'
+  header_image_url?: string
 }
 
 export interface MessageField {
@@ -1359,4 +1401,5 @@ export interface FormSnippet {
   html: string
   fetch: string
   widget: string
+  share_url: string
 }

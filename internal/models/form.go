@@ -72,6 +72,15 @@ type Form struct {
 	UnknownFields    UnknownFieldsPolicy `json:"unknown_fields" gorm:"type:varchar(8);default:'keep';not null"`
 	ErrorRedirectURL string              `json:"error_redirect_url"`
 
+	// Responses: what visitors see after submitting, and when the form stops
+	// accepting submissions. A paused form is closed too.
+	ConfirmationMessage  string         `json:"confirmation_message"`
+	ClosedMessage        string         `json:"closed_message"`
+	CloseAt              *time.Time     `json:"close_at,omitempty"`
+	MaxResponses         int            `json:"max_responses" gorm:"default:0;not null"`
+	AllowAnotherResponse bool           `json:"allow_another_response" gorm:"default:false;not null"`
+	Appearance           FormAppearance `json:"appearance" gorm:"type:jsonb"`
+
 	HoneypotField  string `json:"honeypot_field" gorm:"default:'_gotcha';not null"`
 	RequireNonce   bool   `json:"require_nonce" gorm:"default:false;not null"`
 	MinFillSeconds int    `json:"min_fill_seconds" gorm:"default:3;not null"`
@@ -103,6 +112,19 @@ type Form struct {
 }
 
 func (f *Form) IsActive() bool { return f.Status == FormStatusActive }
+
+// Closed reports whether the form has stopped accepting submissions: it is
+// paused, its close time has passed, or it has reached its response limit.
+// Spam does not count towards the limit.
+func (f *Form) Closed(now time.Time) bool {
+	if f.Status == FormStatusPaused {
+		return true
+	}
+	if f.CloseAt != nil && !now.Before(*f.CloseAt) {
+		return true
+	}
+	return f.MaxResponses > 0 && f.MessageCount-f.SpamCount >= int64(f.MaxResponses)
+}
 
 // HasSchema reports whether submissions are validated against Fields.
 func (f *Form) HasSchema() bool { return f != nil && len(f.Fields.Active()) > 0 }

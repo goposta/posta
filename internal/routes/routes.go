@@ -477,6 +477,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			inbound.NewIPRateLimiter(cfg.MessagesIPRateLimit, time.Duration(cfg.MessagesIPRateWindow)*time.Second),
 			cfg.MessagesMaxAttachSize,
 		)
+		r.h.formIngest.SetHostedPages(settingsProvider, cfg.AdminEmail)
 		if blobStore != nil {
 			r.h.message.SetBlobStore(blobStore)
 			r.h.formIngest.SetBlobStore(blobStore)
