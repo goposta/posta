@@ -44,8 +44,9 @@ func TestPrefillAttrs(t *testing.T) {
 		"unknown": {"x"},
 		"note":    {strings.Repeat("x", maxPrefillLength+1)},
 	}
-	var got []string
-	for _, a := range prefillAttrs(form, query) {
+	attrs := prefillAttrs(form, query)
+	got := make([]string, 0, len(attrs))
+	for _, a := range attrs {
 		got = append(got, string(a))
 	}
 	want := []string{`data-value-plan="pro"`, `data-value-topics="[&#34;a, b&#34;,&#34;c&#34;]"`}

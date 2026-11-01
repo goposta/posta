@@ -279,7 +279,7 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 
 	// Parse optional column mapping: {"0":"email","1":"name","2":"custom_fields.company"}
 	mappingStr := c.Request().FormValue("column_mapping")
-	columnMap := map[int]string{0: "email", 1: "name"} // defaults
+	columnMap := map[int]string{0: fieldEmail, 1: "name"} // defaults
 	if mappingStr != "" {
 		var raw map[string]string
 		if err := json.Unmarshal([]byte(mappingStr), &raw); err == nil {
@@ -328,7 +328,7 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 			}
 			val := strings.TrimSpace(record[idx])
 			switch field {
-			case "email":
+			case fieldEmail:
 				s.Email = strings.ToLower(val)
 			case "name":
 				s.Name = val

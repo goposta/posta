@@ -35,9 +35,13 @@ import (
 
 const maxPrefillLength = 2000
 
+// fieldEmail is the key of an email field: the widget's built-in field and
+// the email column of a subscriber import.
+const fieldEmail = "email"
+
 // builtinPrefillKeys are the fields the widget shows for a form without a
 // schema, so its share link can prefill them too.
-var builtinPrefillKeys = []string{"name", "email", "phone", "subject", "message"}
+var builtinPrefillKeys = []string{"name", fieldEmail, "phone", "subject", "message"}
 
 // hostedPageCSP keeps a hosted page to Posta's own script and API. Inline
 // styles are allowed for the page and the widget's shadow root; images may
