@@ -73,8 +73,8 @@ func TestValidateAcceptsAndCoerces(t *testing.T) {
 	if !reflect.DeepEqual(got.Data, want) {
 		t.Errorf("data:\n got %#v\nwant %#v", got.Data, want)
 	}
-	display := map[string]string{}
-	keys := []string{}
+	display := make(map[string]string, len(got.Fields))
+	keys := make([]string, 0, len(got.Fields))
 	for _, f := range got.Fields {
 		display[f.Key] = f.Value
 		keys = append(keys, f.Key)
@@ -140,7 +140,7 @@ func TestValidateUnknownFields(t *testing.T) {
 	}
 	submitted := fieldsOf("email", "a@example.com", "old", "legacy", "extra", "x")
 	keys := func(fs []models.MessageField) string {
-		var k []string
+		k := make([]string, 0, len(fs))
 		for _, f := range fs {
 			k = append(k, f.Key)
 		}
