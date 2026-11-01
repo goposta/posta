@@ -389,8 +389,8 @@ func (s *Service) resolveUnsubscribe(scope repositories.ResourceScope, req *Send
 }
 
 type SendTemplateRequest struct {
-	TemplateID   *uint               `json:"template_id,omitempty" doc:"Template ID (preferred, uses primary key index)"`
-	Template     string              `json:"template" doc:"Template name (fallback when template_id is not provided)"`
+	Template     TemplateRef         `json:"template" doc:"Template name or ID. A name is matched first; a value that is all digits and matches no name is looked up as an ID."`
+	TemplateID   *uint               `json:"template_id,omitempty" deprecated:"true" doc:"Deprecated: pass the ID in template instead. Used only when template is empty."`
 	Language     string              `json:"language" doc:"Language code for template localization (BCP 47 / ISO 639-1, e.g. en, fr, fr-CA). Falls back to base language, the template default, then en."`
 	From         string              `json:"from" doc:"Sender address. Accepts a plain address (hello@example.com) or RFC 5322 display-name format (Acme <hello@example.com>)."`
 	To           []string            `json:"to" required:"true" minItems:"1" doc:"Recipient addresses. Each accepts a plain address or RFC 5322 display-name format (e.g. Jonas <jonas@example.com>)."`
@@ -405,8 +405,8 @@ type SendResponse struct {
 }
 
 type BatchRequest struct {
-	TemplateID  *uint            `json:"template_id,omitempty" doc:"Template ID (preferred, uses primary key index)"`
-	Template    string           `json:"template" doc:"Template name (fallback when template_id is not provided)"`
+	Template    TemplateRef      `json:"template" doc:"Template name or ID. A name is matched first; a value that is all digits and matches no name is looked up as an ID."`
+	TemplateID  *uint            `json:"template_id,omitempty" deprecated:"true" doc:"Deprecated: pass the ID in template instead. Used only when template is empty."`
 	Language    string           `json:"language" doc:"Default language for the batch (BCP 47 / ISO 639-1, e.g. en, fr, fr-CA). Each recipient can override via recipients[].language."`
 	From        string           `json:"from" doc:"Sender address. Accepts a plain address (hello@example.com) or RFC 5322 display-name format (Acme <hello@example.com>)."`
 	Recipients  []BatchRecipient `json:"recipients" required:"true" minItems:"1"`
@@ -607,7 +607,7 @@ func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceI
 		Valid:           true,
 		From:            from,
 		To:              activeRecipients,
-		Subject:         req.Template,
+		Subject:         req.Template.String(),
 		Recipients:      len(activeRecipients),
 		SuppressedCount: suppressedCount,
 	}, nil
@@ -1028,7 +1028,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 					APIKeyID:     apiKeyPtr,
 					Sender:       from,
 					Recipients:   []string{recipient.Email},
-					Subject:      req.Template,
+					Subject:      req.Template.String(),
 					TemplateName: tmpl.Name,
 					Status:       models.EmailStatusSuppressed,
 					ErrorMessage: errRecipientSuppressed,
@@ -1201,8 +1201,8 @@ func (s *Service) RetryEmail(emailUUID string, userID uint, workspaceID *uint) (
 
 // RenderTemplate resolves a template by ID or name and renders it with the given data,
 // returning the rendered subject, HTML, and text without sending.
-func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uint, templateName, language string, data map[string]any) (*RenderedTemplate, error) {
-	tmpl, err := s.findTemplate(userID, workspaceID, templateID, templateName)
+func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uint, ref TemplateRef, language string, data map[string]any) (*RenderedTemplate, error) {
+	tmpl, err := s.findTemplate(userID, workspaceID, templateID, ref)
 	if err != nil {
 		return nil, fmt.Errorf("template not found: %w", err)
 	}
@@ -1219,37 +1219,48 @@ func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uin
 	return rendered, nil
 }
 
-// findTemplate looks up a template by ID or name. When templateID is provided
-// it performs a fast primary-key lookup and verifies the caller owns the
-// resource. Otherwise it falls back to a name-based search (workspace first,
-// then personal).
-func (s *Service) findTemplate(userID uint, workspaceID *uint, templateID *uint, name string) (*models.Template, error) {
-	if templateID != nil && *templateID != 0 {
-		tmpl, err := s.templateRepo.FindByID(*templateID)
-		if err != nil {
-			return nil, err
+// findTemplate looks up the template ref names, or the deprecated templateID
+// when ref is empty. A ref is matched by name in the workspace first; one that
+// is all digits and matches no name is then looked up as an ID, so a template
+// named "2024" still wins over the template whose ID is 2024.
+func (s *Service) findTemplate(userID uint, workspaceID *uint, templateID *uint, ref TemplateRef) (*models.Template, error) {
+	if ref == "" {
+		if templateID != nil && *templateID != 0 {
+			return s.findTemplateByID(userID, workspaceID, *templateID)
 		}
-		// Verify ownership: must belong to the same user/workspace.
-		if workspaceID != nil {
-			if tmpl.WorkspaceID == nil || *tmpl.WorkspaceID != *workspaceID {
-				return nil, fmt.Errorf("template not found")
-			}
-		} else if tmpl.UserID != userID || tmpl.WorkspaceID != nil {
+		return nil, fmt.Errorf("template is required")
+	}
+
+	if workspaceID != nil {
+		if tmpl, err := s.templateRepo.FindByWorkspaceName(*workspaceID, ref.String()); err == nil {
+			return tmpl, nil
+		}
+	}
+	if id, ok := ref.ID(); ok {
+		if tmpl, err := s.findTemplateByID(userID, workspaceID, id); err == nil {
+			return tmpl, nil
+		}
+	}
+	if workspaceID == nil {
+		return nil, fmt.Errorf("template %q not found: no active workspace", ref)
+	}
+	return nil, fmt.Errorf("template %q not found", ref)
+}
+
+// findTemplateByID performs a primary-key lookup and verifies the caller owns
+// the template: it must belong to the same workspace, or be the user's own
+// personal template outside a workspace.
+func (s *Service) findTemplateByID(userID uint, workspaceID *uint, id uint) (*models.Template, error) {
+	tmpl, err := s.templateRepo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if workspaceID != nil {
+		if tmpl.WorkspaceID == nil || *tmpl.WorkspaceID != *workspaceID {
 			return nil, fmt.Errorf("template not found")
 		}
-		return tmpl, nil
-	}
-
-	if name == "" {
-		return nil, fmt.Errorf("template_id or template name is required")
-	}
-
-	if workspaceID == nil {
-		return nil, fmt.Errorf("template %q not found: no active workspace", name)
-	}
-	tmpl, err := s.templateRepo.FindByWorkspaceName(*workspaceID, name)
-	if err != nil {
-		return nil, fmt.Errorf("template %q not found", name)
+	} else if tmpl.UserID != userID || tmpl.WorkspaceID != nil {
+		return nil, fmt.Errorf("template not found")
 	}
 	return tmpl, nil
 }

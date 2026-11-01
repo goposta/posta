@@ -86,10 +86,10 @@ func (h *EmailHandler) redactContent() bool {
 
 type PreviewEmailRequest struct {
 	Body struct {
-		TemplateID   *uint          `json:"template_id,omitempty" doc:"Template ID (preferred)"`
-		Template     string         `json:"template" doc:"Template name (fallback when template_id is not provided)"`
-		Language     string         `json:"language" doc:"Language code for localization"`
-		TemplateData map[string]any `json:"template_data" doc:"Variables to inject into the template"`
+		Template     email.TemplateRef `json:"template" doc:"Template name or ID. A name is matched first; a value that is all digits and matches no name is looked up as an ID."`
+		TemplateID   *uint             `json:"template_id,omitempty" deprecated:"true" doc:"Deprecated: pass the ID in template instead. Used only when template is empty."`
+		Language     string            `json:"language" doc:"Language code for localization"`
+		TemplateData map[string]any    `json:"template_data" doc:"Variables to inject into the template"`
 	} `json:"body"`
 }
 
