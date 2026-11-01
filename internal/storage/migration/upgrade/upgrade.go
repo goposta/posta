@@ -76,6 +76,13 @@ func runLocked(ctx context.Context, db *gorm.DB, binaryVersion string, opts Opti
 	if err != nil {
 		return fmt.Errorf("upgrade: read stored version: %w", err)
 	}
+	if fresh {
+		applied, err := loadAppliedIDs(db)
+		if err != nil {
+			return fmt.Errorf("upgrade: load applied steps: %w", err)
+		}
+		fresh = len(applied) == 0
+	}
 
 	switch {
 	case fresh:
