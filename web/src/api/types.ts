@@ -1358,4 +1358,5 @@ export interface FormSnippet {
   public_key: string
   html: string
   fetch: string
+  widget: string
 }

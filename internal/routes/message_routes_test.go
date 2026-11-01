@@ -22,8 +22,12 @@ package routes
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"testing/fstest"
 
+	"github.com/goposta/posta/internal/config"
+	"github.com/goposta/posta/internal/handlers"
 	"github.com/jkaninda/okapi"
 )
 
@@ -89,5 +93,28 @@ func TestFormIngestPostIsNotAPreflightedRequest(t *testing.T) {
 		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://customer.test" {
 			t.Fatalf("content type %q: allow-origin = %q", contentType, got)
 		}
+	}
+}
+
+// The widget script lives outside /api/v1 and must not fall through to the
+// dashboard's SPA fallback, which serves index.html for unknown paths.
+func TestFormWidgetScriptIsNotShadowedBySPA(t *testing.T) {
+	o := okapi.NewTestServer(t)
+	r := &Router{app: o.Okapi, cfg: &config.Config{}, v1: o.Group("/api/v1")}
+	r.h.formIngest = handlers.NewFormIngestHandler(nil, nil, 0)
+	o.Register(r.formIngestRoutes()...)
+	o.WebFS("/", fstest.MapFS{"dist/index.html": {Data: []byte("<!doctype html><title>SPA</title>")}}, okapi.WebConfig{Root: "dist"})
+
+	rec := httptest.NewRecorder()
+	o.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/widget/v1/posta-form.js", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/javascript") {
+		t.Fatalf("content type = %q, want text/javascript", ct)
+	}
+	if !strings.Contains(rec.Body.String(), "PostaForms") {
+		t.Fatalf("served the SPA instead of the widget: %.80q", rec.Body.String())
 	}
 }

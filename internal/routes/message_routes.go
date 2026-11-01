@@ -51,6 +51,25 @@ func (r *Router) formIngestRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
+			Path:        "/{key}/config",
+			Handler:     r.h.formIngest.WidgetConfig,
+			Group:       ingestGroup,
+			Summary:     "Get the website widget config",
+			Description: "What the website form widget needs before rendering: whether the form is usable from the calling origin, its honeypot field, and a nonce when the form requires one. Always answers 200; a form that cannot be used has enabled=false and a reason.",
+			Response:    &dto.Response[handlers.WidgetConfig]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("key", "string", "Form public key"),
+			},
+		},
+		{
+			Method:  http.MethodGet,
+			Path:    "/posta-form.js",
+			Handler: r.h.formIngest.FormScript,
+			Group:   r.app.Group("/widget/v1"),
+			Options: []okapi.RouteOption{okapi.DocHide()},
+		},
+		{
+			Method:      http.MethodGet,
 			Path:        "/{key}/nonce",
 			Handler:     r.h.formIngest.Nonce,
 			Group:       ingestGroup,
