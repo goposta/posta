@@ -22,6 +22,7 @@ package handlers
 import (
 	"crypto/rand"
 	"fmt"
+	"html"
 	"math/big"
 	"net/mail"
 	"net/url"
@@ -139,6 +140,7 @@ type FormSnippetResponse struct {
 	PublicKey string `json:"public_key"`
 	HTML      string `json:"html"`
 	Fetch     string `json:"fetch"`
+	Widget    string `json:"widget" doc:"Website widget embed: a placeholder element and the script tag"`
 }
 
 func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
@@ -435,6 +437,7 @@ func (h *FormHandler) Snippet(c *okapi.Context, req *FormIDRequest) error {
 		PublicKey: form.PublicKey,
 		HTML:      buildHTMLSnippet(endpoint, form),
 		Fetch:     buildFetchSnippet(endpoint),
+		Widget:    buildWidgetSnippet(h.apiBaseURL, form),
 	})
 }
 
@@ -601,6 +604,11 @@ func buildHTMLSnippet(endpoint string, form *models.Form) string {
 
   <button type="submit">Send</button>
 </form>`, endpoint, form.Honeypot())
+}
+
+func buildWidgetSnippet(apiBaseURL string, form *models.Form) string {
+	return fmt.Sprintf(`<div data-posta-form="%s"></div>
+<script src="%s/widget/v1/posta-form.js" async></script>`, html.EscapeString(form.PublicKey), html.EscapeString(apiBaseURL))
 }
 
 func buildFetchSnippet(endpoint string) string {

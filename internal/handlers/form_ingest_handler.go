@@ -31,11 +31,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/inbound"
 	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/storage/blob"
+	"github.com/goposta/posta/internal/web/widget"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 )
@@ -79,6 +81,89 @@ func (h *FormIngestHandler) Nonce(c *okapi.Context) error {
 		return c.AbortInternalServerError("failed to issue nonce")
 	}
 	return ok(c, nonce)
+}
+
+// Widget config reasons. "unavailable" covers unknown, paused and archived
+// forms alike, so the endpoint does not reveal which keys exist.
+const (
+	widgetReasonUnavailable      = "unavailable"
+	widgetReasonOriginNotAllowed = "origin_not_allowed"
+)
+
+// WidgetConfig is what the website widget needs before it renders a form.
+type WidgetConfig struct {
+	Enabled        bool            `json:"enabled"`
+	Reason         string          `json:"reason,omitempty" doc:"Why the form cannot be used here: unavailable or origin_not_allowed"`
+	HoneypotField  string          `json:"honeypot_field,omitempty"`
+	RequireNonce   bool            `json:"require_nonce,omitempty"`
+	MinFillSeconds int             `json:"min_fill_seconds,omitempty" doc:"Seconds that must pass between issuing the nonce and submitting; the widget waits them out instead of letting the submission be rejected"`
+	Nonce          *messages.Nonce `json:"nonce,omitempty" doc:"Submission nonce, present only when require_nonce is true"`
+}
+
+// widgetConfig decides what the widget on origin may see of form. A nil form
+// is an unknown key.
+func widgetConfig(form *models.Form, origin string) WidgetConfig {
+	if form == nil || !form.IsActive() {
+		return WidgetConfig{Reason: widgetReasonUnavailable}
+	}
+	allowlist, strict := form.OriginPolicy()
+	if !messages.OriginAllowed(allowlist, strict, origin) {
+		return WidgetConfig{Reason: widgetReasonOriginNotAllowed}
+	}
+	cfg := WidgetConfig{
+		Enabled:       true,
+		HoneypotField: form.Honeypot(),
+		RequireNonce:  form.RequireNonce,
+	}
+	if form.RequireNonce {
+		cfg.MinFillSeconds = form.MinFillSeconds
+	}
+	return cfg
+}
+
+// WidgetConfig answers 200 in every case so the widget can always read why a
+// form is not usable.
+func (h *FormIngestHandler) WidgetConfig(c *okapi.Context) error {
+	key := c.Param("key")
+	origin := c.Request().Header.Get("Origin")
+	c.ResponseWriter().Header().Set("Cache-Control", "no-store")
+
+	form, err := h.svc.FindFormByKey(key)
+	if err != nil {
+		form = nil
+	}
+	cfg := widgetConfig(form, origin)
+	if !cfg.Enabled {
+		// A disabled answer carries no form data, so any origin may read it.
+		if origin != "" {
+			w := c.ResponseWriter()
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		}
+		return ok(c, cfg)
+	}
+	h.applyCORS(c, form)
+
+	if cfg.RequireNonce {
+		nonce, err := h.svc.IssueNonce(c.Request().Context(), key)
+		if err != nil {
+			return c.AbortInternalServerError("failed to issue nonce")
+		}
+		cfg.Nonce = nonce
+	}
+	return ok(c, cfg)
+}
+
+// FormScript serves the website form widget.
+func (h *FormIngestHandler) FormScript(c *okapi.Context) error {
+	w := c.ResponseWriter()
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("ETag", widget.FormScriptETag)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+	http.ServeContent(w, c.Request(), "posta-form.js", time.Time{}, bytes.NewReader(widget.FormScript))
+	return nil
 }
 
 func (h *FormIngestHandler) Submit(c *okapi.Context) error {

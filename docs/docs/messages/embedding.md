@@ -6,7 +6,89 @@ description: Put a Posta form on your website with plain HTML or JavaScript
 
 # Embedding a Form
 
-The **Embed** tab of a form gives you paste-ready code. Both variants below post to the same endpoint.
+The **Embed** tab of a form gives you paste-ready code. The website widget is the quickest option; the HTML and JavaScript variants further down post to the same endpoint if you want full control over the markup.
+
+## Website widget
+
+Paste two lines where the form should appear:
+
+```html
+<div data-posta-form="YOUR_PUBLIC_KEY"></div>
+<script src="https://posta.example.com/widget/v1/posta-form.js" async></script>
+```
+
+The script renders a styled, accessible contact form, fills in the honeypot and nonce for you, and shows the result in place. The **Embed** tab has a builder that writes these two lines with your options filled in.
+
+The widget reads the form's settings when the page loads, so changing the honeypot field, turning the nonce on, or pausing the form takes effect without editing your site. A paused form shows *"This form is not accepting messages right now."* instead of the fields.
+
+Every widget carries a small **Powered by Posta** link under the button.
+
+### Options
+
+Set these as attributes on the placeholder element:
+
+| Attribute | Default | Notes |
+|---|---|---|
+| `data-fields` | `name,email,message` | Any of `name`, `email`, `phone`, `subject`, `message`. Email and message are always included. |
+| `data-title` | none | Heading above the form |
+| `data-description` | none | One line under the heading |
+| `data-button` | `Send message` | |
+| `data-success` | `Thanks — your message has been received.` | Shown after a successful submit |
+| `data-label-<field>` | English or French default | For example `data-label-message="Your question"` |
+| `data-theme` | `light` | `light`, `dark`, or `auto` to follow the visitor's system setting |
+| `data-accent` | `#9333EA` | Any CSS colour |
+| `data-lang` | the visitor's browser language | `en` or `fr` |
+
+### Matching your site's style
+
+The form is drawn inside a Shadow DOM, so your site's CSS cannot break it. It inherits your page's font, and these custom properties pass through:
+
+```css
+[data-posta-form] {
+  --posta-form-accent: #0f766e;
+  --posta-form-radius: 4px;
+  --posta-form-font: inherit;
+  --posta-form-max-width: 560px;
+}
+```
+
+### Allowed origins
+
+If the form lists **Allowed origins**, the widget only works on those sites. Anywhere else, visitors see *"This form is not available on this website."* and the browser console tells you which origin to add on the form's **Setup** tab.
+
+### Single-page apps
+
+The script mounts every `[data-posta-form]` element present when it loads. For elements added later, call:
+
+```js
+PostaForms.mount(document.querySelector('#contact'))
+```
+
+### Events
+
+The placeholder element dispatches events you can use for analytics or a redirect:
+
+| Event | `event.detail` |
+|---|---|
+| `posta:ready` | `{ key }` |
+| `posta:submit` | `{ key }` |
+| `posta:success` | `{ key, id }` |
+| `posta:error` | `{ key, status, code, message }` |
+
+```js
+document.addEventListener('posta:success', () => {
+  window.location.href = '/thanks'
+})
+```
+
+### Content Security Policy
+
+If your site sends a CSP header, allow your Posta host for scripts and requests:
+
+```
+script-src  https://posta.example.com;
+connect-src https://posta.example.com;
+```
 
 ## Plain HTML, no JavaScript
 

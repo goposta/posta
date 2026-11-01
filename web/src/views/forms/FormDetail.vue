@@ -113,6 +113,54 @@ function copy(text: string) {
 
 const endpoint = computed(() => snippet.value?.endpoint || "");
 
+// Website widget builder. Options become data attributes on the placeholder;
+// nothing is saved to the form.
+const optionalWidgetFields = ["name", "phone", "subject"] as const;
+const widget = ref({
+  fields: ["name"] as string[],
+  title: "",
+  description: "",
+  button: "",
+  success: "",
+  theme: "light",
+  accent: "",
+  lang: "",
+});
+
+function setAccent(e: Event) {
+  widget.value.accent = (e.target as HTMLInputElement).value;
+}
+
+function escapeAttr(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+const widgetScriptURL = computed(() =>
+  endpoint.value.replace(/\/api\/v1\/f\/[^/]+$/, "") + "/widget/v1/posta-form.js",
+);
+
+const widgetSnippet = computed(() => {
+  if (!form.value) return "";
+  const w = widget.value;
+  const attrs: [string, string][] = [["data-posta-form", form.value.public_key]];
+  const fields = ["name", "email", "phone", "subject", "message"].filter(
+    (f) => f === "email" || f === "message" || w.fields.includes(f),
+  );
+  if (fields.join(",") !== "name,email,message") attrs.push(["data-fields", fields.join(",")]);
+  if (w.title.trim()) attrs.push(["data-title", w.title.trim()]);
+  if (w.description.trim()) attrs.push(["data-description", w.description.trim()]);
+  if (w.button.trim()) attrs.push(["data-button", w.button.trim()]);
+  if (w.success.trim()) attrs.push(["data-success", w.success.trim()]);
+  if (w.theme !== "light") attrs.push(["data-theme", w.theme]);
+  if (w.accent) attrs.push(["data-accent", w.accent]);
+  if (w.lang) attrs.push(["data-lang", w.lang]);
+  const placeholder =
+    attrs.length > 2
+      ? `<div\n${attrs.map(([k, v]) => `  ${k}="${escapeAttr(v)}"`).join("\n")}\n></div>`
+      : `<div ${attrs.map(([k, v]) => `${k}="${escapeAttr(v)}"`).join(" ")}></div>`;
+  return `${placeholder}\n<script src="${escapeAttr(widgetScriptURL.value)}" async></` + `script>`;
+});
+
 onMounted(load);
 </script>
 
@@ -305,6 +353,81 @@ onMounted(load);
           <button class="btn btn-secondary" @click="rotateKey">Rotate key</button>
         </div>
         <div class="card-body">
+          <h3 style="margin: 0 0 4px">Website widget <span class="badge badge-success">Recommended</span></h3>
+          <p class="muted" style="margin: 0 0 16px">
+            Paste two lines into any page. Posta renders a styled form, handles spam protection,
+            and shows the result in place. Settings you change here later apply without editing your site.
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 16px">
+            <div class="form-group">
+              <label class="form-label">Fields</label>
+              <label v-for="f in optionalWidgetFields" :key="f" class="checkbox-label">
+                <input v-model="widget.fields" type="checkbox" :value="f" />
+                {{ f }}
+              </label>
+              <small class="muted">Email and message are always included.</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Title</label>
+              <input v-model="widget.title" class="form-input" placeholder="Contact us" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <input v-model="widget.description" class="form-input" placeholder="We reply within a day." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Button text</label>
+              <input v-model="widget.button" class="form-input" placeholder="Send message" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Success message</label>
+              <input v-model="widget.success" class="form-input" placeholder="Thanks — your message has been received." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Theme</label>
+              <select v-model="widget.theme" class="form-select">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="auto">Follow the visitor's system</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Accent colour</label>
+              <div style="display: flex; gap: 8px; align-items: center">
+                <input
+                  type="color"
+                  :value="widget.accent || '#9333ea'"
+                  aria-label="Accent colour"
+                  @input="setAccent"
+                />
+                <button v-if="widget.accent" class="btn btn-secondary" @click="widget.accent = ''">Reset</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Language</label>
+              <select v-model="widget.lang" class="form-select">
+                <option value="">Visitor's browser</option>
+                <option value="en">English</option>
+                <option value="fr">French</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Embed code</label>
+            <pre style="overflow-x: auto; padding: 12px; border-radius: 8px; background: var(--bg-secondary)">{{ widgetSnippet }}</pre>
+            <button class="btn btn-primary" @click="copy(widgetSnippet)">Copy widget code</button>
+          </div>
+          <p v-if="!form.allowed_origins?.length" class="muted">
+            Any website can show this form. To restrict it, list your site's origin
+            (for example <code>https://example.com</code>) under Allowed origins on the Setup tab.
+          </p>
+          <p v-else class="muted">
+            The widget only works on: <code>{{ form.allowed_origins.join(", ") }}</code>.
+            Other sites see "This form is not available on this website."
+          </p>
+
+          <hr style="margin: 24px 0; border: 0; border-top: 1px solid var(--border-primary)" />
+          <h3 style="margin: 0 0 12px">Build your own</h3>
           <div class="form-group">
             <label class="form-label">Endpoint</label>
             <div style="display: flex; gap: 8px">
@@ -314,12 +437,12 @@ onMounted(load);
           </div>
           <div class="form-group">
             <label class="form-label">HTML form</label>
-            <pre style="overflow-x: auto; padding: 12px; border-radius: 8px; background: var(--bg-subtle)">{{ snippet?.html }}</pre>
+            <pre style="overflow-x: auto; padding: 12px; border-radius: 8px; background: var(--bg-secondary)">{{ snippet?.html }}</pre>
             <button class="btn btn-secondary" @click="copy(snippet?.html || '')">Copy HTML</button>
           </div>
           <div class="form-group">
             <label class="form-label">fetch()</label>
-            <pre style="overflow-x: auto; padding: 12px; border-radius: 8px; background: var(--bg-subtle)">{{ snippet?.fetch }}</pre>
+            <pre style="overflow-x: auto; padding: 12px; border-radius: 8px; background: var(--bg-secondary)">{{ snippet?.fetch }}</pre>
             <button class="btn btn-secondary" @click="copy(snippet?.fetch || '')">Copy JS</button>
           </div>
         </div>
