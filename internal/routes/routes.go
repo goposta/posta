@@ -139,6 +139,8 @@ type routerHandlers struct {
 	form             *handlers.FormHandler
 	message          *handlers.MessageHandler
 	messageFilter    *handlers.MessageFilterHandler
+	formRule         *handlers.FormRuleHandler
+	team             *handlers.TeamHandler
 	formIngest       *handlers.FormIngestHandler
 }
 
@@ -472,6 +474,11 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.message.SetEventBus(bus)
 		r.h.message.SetRealtime(realtime.NewRedis(redisClient))
 		r.h.messageFilter = handlers.NewMessageFilterHandler(messageFilterRepo, messageRepo, formRepo, messageSvc.Scanner())
+		ruleRepo := repositories.NewFormRuleRepository(db)
+		teamRepo := repositories.NewTeamRepository(db)
+		r.h.formRule = handlers.NewFormRuleHandler(ruleRepo, formRepo, messageRepo, teamRepo, workspaceRepo, webhookRepo, auditLogger)
+		r.h.team = handlers.NewTeamHandler(teamRepo, ruleRepo, workspaceRepo, auditLogger)
+		r.h.message.SetRouting(teamRepo, ruleRepo)
 		r.h.formIngest = handlers.NewFormIngestHandler(
 			messageSvc,
 			inbound.NewIPRateLimiter(cfg.MessagesIPRateLimit, time.Duration(cfg.MessagesIPRateWindow)*time.Second),

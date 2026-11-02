@@ -58,6 +58,7 @@ const ROLES: { value: FormFieldRole; label: string; types: FormFieldType[] }[] =
 const TEXT_TYPES: FormFieldType[] = ["text", "textarea"];
 const PLACEHOLDER_TYPES: FormFieldType[] = ["text", "textarea", "email", "phone", "number", "url"];
 const CHOICE_TYPES: FormFieldType[] = ["select", "multiselect"];
+const isSection = (d: { type: FormFieldType }) => d.type === "section";
 
 let uidSeq = 0;
 const drafts = ref<Draft[]>([]);
@@ -91,6 +92,53 @@ function reset(form: Form) {
 
 const active = computed(() => drafts.value.filter((d) => !d.archived));
 const archived = computed(() => drafts.value.filter((d) => d.archived));
+const questionCount = computed(() => active.value.filter((d) => !isSection(d)).length);
+
+// ─── Sections and branching ───────────────────────────────────────────────
+
+// Where a page may lead: a later section, or submit. Mirrors checkFlow in
+// services/messages/schema.go, which only allows moving forward.
+function laterSections(d: Draft) {
+  const list = active.value;
+  return list.slice(list.indexOf(d) + 1).filter(isSection);
+}
+
+// pageNumber is the page a card's question is on, counting from 1.
+function pageNumber(d: Draft) {
+  const list = active.value;
+  const before = list.slice(0, list.indexOf(d) + 1);
+  const opensWithSection = list.length > 0 && isSection(list[0]);
+  return before.filter(isSection).length + (opensWithSection ? 0 : 1);
+}
+
+const branchUids = ref(new Set<number>());
+function branches(d: Draft) {
+  return branchUids.value.has(d.uid) || (d.options || []).some((o) => o.goto);
+}
+function toggleBranch(d: Draft, on: boolean) {
+  const next = new Set(branchUids.value);
+  if (on) next.add(d.uid);
+  else {
+    next.delete(d.uid);
+    (d.options || []).forEach((o) => (o.goto = undefined));
+  }
+  branchUids.value = next;
+}
+
+// A target that is no longer ahead (after a reorder or archive) would be
+// refused on save; say so on the card instead.
+function staleTarget(d: Draft, target?: string) {
+  if (!target || target === "submit") return false;
+  return !laterSections(d).some((s) => s.key === target);
+}
+function hasStaleTargets(d: Draft) {
+  return isSection(d) ? staleTarget(d, d.next) : (d.options || []).some((o) => staleTarget(d, o.goto));
+}
+
+function sectionTitle(key?: string) {
+  const s = drafts.value.find((d) => d.key === key);
+  return s ? s.label || s.key : key;
+}
 
 // ─── Keys and option values ───────────────────────────────────────────────
 
@@ -172,7 +220,7 @@ function newDraft(type: FormFieldType, label: string, extra: Partial<Draft> = {}
 }
 
 async function addQuestion(type: FormFieldType = "text") {
-  const d = newDraft(type, "Untitled question");
+  const d = newDraft(type, type === "section" ? "Untitled section" : "Untitled question");
   const at = openUid.value ? drafts.value.findIndex((x) => x.uid === openUid.value) + 1 : drafts.value.length;
   drafts.value.splice(at || drafts.value.length, 0, d);
   openUid.value = d.uid;
@@ -202,6 +250,15 @@ function duplicate(d: Draft) {
 }
 
 function remove(d: Draft) {
+  if (isSection(d)) {
+    // Nothing may lead to a section that is gone.
+    drafts.value.forEach((x) => {
+      if (x.next === d.key) x.next = undefined;
+      (x.options || []).forEach((o) => {
+        if (o.goto === d.key) o.goto = undefined;
+      });
+    });
+  }
   if (d.saved) {
     // Stored answers refer to the key, so it is kept, hidden from respondents.
     d.archived = true;
@@ -262,6 +319,12 @@ function num(v: unknown): number | undefined {
 function serialize(): FormField[] {
   return drafts.value.map((d) => {
     const f: FormField = { key: d.key.trim(), label: d.label.trim(), type: d.type };
+    if (isSection(d)) {
+      if (d.help?.trim()) f.help = d.help.trim();
+      if (d.next) f.next = d.next;
+      if (d.archived) f.archived = true;
+      return f;
+    }
     if (d.required && d.type !== "hidden") f.required = true;
     if (d.role) f.role = d.role;
     if (d.pii) f.pii = true;
@@ -283,7 +346,12 @@ function serialize(): FormField[] {
       if (d.max_label?.trim()) f.max_label = d.max_label.trim();
     }
     if (CHOICE_TYPES.includes(d.type)) {
-      f.options = (d.options || []).map((o) => (o.label?.trim() ? { value: o.value.trim(), label: o.label.trim() } : { value: o.value.trim() }));
+      f.options = (d.options || []).map((o) => {
+        const opt: FormFieldOption = { value: o.value.trim() };
+        if (o.label?.trim()) opt.label = o.label.trim();
+        if (d.type === "select" && o.goto) opt.goto = o.goto;
+        return opt;
+      });
       if (d.display) f.display = d.display;
     }
     return JSON.parse(JSON.stringify(f)); // drops undefined
@@ -303,7 +371,7 @@ async function save() {
   } catch (e: unknown) {
     const message = apiMessage(e, "Failed to save questions");
     // Schema errors name the field: open that card so the problem is in view.
-    const key = /field(?: key)? "([^"]+)"/.exec(message)?.[1];
+    const key = /(?:field|section)(?: key)? "([^"]+)"/.exec(message)?.[1];
     const target = key && drafts.value.find((d) => d.key === key);
     if (target) {
       errorKey.value = key!;
@@ -410,7 +478,7 @@ onBeforeUnmount(() => {
       <div class="card qb-bar">
         <div class="card-body qb-bar-body">
           <div>
-            <strong>{{ active.length }} {{ active.length === 1 ? "question" : "questions" }}</strong>
+            <strong>{{ questionCount }} {{ questionCount === 1 ? "question" : "questions" }}</strong>
             <span v-if="form.schema_version" class="muted"> · version {{ form.schema_version }}</span>
             <span v-if="dirty" class="badge badge-warning" style="margin-left: 8px">Unsaved</span>
           </div>
@@ -441,7 +509,7 @@ onBeforeUnmount(() => {
         v-for="(d, i) in active"
         :key="d.uid"
         class="card qcard"
-        :class="{ open: openUid === d.uid, error: errorKey === d.key, dragging: dragUid === d.uid }"
+        :class="{ open: openUid === d.uid, error: errorKey === d.key, dragging: dragUid === d.uid, section: isSection(d) }"
         @dragover.prevent
         @drop="onDrop(d)"
       >
@@ -457,11 +525,19 @@ onBeforeUnmount(() => {
           >⋮⋮</span>
           <div class="qcard-summary">
             <div class="qcard-title">
-              {{ d.label || (d.type === "hidden" ? d.key : "Untitled question") }}
+              {{ d.label || (d.type === "hidden" ? d.key : isSection(d) ? "Untitled section" : "Untitled question") }}
               <span v-if="d.required" class="qcard-req" title="Required">*</span>
             </div>
-            <div class="qcard-meta">
+            <div v-if="isSection(d)" class="qcard-meta">
+              Page {{ pageNumber(d) }}
+              <template v-if="d.next === 'submit'"> · then submit</template>
+              <template v-else-if="d.next"> · then “{{ sectionTitle(d.next) }}”</template>
+              <span v-if="hasStaleTargets(d)" class="badge badge-warning">Check where it leads</span>
+            </div>
+            <div v-else class="qcard-meta">
               {{ typeLabel(d.type) }} · <code>{{ d.key }}</code>
+              <span v-if="branches(d)" class="badge badge-info">Branches</span>
+              <span v-if="hasStaleTargets(d)" class="badge badge-warning">Check where it leads</span>
               <span v-if="d.role" class="badge badge-info">{{ ROLES.find((r) => r.value === d.role)?.label }}</span>
               <span v-if="d.pii" class="badge badge-neutral">Personal data</span>
             </div>
@@ -476,7 +552,43 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="openUid === d.uid" class="qcard-body">
+        <div v-if="openUid === d.uid && isSection(d)" class="qcard-body">
+          <div class="form-group">
+            <label class="form-label" :for="`q-label-${d.uid}`">Section title</label>
+            <input :id="`q-label-${d.uid}`" v-model="d.label" class="form-input" @input="onLabelInput(d)" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description <span class="muted">(optional)</span></label>
+            <textarea v-model="d.help" class="form-input" rows="2" placeholder="Shown at the top of the page"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">After this section</label>
+            <select v-model="d.next" class="form-select" style="max-width: 360px">
+              <option :value="undefined">Continue to the next section</option>
+              <option v-for="s in laterSections(d)" :key="s.uid" :value="s.key">Go to “{{ s.label || s.key }}”</option>
+              <option value="submit">Submit the form</option>
+            </select>
+            <small v-if="staleTarget(d, d.next)" class="form-hint warn">
+              “{{ sectionTitle(d.next) }}” is no longer after this section. Pick where this page leads again.
+            </small>
+            <small v-else class="form-hint">A branching question on this page takes precedence for the answers it covers.</small>
+          </div>
+          <div class="qcard-foot">
+            <div class="qcard-key">
+              <label class="form-label" style="margin: 0">Key</label>
+              <input
+                v-model="d.key"
+                class="form-input"
+                :disabled="d.saved"
+                title="Branches point to sections by this key"
+                spellcheck="false"
+                @input="onKeyInput(d)"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div v-if="openUid === d.uid && !isSection(d)" class="qcard-body">
           <div class="qgrid">
             <div class="form-group">
               <label class="form-label" :for="`q-label-${d.uid}`">Question</label>
@@ -509,7 +621,29 @@ onBeforeUnmount(() => {
                 @input="o.auto = false"
               />
               <button class="btn btn-ghost btn-xs" :disabled="(d.options?.length || 0) <= 1" aria-label="Remove option" @click="removeOption(d, oi)">×</button>
+              <select
+                v-if="d.type === 'select' && branches(d)"
+                v-model="o.goto"
+                class="form-select qopt-goto"
+                :class="{ stale: staleTarget(d, o.goto) }"
+                :aria-label="`After choosing ${o.label || o.value}`"
+              >
+                <option :value="undefined">Continue</option>
+                <option v-for="s in laterSections(d)" :key="s.uid" :value="s.key">Go to “{{ s.label || s.key }}”</option>
+                <option value="submit">Submit the form</option>
+              </select>
             </div>
+            <label
+              v-if="d.type === 'select' && (laterSections(d).length || branches(d))"
+              class="checkbox-label"
+              style="margin-top: 8px"
+            >
+              <input type="checkbox" :checked="branches(d)" @change="toggleBranch(d, ($event.target as HTMLInputElement).checked)" />
+              Go to a section based on the answer
+            </label>
+            <small v-if="d.type === 'select' && !laterSections(d).length && !branches(d)" class="form-hint">
+              Add a section below this question to send respondents to different pages by their answer.
+            </small>
             <button class="btn btn-secondary btn-xs" style="margin-top: 6px" @click="addOption(d)">Add option</button>
             <small class="form-hint">The second box is the stored value. Keep it stable once answers come in.</small>
           </div>
@@ -628,6 +762,7 @@ onBeforeUnmount(() => {
 
       <div v-if="drafts.length" class="qb-add">
         <button class="btn btn-secondary" @click="addQuestion()">+ Add question</button>
+        <button class="btn btn-secondary" @click="addQuestion('section')">+ Add section</button>
       </div>
 
       <div v-if="archived.length" class="card">
@@ -739,6 +874,13 @@ onBeforeUnmount(() => {
   border-left-color: var(--primary-600);
 }
 
+/* A section starts a page: set it apart from the questions around it. */
+.qcard.section {
+  margin-top: 12px;
+  background: var(--bg-secondary);
+  border-top: 3px solid var(--primary-500);
+}
+
 .qcard.error {
   border-left-color: var(--danger, #dc2626);
 }
@@ -826,6 +968,15 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
+.qopt .qopt-goto {
+  flex: 0 1 190px;
+  min-width: 0;
+}
+
+.qopt .qopt-goto.stale {
+  border-color: var(--warning-600);
+}
+
 .qopt-mark {
   width: 14px;
   height: 14px;
@@ -880,6 +1031,7 @@ onBeforeUnmount(() => {
 .qb-add {
   display: flex;
   justify-content: center;
+  gap: 8px;
 }
 
 .qarch {

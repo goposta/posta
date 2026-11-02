@@ -129,6 +129,15 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
+	// Routing: a form's rules in order, team names unique per workspace, and
+	// the "My teams" inbox view.
+	db.Exec(`DO $$ BEGIN
+		CREATE INDEX IF NOT EXISTS idx_form_rules_order ON form_rules (form_id, position);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_team_name ON teams (workspace_id, LOWER(name)) WHERE deleted_at IS NULL;
+		CREATE INDEX IF NOT EXISTS idx_messages_team ON messages (team_id, created_at DESC) WHERE team_id IS NOT NULL AND deleted_at IS NULL;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
 	// One thread reply per inbound email, so a retried parse task cannot attach
 	// the same answer twice. Its own block: a failure must not skip the others.
 	db.Exec(`DO $$ BEGIN

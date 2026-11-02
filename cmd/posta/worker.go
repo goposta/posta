@@ -222,6 +222,10 @@ func runWorker() error {
 		)
 		messageHandler.OnNotified(metrics.IncrementMessageNotification)
 		messageHandler.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
+		messageHandler.SetRouting(repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
+			Workspaces: repositories.NewWorkspaceRepository(db),
+			Teams:      repositories.NewTeamRepository(db),
+		})
 		mux.HandleFunc(worker.TypeMessageProcess, messageHandler.ProcessTask)
 		mux.HandleFunc(worker.TypeMessageReply, messageHandler.ProcessReplyTask)
 	}

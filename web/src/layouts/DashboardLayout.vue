@@ -162,6 +162,7 @@ const workspaceNavSections: NavSection[] = [
         icon: 'message-square',
         children: [
           { name: 'Forms', path: '/forms', icon: 'edit-3' },
+          { name: 'Teams', path: '/teams', icon: 'users' },
           { name: 'Spam Filters', path: '/message-filters', icon: 'shield' },
         ],
       },

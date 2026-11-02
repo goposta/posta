@@ -229,6 +229,31 @@ func (d *Dispatcher) DispatchJSON(userID uint, workspaceID *uint, event string, 
 	}()
 }
 
+// DispatchJSONTo sends body to the named webhooks of a workspace, as a routing
+// rule asks. A webhook already subscribed to event is skipped: DispatchJSON
+// delivers to it, and it must not get the payload twice. Runs asynchronously.
+func (d *Dispatcher) DispatchJSONTo(workspaceID uint, webhookIDs []uint, event string, body []byte) {
+	if len(webhookIDs) == 0 {
+		return
+	}
+	go func() {
+		for _, id := range webhookIDs {
+			wh, err := d.repo.FindByID(id)
+			if err != nil || wh.WorkspaceID == nil || *wh.WorkspaceID != workspaceID {
+				continue
+			}
+			subscribed := false
+			for _, e := range wh.Events {
+				subscribed = subscribed || e == event
+			}
+			if subscribed {
+				continue
+			}
+			d.deliverWithRetry(wh.UserID, *wh, body, event)
+		}
+	}()
+}
+
 // matchesFilters checks if the sender address matches the webhook's filters.
 func matchesFilters(filters []string, from string) bool {
 	if len(filters) == 0 {

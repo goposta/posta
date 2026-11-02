@@ -173,9 +173,17 @@ func (r *WorkspaceRepository) AddMember(member *models.WorkspaceMember) error {
 }
 
 // RemoveMember removes a user from a workspace.
+// RemoveMember takes a user out of a workspace, and off its teams with it.
 func (r *WorkspaceRepository) RemoveMember(workspaceID, userID uint) error {
-	return r.db.Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
-		Delete(&models.WorkspaceMember{}).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ? AND team_id IN (?)", userID,
+			tx.Model(&models.Team{}).Select("id").Where("workspace_id = ?", workspaceID)).
+			Delete(&models.TeamMember{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+			Delete(&models.WorkspaceMember{}).Error
+	})
 }
 
 // UpdateMemberRole updates a member's role in a workspace.

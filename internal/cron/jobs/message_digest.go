@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/formrules"
 	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/storage/repositories"
@@ -44,6 +45,8 @@ type MessageDigestJob struct {
 	formRepo      *repositories.FormRepository
 	messageRepo   *repositories.MessageRepository
 	workspaceRepo *repositories.WorkspaceRepository
+	ruleRepo      *repositories.FormRuleRepository
+	directory     formrules.Directory
 	appURL        string
 }
 
@@ -61,6 +64,12 @@ func NewMessageDigestJob(
 		workspaceRepo: workspaceRepo,
 		appURL:        strings.TrimSuffix(appURL, "/"),
 	}
+}
+
+// SetRouting groups digests by the recipients routing rules chose, so a team
+// is sent its own submissions rather than everyone everything.
+func (j *MessageDigestJob) SetRouting(rules *repositories.FormRuleRepository, dir formrules.Directory) {
+	j.ruleRepo, j.directory = rules, dir
 }
 
 func (j *MessageDigestJob) Name() string     { return "message-digest" }
@@ -103,7 +112,19 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 		}
 
 		mask := messages.NewPIIMask(form.Fields)
-		items := make([]digestItem, 0, len(pending))
+		var rules []models.FormRule
+		if j.ruleRepo != nil {
+			rules, _ = j.ruleRepo.ListByForm(form.ID)
+		}
+		var dir formrules.Directory
+		if j.directory != nil {
+			dir = &formrules.CachedDirectory{Next: j.directory}
+		}
+
+		// Each recipient gets the submissions routed to them: the form's
+		// default route, or an address or member a rule added.
+		groups := map[digestTarget][]digestItem{}
+		var order []digestTarget
 		ids := make([]uint, 0, len(pending))
 		for k := range pending {
 			m := &pending[k]
@@ -111,16 +132,20 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 			if m.Status == models.MessageStatusFlagged && !form.NotifyOnFlagged {
 				continue
 			}
-			if len(items) < 25 {
-				items = append(items, digestItem{
-					Sender:  senderLabel(m, mask),
-					Subject: mask.Value(models.RoleSubject, m.Subject),
-					Flagged: m.Status == models.MessageStatusFlagged,
-				})
+			item := digestItem{
+				Sender:  senderLabel(m, mask),
+				Subject: mask.Value(models.RoleSubject, m.Subject),
+				Flagged: m.Status == models.MessageStatusFlagged,
+			}
+			for _, target := range j.targets(form, rules, dir, m) {
+				if _, seen := groups[target]; !seen {
+					order = append(order, target)
+				}
+				groups[target] = append(groups[target], item)
 			}
 		}
 
-		if len(items) == 0 {
+		if len(order) == 0 {
 			_ = j.messageRepo.MarkNotified(ids, now)
 			continue
 		}
@@ -129,26 +154,38 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 		if ws, err := j.workspaceRepo.FindByID(*form.WorkspaceID); err == nil {
 			workspaceName = ws.Name
 		}
-
-		data := map[string]any{
-			"Period":   label,
-			"FormName": form.Name,
-			"Collect":  form.IsCollect(),
-			"Total":    len(items),
-			"Items":    items,
-			"InboxURL": j.inboxURL(form),
-		}
-		if workspaceName != "" {
-			data["WorkspaceName"] = workspaceName
-		}
 		noun := "message(s)"
 		if form.IsCollect() {
 			noun = "response(s)"
 		}
-		subject := fmt.Sprintf("%s digest: %d new %s on %s", label, len(items), noun, form.Name)
 
-		if err := j.deliver(form, subject, data); err != nil {
-			logger.Error("message-digest: failed to send", "form_id", form.ID, "error", err)
+		failed := false
+		for _, target := range order {
+			items := groups[target]
+			data := map[string]any{
+				"Period":   label,
+				"FormName": form.Name,
+				"Collect":  form.IsCollect(),
+				"Total":    len(items),
+				"Items":    items,
+				"InboxURL": j.inboxURL(form),
+			}
+			if len(items) > 25 {
+				data["Items"] = items[:25]
+			}
+			if workspaceName != "" {
+				data["WorkspaceName"] = workspaceName
+			}
+			subject := fmt.Sprintf("%s digest: %d new %s on %s", label, len(items), noun, form.Name)
+			if err := j.send(form, target, subject, data); err != nil {
+				logger.Error("message-digest: failed to send", "form_id", form.ID, "error", err)
+				failed = true
+			}
+		}
+		// A failed send keeps the submissions pending for the next run; the
+		// recipients that did get theirs may then get them twice, which
+		// beats someone never hearing of them.
+		if failed {
 			continue
 		}
 
@@ -156,6 +193,56 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 		sent++
 	}
 	return sent
+}
+
+// digestTarget is one recipient of a digest: the form's default route, an
+// address, or a member.
+type digestTarget struct {
+	Default bool
+	Email   string
+	UserID  uint
+}
+
+// targets is where one submission is reported. Without rules, that is the
+// form's default route, as before.
+func (j *MessageDigestJob) targets(form *models.Form, rules []models.FormRule, dir formrules.Directory, m *models.Message) []digestTarget {
+	if len(rules) == 0 || dir == nil || !formrules.Routable(m.Status) {
+		return []digestTarget{{Default: true}}
+	}
+	var out formrules.Outcome
+	if m.RoutedAt != nil {
+		out = formrules.Combine(rules, m.MatchedRules)
+	} else {
+		out = formrules.Evaluate(rules, formrules.FactsFor(m, form))
+	}
+	res, err := formrules.Resolve(form, out, dir)
+	if err != nil {
+		logger.Warn("message-digest: failed to resolve rule recipients", "form_id", form.ID, "error", err)
+		return []digestTarget{{Default: true}}
+	}
+	var targets []digestTarget
+	if res.Default {
+		targets = append(targets, digestTarget{Default: true})
+	}
+	for _, e := range res.Emails {
+		targets = append(targets, digestTarget{Email: e})
+	}
+	for _, id := range res.UserIDs {
+		targets = append(targets, digestTarget{UserID: id})
+	}
+	return targets
+}
+
+func (j *MessageDigestJob) send(form *models.Form, target digestTarget, subject string, data map[string]any) error {
+	switch {
+	case target.Default:
+		return j.deliver(form, subject, data)
+	case target.Email != "":
+		data["UserName"] = "there"
+		return j.notifier.Send(target.Email, subject, notification.TemplateMessageDigest, data)
+	default:
+		return j.notifier.SendToUser(target.UserID, subject, notification.TemplateMessageDigest, data)
+	}
 }
 
 func (j *MessageDigestJob) deliver(form *models.Form, subject string, data map[string]any) error {

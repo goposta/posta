@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { formsApi, messagesApi } from "../../api/messages";
+import { formsApi, messagesApi, teamsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
-import type { Form, Message, MessageStats } from "../../api/types";
+import type { Form, Message, MessageStats, Team } from "../../api/types";
 import Pagination from "../../components/Pagination.vue";
 import { usePagination } from "../../composables/usePagination";
 
@@ -25,6 +25,9 @@ const q = ref("");
 const tag = ref(String(route.query.tag || ""));
 const priority = ref("");
 const knownTags = ref<string[]>([]);
+const teamId = ref<number>(Number(route.query.team_id) || 0);
+const mine = ref(route.query.mine === "1");
+const teams = ref<Team[]>([]);
 
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true;
@@ -38,6 +41,8 @@ const { pageable, goToPage } = usePagination(async (page) => {
       q: q.value || undefined,
       tag: tag.value || undefined,
       priority: priority.value || undefined,
+      team_id: teamId.value || undefined,
+      mine: mine.value || undefined,
     });
     messages.value = res.data.data;
     pageable.value = res.data.pageable;
@@ -55,11 +60,13 @@ const { pageable, goToPage } = usePagination(async (page) => {
 
 async function loadSidebarData() {
   try {
-    const [formsRes, statsRes, tagsRes] = await Promise.all([
+    const [formsRes, statsRes, tagsRes, teamsRes] = await Promise.all([
       formsApi.list({ size: 100 }),
       messagesApi.stats(),
       messagesApi.tags(),
+      teamsApi.list().catch(() => null),
     ]);
+    teams.value = teamsRes?.data.data || [];
     forms.value = formsRes.data.data;
     stats.value = statsRes.data.data;
     knownTags.value = tagsRes.data.data.map((t) => t.tag);
@@ -80,6 +87,8 @@ function resetFilters() {
   q.value = "";
   tag.value = "";
   priority.value = "";
+  teamId.value = 0;
+  mine.value = false;
   goToPage(0);
 }
 
@@ -249,6 +258,14 @@ function formatDate(date: string | null | undefined) {
             </select>
           </div>
 
+          <div v-if="teams.length || teamId" style="flex: 1 1 140px">
+            <label class="form-label">Team</label>
+            <select v-model.number="teamId" class="form-select" @change="applyFilters">
+              <option :value="0">Any</option>
+              <option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option>
+            </select>
+          </div>
+
           <div v-if="knownTags.length || tag" style="flex: 1 1 140px">
             <label class="form-label">Tag</label>
             <select v-model="tag" class="form-select" @change="applyFilters">
@@ -272,6 +289,14 @@ function formatDate(date: string | null | undefined) {
             <label class="form-label" style="display: flex; gap: 6px; align-items: center; margin: 0">
               <input v-model="unread" type="checkbox" @change="applyFilters" />
               Unread only
+            </label>
+            <label
+              class="form-label"
+              style="display: flex; gap: 6px; align-items: center; margin: 0"
+              title="Assigned to you, or routed to one of your teams"
+            >
+              <input v-model="mine" type="checkbox" @change="applyFilters" />
+              My work
             </label>
             <button class="btn btn-primary" @click="applyFilters">Apply</button>
             <button class="btn btn-secondary" @click="resetFilters">Reset</button>
@@ -339,7 +364,12 @@ function formatDate(date: string | null | undefined) {
                       >{{ t }}</button>
                     </span>
                   </td>
-                  <td>{{ message.form?.name || "-" }}</td>
+                  <td>
+                    {{ message.form?.name || "-" }}
+                    <div v-if="message.team || message.assigned_to" class="route-line">
+                      {{ [message.team?.name, message.assigned_to?.name].filter(Boolean).join(" · ") }}
+                    </div>
+                  </td>
                   <td>
                     <span :class="statusBadgeClass(message.status)">{{ message.status }}</span>
                   </td>
@@ -359,6 +389,11 @@ function formatDate(date: string | null | undefined) {
 </template>
 
 <style scoped>
+.route-line {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 .collect-note {
   margin: 0;
   padding: 0 20px 14px;

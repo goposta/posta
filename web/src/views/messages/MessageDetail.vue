@@ -388,6 +388,22 @@ onBeforeUnmount(() => {
                 <td style="font-weight: 600">Client IP</td>
                 <td><code style="font-size: 12px">{{ message.client_ip }}</code></td>
               </tr>
+              <tr v-if="message.assigned_to">
+                <td style="font-weight: 600">Assigned to</td>
+                <td>{{ message.assigned_to.name }}</td>
+              </tr>
+              <tr v-if="message.routed_by && message.routed_by.length">
+                <td style="font-weight: 600">Routed by</td>
+                <td class="scan-reasons">
+                  <router-link
+                    v-for="r in message.routed_by"
+                    :key="r.uuid"
+                    class="badge badge-info"
+                    :to="message.form ? `/forms/${message.form.id}?tab=routing` : ''"
+                    title="The routing rule that matched this submission"
+                  >{{ r.name }}</router-link>
+                </td>
+              </tr>
               <tr v-if="message.spam_score">
                 <td style="font-weight: 600">Spam score</td>
                 <td>{{ message.spam_score.toFixed(1) }}</td>

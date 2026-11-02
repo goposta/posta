@@ -34,6 +34,9 @@
       error: "Your message could not be sent. Please try again.",
       poweredBy: "Powered by",
       previewOnly: "Preview only: nothing was sent.",
+      next: "Next",
+      back: "Back",
+      page: "Page {n} of {total}",
     },
     fr: {
       name: "Nom",
@@ -55,6 +58,9 @@
       error: "Votre message n'a pas pu être envoyé. Veuillez réessayer.",
       poweredBy: "Propulsé par",
       previewOnly: "Aperçu uniquement : rien n'a été envoyé.",
+      next: "Suivant",
+      back: "Retour",
+      page: "Page {n} sur {total}",
     },
   };
 
@@ -88,6 +94,8 @@
     ".pf[data-theme=dark]{--t-bg:#101A37;--t-fg:#F2F4FA;--t-mut:#A9B1CC;--t-bd:#2A3A66;--t-in:#0A1124;--t-err:#FDA29B;--t-ok:#75E0A7}" +
     "@media (prefers-color-scheme:dark){.pf[data-theme=auto]{--t-bg:#101A37;--t-fg:#F2F4FA;--t-mut:#A9B1CC;--t-bd:#2A3A66;--t-in:#0A1124;--t-err:#FDA29B;--t-ok:#75E0A7}}" +
     ".pf *{box-sizing:border-box}" +
+    // Display rules below would otherwise beat the hidden attribute.
+    ".pf [hidden]{display:none!important}" +
     ".pf h2{margin:0 0 14px;font-size:1.2em;line-height:1.3}" +
     ".pf .desc{margin:-10px 0 14px;color:var(--mut)}" +
     ".pf .f{margin:0 0 12px}" +
@@ -127,6 +135,13 @@
     ".pf .st.err{color:var(--err)}" +
     ".pf .done{margin:4px 0;color:var(--ok);font-weight:600}" +
     ".pf button.again{margin-top:10px;background:none;color:var(--a);padding:0;min-height:0;text-decoration:underline}" +
+    ".pf .sec h3{margin:0 0 4px;font-size:1.05em;line-height:1.3}" +
+    ".pf .sec p{margin:0 0 12px;color:var(--mut);white-space:pre-line}" +
+    ".pf .prog{margin:0 0 14px;font-size:.8em;color:var(--mut)}" +
+    ".pf .bar{height:4px;margin-top:4px;border-radius:2px;background:var(--bd);overflow:hidden}" +
+    ".pf .bar span{display:block;height:100%;width:0;background:var(--a);transition:width .2s}" +
+    ".pf .nav{display:flex;flex-wrap:wrap;gap:8px;align-items:center}" +
+    ".pf button.back{background:none;color:var(--a);border:1px solid var(--bd)}" +
     ".pf .brand{display:flex;justify-content:flex-end;margin-top:16px;padding-top:10px;border-top:1px solid var(--bd)}" +
     ".pf .brand a{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--mut);text-decoration:none}" +
     ".pf .brand a:hover{color:var(--fg)}" +
@@ -496,11 +511,78 @@
 
       var controls = {};
 
+      // Sections split the questions into pages, shown one at a time. Hidden
+      // fields sit on no page; the embed sets them. A form without sections
+      // is one page and looks as it always did.
+      var pages = [{ section: null, keys: [], node: h("div") }];
+      var loose = h("div");
       fields.forEach(function (f) {
+        if (f.type === "section") {
+          var node = h("div");
+          var head = h("div", { class: "sec" });
+          head.appendChild(h("h3", null, f.label || f.key));
+          if (f.help) head.appendChild(h("p", null, f.help));
+          node.appendChild(head);
+          pages.push({ section: f, keys: [], node: node });
+          return;
+        }
         var c = buildField(f, id + "-" + f.key);
+        c.def = f;
         controls[f.key] = c;
-        form.appendChild(c.row);
+        if (f.type === "hidden") {
+          loose.appendChild(c.row);
+          return;
+        }
+        var last = pages[pages.length - 1];
+        last.keys.push(f.key);
+        last.node.appendChild(c.row);
       });
+      if (pages.length > 1 && !pages[0].keys.length) pages.shift();
+      var paged = pages.length > 1;
+      var sectionIndex = {};
+      pages.forEach(function (p, i) {
+        if (p.section) sectionIndex[p.section.key] = i;
+      });
+
+      var progressText = null;
+      var barFill = null;
+      if (paged) {
+        var progress = h("div", { class: "prog" });
+        progressText = h("span");
+        var bar = h("div", { class: "bar", "aria-hidden": "true" });
+        barFill = h("span");
+        bar.appendChild(barFill);
+        progress.appendChild(progressText);
+        progress.appendChild(bar);
+        form.appendChild(progress);
+        // The widget checks one page at a time, so the browser must not
+        // block submit over a required field on a page that was skipped.
+        form.setAttribute("novalidate", "");
+      }
+      pages.forEach(function (p) { form.appendChild(p.node); });
+      form.appendChild(loose);
+
+      // nextPage mirrors the server's route (services/messages/branching.go):
+      // the chosen option of a branching question, else the section's next,
+      // else the following page. -1 means the form is submitted from page i.
+      function nextPage(i) {
+        var p = pages[i];
+        var target = (p.section && p.section.next) || "";
+        p.keys.forEach(function (k) {
+          var f = controls[k].def;
+          if (f.type !== "select") return;
+          var v = controls[k].get();
+          (f.options || []).forEach(function (o) {
+            if (o.value === v && o.goto) target = o.goto;
+          });
+        });
+        if (target === "submit") return -1;
+        if (target && sectionIndex[target] > i) return sectionIndex[target];
+        return i + 1 < pages.length ? i + 1 : -1;
+      }
+
+      var current = 0;
+      var trail = []; // pages visited before the current one, in order
 
       var hpWrap = h("div", { class: "hp", "aria-hidden": "true" });
       var honeypot = h("input", { type: "text", name: cfg.honeypot_field || "_gotcha", tabindex: "-1", autocomplete: "off" });
@@ -508,11 +590,68 @@
       form.appendChild(hpWrap);
 
       var buttonText = el.getAttribute("data-button") || t.button;
+      var nav = h("div", { class: "nav" });
+      var backButton = h("button", { type: "button", class: "back", hidden: true }, t.back);
       var button = h("button", { type: "submit" }, buttonText);
-      form.appendChild(button);
+      nav.appendChild(backButton);
+      nav.appendChild(button);
+      form.appendChild(nav);
       var status = h("p", { class: "st", role: "status", "aria-live": "polite" });
       form.appendChild(status);
       body.appendChild(form);
+
+      // isLast decides the button: Next while the answers lead to another
+      // page, the submit text once they lead to the end.
+      function isLast() { return nextPage(current) < 0; }
+
+      function showPage(i, focus) {
+        current = i;
+        pages.forEach(function (p, j) { p.node.hidden = j !== i; });
+        backButton.hidden = !trail.length;
+        if (paged) {
+          progressText.textContent = t.page.replace("{n}", i + 1).replace("{total}", pages.length);
+          barFill.style.width = Math.round(((i + 1) / pages.length) * 100) + "%";
+        }
+        if (!button.disabled) button.textContent = isLast() ? buttonText : t.next;
+        if (focus) {
+          var first = pages[i].node.querySelector("input,select,textarea");
+          if (first) first.focus();
+          else wrap.scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      // pageValid checks the current page the way the browser would, plus
+      // required checkbox groups, which have no native check.
+      function pageValid() {
+        if (preview && paged) return true;
+        var keys = paged ? pages[current].keys : Object.keys(controls);
+        var inputs = paged ? pages[current].node.querySelectorAll("input,select,textarea") : [];
+        for (var n = 0; n < inputs.length; n++) {
+          if (!inputs[n].checkValidity()) {
+            inputs[n].reportValidity();
+            return false;
+          }
+        }
+        for (var k = 0; k < keys.length; k++) {
+          var c = controls[keys[k]];
+          if (c.requiredGroup && !c.get().length) {
+            c.mark(t.required);
+            c.focus();
+            return false;
+          }
+        }
+        return true;
+      }
+
+      backButton.addEventListener("click", function () {
+        clearErrors();
+        showPage(trail.pop(), true);
+      });
+      // A changed answer can change where a branching page leads.
+      form.addEventListener("change", function () {
+        if (!button.disabled) button.textContent = isLast() ? buttonText : t.next;
+      });
+      showPage(0, false);
 
       function clearErrors() {
         status.textContent = "";
@@ -539,22 +678,22 @@
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         clearErrors();
-        var payload = {};
-        var missing = null;
-        Object.keys(controls).forEach(function (k) {
-          var c = controls[k];
-          payload[k] = c.get();
-          if (c.requiredGroup && !payload[k].length) {
-            c.mark(t.required);
-            missing = missing || c;
-          }
-        });
-        // Native validation covers single inputs; a required group of
-        // checkboxes has no native check.
-        if (missing) {
-          missing.focus();
+        if (!pageValid()) return;
+        var after = nextPage(current);
+        if (after >= 0) {
+          trail.push(current);
+          showPage(after, true);
           return;
         }
+        // Only the pages the respondent went through are sent, plus hidden
+        // fields; the server applies the same route.
+        var payload = {};
+        var sent = trail.concat([current]);
+        Object.keys(controls).forEach(function (k) {
+          var c = controls[k];
+          var onRoute = c.def.type === "hidden" || sent.some(function (i) { return pages[i].keys.indexOf(k) >= 0; });
+          if (onRoute) payload[k] = c.get();
+        });
         if (preview) {
           status.textContent = t.previewOnly;
           return;
@@ -604,7 +743,15 @@
                 var c = controls[fe.key];
                 if (!c) return;
                 c.mark(fe.message || fe.code);
-                first = first || c;
+                if (!first) {
+                  first = c;
+                  // Go back to the page that holds the first error.
+                  var at = sent.filter(function (i) { return pages[i].keys.indexOf(fe.key) >= 0; })[0];
+                  if (at !== undefined && at !== current) {
+                    trail = trail.slice(0, trail.indexOf(at));
+                    showPage(at, false);
+                  }
+                }
               });
               var message = data.message || (res.body && res.body.error && res.body.error.message) || (res.body && res.body.message) || t.error;
               if (!first) fail(message);
@@ -621,7 +768,7 @@
           )
           .then(function () {
             button.disabled = false;
-            button.textContent = buttonText;
+            button.textContent = isLast() ? buttonText : t.next;
           });
       });
 

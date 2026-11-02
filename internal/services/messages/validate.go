@@ -117,11 +117,19 @@ func Validate(form *models.Form, fields []models.MessageField) (*Validated, []Fi
 		Roles: map[models.FieldRole]string{},
 	}
 	var errs []FieldError
+	// On a form with sections, only the pages the answers lead through count:
+	// a skipped page's questions are neither required nor stored.
+	reached := Route(form.Fields, func(key string) string {
+		if v := values[key]; len(v) > 0 {
+			return v[0]
+		}
+		return ""
+	})
 	declared := make(map[string]bool, len(form.Fields))
 	for i := range form.Fields {
 		def := &form.Fields[i]
 		declared[def.Key] = true
-		if def.Archived {
+		if def.Archived || def.IsSection() || !reached[def.Key] {
 			continue
 		}
 		value, display, err := coerce(def, values[def.Key])

@@ -84,7 +84,7 @@ type Summarizer struct {
 func NewSummarizer(defs models.FieldDefs, showPII bool) *Summarizer {
 	s := &Summarizer{showPII: showPII}
 	for _, f := range defs.Active() {
-		if f.Type == models.FieldHidden {
+		if f.Type == models.FieldHidden || f.IsSection() {
 			continue
 		}
 		s.fields = append(s.fields, &fieldAgg{

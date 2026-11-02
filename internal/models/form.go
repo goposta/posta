@@ -142,7 +142,7 @@ func (f *Form) Closed(now time.Time) bool {
 func (f *Form) IsCollect() bool { return f != nil && f.Mode == FormModeCollect }
 
 // HasSchema reports whether submissions are validated against Fields.
-func (f *Form) HasSchema() bool { return f != nil && len(f.Fields.Active()) > 0 }
+func (f *Form) HasSchema() bool { return f != nil && len(f.Fields.Active().Questions()) > 0 }
 
 // UnknownFieldsPolicy returns the policy for undeclared keys, keep by default.
 func (f *Form) UnknownFieldsPolicy() UnknownFieldsPolicy {

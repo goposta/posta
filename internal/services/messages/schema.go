@@ -45,7 +45,7 @@ var fieldTypes = map[models.FieldType]bool{
 	models.FieldPhone: true, models.FieldNumber: true, models.FieldURL: true,
 	models.FieldDate: true, models.FieldTime: true, models.FieldSelect: true,
 	models.FieldMultiSelect: true, models.FieldCheckbox: true, models.FieldScale: true,
-	models.FieldRating: true, models.FieldHidden: true,
+	models.FieldRating: true, models.FieldHidden: true, models.FieldSection: true,
 }
 
 // roleTypes lists the field types each role may sit on.
@@ -84,7 +84,19 @@ func CheckSchema(defs models.FieldDefs, previous models.FieldDefs, honeypot stri
 			return fmt.Errorf("field %q has unknown type %q", f.Key, f.Type)
 		}
 		if f.Label == "" && f.Type != models.FieldHidden {
+			if f.IsSection() {
+				return fmt.Errorf("section %q needs a title", f.Key)
+			}
 			return fmt.Errorf("field %q needs a label", f.Key)
+		}
+		if f.IsSection() {
+			if err := checkSection(f); err != nil {
+				return err
+			}
+			continue
+		}
+		if f.Next != "" {
+			return fmt.Errorf("field %q: only a section has a next page", f.Key)
 		}
 		if err := checkRole(f, roles); err != nil {
 			return err
@@ -93,10 +105,87 @@ func CheckSchema(defs models.FieldDefs, previous models.FieldDefs, honeypot stri
 			return err
 		}
 	}
+	if err := checkFlow(defs); err != nil {
+		return err
+	}
 	for _, old := range previous {
 		if !seen[old.Key] {
 			return fmt.Errorf("field %q cannot be removed because submissions may use it; archive it instead", old.Key)
 		}
+	}
+	return nil
+}
+
+// checkSection rejects question settings on a section, which only has a
+// title, a description (Help) and where its page leads.
+func checkSection(f *models.FieldDef) error {
+	if f.Key == models.GotoSubmit {
+		return fmt.Errorf("%q cannot be a section key: it means \"submit the form\"", f.Key)
+	}
+	if f.Required || f.Role != models.RoleNone || f.PII || len(f.Options) > 0 || f.Display != models.DisplayDefault ||
+		f.MinLen != nil || f.MaxLen != nil || f.Min != nil || f.Max != nil || f.Pattern != "" {
+		return fmt.Errorf("section %q only takes a title, a description and where it leads", f.Key)
+	}
+	return nil
+}
+
+// checkFlow checks where pages lead. A branch or a section's next must point
+// to a later, active section or to submit, so every respondent moves forward
+// and the form always ends. A page has at most one branching question;
+// with two, which one wins would be invisible in the builder.
+func checkFlow(defs models.FieldDefs) error {
+	position := map[string]int{}
+	page := 0
+	for _, f := range defs {
+		if f.Archived {
+			continue
+		}
+		if f.IsSection() {
+			page++
+			position[f.Key] = page
+		}
+	}
+	ahead := func(target string, from int) bool {
+		if target == "" || target == models.GotoSubmit {
+			return true
+		}
+		to, ok := position[target]
+		return ok && to > from
+	}
+
+	page = 0
+	branching := map[int]string{}
+	for i := range defs {
+		f := &defs[i]
+		f.Next = strings.TrimSpace(f.Next)
+		for j := range f.Options {
+			f.Options[j].Goto = strings.TrimSpace(f.Options[j].Goto)
+		}
+		if f.Archived {
+			continue
+		}
+		if f.IsSection() {
+			page = position[f.Key]
+			if !ahead(f.Next, page) {
+				return fmt.Errorf("section %q can only lead to a later section or to submit", f.Key)
+			}
+			continue
+		}
+		if !branches(f) {
+			continue
+		}
+		if f.Type != models.FieldSelect {
+			return fmt.Errorf("field %q: only a single-choice question can lead to a section", f.Key)
+		}
+		for _, o := range f.Options {
+			if !ahead(o.Goto, page) {
+				return fmt.Errorf("field %q: option %q can only lead to a later section or to submit", f.Key, o.Value)
+			}
+		}
+		if other, dup := branching[page]; dup {
+			return fmt.Errorf("fields %q and %q are on the same page and both lead to sections; keep one", other, f.Key)
+		}
+		branching[page] = f.Key
 	}
 	return nil
 }
