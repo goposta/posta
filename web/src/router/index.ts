@@ -102,6 +102,8 @@ const routes = [
       { path: 'change-password', redirect: '/profile' },
       // Admin
       { path: 'notifications', name: 'notifications', component: () => import('../views/Notifications.vue'), meta: { title: 'Notifications' } },
+      // The platform console's home, so the switcher and bookmarks have a stable entry point.
+      { path: 'admin', redirect: '/admin/dashboard' },
       { path: 'admin/users', name: 'admin-users', component: () => import('../views/admin/Users.vue'), meta: { admin: true, title: 'Admin · Users' } },
       { path: 'admin/users/:id', name: 'admin-user-detail', component: () => import('../views/admin/UserDetail.vue'), meta: { admin: true, title: 'Admin · User' } },
       { path: 'admin/dashboard', name: 'admin-dashboard', component: () => import('../views/admin/Dashboard.vue'), meta: { admin: true, title: 'Admin · Dashboard' } },

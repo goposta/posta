@@ -117,15 +117,15 @@ interface NavSection {
   id: string
   title: string
   items: NavItem[]
-  /** Only rendered for platform admins. */
-  admin?: boolean
   /** Hidden in Personal mode; only shown when a real workspace is selected. */
   requiresWorkspace?: boolean
   /** Whether the section starts expanded. Defaults to true. */
   defaultOpen?: boolean
 }
 
-const navSections: NavSection[] = [
+// The workspace console's navigation. Platform administration is a separate
+// console with its own sections (adminNavSections), entered from the switcher.
+const workspaceNavSections: NavSection[] = [
   {
     id: 'overview',
     title: 'Overview',
@@ -217,57 +217,144 @@ const navSections: NavSection[] = [
       { name: 'Settings', path: '', icon: 'settings', workspaceTab: 'settings', requiresWorkspaceAdmin: true },
     ],
   },
+]
+
+// The platform console's navigation. Grouped rather than one flat "Admin" list
+// appended to the workspace menu, so a tenant's resources and the whole
+// server's never share a sidebar.
+const adminNavSections: NavSection[] = [
   {
-    id: 'admin',
-    title: 'Admin',
-    admin: true,
-    defaultOpen: false,
+    id: 'admin-overview',
+    title: 'Overview',
     items: [
-      // The dashboard is the landing page for this section, so it leads.
       { name: 'Dashboard', path: '/admin/dashboard', icon: 'pie-chart' },
-      { name: 'Users', path: '/admin/users', icon: 'users' },
-      { name: 'Workspaces', path: '/admin/workspaces', icon: 'briefcase' },
-      { name: 'Plans', path: '/admin/plans', icon: 'layers' },
-      { name: 'Shared Servers', path: '/admin/servers', icon: 'server' },
-      { name: 'Domains', path: '/admin/domains', icon: 'globe' },
-      { name: 'Announcements', path: '/admin/announcements', icon: 'bell' },
-      { name: 'OAuth', path: '/admin/oauth', icon: 'shield' },
       { name: 'Jobs', path: '/admin/jobs', icon: 'clock' },
       { name: 'Events', path: '/admin/events', icon: 'zap' },
+    ],
+  },
+  {
+    id: 'admin-identity',
+    title: 'Identity',
+    items: [
+      { name: 'Users', path: '/admin/users', icon: 'users' },
+      { name: 'OAuth Providers', path: '/admin/oauth', icon: 'shield' },
+    ],
+  },
+  {
+    id: 'admin-tenants',
+    title: 'Tenants',
+    items: [
+      { name: 'Workspaces', path: '/admin/workspaces', icon: 'briefcase' },
+      { name: 'Plans', path: '/admin/plans', icon: 'layers' },
+      { name: 'Announcements', path: '/admin/announcements', icon: 'bell' },
+    ],
+  },
+  {
+    id: 'admin-delivery',
+    title: 'Delivery',
+    items: [
+      { name: 'Shared Servers', path: '/admin/servers', icon: 'server' },
+      { name: 'Domains', path: '/admin/domains', icon: 'globe' },
+    ],
+  },
+  {
+    id: 'admin-platform',
+    title: 'Platform',
+    items: [
       { name: 'Platform Settings', path: '/admin/settings', icon: 'settings' },
     ],
   },
 ]
 
-const SECTION_STATE_KEY = 'posta_nav_sections'
+// Which console the current route belongs to. The router decides access
+// (meta.admin); this only picks the sidebar and the switcher's identity.
+const ADMIN_HOME = '/admin'
+const isAdminConsole = computed(() => route.path === ADMIN_HOME || route.path.startsWith(ADMIN_HOME + '/'))
+const consoleHome = computed(() => (isAdminConsole.value ? ADMIN_HOME : '/'))
+const navSections = computed(() => (isAdminConsole.value ? adminNavSections : workspaceNavSections))
 
-function loadSectionState(): Record<string, boolean> {
+// Section open/closed state, remembered per console: the two have different sections.
+const SECTION_STATE_KEYS = { workspace: 'posta_nav_sections', admin: 'posta_admin_nav_sections' } as const
+
+function loadSectionState(sections: NavSection[], key: string): Record<string, boolean> {
   const defaults: Record<string, boolean> = {}
-  navSections.forEach((s) => {
+  sections.forEach((s) => {
     defaults[s.id] = s.defaultOpen !== false
   })
   try {
-    const saved = JSON.parse(localStorage.getItem(SECTION_STATE_KEY) || '{}')
+    const saved = JSON.parse(localStorage.getItem(key) || '{}')
     return { ...defaults, ...saved }
   } catch {
     return defaults
   }
 }
 
-const sectionOpen = ref<Record<string, boolean>>(loadSectionState())
+const sectionOpen = ref<Record<string, boolean>>({
+  ...loadSectionState(workspaceNavSections, SECTION_STATE_KEYS.workspace),
+  ...loadSectionState(adminNavSections, SECTION_STATE_KEYS.admin),
+})
 
 function toggleSection(id: string) {
   sectionOpen.value[id] = !sectionOpen.value[id]
-  localStorage.setItem(SECTION_STATE_KEY, JSON.stringify(sectionOpen.value))
+  const sections = isAdminConsole.value ? adminNavSections : workspaceNavSections
+  const key = isAdminConsole.value ? SECTION_STATE_KEYS.admin : SECTION_STATE_KEYS.workspace
+  const state: Record<string, boolean> = {}
+  sections.forEach((s) => {
+    state[s.id] = sectionOpen.value[s.id]
+  })
+  try {
+    localStorage.setItem(key, JSON.stringify(state))
+  } catch {
+    // Storage refused: the section still toggles, it just isn't remembered.
+  }
 }
 
 const visibleSections = computed(() =>
-  navSections.filter((s) => {
-    if (s.admin && !auth.isAdmin) return false
+  navSections.value.filter((s) => {
     if (s.requiresWorkspace && !wsStore.isWorkspaceContext) return false
     return true
   })
 )
+
+// Where each console was last left, so switching back lands there rather than
+// on its home. Per device by design: "where was I", not a preference.
+const RETURN_KEYS = { workspace: 'posta_return_workspace', admin: 'posta_return_admin' } as const
+
+function rememberRoute(key: string, path: string) {
+  try {
+    localStorage.setItem(key, path)
+  } catch {
+    // A browser refusing storage costs a landing spot, nothing more.
+  }
+}
+
+function storedRoute(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function enterAdmin() {
+  rememberRoute(RETURN_KEYS.workspace, route.fullPath)
+  const stored = storedRoute(RETURN_KEYS.admin)
+  closeSwitcher()
+  router.push(stored?.startsWith(ADMIN_HOME + '/') ? stored : ADMIN_HOME)
+}
+
+function leaveAdmin() {
+  rememberRoute(RETURN_KEYS.admin, route.fullPath)
+  // A stored /admin path would bounce straight back, so only a workspace path is trusted.
+  const stored = storedRoute(RETURN_KEYS.workspace)
+  closeSwitcher()
+  router.push(stored?.startsWith('/') && !stored.startsWith(ADMIN_HOME) ? stored : '/')
+}
+
+function closeSwitcher() {
+  wsSwitcherOpen.value = false
+  mobileOpen.value = false
+}
 
 function sectionItems(section: NavSection): NavItem[] {
   return section.items.filter((item) => {
@@ -372,6 +459,9 @@ function getIcon(name: string): string {
     'pie-chart': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M16.5 11.4A7.5 7.5 0 116.6 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.5 9A7.5 7.5 0 009 1.5V9h7.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'zap': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9.75 1.5L3 10.5h5.25L8.25 16.5 15 7.5H9.75l0-6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'code': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M12 4.5L16.5 9 12 13.5M6 4.5L1.5 9 6 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'shield-admin': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1.5l6 2.25v4.5c0 3.6-2.55 6.6-6 7.5-3.45-.9-6-3.9-6-7.5v-4.5L9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10.5l.75-3.75L9 8.25l2.25-1.5.75 3.75H6z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>',
+    'arrow-left': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M14.25 9H3.75M8.25 4.5L3.75 9l4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'chevron-right': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M6.75 4.5L11.25 9l-4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     'message-square': '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M15.75 11.25a1.5 1.5 0 01-1.5 1.5H5.25L2.25 15.75V3.75a1.5 1.5 0 011.5-1.5h10.5a1.5 1.5 0 011.5 1.5v7.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   }
   return icons[name] || ''
@@ -379,11 +469,11 @@ function getIcon(name: string): string {
 </script>
 
 <template>
-  <div class="layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div class="layout" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'console-admin': isAdminConsole }">
     <aside class="sidebar">
         <div class="sidebar-header">
-            <img src="/logo-navy.png" alt="Posta" class="sidebar-logo" @click="navigate('/')" />
-            <span class="sidebar-brand-text" @click="navigate('/')">Posta<span class="sidebar-brand-text-dot">.</span></span>
+            <img src="/logo-navy.png" alt="Posta" class="sidebar-logo" @click="navigate(consoleHome)" />
+            <span class="sidebar-brand-text" @click="navigate(consoleHome)">Posta<span class="sidebar-brand-text-dot">.</span></span>
          
           <button class="sidebar-collapse-btn" @click="toggleSidebar"
             :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
@@ -401,8 +491,12 @@ function getIcon(name: string): string {
         <div class="ws-switcher">
           <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
             <div class="ws-switcher-current">
-              <div class="ws-avatar">{{ wsStore.currentWorkspace?.name?.charAt(0)?.toUpperCase() || 'P' }}</div>
-              <span v-if="!sidebarCollapsed" class="ws-switcher-name">{{ wsStore.contextLabel }}</span>
+              <div v-if="isAdminConsole" class="ws-avatar ws-avatar-admin" v-html="getIcon('shield-admin')"></div>
+              <div v-else class="ws-avatar">{{ wsStore.currentWorkspace?.name?.charAt(0)?.toUpperCase() || 'P' }}</div>
+              <span v-if="!sidebarCollapsed" class="ws-switcher-name">
+                {{ isAdminConsole ? 'Platform' : wsStore.contextLabel }}
+                <span v-if="isAdminConsole" class="ws-admin-badge">Admin</span>
+              </span>
             </div>
             <svg v-if="!sidebarCollapsed" width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
@@ -411,7 +505,7 @@ function getIcon(name: string): string {
           </div>
           <div v-if="wsSwitcherOpen" class="ws-switcher-dropdown">
             <div v-for="ws in wsStore.workspaces" :key="ws.id" class="ws-switcher-option"
-              :class="{ active: wsStore.currentWorkspaceId === ws.id }" @click="switchContext(ws.id)">
+              :class="{ active: !isAdminConsole && wsStore.currentWorkspaceId === ws.id }" @click="switchContext(ws.id)">
               <div class="ws-avatar-sm">{{ ws.name.charAt(0).toUpperCase() }}</div>
               <span>{{ ws.name }}</span>
               <span class="ws-role-badge" :class="{ 'ws-role-badge--system': ws.system }">{{ ws.system ? 'system' : ws.role }}</span>
@@ -425,6 +519,20 @@ function getIcon(name: string): string {
               <span class="nav-icon" v-html="getIcon('briefcase')"></span>
               <span>Manage workspaces…</span>
             </div>
+            <!-- The platform is not a workspace, so it sits below its own rule
+                 rather than as one more row in the list above. -->
+            <template v-if="auth.isAdmin">
+              <div class="ws-switcher-divider"></div>
+              <div v-if="isAdminConsole" class="ws-switcher-action" @click="leaveAdmin">
+                <span class="nav-icon" v-html="getIcon('arrow-left')"></span>
+                <span>Back to {{ wsStore.isWorkspaceContext ? wsStore.contextLabel : 'workspaces' }}</span>
+              </div>
+              <div v-else class="ws-switcher-action ws-switcher-enter" @click="enterAdmin">
+                <span class="nav-icon" v-html="getIcon('shield-admin')"></span>
+                <span>Platform admin</span>
+                <span class="nav-icon ws-switcher-enter-chevron" v-html="getIcon('chevron-right')"></span>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -636,10 +744,14 @@ function getIcon(name: string): string {
         <div class="ws-switcher">
           <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
             <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-              <span class="ws-avatar">
+              <span v-if="isAdminConsole" class="ws-avatar ws-avatar-admin" v-html="getIcon('shield-admin')"></span>
+              <span v-else class="ws-avatar">
                 {{ wsStore.currentWorkspace?.name?.charAt(0)?.toUpperCase() || 'P' }}
               </span>
-              <span class="ws-name">{{ wsStore.contextLabel }}</span>
+              <span class="ws-name">
+                {{ isAdminConsole ? 'Platform' : wsStore.contextLabel }}
+                <span v-if="isAdminConsole" class="ws-admin-badge">Admin</span>
+              </span>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -650,7 +762,7 @@ function getIcon(name: string): string {
           <Transition name="dropdown">
             <div v-if="wsSwitcherOpen" class="ws-dropdown">
               <div v-for="ws in wsStore.workspaces" :key="ws.id" class="ws-option"
-                :class="{ active: wsStore.currentWorkspaceId === ws.id }"
+                :class="{ active: !isAdminConsole && wsStore.currentWorkspaceId === ws.id }"
                 @click="switchContext(ws.id); mobileOpen = false">
                 <span class="ws-avatar">{{ ws.name?.charAt(0)?.toUpperCase() }}</span>
                 <div style="display: flex; flex-direction: column;">
@@ -668,6 +780,18 @@ function getIcon(name: string): string {
                 <span class="nav-icon" v-html="getIcon('briefcase')"></span>
                 <span>Manage workspaces…</span>
               </div>
+              <template v-if="auth.isAdmin">
+                <div class="ws-switcher-divider"></div>
+                <div v-if="isAdminConsole" class="ws-option" @click="leaveAdmin">
+                  <span class="nav-icon" v-html="getIcon('arrow-left')"></span>
+                  <span>Back to {{ wsStore.isWorkspaceContext ? wsStore.contextLabel : 'workspaces' }}</span>
+                </div>
+                <div v-else class="ws-option ws-switcher-enter" @click="enterAdmin">
+                  <span class="nav-icon" v-html="getIcon('shield-admin')"></span>
+                  <span>Platform admin</span>
+                  <span class="nav-icon ws-switcher-enter-chevron" v-html="getIcon('chevron-right')"></span>
+                </div>
+              </template>
             </div>
           </Transition>
         </div>
@@ -733,6 +857,47 @@ function getIcon(name: string): string {
 
 .sidebar-collapsed .sidebar:not(.sidebar-mobile) {
   width: 64px;
+}
+
+/* The platform console's sidebar carries a Signal Purple wash (the brand
+   accent) so the console you are in reads at a glance: deleting a workspace's
+   template and deleting a user look alike otherwise, and only one of them is
+   scoped to a single tenant. */
+.console-admin .sidebar {
+  background:
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--primary-600, #9333ea) 28%, transparent),
+      color-mix(in srgb, var(--primary-700, #7e22ce) 10%, transparent) 45%,
+      transparent 80%),
+    var(--bg-sidebar);
+  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--primary-500, #a855f7) 55%, transparent);
+}
+
+.ws-avatar.ws-avatar-admin {
+  background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+}
+
+.ws-avatar-admin :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+
+.ws-admin-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  color: #d8b4fe;
+  background: color-mix(in srgb, var(--primary-500, #a855f7) 22%, transparent);
+}
+
+.ws-switcher-enter-chevron {
+  margin-left: auto;
+  opacity: 0.6;
 }
 
 .sidebar-header {
