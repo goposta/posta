@@ -26,6 +26,7 @@ import (
 	"github.com/goposta/posta/internal/handlers"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/messages"
+	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
 
@@ -302,6 +303,41 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Options: []okapi.RouteOption{
 				okapi.DocPathParam("id", "string", "Message UUID"),
 			},
+		},
+		{
+			Method:      http.MethodPut,
+			Path:        "/messages/{id}/tags",
+			Handler:     okapi.H(r.h.message.UpdateTags),
+			Group:       opsGroup,
+			Summary:     "Add or remove message tags",
+			Description: "Tags are lowercased and deduplicated. A tag in both add and remove is removed.",
+			Request:     &handlers.UpdateMessageTagsRequest{},
+			Response:    &dto.Response[models.Message]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "string", "Message UUID"),
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
+			},
+		},
+		{
+			Method:   http.MethodPut,
+			Path:     "/messages/{id}/priority",
+			Handler:  okapi.H(r.h.message.UpdatePriority),
+			Group:    opsGroup,
+			Summary:  "Set message priority",
+			Request:  &handlers.UpdateMessagePriorityRequest{},
+			Response: &dto.Response[models.Message]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "string", "Message UUID"),
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/message-tags",
+			Handler:     r.h.message.Tags,
+			Group:       opsGroup,
+			Summary:     "List message tags in use",
+			Description: "Tags on the workspace's recent messages, most used first, for suggestions and filters.",
+			Response:    &dto.Response[[]repositories.TagCount]{},
 		},
 		{
 			Method:      http.MethodPost,

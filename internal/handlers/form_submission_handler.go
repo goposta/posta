@@ -56,14 +56,16 @@ const (
 // field.<key>[lte]=n for ranges on number, scale, rating, date and time
 // questions.
 type SubmissionQueryRequest struct {
-	FormID int    `query:"form_id" doc:"The form whose submissions to read (required)"`
-	Page   int    `query:"page" default:"0"`
-	Size   int    `query:"size" default:"20"`
-	Status string `query:"status" enum:"received,flagged,quarantined,rejected" doc:"Defaults to received and flagged: spam is not a response"`
-	Q      string `query:"q" doc:"Free-text search over the submission"`
-	After  string `query:"after" doc:"RFC 3339 lower bound on received time"`
-	Before string `query:"before" doc:"RFC 3339 upper bound on received time"`
-	Format string `query:"format" enum:"csv,json" default:"csv" doc:"Export only"`
+	FormID   int    `query:"form_id" doc:"The form whose submissions to read (required)"`
+	Page     int    `query:"page" default:"0"`
+	Size     int    `query:"size" default:"20"`
+	Status   string `query:"status" enum:"received,flagged,quarantined,rejected" doc:"Defaults to received and flagged: spam is not a response"`
+	Q        string `query:"q" doc:"Free-text search over the submission"`
+	After    string `query:"after" doc:"RFC 3339 lower bound on received time"`
+	Before   string `query:"before" doc:"RFC 3339 upper bound on received time"`
+	Tag      string `query:"tag" doc:"Only submissions carrying this tag"`
+	Priority string `query:"priority" enum:"low,normal,high,urgent"`
+	Format   string `query:"format" enum:"csv,json" default:"csv" doc:"Export only"`
 }
 
 // submissionQuery resolves the form and the filter a request names. It writes
@@ -80,10 +82,16 @@ func (h *MessageHandler) submissionQuery(c *okapi.Context, req *SubmissionQueryR
 	if err != nil {
 		return nil, nil, c.AbortBadRequest(err.Error())
 	}
+	tags, err := tagFilter(req.Tag)
+	if err != nil {
+		return nil, nil, c.AbortBadRequest(err.Error())
+	}
 	filter := &repositories.MessageFilterQuery{
 		FormID:          form.ID,
 		Status:          req.Status,
 		Query:           strings.TrimSpace(req.Q),
+		Tags:            tags,
+		Priority:        req.Priority,
 		SubmissionsOnly: true,
 		DataEquals:      equals,
 		DataRanges:      ranges,
@@ -255,6 +263,20 @@ func answersOf(m *models.Message) models.SubmissionData {
 // exportColumns are the questions an export carries, active ones first, then
 // archived ones, so old answers are not lost. Personal-data questions are
 // left out unless the caller may see them.
+func priorityOf(m *models.Message) models.MessagePriority {
+	if m.Priority == "" {
+		return models.MessagePriorityNormal
+	}
+	return m.Priority
+}
+
+func tagsOf(m *models.Message) []string {
+	if m.Tags == nil {
+		return []string{}
+	}
+	return m.Tags
+}
+
 func exportColumns(defs models.FieldDefs, showPII bool) (cols []models.FieldDef, withheld int) {
 	for _, archived := range []bool{false, true} {
 		for _, f := range defs {
@@ -327,7 +349,7 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 		// The byte-order mark makes Excel read the file as UTF-8.
 		_, _ = out.WriteString("\ufeff")
 		w := csv.NewWriter(out)
-		header := []string{"Submitted at", "ID", "Status"}
+		header := []string{"Submitted at", "ID", "Status", "Priority", "Tags"}
 		if len(form.Fields) == 0 {
 			header = append(header, "Email", "Name", "Phone", "Subject", "Message", "Fields")
 		}
@@ -348,7 +370,8 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 			return nil
 		}
 		write = func(m *models.Message) error {
-			record := []string{m.CreatedAt.UTC().Format(time.RFC3339), m.UUID, string(m.Status)}
+			record := []string{m.CreatedAt.UTC().Format(time.RFC3339), m.UUID, string(m.Status),
+				string(priorityOf(m)), csvSafe(strings.Join(m.Tags, "; "))}
 			if len(form.Fields) == 0 {
 				hydrate(m)
 				raw, _ := json.Marshal(m.Fields)
@@ -381,6 +404,8 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 				"id":           m.UUID,
 				"submitted_at": m.CreatedAt.UTC().Format(time.RFC3339),
 				"status":       m.Status,
+				"priority":     priorityOf(m),
+				"tags":         tagsOf(m),
 			}
 			if len(form.Fields) == 0 {
 				hydrate(m)

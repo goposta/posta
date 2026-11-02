@@ -5,6 +5,7 @@ import { messagesApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
 import type { Message } from "../../api/types";
+import MessageTriage from "./MessageTriage.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -141,7 +142,7 @@ async function remove() {
   busy.value = true;
   try {
     await messagesApi.delete(uuid);
-    router.push("/messages");
+    router.push(backTo.value);
   } catch (e: any) {
     notify.error(apiMessage(e, "Failed to delete message"));
     busy.value = false;
@@ -248,6 +249,15 @@ async function copyValue(value: string) {
   }
 }
 
+// A collect-mode form's submissions are responses to read, not conversations:
+// no reply composer and no state to work through.
+const collect = computed(() => message.value?.form?.mode === "collect");
+const backTo = computed(() =>
+  collect.value && message.value?.form
+    ? `/forms/${message.value.form.id}?tab=responses`
+    : "/messages"
+);
+
 const canReply = computed(
   () => !!message.value?.sender_email && message.value?.status !== "rejected"
 );
@@ -294,9 +304,14 @@ onBeforeUnmount(() => {
 <template>
   <div>
     <div class="page-header">
-      <h1>Message</h1>
+      <h1>{{ collect ? "Response" : "Message" }}</h1>
       <div style="display: flex; gap: 8px">
-        <button v-if="message" class="btn btn-secondary" :disabled="busy" @click="setState('closed')">
+        <button
+          v-if="message && !collect"
+          class="btn btn-secondary"
+          :disabled="busy"
+          @click="setState('closed')"
+        >
           Close
         </button>
         <button
@@ -316,7 +331,7 @@ onBeforeUnmount(() => {
           Not spam
         </button>
         <button class="btn btn-danger" :disabled="busy" @click="remove">Delete</button>
-        <button class="btn btn-secondary" @click="router.push('/messages')">Back</button>
+        <button class="btn btn-secondary" @click="router.push(backTo)">Back</button>
       </div>
     </div>
 
@@ -338,7 +353,7 @@ onBeforeUnmount(() => {
           <h2>{{ message.subject || "(no subject)" }}</h2>
           <div style="display: flex; gap: 8px">
             <span :class="statusBadgeClass(message.status)">{{ message.status }}</span>
-            <span class="badge badge-secondary">{{ message.state }}</span>
+            <span v-if="!collect" class="badge badge-secondary">{{ message.state }}</span>
           </div>
         </div>
         <div class="card-body">
@@ -390,6 +405,9 @@ onBeforeUnmount(() => {
               </tr>
             </tbody>
           </table>
+          <div class="triage-block">
+            <MessageTriage :message="message" @updated="message = $event" />
+          </div>
         </div>
       </div>
 
@@ -513,7 +531,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="card">
+      <div v-if="!collect" class="card">
         <div class="card-header"><h2>Reply</h2></div>
         <div class="card-body">
           <div v-if="!canReply" class="empty-state">
@@ -558,6 +576,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.triage-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-secondary);
+}
+
 .submission-actions {
   display: flex;
   align-items: center;

@@ -22,6 +22,9 @@ const status = ref("");
 const state = ref("");
 const unread = ref(false);
 const q = ref("");
+const tag = ref(String(route.query.tag || ""));
+const priority = ref("");
+const knownTags = ref<string[]>([]);
 
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true;
@@ -33,6 +36,8 @@ const { pageable, goToPage } = usePagination(async (page) => {
       state: state.value || undefined,
       unread: unread.value || undefined,
       q: q.value || undefined,
+      tag: tag.value || undefined,
+      priority: priority.value || undefined,
     });
     messages.value = res.data.data;
     pageable.value = res.data.pageable;
@@ -50,12 +55,14 @@ const { pageable, goToPage } = usePagination(async (page) => {
 
 async function loadSidebarData() {
   try {
-    const [formsRes, statsRes] = await Promise.all([
+    const [formsRes, statsRes, tagsRes] = await Promise.all([
       formsApi.list({ size: 100 }),
       messagesApi.stats(),
+      messagesApi.tags(),
     ]);
     forms.value = formsRes.data.data;
     stats.value = statsRes.data.data;
+    knownTags.value = tagsRes.data.data.map((t) => t.tag);
   } catch {
     /* the list view already reports a disabled feature */
   }
@@ -71,6 +78,8 @@ function resetFilters() {
   state.value = "";
   unread.value = false;
   q.value = "";
+  tag.value = "";
+  priority.value = "";
   goToPage(0);
 }
 
@@ -98,6 +107,18 @@ onBeforeUnmount(() => {
 });
 
 const hasForms = computed(() => forms.value.length > 0);
+const collectForms = computed(() => forms.value.filter((f) => f.mode === "collect"));
+
+function filterByTag(value: string) {
+  tag.value = value;
+  applyFilters();
+}
+
+const PRIORITY_BADGES: Record<string, { label: string; cls: string }> = {
+  urgent: { label: "Urgent", cls: "badge badge-danger" },
+  high: { label: "High", cls: "badge badge-warning" },
+  low: { label: "Low", cls: "badge badge-neutral" },
+};
 
 function statusBadgeClass(value: string) {
   switch (value) {
@@ -217,6 +238,26 @@ function formatDate(date: string | null | undefined) {
             </select>
           </div>
 
+          <div style="flex: 1 1 120px">
+            <label class="form-label">Priority</label>
+            <select v-model="priority" class="form-select" @change="applyFilters">
+              <option value="">Any</option>
+              <option value="urgent">Urgent</option>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          <div v-if="knownTags.length || tag" style="flex: 1 1 140px">
+            <label class="form-label">Tag</label>
+            <select v-model="tag" class="form-select" @change="applyFilters">
+              <option value="">Any</option>
+              <option v-if="tag && !knownTags.includes(tag)" :value="tag">{{ tag }}</option>
+              <option v-for="t in knownTags" :key="t" :value="t">{{ t }}</option>
+            </select>
+          </div>
+
           <div style="flex: 2 1 200px">
             <label class="form-label">Search</label>
             <input
@@ -236,6 +277,16 @@ function formatDate(date: string | null | undefined) {
             <button class="btn btn-secondary" @click="resetFilters">Reset</button>
           </div>
         </div>
+
+        <p v-if="!formId && collectForms.length" class="collect-note">
+          Responses to
+          <template v-for="(f, i) in collectForms.slice(0, 3)" :key="f.id">
+            <router-link :to="`/forms/${f.id}?tab=responses`">{{ f.name }}</router-link
+            >{{ i < Math.min(collectForms.length, 3) - 1 ? ", " : "" }}
+          </template>
+          <template v-if="collectForms.length > 3"> and {{ collectForms.length - 3 }} more</template>
+          are collected on {{ collectForms.length === 1 ? "its form" : "their forms" }}, not in this inbox.
+        </p>
 
         <div v-if="messages.length === 0" class="empty-state">
           <h3>No messages yet</h3>
@@ -271,7 +322,23 @@ function formatDate(date: string | null | undefined) {
                   <td :style="{ fontWeight: message.read_at ? '400' : '600' }">
                     {{ senderLabel(message) }}
                   </td>
-                  <td>{{ message.subject || "(no subject)" }}</td>
+                  <td>
+                    <span class="subject-cell">
+                      <span
+                        v-if="PRIORITY_BADGES[message.priority]"
+                        :class="PRIORITY_BADGES[message.priority].cls"
+                      >{{ PRIORITY_BADGES[message.priority].label }}</span>
+                      <span>{{ message.subject || "(no subject)" }}</span>
+                      <button
+                        v-for="t in message.tags"
+                        :key="t"
+                        type="button"
+                        class="tag-chip"
+                        :title="`Show messages tagged ${t}`"
+                        @click.stop="filterByTag(t)"
+                      >{{ t }}</button>
+                    </span>
+                  </td>
                   <td>{{ message.form?.name || "-" }}</td>
                   <td>
                     <span :class="statusBadgeClass(message.status)">{{ message.status }}</span>
@@ -290,3 +357,36 @@ function formatDate(date: string | null | undefined) {
     </template>
   </div>
 </template>
+
+<style scoped>
+.collect-note {
+  margin: 0;
+  padding: 0 20px 14px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.subject-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-chip {
+  border: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tag-chip:hover,
+.tag-chip:focus-visible {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+</style>

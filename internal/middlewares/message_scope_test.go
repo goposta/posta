@@ -36,6 +36,9 @@ func TestWorkspaceScopeForMessageRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v1/workspaces/current/messages/abc", models.ScopeRead},
 		{http.MethodPost, "/api/v1/workspaces/current/messages/abc/reply", models.ScopeWrite},
 		{http.MethodDelete, "/api/v1/workspaces/current/messages/abc", models.ScopeWrite},
+		{http.MethodPut, "/api/v1/workspaces/current/messages/abc/tags", models.ScopeWrite},
+		{http.MethodPut, "/api/v1/workspaces/current/messages/abc/priority", models.ScopeWrite},
+		{http.MethodGet, "/api/v1/workspaces/current/message-tags", models.ScopeRead},
 
 		{http.MethodGet, "/api/v1/workspaces/current/forms", models.ScopeAdmin},
 		{http.MethodPost, "/api/v1/workspaces/current/forms", models.ScopeAdmin},

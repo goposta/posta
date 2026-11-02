@@ -28,7 +28,9 @@ const TABS = [
   { key: "embed", label: "Share & embed" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
-const tab = ref<Tab>("questions");
+// ?tab=responses opens a tab directly (digest emails and the inbox link here).
+const queryTab = TABS.find((t) => t.key === route.query.tab)?.key;
+const tab = ref<Tab>(queryTab ?? "questions");
 
 const originsText = ref("");
 // close_at is edited in the browser's local time and stored as UTC.
@@ -66,6 +68,8 @@ async function load() {
     originsText.value = (formRes.data.data.allowed_origins || []).join(", ");
     syncResponseFields(formRes.data.data);
     notifyText.value = (formRes.data.data.notify_emails || []).join(", ");
+    // A collect form is mostly read, so it opens on its responses.
+    if (!queryTab && formRes.data.data.mode === "collect") tab.value = "responses";
   } catch (e: any) {
     loadFailed.value = true;
     notify.error(apiMessage(e, "Failed to load form"));
@@ -89,6 +93,7 @@ async function save() {
       name: form.value.name,
       description: form.value.description,
       status: form.value.status,
+      mode: form.value.mode,
       allowed_origins: splitList(originsText.value),
       strict_origin: form.value.strict_origin,
       redirect_url: form.value.redirect_url,
@@ -229,7 +234,7 @@ onMounted(load);
       <h1>{{ form?.name || "Form" }}</h1>
       <div style="display: flex; gap: 8px">
         <router-link
-          v-if="form"
+          v-if="form && form.mode !== 'collect'"
           :to="`/messages?form_id=${form.id}`"
           class="btn btn-secondary"
         >View messages</router-link>
@@ -267,7 +272,7 @@ onMounted(load);
 
       <FormFields v-show="tab === 'questions'" :form="form" @saved="onFieldsSaved" />
       <!-- Mounted on demand: it loads responses, and has no edits to keep. -->
-      <FormResponses v-if="tab === 'responses'" :form="form" />
+      <FormResponses v-if="tab === 'responses'" :form="form" :share-url="snippet?.share_url" />
 
       <div v-show="tab === 'setup'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Setup</h2></div>
@@ -280,6 +285,29 @@ onMounted(load);
             <label class="form-label">Description</label>
             <input v-model="form.description" class="form-input" />
           </div>
+          <fieldset class="form-group mode-choice">
+            <legend class="form-label">What submissions are</legend>
+            <label class="mode-option" :class="{ selected: form.mode !== 'collect' }">
+              <input v-model="form.mode" type="radio" value="inbox" />
+              <span>
+                <strong>Messages to answer</strong>
+                <small class="muted">
+                  Contact and support forms. Submissions arrive in the inbox, where you reply,
+                  assign and close them.
+                </small>
+              </span>
+            </label>
+            <label class="mode-option" :class="{ selected: form.mode === 'collect' }">
+              <input v-model="form.mode" type="radio" value="collect" />
+              <span>
+                <strong>Responses to collect</strong>
+                <small class="muted">
+                  Surveys, signups and RSVPs. Responses stay out of the inbox and are read on the
+                  Responses tab, as a summary or a table.
+                </small>
+              </span>
+            </label>
+          </fieldset>
           <div class="form-group">
             <label class="form-label">Status</label>
             <select v-model="form.status" class="form-select">
@@ -326,12 +354,12 @@ onMounted(load);
               Accept file attachments
             </label>
           </div>
-          <div class="form-group">
+          <div v-if="form.mode !== 'collect'" class="form-group">
             <label class="form-label">Reply sender</label>
             <input v-model="form.reply_from" class="form-input" placeholder="support@example.com" />
             <small class="muted">Must be on a verified domain in this workspace.</small>
           </div>
-          <div class="form-group">
+          <div v-if="form.mode !== 'collect'" class="form-group">
             <label class="form-label">Reply sender name</label>
             <input v-model="form.reply_from_name" class="form-input" placeholder="Acme Support" />
           </div>
@@ -607,3 +635,44 @@ onMounted(load);
     </template>
   </div>
 </template>
+
+<style scoped>
+.mode-choice {
+  border: 0;
+  padding: 0;
+  margin-inline: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.mode-choice legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.mode-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mode-option.selected {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+}
+
+.mode-option input {
+  margin-top: 3px;
+}
+
+.mode-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+</style>

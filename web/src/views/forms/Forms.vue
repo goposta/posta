@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { formsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
-import type { Form } from "../../api/types";
+import type { Form, FormMode } from "../../api/types";
 import Pagination from "../../components/Pagination.vue";
 import { usePagination } from "../../composables/usePagination";
 
@@ -19,6 +19,7 @@ const creating = ref(false);
 const newName = ref("");
 const newOrigins = ref("");
 const newNotify = ref("");
+const newMode = ref<FormMode>("inbox");
 
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true;
@@ -42,6 +43,7 @@ function openCreate() {
   newName.value = "";
   newOrigins.value = "";
   newNotify.value = "";
+  newMode.value = "inbox";
   showCreate.value = true;
 }
 
@@ -51,6 +53,7 @@ async function createForm() {
   try {
     const res = await formsApi.create({
       name: newName.value.trim(),
+      mode: newMode.value,
       allowed_origins: splitList(newOrigins.value),
       notify_emails: splitList(newNotify.value),
     });
@@ -126,9 +129,10 @@ function formatDate(date: string | null | undefined) {
                 <th>Name</th>
                 <th>Public key</th>
                 <th>Status</th>
-                <th>Messages</th>
+                <th>Kind</th>
+                <th>Submissions</th>
                 <th>Spam</th>
-                <th>Last message</th>
+                <th>Last submission</th>
               </tr>
             </thead>
             <tbody>
@@ -141,6 +145,7 @@ function formatDate(date: string | null | undefined) {
                 <td>{{ form.name }}</td>
                 <td><code style="font-size: 12px">{{ form.public_key }}</code></td>
                 <td><span :class="statusBadgeClass(form.status)">{{ form.status }}</span></td>
+                <td>{{ form.mode === "collect" ? "Responses" : "Messages" }}</td>
                 <td>{{ form.message_count }}</td>
                 <td>{{ form.spam_count }}</td>
                 <td>{{ formatDate(form.last_message_at) }}</td>
@@ -161,6 +166,16 @@ function formatDate(date: string | null | undefined) {
           <div class="form-group">
             <label class="form-label">Name</label>
             <input v-model="newName" class="form-input" placeholder="Contact form" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Submissions are</label>
+            <select v-model="newMode" class="form-select">
+              <option value="inbox">Messages to answer (contact, support)</option>
+              <option value="collect">Responses to collect (surveys, signups, RSVPs)</option>
+            </select>
+            <small v-if="newMode === 'collect'" class="muted">
+              Responses stay out of the inbox, and notifications default to a daily digest.
+            </small>
           </div>
           <div class="form-group">
             <label class="form-label">Allowed origins</label>

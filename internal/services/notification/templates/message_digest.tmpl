@@ -1,8 +1,8 @@
 {{ define "content" }}
-<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">{{ .Period }} message digest</h2>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">{{ .Period }} {{ if .Collect }}response{{ else }}message{{ end }} digest</h2>
 <p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
 
-<p style="margin: 0 0 16px;">{{ if .WorkspaceName }}<strong>{{ .WorkspaceName }}</strong> received{{ else }}You received{{ end }} <strong>{{ .Total }}</strong> new message{{ if ne .Total 1 }}s{{ end }} on <strong>{{ .FormName }}</strong>.</p>
+<p style="margin: 0 0 16px;">{{ if .WorkspaceName }}<strong>{{ .WorkspaceName }}</strong> received{{ else }}You received{{ end }} <strong>{{ .Total }}</strong> new {{ if .Collect }}response{{ else }}message{{ end }}{{ if ne .Total 1 }}s{{ end }} on <strong>{{ .FormName }}</strong>.</p>
 
 <table class="stats-table" role="presentation" style="width: 100%; border-collapse: separate; border-spacing: 0; margin: 20px 0; border: 1px solid #eceef2; border-radius: 10px; overflow: hidden;">
   <tr>
@@ -20,7 +20,7 @@
 {{ if .InboxURL }}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
   <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
-    <a href="{{ .InboxURL }}" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Open inbox</a>
+    <a href="{{ .InboxURL }}" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">{{ if .Collect }}Open responses{{ else }}Open inbox{{ end }}</a>
   </td></tr>
 </table>
 {{ end }}

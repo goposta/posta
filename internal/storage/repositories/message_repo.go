@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -38,6 +39,13 @@ type MessageFilterQuery struct {
 	Query    string
 	From     *time.Time
 	To       *time.Time
+
+	// Tags keeps messages carrying every listed tag; Priority one priority.
+	Tags     []string
+	Priority string
+	// InboxOnly leaves out collect-mode forms, whose responses are read as a
+	// table on the form rather than worked as conversations.
+	InboxOnly bool
 
 	// SubmissionsOnly leaves out quarantined and rejected messages unless
 	// Status asks for one: spam is not a response.
@@ -82,6 +90,15 @@ func applyMessageFilter(q *gorm.DB, scope ResourceScope, f MessageFilterQuery) *
 	}
 	if f.Unread {
 		q = q.Where("read_at IS NULL")
+	}
+	if len(f.Tags) > 0 {
+		q = q.Where("tags @> ?", pq.StringArray(f.Tags))
+	}
+	if f.Priority != "" {
+		q = q.Where("priority = ?", f.Priority)
+	}
+	if f.InboxOnly {
+		q = q.Where(notCollectForm)
 	}
 	if f.Query != "" {
 		like := "%" + strings.ToLower(f.Query) + "%"
@@ -292,14 +309,38 @@ func (r *MessageRepository) Delete(id uint) error {
 	return r.db.Delete(&models.Message{}, id).Error
 }
 
+// notCollectForm keeps messages whose form is in inbox mode.
+const notCollectForm = "NOT EXISTS (SELECT 1 FROM forms WHERE forms.id = messages.form_id AND forms.mode = 'collect')"
+
+// CountByScope counts the inbox: total and unread leave out collect-mode
+// forms, as the inbox list does; spam counts every form.
 func (r *MessageRepository) CountByScope(scope ResourceScope) (total, unread, spam int64) {
 	ApplyWorkspaceScope(r.db.Model(&models.Message{}), scope).
-		Where("status <> ?", models.MessageStatusRejected).Count(&total)
+		Where("status <> ?", models.MessageStatusRejected).Where(notCollectForm).Count(&total)
 	ApplyWorkspaceScope(r.db.Model(&models.Message{}), scope).
-		Where("read_at IS NULL AND status IN ?", []models.MessageStatus{models.MessageStatusReceived, models.MessageStatusFlagged}).Count(&unread)
+		Where("read_at IS NULL AND status IN ?", []models.MessageStatus{models.MessageStatusReceived, models.MessageStatusFlagged}).
+		Where(notCollectForm).Count(&unread)
 	ApplyWorkspaceScope(r.db.Model(&models.Message{}), scope).
 		Where("status IN ?", []models.MessageStatus{models.MessageStatusQuarantined, models.MessageStatusRejected}).Count(&spam)
 	return
+}
+
+// TagCount is one tag in use and how many messages carry it.
+type TagCount struct {
+	Tag   string `json:"tag"`
+	Count int64  `json:"count"`
+}
+
+// RecentTags lists the tags on the newest tagged messages, most used first,
+// for suggestions. It reads a bounded window so a large workspace stays cheap.
+func (r *MessageRepository) RecentTags(scope ResourceScope, window, limit int) ([]TagCount, error) {
+	recent := ApplyWorkspaceScope(r.db.Model(&models.Message{}), scope).
+		Select("tags").Where("tags IS NOT NULL AND cardinality(tags) > 0").
+		Order("id DESC").Limit(window)
+	var out []TagCount
+	err := r.db.Raw("SELECT t.tag, COUNT(*) AS count FROM (?) AS recent, unnest(recent.tags) AS t(tag) GROUP BY t.tag ORDER BY count DESC, t.tag ASC LIMIT ?",
+		recent, limit).Scan(&out).Error
+	return out, err
 }
 
 func (r *MessageRepository) CountBySenderSince(formID uint, email string, since time.Time) int64 {

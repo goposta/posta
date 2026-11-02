@@ -242,16 +242,28 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form) e
 		_ = json.Unmarshal([]byte(msg.FieldsJSON), &fields)
 	}
 
-	subject := fmt.Sprintf("New message on %s", form.Name)
+	noun := "message"
+	if form.IsCollect() {
+		noun = "response"
+	}
+	subject := fmt.Sprintf("New %s on %s", noun, form.Name)
 	if msg.Status == models.MessageStatusFlagged {
-		subject = fmt.Sprintf("Flagged message on %s", form.Name)
+		subject = fmt.Sprintf("Flagged %s on %s", noun, form.Name)
 	}
 
+	// Answers to personal-data questions stay out of email: inboxes are
+	// forwarded, synced and searched far beyond the workspace.
+	mask := messages.NewPIIMask(form.Fields)
+	phone := msg.SenderPhone
+	if mask.Value(models.RoleSenderPhone, phone) != phone {
+		phone = "" // the Phone row in Fields shows it as hidden
+	}
 	data := map[string]any{
 		"FormName":    form.Name,
-		"SenderPhone": msg.SenderPhone,
-		"Fields":      notifiableFields(msg, fields),
-		"Body":        msg.Body,
+		"Collect":     form.IsCollect(),
+		"SenderPhone": phone,
+		"Fields":      notifiableFields(msg, fields, mask),
+		"Body":        mask.Value(models.RoleBody, msg.Body),
 		"Flagged":     msg.Status == models.MessageStatusFlagged,
 		"SpamScore":   fmt.Sprintf("%.1f", msg.SpamScore),
 		"MessageURL":  h.messageURL(msg.UUID),
@@ -309,14 +321,16 @@ var summarizedFieldKeys = func() map[string]bool {
 	return set
 }()
 
-func notifiableFields(msg *models.Message, fields []models.MessageField) []models.MessageField {
-	out := []models.MessageField{
-		{Key: "From", Value: displaySender(msg)},
+func notifiableFields(msg *models.Message, fields []models.MessageField, mask messages.PIIMask) []models.MessageField {
+	from := mask.Sender(msg.SenderName, msg.SenderEmail)
+	if from == "" {
+		from = "unknown sender"
 	}
+	out := []models.MessageField{{Key: "From", Value: from}}
 	if msg.SenderPhone != "" {
-		out = append(out, models.MessageField{Key: "Phone", Value: msg.SenderPhone})
+		out = append(out, models.MessageField{Key: "Phone", Value: mask.Value(models.RoleSenderPhone, msg.SenderPhone)})
 	}
-	out = append(out, models.MessageField{Key: "Subject", Value: msg.Subject})
+	out = append(out, models.MessageField{Key: "Subject", Value: mask.Value(models.RoleSubject, msg.Subject)})
 
 	for _, f := range fields {
 		if summarizedFieldKeys[strings.ToLower(strings.TrimSpace(f.Key))] {
@@ -325,22 +339,12 @@ func notifiableFields(msg *models.Message, fields []models.MessageField) []model
 		if len(out) >= 12 {
 			break
 		}
+		if mask.Key(f.Key) && f.Value != "" {
+			f.Value = messages.HiddenValue
+		}
 		out = append(out, f)
 	}
 	return out
-}
-
-func displaySender(msg *models.Message) string {
-	switch {
-	case msg.SenderName != "" && msg.SenderEmail != "":
-		return fmt.Sprintf("%s <%s>", msg.SenderName, msg.SenderEmail)
-	case msg.SenderEmail != "":
-		return msg.SenderEmail
-	case msg.SenderName != "":
-		return msg.SenderName
-	default:
-		return "unknown sender"
-	}
 }
 
 func cloneData(in map[string]any) map[string]any {
@@ -444,7 +448,7 @@ func (h *MessageProcessHandler) notifyReply(msg *models.Message, form *models.Fo
 		"Reply":          true,
 		"SenderMismatch": reply.SenderMismatch,
 		"Fields": []models.MessageField{
-			{Key: "From", Value: reply.FromAddr},
+			{Key: "From", Value: messages.NewPIIMask(form.Fields).Value(models.RoleSenderEmail, reply.FromAddr)},
 			{Key: "Subject", Value: reply.Subject},
 		},
 		"Body":       reply.TextBody,

@@ -1,5 +1,5 @@
 {{ define "content" }}
-<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">{{ if .Reply }}New reply on {{ .FormName }}{{ else }}New message on {{ .FormName }}{{ end }}</h2>
+<h2 style="color: #111827; font-size: 20px; line-height: 1.3; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em;">{{ if .Reply }}New reply on {{ .FormName }}{{ else if .Collect }}New response on {{ .FormName }}{{ else }}New message on {{ .FormName }}{{ end }}</h2>
 <p style="margin: 0 0 16px;">Hi {{ .UserName }},</p>
 
 {{ if .Reply }}
@@ -10,12 +10,12 @@
 </div>
 {{ end }}
 {{ else }}
-<p style="margin: 0 0 16px;">{{ if .WorkspaceName }}<strong>{{ .WorkspaceName }}</strong> received{{ else }}You received{{ end }} a new message through the <strong>{{ .FormName }}</strong> form.</p>
+<p style="margin: 0 0 16px;">{{ if .WorkspaceName }}<strong>{{ .WorkspaceName }}</strong> received{{ else }}You received{{ end }} a new {{ if .Collect }}response{{ else }}message{{ end }} through the <strong>{{ .FormName }}</strong> form.</p>
 {{ end }}
 
 {{ if .Flagged }}
 <div class="alert-box alert-warning" style="padding: 14px 16px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.55; background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e;">
-  This message was flagged by spam scanning (score {{ .SpamScore }}). Review it before replying.
+  This {{ if .Collect }}response{{ else }}message{{ end }} was flagged by spam scanning (score {{ .SpamScore }}).{{ if not .Collect }} Review it before replying.{{ end }}
 </div>
 {{ end }}
 
@@ -44,7 +44,7 @@
 {{ if .MessageURL }}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
   <tr><td align="center" bgcolor="#7c3aed" style="border-radius: 8px;">
-    <a href="{{ .MessageURL }}" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">Open and reply</a>
+    <a href="{{ .MessageURL }}" class="btn" style="display: inline-block; padding: 13px 30px; background-color: #7c3aed; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1;">{{ if .Collect }}Open response{{ else }}Open and reply{{ end }}</a>
   </td></tr>
 </table>
 {{ end }}

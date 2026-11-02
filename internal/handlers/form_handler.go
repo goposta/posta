@@ -91,6 +91,7 @@ type CreateFormRequest struct {
 		Name             string   `json:"name" required:"true"`
 		Slug             string   `json:"slug"`
 		Description      string   `json:"description"`
+		Mode             string   `json:"mode" enum:"inbox,collect" doc:"inbox (default): submissions are conversations to answer. collect: responses read as a table, kept out of the inbox."`
 		AllowedOrigins   []string `json:"allowed_origins"`
 		StrictOrigin     bool     `json:"strict_origin"`
 		RedirectURL      string   `json:"redirect_url"`
@@ -121,6 +122,7 @@ type UpdateFormRequest struct {
 		Slug                string            `json:"slug"`
 		Description         string            `json:"description"`
 		Status              string            `json:"status" enum:"active,paused,archived"`
+		Mode                *string           `json:"mode" doc:"inbox or collect"`
 		AllowedOrigins      *[]string         `json:"allowed_origins"`
 		StrictOrigin        *bool             `json:"strict_origin"`
 		RedirectURL         *string           `json:"redirect_url"`
@@ -210,6 +212,16 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		}
 	}
 
+	mode, valid := parseFormMode(req.Body.Mode)
+	if !valid {
+		return c.AbortBadRequest("mode must be inbox or collect")
+	}
+	notifyMode := normalizeNotifyMode(req.Body.NotifyMode)
+	if mode == models.FormModeCollect && strings.TrimSpace(req.Body.NotifyMode) == "" {
+		// A survey's responses are rarely urgent: one email a day, not one each.
+		notifyMode = models.NotifyModeDaily
+	}
+
 	key, err := generatePublicKey()
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate form key")
@@ -223,6 +235,7 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		Description:         strings.TrimSpace(req.Body.Description),
 		PublicKey:           key,
 		Status:              models.FormStatusActive,
+		Mode:                mode,
 		AllowedOrigins:      origins,
 		StrictOrigin:        req.Body.StrictOrigin,
 		RedirectURL:         strings.TrimSpace(req.Body.RedirectURL),
@@ -238,7 +251,7 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		RejectThreshold:     10,
 		NotifyEnabled:       true,
 		NotifyEmails:        notify,
-		NotifyMode:          normalizeNotifyMode(req.Body.NotifyMode),
+		NotifyMode:          notifyMode,
 		NotifyOnFlagged:     true,
 		ReplyFrom:           replyFrom,
 		ReplyFromName:       strings.TrimSpace(req.Body.ReplyFromName),
@@ -319,6 +332,13 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 			return c.AbortBadRequest("invalid status")
 		}
 		form.Status = status
+	}
+	if b.Mode != nil {
+		mode, valid := parseFormMode(*b.Mode)
+		if !valid {
+			return c.AbortBadRequest("mode must be inbox or collect")
+		}
+		form.Mode = mode
 	}
 	if b.AllowedOrigins != nil {
 		origins, err := normalizeOrigins(*b.AllowedOrigins)
@@ -596,6 +616,17 @@ func parseNotifyMode(v string) (models.NotifyMode, bool) {
 	default:
 		return models.NotifyModeImmediate, false
 	}
+}
+
+// parseFormMode reads a form mode; empty means inbox.
+func parseFormMode(v string) (models.FormMode, bool) {
+	switch models.FormMode(strings.ToLower(strings.TrimSpace(v))) {
+	case "", models.FormModeInbox:
+		return models.FormModeInbox, true
+	case models.FormModeCollect:
+		return models.FormModeCollect, true
+	}
+	return models.FormModeInbox, false
 }
 
 func normalizeNotifyMode(v string) models.NotifyMode {

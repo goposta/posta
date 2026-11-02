@@ -20,9 +20,11 @@
 package worker
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/messages"
 )
 
 func TestShouldNotify(t *testing.T) {
@@ -76,7 +78,7 @@ func TestShouldNotify(t *testing.T) {
 	}
 }
 
-func TestDisplaySender(t *testing.T) {
+func TestNotifiableFieldsSender(t *testing.T) {
 	cases := []struct {
 		msg  models.Message
 		want string
@@ -88,9 +90,40 @@ func TestDisplaySender(t *testing.T) {
 	}
 	for _, tc := range cases {
 		msg := tc.msg
-		if got := displaySender(&msg); got != tc.want {
-			t.Fatalf("displaySender(%+v) = %q, want %q", tc.msg, got, tc.want)
+		if got := notifiableFields(&msg, nil, messages.NewPIIMask(nil))[0].Value; got != tc.want {
+			t.Fatalf("From for %+v = %q, want %q", tc.msg, got, tc.want)
 		}
+	}
+}
+
+// Answers to personal-data questions never reach a notification email, and
+// neither do the summary values they fill.
+func TestNotifiableFieldsHidesPII(t *testing.T) {
+	mask := messages.NewPIIMask(models.FieldDefs{
+		{Key: "work_email", Type: models.FieldEmail, Role: models.RoleSenderEmail, PII: true},
+		{Key: "mobile", Type: models.FieldPhone, Role: models.RoleSenderPhone, PII: true},
+		{Key: "salary", Type: models.FieldNumber, PII: true},
+		{Key: "dept", Type: models.FieldText},
+	})
+	msg := &models.Message{SenderName: "Ada", SenderEmail: "ada@example.com", SenderPhone: "+1 555 010 9999", Subject: "Hi"}
+	fields := []models.MessageField{
+		{Key: "work_email", Value: "ada@example.com"},
+		{Key: "mobile", Value: "+1 555 010 9999"},
+		{Key: "salary", Value: "90000"},
+		{Key: "dept", Value: "sales"},
+	}
+	got := map[string]string{}
+	for _, f := range notifiableFields(msg, fields, mask) {
+		got[f.Key] = f.Value
+		if strings.Contains(f.Value, "ada@example.com") || strings.Contains(f.Value, "555") || f.Value == "90000" {
+			t.Errorf("%s leaks %q", f.Key, f.Value)
+		}
+	}
+	if got["From"] != "Ada (email hidden)" || got["salary"] != messages.HiddenValue || got["Phone"] != messages.HiddenValue {
+		t.Errorf("unexpected masking: %+v", got)
+	}
+	if got["dept"] != "sales" || got["Subject"] != "Hi" {
+		t.Errorf("visible answers were hidden: %+v", got)
 	}
 }
 
@@ -101,7 +134,7 @@ func TestNotifiableFieldsDropsBodyAndCaps(t *testing.T) {
 		fields = append(fields, models.MessageField{Key: "extra", Value: "x"})
 	}
 
-	got := notifiableFields(msg, fields)
+	got := notifiableFields(msg, fields, messages.NewPIIMask(nil))
 	if len(got) > 12 {
 		t.Fatalf("got %d fields, want at most 12", len(got))
 	}
@@ -146,7 +179,7 @@ func TestNotifiableFieldsIncludesPhoneAndDropsSummarizedAliases(t *testing.T) {
 		{Key: "company", Value: "Acme"},
 	}
 
-	got := notifiableFields(msg, fields)
+	got := notifiableFields(msg, fields, messages.NewPIIMask(nil))
 
 	keys := make([]string, 0, len(got))
 	for _, f := range got {
@@ -168,7 +201,7 @@ func TestNotifiableFieldsIncludesPhoneAndDropsSummarizedAliases(t *testing.T) {
 
 func TestNotifiableFieldsOmitsPhoneRowWhenAbsent(t *testing.T) {
 	msg := &models.Message{SenderEmail: "ada@example.com", Subject: "Hi"}
-	for _, f := range notifiableFields(msg, nil) {
+	for _, f := range notifiableFields(msg, nil, messages.NewPIIMask(nil)) {
 		if f.Key == "Phone" {
 			t.Fatal("a Phone row should not appear when no phone was submitted")
 		}

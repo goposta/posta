@@ -45,6 +45,25 @@ const (
 	MessageStateSpam    MessageState = "spam"
 )
 
+// MessagePriority orders submissions for triage. Normal is the default.
+type MessagePriority string
+
+const (
+	MessagePriorityLow    MessagePriority = "low"
+	MessagePriorityNormal MessagePriority = "normal"
+	MessagePriorityHigh   MessagePriority = "high"
+	MessagePriorityUrgent MessagePriority = "urgent"
+)
+
+// ValidPriority reports whether p is one of the four priorities.
+func ValidPriority(p MessagePriority) bool {
+	switch p {
+	case MessagePriorityLow, MessagePriorityNormal, MessagePriorityHigh, MessagePriorityUrgent:
+		return true
+	}
+	return false
+}
+
 type MessageReplyKind string
 
 const (
@@ -85,6 +104,10 @@ type Message struct {
 	State       MessageState   `json:"state" gorm:"type:varchar(20);default:'new';index;not null"`
 	SpamScore   float64        `json:"spam_score" gorm:"default:0;not null"`
 	ScanReasons pq.StringArray `json:"scan_reasons" gorm:"type:text[]"`
+
+	// Tags and Priority are set by operators (and later by routing rules).
+	Tags     pq.StringArray  `json:"tags" gorm:"type:text[]"`
+	Priority MessagePriority `json:"priority" gorm:"type:varchar(8);default:'normal';not null"`
 
 	ThreadToken   string `json:"-" gorm:"uniqueIndex"`
 	RootMessageID string `json:"-"`
