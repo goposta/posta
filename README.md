@@ -275,7 +275,7 @@ flowchart LR
 Running the API without a dedicated worker works for evaluation, but production
 deployments should split them so sending, retries, campaigns, and scheduled jobs scale
 independently of request traffic — see
-[`examples/docker-compose-full.yml`](examples/docker-compose-full.yml).
+[`examples/compose/docker-compose-full.yml`](examples/compose/docker-compose-full.yml).
 
 Object storage is optional (dashed above). With `POSTA_BLOB_PROVIDER` unset, attachments
 and raw inbound messages stay in the database; point it at `s3` or `fs` to move them out.

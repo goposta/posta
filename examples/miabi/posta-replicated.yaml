@@ -1,0 +1,268 @@
+# Posta on Miabi (replicated server + dedicated workers)
+# ======================================================
+# The production topology for a Miabi location running in cluster mode
+# (a swarm): the API server and the queue worker run as separate replicated
+# services, so request traffic and email delivery scale independently and a
+# node failure reschedules them elsewhere.
+#
+#   posta          HTTP API + web UI, 3 replicas behind the gateway
+#   posta-worker   queue consumer (sending, retries, campaigns), 2 replicas
+#   posta-db       managed PostgreSQL, shared by both
+#   posta-redis    queue, sessions, caches and realtime events, shared by both
+#
+# What makes replicas safe:
+#   • Shared state lives in Postgres and Redis only. Sessions, the queue and
+#     realtime events are all in Redis, so any replica can serve any request.
+#   • Every replica gets the same JWT secret and encryption key, from the vault.
+#   • Attachments go to S3. A volume is node-local and per-replica, so the
+#     filesystem blob provider does not work here.
+#   • POSTA_EMBEDDED_WORKER is off: delivery belongs to posta-worker.
+#
+# ⚠ Known limitation: every server replica starts its own scheduler (daily
+#   reports, bounce alerts, API key expiry, retention, campaign restarts) and
+#   its own failed-email retry loop. Neither takes a lock yet, so with N
+#   replicas those jobs run N times, and a failed email can be re-enqueued
+#   once per replica. Until the server can elect one scheduler, keep the
+#   `posta` service at replicas: 1 and scale posta-worker instead, which
+#   is safe at any count.
+#
+# Before applying:
+#   1. Replace posta.example.com (three places) with your hostname.
+#   2. Set the S3 bucket settings below and store the secret key:
+#        echo -n "$S3_SECRET" | miabi secrets seal posta-s3-secret-key
+#      and paste the output over the SealedSecret value below.
+#
+# Apply:
+#   miabi apply -f posta-replicated.yaml --dry-run
+#   miabi apply -f posta-replicated.yaml
+#
+# After the first apply, reveal `posta-admin-password` in the workspace vault.
+apiVersion: miabi.io/v1
+kind: Project
+metadata:
+  name: posta
+spec:
+  description: Posta with a replicated API server and dedicated queue workers.
+  resources:
+    - apiVersion: miabi.io/v1
+      kind: Secret
+      metadata: { name: posta-jwt-secret }
+      spec:
+        generate: true
+        length: 64
+
+    # Do not rotate: stored SMTP passwords would no longer decrypt.
+    - apiVersion: miabi.io/v1
+      kind: Secret
+      metadata: { name: posta-encryption-key }
+      spec:
+        generate: true
+        length: 48
+
+    - apiVersion: miabi.io/v1
+      kind: Secret
+      metadata: { name: posta-admin-password }
+      spec:
+        generate: true
+        length: 24
+
+    # Sealed to your workspace's key, so this file is safe to commit.
+    - apiVersion: miabi.io/v1
+      kind: SealedSecret
+      metadata: { name: posta-s3-secret-key }
+      spec:
+        value: sealed:v1:REPLACE-WITH-OUTPUT-OF-miabi-secrets-seal
+
+    - apiVersion: miabi.io/v1
+      kind: Database
+      metadata: { name: posta-db }
+      spec:
+        engine: postgres
+        version: "17-alpine"
+        instance: dedicated
+        resources:
+          memory: 2Gi
+          cpu: "1"
+
+    - apiVersion: miabi.io/v1
+      kind: Database
+      metadata: { name: posta-redis }
+      spec:
+        engine: redis
+        version: "8-alpine"
+        instance: dedicated
+        resources:
+          memory: 512Mi
+          cpu: "0.5"
+
+    # Members share a network and resolve each other by name.
+    - apiVersion: miabi.io/v1
+      kind: Stack
+      metadata: { name: posta }
+      spec:
+        description: Posta server and workers.
+
+    # ── API server ──────────────────────────────────────────────────────────
+    - apiVersion: miabi.io/v1
+      kind: Application
+      metadata: { name: posta }
+      spec:
+        image: jkaninda/posta
+        tag: "latest"            # pin a release tag (or digest) in production
+        stack: posta
+        deployment:
+          runtime: service
+          # See the known limitation above before raising this.
+          replicas: 1
+          strategy: rolling
+          update:
+            parallelism: 1       # one replica at a time: migrations run on boot
+            delaySeconds: 15
+        placement:
+          constraints:
+            - node.role==worker
+        healthcheck:
+          type: http
+          path: /healthz
+          port: 9000
+          intervalSeconds: 10
+          startPeriodSeconds: 30
+        ports:
+          - container: 9000
+            scheme: http
+        env:
+          POSTA_ENV: production
+          POSTA_WEB_URL: "https://posta.example.com"
+
+          # Miabi renders postgres://user:pass@host:port/db (no TLS on the
+          # workspace network, hence sslmode=disable).
+          POSTA_DB_URL: "{{ .databases.posta-db.uri }}?sslmode=disable"
+
+          # redis://:password@host:port
+          POSTA_REDIS_URL: "{{ .databases.posta-redis.uri }}"
+
+          POSTA_JWT_SECRET: "{{ .secrets.posta-jwt-secret }}"
+          POSTA_ENCRYPTION_KEY: "{{ .secrets.posta-encryption-key }}"
+          POSTA_ADMIN_EMAIL: admin@example.com
+          POSTA_ADMIN_PASSWORD: "{{ .secrets.posta-admin-password }}"
+
+          POSTA_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12"
+          POSTA_EMBEDDED_WORKER: "false"
+          POSTA_METRICS_ENABLED: "true"
+
+          POSTA_BLOB_PROVIDER: s3
+          POSTA_BLOB_S3_ENDPOINT: s3.eu-central-1.amazonaws.com
+          POSTA_BLOB_S3_REGION: eu-central-1
+          POSTA_BLOB_S3_BUCKET: posta-attachments
+          POSTA_BLOB_S3_ACCESS_KEY: AKIAXXXXXXXXXXXXXXXX
+          POSTA_BLOB_S3_SECRET_KEY: "{{ .secrets.posta-s3-secret-key }}"
+          POSTA_BLOB_S3_USE_SSL: "true"
+          POSTA_BLOB_S3_PATH_STYLE: "false"   # true for MinIO and most self-hosted S3
+
+          # System SMTP for invitations, password resets and daily reports.
+          # POSTA_SYSTEM_SMTP_HOST: smtp.example.com
+          # POSTA_SYSTEM_SMTP_PORT: "587"
+          # POSTA_SYSTEM_SMTP_USERNAME: notifications@example.com
+          # POSTA_SYSTEM_SMTP_PASSWORD: "{{ .secrets.posta-system-smtp-password }}"
+          # POSTA_SYSTEM_SMTP_FROM: notifications@example.com
+          # POSTA_SYSTEM_SMTP_ENCRYPTION: starttls
+        secretEnv:
+          - POSTA_DB_URL
+          - POSTA_REDIS_URL
+          - POSTA_JWT_SECRET
+          - POSTA_ENCRYPTION_KEY
+          - POSTA_ADMIN_PASSWORD
+          - POSTA_BLOB_S3_SECRET_KEY
+        resources:
+          memory: 512Mi
+          cpu: "1"
+
+    # ── Queue workers ───────────────────────────────────────────────────────
+    # Workers pull from the shared Redis queue, so any count is safe. Scale
+    # this, not the server, when delivery falls behind.
+    - apiVersion: miabi.io/v1
+      kind: Application
+      metadata: { name: posta-worker }
+      spec:
+        image: jkaninda/posta
+        tag: "latest"            # keep in lockstep with the server's tag
+        command: ["worker"]
+        stack: posta
+        deployment:
+          runtime: service
+          replicas: 2
+          strategy: rolling
+          update:
+            parallelism: 1
+            delaySeconds: 10
+        placement:
+          constraints:
+            - node.role==worker
+        # The worker serves /healthz, /readyz and /metrics on POSTA_PORT.
+        healthcheck:
+          type: http
+          path: /healthz
+          port: 9000
+          intervalSeconds: 15
+          startPeriodSeconds: 20
+        ports:
+          - container: 9000
+            scheme: http
+        # Same database, Redis, secrets and S3 settings as the server: the worker
+        # signs tracking links with the JWT secret, decrypts SMTP passwords with
+        # the encryption key, and reads attachments from the bucket.
+        env:
+          POSTA_ENV: production
+          POSTA_WEB_URL: "https://posta.example.com"   # base for tracking and unsubscribe links
+
+          # Miabi renders postgres://user:pass@host:port/db (no TLS on the
+          # workspace network, hence sslmode=disable).
+          POSTA_DB_URL: "{{ .databases.posta-db.uri }}?sslmode=disable"
+
+          # redis://:password@host:port
+          POSTA_REDIS_URL: "{{ .databases.posta-redis.uri }}"
+
+          POSTA_JWT_SECRET: "{{ .secrets.posta-jwt-secret }}"
+          POSTA_ENCRYPTION_KEY: "{{ .secrets.posta-encryption-key }}"
+
+          POSTA_BLOB_PROVIDER: s3
+          POSTA_BLOB_S3_ENDPOINT: s3.eu-central-1.amazonaws.com
+          POSTA_BLOB_S3_REGION: eu-central-1
+          POSTA_BLOB_S3_BUCKET: posta-attachments
+          POSTA_BLOB_S3_ACCESS_KEY: AKIAXXXXXXXXXXXXXXXX
+          POSTA_BLOB_S3_SECRET_KEY: "{{ .secrets.posta-s3-secret-key }}"
+          POSTA_BLOB_S3_USE_SSL: "true"
+          POSTA_BLOB_S3_PATH_STYLE: "false"
+
+          POSTA_WORKER_CONCURRENCY: "20"
+          POSTA_WORKER_MAX_RETRIES: "5"
+          POSTA_WORKER_HEALTH_ENABLED: "true"
+          POSTA_WORKER_HEALTH_PORT: "9000"
+          POSTA_METRICS_ENABLED: "true"
+        secretEnv:
+          - POSTA_DB_URL
+          - POSTA_REDIS_URL
+          - POSTA_JWT_SECRET
+          - POSTA_ENCRYPTION_KEY
+          - POSTA_BLOB_S3_SECRET_KEY
+        resources:
+          memory: 512Mi
+          cpu: "1"
+
+    # ── Public route ────────────────────────────────────────────────────────
+    - apiVersion: miabi.io/v1
+      kind: Domain
+      metadata: { name: posta.example.com }
+      spec:
+        tls: acme
+
+    - apiVersion: miabi.io/v1
+      kind: Route
+      metadata: { name: posta-web }
+      spec:
+        hosts: [posta.example.com]
+        app: posta
+        port: 9000
+        tls: acme
+        security:
+          exploitProtection: true

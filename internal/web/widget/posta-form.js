@@ -75,12 +75,16 @@
   var STYLE =
     ":host{display:block}" +
     ".pf{--a:var(--posta-form-accent,var(--pf-accent,#9333EA));--r:var(--posta-form-radius,8px);" +
-    "--bg:#fff;--fg:#101A37;--mut:#5A6486;--bd:#DFE5F2;--in:#fff;--err:#B42318;--ok:#067647;" +
+    // The theme sets --t-*; a site overrides any of them with --posta-form-*.
+    "--t-bg:#fff;--t-fg:#101A37;--t-mut:#5A6486;--t-bd:#DFE5F2;--t-in:#fff;--t-err:#B42318;--t-ok:#067647;" +
+    "--bg:var(--posta-form-bg,var(--t-bg));--fg:var(--posta-form-text,var(--t-fg));--mut:var(--posta-form-muted,var(--t-mut));" +
+    "--bd:var(--posta-form-border,var(--t-bd));--in:var(--posta-form-input-bg,var(--t-in));--err:var(--posta-form-error,var(--t-err));" +
+    "--ok:var(--posta-form-success,var(--t-ok));--at:var(--posta-form-accent-text,#fff);" +
     "box-sizing:border-box;max-width:var(--posta-form-max-width,480px);font-family:var(--posta-form-font,inherit);" +
     "font-size:15px;line-height:1.5;color:var(--fg);background:var(--bg);border:1px solid var(--bd);" +
     "border-radius:calc(var(--r) + 4px);padding:20px}" +
-    ".pf[data-theme=dark]{--bg:#101A37;--fg:#F2F4FA;--mut:#A9B1CC;--bd:#2A3A66;--in:#0A1124;--err:#FDA29B;--ok:#75E0A7}" +
-    "@media (prefers-color-scheme:dark){.pf[data-theme=auto]{--bg:#101A37;--fg:#F2F4FA;--mut:#A9B1CC;--bd:#2A3A66;--in:#0A1124;--err:#FDA29B;--ok:#75E0A7}}" +
+    ".pf[data-theme=dark]{--t-bg:#101A37;--t-fg:#F2F4FA;--t-mut:#A9B1CC;--t-bd:#2A3A66;--t-in:#0A1124;--t-err:#FDA29B;--t-ok:#75E0A7}" +
+    "@media (prefers-color-scheme:dark){.pf[data-theme=auto]{--t-bg:#101A37;--t-fg:#F2F4FA;--t-mut:#A9B1CC;--t-bd:#2A3A66;--t-in:#0A1124;--t-err:#FDA29B;--t-ok:#75E0A7}}" +
     ".pf *{box-sizing:border-box}" +
     ".pf h2{margin:0 0 14px;font-size:1.2em;line-height:1.3}" +
     ".pf .desc{margin:-10px 0 14px;color:var(--mut)}" +
@@ -98,7 +102,7 @@
     ".pf .scale .end{font-size:.85em;color:var(--mut)}" +
     ".pf .scale .opt-item{position:relative;justify-content:center;min-width:38px;height:38px;border:1px solid var(--bd);border-radius:var(--r);background:var(--in)}" +
     ".pf .scale .opt-item input{position:absolute;opacity:0;width:100%;height:100%;cursor:pointer}" +
-    ".pf .scale .opt-item:has(input:checked){background:var(--a);border-color:var(--a);color:#fff}" +
+    ".pf .scale .opt-item:has(input:checked){background:var(--a);border-color:var(--a);color:var(--at)}" +
     ".pf .scale .opt-item:has(input:focus-visible){outline:2px solid var(--a);outline-offset:2px}" +
     ".pf .rating .opt-item{border:0;background:none;min-width:30px;font-size:1.5em;color:var(--bd)}" +
     ".pf .rating .opt-item.on,.pf .rating .opt-item:has(input:checked){background:none;color:#F5A524}" +
@@ -112,7 +116,7 @@
     ".pf .ferr{margin:4px 0 0;font-size:.85em;color:var(--err)}" +
     ".pf .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}" +
     ".pf button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;font:inherit;font-weight:600;" +
-    "color:#fff;background:var(--a);border:0;border-radius:var(--r);cursor:pointer;transition:filter .15s}" +
+    "color:var(--at);background:var(--a);border:0;border-radius:var(--r);cursor:pointer;transition:filter .15s}" +
     ".pf button:hover{filter:brightness(1.08)}" +
     ".pf button:disabled{opacity:.6;cursor:default;filter:none}" +
     ".pf button:focus-visible{outline:2px solid var(--a);outline-offset:2px}" +
@@ -125,9 +129,29 @@
     ".pf .brand a{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--mut);text-decoration:none}" +
     ".pf .brand a:hover{color:var(--fg)}" +
     ".pf .brand strong{font-weight:700}" +
+    ".pf .brand .mk{display:inline-flex}" +
     "@media (prefers-reduced-motion:reduce){.pf *{transition:none!important}}";
 
   var counter = 0;
+  var sheet = null;
+
+  function adoptStyle(root) {
+    try {
+      if (root.adoptedStyleSheets !== undefined && typeof CSSStyleSheet === "function") {
+        if (!sheet) {
+          sheet = new CSSStyleSheet();
+          sheet.replaceSync(STYLE);
+        }
+        root.adoptedStyleSheets = root.adoptedStyleSheets.concat(sheet);
+        return;
+      }
+    } catch (e) {
+      // fall through to a <style> element
+    }
+    var style = document.createElement("style");
+    style.textContent = STYLE;
+    root.appendChild(style);
+  }
 
   function apiBase(el) {
     var host = el.getAttribute("data-posta-host");
@@ -212,9 +236,7 @@
     var id = "pf" + ++counter;
     var root = el.attachShadow ? el.attachShadow({ mode: "open" }) : el;
 
-    var style = document.createElement("style");
-    style.textContent = STYLE;
-    root.appendChild(style);
+    adoptStyle(root);
 
     var wrap = h("div", { class: "pf", part: "form" });
     // The form's saved appearance is the default; the embed's own attributes
@@ -235,7 +257,7 @@
     var brand = h("div", { class: "brand" });
     var link = h("a", { href: BRAND_URL, target: "_blank", rel: "noopener" });
     link.appendChild(document.createTextNode(t.poweredBy + " "));
-    var mark = h("span", { "aria-hidden": "true", style: "display:inline-flex" });
+    var mark = h("span", { "aria-hidden": "true", class: "mk" });
     mark.innerHTML = MARK_SVG;
     link.appendChild(mark);
     link.appendChild(h("strong", null, "Posta"));

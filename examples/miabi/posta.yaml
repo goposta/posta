@@ -1,0 +1,169 @@
+# Posta on Miabi (single instance, embedded worker)
+# ==================================================
+# A complete Posta deployment as one miabi.io/v1 Project: a managed PostgreSQL
+# database, a dedicated Redis, generated secrets, a volume for attachments, the
+# Posta server (HTTP API + web UI with the worker embedded), and a public HTTPS
+# route with automatic TLS.
+#
+# This is the Miabi equivalent of ../compose/compose.yml. It suits small and
+# medium installations; for replicas and a dedicated worker see
+# posta-replicated.yaml.
+#
+# Before applying, replace posta.example.com (three places) with your hostname.
+#
+# Apply:
+#   miabi apply -f posta.yaml --dry-run   # preview the plan
+#   miabi apply -f posta.yaml             # converge the workspace
+#
+# After the first apply, reveal the generated admin password in the workspace
+# vault (secret `posta-admin-password`) and sign in as admin@example.com.
+apiVersion: miabi.io/v1
+kind: Project
+metadata:
+  name: posta
+spec:
+  description: Posta transactional email platform, with Postgres, Redis, server and route.
+  resources:
+    # Secrets are generated once at create time and never change on re-apply.
+    # POSTA_JWT_SECRET signs sessions: anyone who knows it can forge one.
+    - apiVersion: miabi.io/v1
+      kind: Secret
+      metadata: { name: posta-jwt-secret }
+      spec:
+        generate: true
+        length: 64
+
+    # Encrypts SMTP server passwords at rest (hashed to an AES-256 key, so any
+    # length works). Do not rotate it: stored passwords would no longer decrypt.
+    - apiVersion: miabi.io/v1
+      kind: Secret
+      metadata: { name: posta-encryption-key }
+      spec:
+        generate: true
+        length: 48
+
+    # Used only to create the first admin account on an empty database.
+    - apiVersion: miabi.io/v1
+      kind: Secret
+      metadata: { name: posta-admin-password }
+      spec:
+        generate: true
+        length: 24
+
+    - apiVersion: miabi.io/v1
+      kind: Database
+      metadata: { name: posta-db }
+      spec:
+        engine: postgres
+        version: "17-alpine"
+        instance: auto           # auto | dedicated | shared
+
+    # Queue (asynq), sessions, caches and realtime events. Redis is always a
+    # dedicated instance; Miabi sets its password.
+    - apiVersion: miabi.io/v1
+      kind: Database
+      metadata: { name: posta-redis }
+      spec:
+        engine: redis
+        version: "8-alpine"
+        instance: dedicated
+
+    # Attachments and inbound mail bodies. A single instance can keep them on a
+    # volume; replicas need S3 instead (see posta-replicated.yaml).
+    - apiVersion: miabi.io/v1
+      kind: Volume
+      metadata: { name: posta-data }
+      spec:
+        size: 5Gi
+
+    - apiVersion: miabi.io/v1
+      kind: Application
+      metadata: { name: posta }
+      spec:
+        image: jkaninda/posta
+        tag: "latest"            # pin a release tag in production
+        ports:
+          - container: 9000
+            scheme: http
+        # The image's `posta` user. Stating it makes Miabi chown the volume
+        # to it, so the server can write attachments.
+        security:
+          runAsUser: "100:101"
+        healthcheck:
+          type: http
+          path: /healthz
+          port: 9000
+          startPeriodSeconds: 20
+        env:
+          POSTA_ENV: production
+          POSTA_WEB_URL: "https://posta.example.com"   # must match the route host
+
+          # Miabi renders postgres://user:pass@host:port/db (no TLS on the
+          # workspace network, hence sslmode=disable).
+          POSTA_DB_URL: "{{ .databases.posta-db.uri }}?sslmode=disable"
+
+          # redis://:password@host:port
+          POSTA_REDIS_URL: "{{ .databases.posta-redis.uri }}"
+
+          POSTA_JWT_SECRET: "{{ .secrets.posta-jwt-secret }}"
+          POSTA_ENCRYPTION_KEY: "{{ .secrets.posta-encryption-key }}"
+          POSTA_ADMIN_EMAIL: admin@example.com
+          POSTA_ADMIN_PASSWORD: "{{ .secrets.posta-admin-password }}"
+
+          # Requests arrive through the Miabi gateway; trust its forwarded
+          # client IP so rate limits and audit logs see the real address.
+          # Narrow this to your workspace network if you know its subnet.
+          POSTA_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12"
+
+          POSTA_EMBEDDED_WORKER: "true"
+          POSTA_WORKER_CONCURRENCY: "10"
+          POSTA_WORKER_MAX_RETRIES: "5"
+
+          POSTA_BLOB_PROVIDER: filesystem
+          POSTA_BLOB_FS_PATH: /data/attachments
+
+          # System SMTP for invitations, password resets and daily reports.
+          # Uncomment and set, then add POSTA_SYSTEM_SMTP_PASSWORD to secretEnv.
+          # POSTA_SYSTEM_SMTP_HOST: smtp.example.com
+          # POSTA_SYSTEM_SMTP_PORT: "587"
+          # POSTA_SYSTEM_SMTP_USERNAME: notifications@example.com
+          # POSTA_SYSTEM_SMTP_PASSWORD: "{{ .secrets.posta-system-smtp-password }}"
+          # POSTA_SYSTEM_SMTP_FROM: notifications@example.com
+          # POSTA_SYSTEM_SMTP_ENCRYPTION: starttls
+        secretEnv:
+          - POSTA_DB_URL
+          - POSTA_REDIS_URL
+          - POSTA_JWT_SECRET
+          - POSTA_ENCRYPTION_KEY
+          - POSTA_ADMIN_PASSWORD
+        mounts:
+          - volume: posta-data
+            path: /data
+        resources:
+          memory: 512Mi
+          cpu: "1"
+
+        # ── Optional: receive inbound email ──────────────────────────────────
+        # Add to env:
+        #   POSTA_INBOUND_ENABLED: "true"
+        #   POSTA_INBOUND_HOSTNAME: posta.example.com   # must match your MX record
+        # and publish the receiver on the node's port 25:
+        #   - container: 2525
+        #     protocol: tcp
+        #     publish: true
+        #     hostPort: 25
+
+    - apiVersion: miabi.io/v1
+      kind: Domain
+      metadata: { name: posta.example.com }
+      spec:
+        tls: acme
+
+    - apiVersion: miabi.io/v1
+      kind: Route
+      metadata: { name: posta-web }
+      spec:
+        hosts: [posta.example.com]
+        app: posta
+        port: 9000
+        tls: acme
