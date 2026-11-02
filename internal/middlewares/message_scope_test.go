@@ -42,6 +42,12 @@ func TestWorkspaceScopeForMessageRoutes(t *testing.T) {
 		{http.MethodPut, "/api/v1/workspaces/current/forms/1", models.ScopeAdmin},
 		{http.MethodPost, "/api/v1/workspaces/current/forms/1/rotate-key", models.ScopeAdmin},
 
+		// Responses are content, not configuration: reading them needs only read,
+		// even though the form they belong to is admin-only.
+		{http.MethodGet, "/api/v1/workspaces/current/form-submissions", models.ScopeRead},
+		{http.MethodGet, "/api/v1/workspaces/current/form-submissions/summary", models.ScopeRead},
+		{http.MethodGet, "/api/v1/workspaces/current/form-submissions/export", models.ScopeRead},
+
 		{http.MethodGet, "/api/v1/workspaces/current/message-filters", models.ScopeAdmin},
 		{http.MethodPost, "/api/v1/workspaces/current/message-filters", models.ScopeAdmin},
 	}
