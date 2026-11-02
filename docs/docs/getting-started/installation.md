@@ -20,7 +20,7 @@ Full Docker Compose examples are available in the [`examples/`](https://github.c
 
 This setup runs Posta with the embedded worker enabled. The email processing worker runs inside the main server process, so no separate worker container is required. Ideal for development and small deployments.
 
-See [`examples/compose.yml`](https://github.com/goposta/posta/blob/main/examples/compose.yml)
+See [`examples/compose/compose.yml`](https://github.com/goposta/posta/blob/main/examples/compose/compose.yml)
 
 ```yaml
 services:
@@ -94,7 +94,7 @@ Posta will be available at `http://localhost:9000`.
 
 For production environments, run the worker as a separate container. This allows the API server and background processing to scale independently.
 
-See [`examples/docker-compose-full.yml`](https://github.com/goposta/posta/blob/main/examples/docker-compose-full.yml)
+See [`examples/compose/docker-compose-full.yml`](https://github.com/goposta/posta/blob/main/examples/compose/docker-compose-full.yml)
 
 ```yaml
 services:

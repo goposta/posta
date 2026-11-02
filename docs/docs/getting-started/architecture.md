@@ -81,7 +81,7 @@ small installs — one container, nothing else to run. Production deployments
 should split them, so sending, retries, campaigns, and scheduled jobs scale
 independently of request traffic and a burst of API calls cannot starve delivery.
 
-See [`examples/docker-compose-full.yml`](https://github.com/goposta/posta/blob/main/examples/docker-compose-full.yml)
+See [`examples/compose/docker-compose-full.yml`](https://github.com/goposta/posta/blob/main/examples/compose/docker-compose-full.yml)
 for a two-process deployment.
 
 :::warning
