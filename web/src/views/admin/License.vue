@@ -122,8 +122,8 @@ onMounted(load)
       <div>
         <h1>License</h1>
         <p class="page-description">
-          Posta Enterprise adds routing rules and teams, branching forms and encryption of personal data, on top
-          of everything in Posta Community.
+          Posta Enterprise adds routing rules and teams, branching forms, encryption of personal data, LDAP /
+          Active Directory sign-in and several OAuth providers, on top of everything in Posta Community.
         </p>
       </div>
     </div>

@@ -34,6 +34,13 @@ func NewOAuthProviderRepository(db *gorm.DB) *OAuthProviderRepository {
 	return &OAuthProviderRepository{db: db}
 }
 
+// Count counts the configured providers, enabled or not.
+func (r *OAuthProviderRepository) Count() (int64, error) {
+	var n int64
+	err := r.db.Model(&models.OAuthProvider{}).Count(&n).Error
+	return n, err
+}
+
 func (r *OAuthProviderRepository) Create(p *models.OAuthProvider) error {
 	return r.db.Create(p).Error
 }

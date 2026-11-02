@@ -12,6 +12,13 @@ Administrators can configure OAuth 2.0 / OpenID Connect providers to allow users
 For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::
 
+:::info Posta Enterprise
+Posta Community signs in through **one** OAuth provider. Adding a second needs a
+[Posta Enterprise](https://goposta.dev/enterprise) license; installations that already
+had several keep them. For LDAP or Active Directory, see
+[LDAP Directories](./ldap-directories.md).
+:::
+
 ## Supported Provider Types
 
 | Type | Description |

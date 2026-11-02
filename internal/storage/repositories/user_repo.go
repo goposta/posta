@@ -158,6 +158,13 @@ func (r *UserRepository) FindAll(search string, limit, offset int) ([]models.Use
 	return users, total, nil
 }
 
+// CountActiveAdmins counts the platform admins who can still sign in.
+func (r *UserRepository) CountActiveAdmins() (int64, error) {
+	var n int64
+	err := r.db.Model(&models.User{}).Where("role = ? AND active = ?", models.UserRoleAdmin, true).Count(&n).Error
+	return n, err
+}
+
 func (r *UserRepository) Update(user *models.User) error {
 	return r.db.Save(user).Error
 }

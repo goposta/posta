@@ -21,7 +21,10 @@ package enterprise
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/goposta/posta/internal/models"
 )
 
 // Product is the product name license tokens are issued for.
@@ -102,7 +105,39 @@ type EE interface {
 	Install(ctx context.Context, token, requestHost string) (Status, error)
 	// Remove deletes the installed license, reverting to Community.
 	Remove(ctx context.Context) error
+	// LDAP returns the LDAP / Active Directory authenticator, or nil in the
+	// Community build and without a license. Sign-in asks it only after the
+	// local password check fails, so local accounts keep working when the
+	// directory is down.
+	LDAP() LDAPAuthenticator
 }
+
+// LDAPIdentity is a directory user whose password bound: the mapped email and
+// name, the groups they belong to, and the directory that matched. It is plain
+// data, so this package never touches users or sessions.
+type LDAPIdentity struct {
+	Email     string
+	Name      string
+	Groups    []string // group DNs
+	Directory string   // the matched LDAPConfig name
+}
+
+// LDAPTestResult is the outcome of an admin's "Test connection".
+type LDAPTestResult struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// LDAPAuthenticator binds sign-in credentials against the configured directories.
+type LDAPAuthenticator interface {
+	Authenticate(ctx context.Context, email, password string) (LDAPIdentity, error)
+	TestConnection(ctx context.Context, cfg *models.LDAPConfig) LDAPTestResult
+}
+
+// ErrLDAPNoMatch means no enabled directory knows the user, so sign-in keeps
+// its local result. It is never shown to the client.
+var ErrLDAPNoMatch = errors.New("no matching LDAP directory")
 
 // Options configure New.
 type Options struct {
@@ -116,6 +151,11 @@ type Options struct {
 	InstanceURL string
 	// InstallID is this deployment's Install ID, for the install-ID binding.
 	InstallID string
+	// LDAPDirectories lists the enabled directories, in the order sign-in
+	// tries them, and Decrypt reads their stored service passwords. Passed in
+	// so this package imports no repositories or crypto.
+	LDAPDirectories func(ctx context.Context) ([]models.LDAPConfig, error)
+	Decrypt         func(stored string) (string, error)
 }
 
 // GateError is the error a gate returns. Code is the stable API error code
@@ -158,6 +198,7 @@ func (community) Mutable() bool                { return false }
 func (community) Require() error               { return ErrLicenseRequired }
 func (community) RequireMutable() error        { return ErrLicenseRequired }
 func (community) Remove(context.Context) error { return ErrCommunityEdition }
+func (community) LDAP() LDAPAuthenticator      { return nil }
 func (community) Install(context.Context, string, string) (Status, error) {
 	return Status{}, ErrCommunityEdition
 }

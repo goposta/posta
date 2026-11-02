@@ -73,10 +73,9 @@ func created[T any](c *okapi.Context, data T) error {
 	})
 }
 
+// noContent answers 204 with no body, as HTTP requires for that status.
 func noContent(c *okapi.Context) error {
-	return c.JSON(http.StatusNoContent, dto.Response[any]{
-		Success: true,
-	})
+	return c.NoContent()
 }
 
 // getScope extracts the ResourceScope from the request context.
