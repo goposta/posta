@@ -417,6 +417,20 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
 			},
 		},
+		{
+			Method:      http.MethodPut,
+			Path:        pathWorkspaceByID + "/hosted-forms",
+			Handler:     okapi.H(r.h.adminWorkspace.SetHostedForms),
+			Group:       adminGroup,
+			Summary:     "Turn a workspace's hosted form pages on or off",
+			Description: "Off, the workspace's /f/{key} pages answer 404 and forms cannot be loaded or submitted from Posta's own domain. Forms embedded on the workspace's own sites keep working.",
+			Request:     &handlers.AdminSetHostedFormsRequest{},
+			Response:    &dto.Response[handlers.AdminWorkspaceRow]{},
+			Options: []okapi.RouteOption{
+				okapi.DocPathParam("id", "integer", "Workspace ID"),
+				okapi.DocResponse(404, &dto.ErrorResponseBody{}),
+			},
+		},
 
 		// ==================== Plans ====================
 		{

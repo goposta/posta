@@ -547,6 +547,18 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			},
 		},
 		{
+			Method:      http.MethodGet,
+			Path:        "/teams/{id:int}",
+			Handler:     okapi.H(r.h.team.Get),
+			Group:       opsGroup,
+			Middlewares: r.licensed(),
+			Summary:     "Get a team",
+			Description: "The team with its members, the routing rules that notify or assign it, and how many submissions it holds.",
+			Request:     &handlers.TeamIDRequest{},
+			Response:    &dto.Response[handlers.TeamDetail]{},
+			Options:     []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Team ID")},
+		},
+		{
 			Method:      http.MethodPut,
 			Path:        "/teams/{id:int}",
 			Handler:     okapi.H(r.h.team.Update),

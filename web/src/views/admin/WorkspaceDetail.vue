@@ -5,6 +5,7 @@ import { adminApi } from "../../api/admin";
 import { plansApi } from "../../api/plans";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
+import { useConfirm } from "../../composables/useConfirm";
 import type { AdminWorkspaceDetail, Plan } from "../../api/types";
 
 const route = useRoute();
@@ -17,6 +18,35 @@ const plans = ref<Plan[]>([]);
 const loading = ref(true);
 const loadFailed = ref(false);
 const changingPlan = ref(false);
+const { confirm } = useConfirm();
+const changingHosted = ref(false);
+
+// Taking hosted pages offline is the abuse switch for one workspace: its share
+// links stop at once, while forms embedded on its own sites keep working.
+async function toggleHostedForms() {
+  const ws = workspace.value;
+  if (!ws) return;
+  const enable = ws.hosted_forms_disabled;
+  const ok = await confirm({
+    title: enable ? "Turn hosted form pages back on?" : "Take hosted form pages offline?",
+    message: enable
+      ? `The share links of "${ws.name}" forms work again.`
+      : `Every share link of "${ws.name}" forms answers "not found" at once, and forms can no longer be loaded or submitted from this Posta's domain. Forms embedded on the workspace's own websites, its submissions and its data are not affected. Use this when hosted forms are abused, for example for phishing.`,
+    confirmText: enable ? "Turn back on" : "Take offline",
+    variant: enable ? "info" : "danger",
+  });
+  if (!ok) return;
+  changingHosted.value = true;
+  try {
+    const res = await adminApi.setWorkspaceHostedForms(ws.id, enable);
+    ws.hosted_forms_disabled = res.data.data.hosted_forms_disabled;
+    notify.success(enable ? "Hosted form pages are back on." : "Hosted form pages are offline.");
+  } catch (e: any) {
+    notify.error(apiMessage(e, "Failed to update hosted form pages"));
+  } finally {
+    changingHosted.value = false;
+  }
+}
 
 async function load() {
   loading.value = true;
@@ -164,6 +194,21 @@ onMounted(load);
                 </td>
               </tr>
               <tr>
+                <td class="label-cell">Hosted form pages</td>
+                <td>
+                  <span v-if="workspace.hosted_forms_disabled" class="badge badge-danger">Offline</span>
+                  <span v-else class="badge badge-success">Online</span>
+                  <button
+                    class="btn btn-sm hosted-toggle"
+                    :class="workspace.hosted_forms_disabled ? 'btn-secondary' : 'btn-danger'"
+                    :disabled="changingHosted"
+                    @click="toggleHostedForms"
+                  >
+                    {{ workspace.hosted_forms_disabled ? "Turn back on" : "Take offline" }}
+                  </button>
+                </td>
+              </tr>
+              <tr>
                 <td class="label-cell">Pending invitations</td>
                 <td>{{ workspace.pending_invitations }}</td>
               </tr>
@@ -263,5 +308,9 @@ onMounted(load);
 
 .plan-select {
   max-width: 300px;
+}
+
+.hosted-toggle {
+  margin-left: 10px;
 }
 </style>

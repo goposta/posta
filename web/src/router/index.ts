@@ -64,6 +64,7 @@ const routes = [
       { path: 'messages', name: 'messages', component: () => import('../views/messages/Messages.vue'), meta: { title: 'Messages' } },
       { path: 'messages/:id', name: 'message-detail', component: () => import('../views/messages/MessageDetail.vue'), meta: { title: 'Message' } },
       { path: 'teams', name: 'teams', component: () => import('../views/teams/Teams.vue'), meta: { title: 'Teams' } },
+      { path: 'teams/:id', name: 'team-detail', component: () => import('../views/teams/TeamDetail.vue'), meta: { title: 'Team' } },
       { path: 'message-filters', name: 'message-filters', component: () => import('../views/messages/MessageFilters.vue'), meta: { title: 'Spam Filters' } },
       { path: 'forms', name: 'forms', component: () => import('../views/forms/Forms.vue'), meta: { title: 'Forms' } },
       { path: 'forms/:id', name: 'form-detail', component: () => import('../views/forms/FormDetail.vue'), meta: { title: 'Form' } },

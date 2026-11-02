@@ -121,11 +121,36 @@ func (r *FormRuleRepository) NamesByUUID(uuids []string) (map[string]string, err
 	return out, nil
 }
 
+// RuleUsingTeam is a rule that notifies or assigns a team, with its form.
+type RuleUsingTeam struct {
+	ID       uint   `json:"id"`
+	Name     string `json:"name"`
+	Enabled  bool   `json:"enabled"`
+	FormID   uint   `json:"form_id"`
+	FormName string `json:"form_name"`
+}
+
+// RulesUsingTeam lists a workspace's rules that notify or assign team teamID,
+// by form then rule order.
+func (r *FormRuleRepository) RulesUsingTeam(workspaceID, teamID uint) ([]RuleUsingTeam, error) {
+	var out []RuleUsingTeam
+	err := r.db.Table("form_rules").
+		Select("form_rules.id, form_rules.name, form_rules.enabled, form_rules.form_id, forms.name AS form_name").
+		Joins("JOIN forms ON forms.id = form_rules.form_id AND forms.deleted_at IS NULL").
+		Where("form_rules.workspace_id = ? AND form_rules.actions @> ?::jsonb", workspaceID, fmt.Sprintf(`[{"team_id":%d}]`, teamID)).
+		Order("LOWER(forms.name), form_rules.position").
+		Scan(&out).Error
+	return out, err
+}
+
 // UsingTeam names a workspace's rules that notify or assign team teamID.
+// Rules of a deleted form never run and can no longer be edited, so they do
+// not count.
 func (r *FormRuleRepository) UsingTeam(workspaceID, teamID uint) ([]string, error) {
-	var names []string
-	err := r.db.Model(&models.FormRule{}).
-		Where("workspace_id = ? AND actions @> ?::jsonb", workspaceID, fmt.Sprintf(`[{"team_id":%d}]`, teamID)).
-		Pluck("name", &names).Error
+	rules, err := r.RulesUsingTeam(workspaceID, teamID)
+	names := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		names = append(names, rule.Name)
+	}
 	return names, err
 }

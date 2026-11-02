@@ -63,6 +63,28 @@ type TeamIDRequest struct {
 	ID int `param:"id"`
 }
 
+// TeamMemberView is a team member with their workspace account.
+type TeamMemberView struct {
+	UserID uint                 `json:"user_id"`
+	Name   string               `json:"name"`
+	Email  string               `json:"email"`
+	Role   models.WorkspaceRole `json:"role"`
+}
+
+// TeamDetail is a team with its members, the rules that route to it, and how
+// many submissions it holds.
+type TeamDetail struct {
+	ID           uint                         `json:"id"`
+	UUID         string                       `json:"uuid"`
+	Name         string                       `json:"name"`
+	Email        string                       `json:"email"`
+	CreatedAt    time.Time                    `json:"created_at"`
+	Members      []TeamMemberView             `json:"members"`
+	Rules        []repositories.RuleUsingTeam `json:"rules"`
+	OpenMessages int64                        `json:"open_messages" doc:"Submissions routed to the team that are new or open"`
+	Messages     int64                        `json:"messages" doc:"All submissions routed to the team"`
+}
+
 // requireManage allows workspace owners and admins: teams decide who is
 // sent submissions.
 func requireManage(c *okapi.Context) error {
@@ -132,6 +154,46 @@ func (h *TeamHandler) List(c *okapi.Context) error {
 		teams = []models.Team{}
 	}
 	return ok(c, teams)
+}
+
+// Get returns one team with its members, the rules that use it and its
+// submission counts. Any workspace member may read it.
+func (h *TeamHandler) Get(c *okapi.Context, req *TeamIDRequest) error {
+	ws, err := h.workspace(c)
+	if ws == 0 {
+		return err
+	}
+	team, err := h.repo.FindForWorkspace(ws, uint(req.ID))
+	if err != nil {
+		return c.AbortNotFound("team not found")
+	}
+	members, err := h.workspaceRepo.ListMembers(ws)
+	if err != nil {
+		return c.AbortInternalServerError("failed to load members")
+	}
+	byUser := map[uint]models.WorkspaceMember{}
+	for _, m := range members {
+		byUser[m.UserID] = m
+	}
+	detail := TeamDetail{
+		ID: team.ID, UUID: team.UUID, Name: team.Name, Email: team.Email, CreatedAt: team.CreatedAt,
+		Members: []TeamMemberView{}, Rules: []repositories.RuleUsingTeam{},
+	}
+	for _, tm := range team.Members {
+		m, ok := byUser[tm.UserID]
+		if !ok {
+			// A member who left the workspace no longer receives anything.
+			continue
+		}
+		detail.Members = append(detail.Members, TeamMemberView{UserID: m.UserID, Name: m.User.Name, Email: m.User.Email, Role: m.Role})
+	}
+	if rules, err := h.ruleRepo.RulesUsingTeam(ws, team.ID); err == nil && rules != nil {
+		detail.Rules = rules
+	}
+	if detail.OpenMessages, detail.Messages, err = h.repo.MessageCounts(team.ID); err != nil {
+		return c.AbortInternalServerError("failed to count messages")
+	}
+	return ok(c, detail)
 }
 
 func (h *TeamHandler) Create(c *okapi.Context, req *CreateTeamRequest) error {

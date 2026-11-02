@@ -36,6 +36,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/messages"
+	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
@@ -48,13 +49,16 @@ const publicKeyLength = 22
 var formSlugPattern = regexp.MustCompile(`[^a-z0-9]+`)
 
 type FormHandler struct {
-	repo        *repositories.FormRepository
-	messageRepo *repositories.MessageRepository
-	domainRepo  *repositories.DomainRepository
-	audit       *audit.Logger
-	apiBaseURL  string
-	keyCache    FormKeyInvalidator
-	edition     enterprise.EE
+	repo *repositories.FormRepository
+	// hostedSettings and workspaces tell the snippet whether the share link works.
+	hostedSettings *settings.Provider
+	workspaces     *repositories.WorkspaceRepository
+	messageRepo    *repositories.MessageRepository
+	domainRepo     *repositories.DomainRepository
+	audit          *audit.Logger
+	apiBaseURL     string
+	keyCache       FormKeyInvalidator
+	edition        enterprise.EE
 }
 
 // FormKeyInvalidator drops cached public-key lookups; *messages.Service
@@ -176,6 +180,15 @@ type FormSnippetResponse struct {
 	Fetch     string `json:"fetch"`
 	Widget    string `json:"widget" doc:"Website widget embed: a placeholder element and the script tag"`
 	ShareURL  string `json:"share_url" doc:"The form's hosted page, a link that works without a website"`
+	// ShareUnavailable is set when the hosted page is offline: "platform" when
+	// the instance serves no hosted pages, "workspace" when a platform admin
+	// took this workspace's pages offline.
+	ShareUnavailable string `json:"share_unavailable,omitempty" enum:"platform,workspace"`
+}
+
+// SetHostedPageChecks lets the snippet say when the share link is offline.
+func (h *FormHandler) SetHostedPageChecks(p *settings.Provider, workspaces *repositories.WorkspaceRepository) {
+	h.hostedSettings, h.workspaces = p, workspaces
 }
 
 func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
@@ -524,6 +537,8 @@ func (h *FormHandler) Snippet(c *okapi.Context, req *FormIDRequest) error {
 		Fetch:     buildFetchSnippet(endpoint),
 		Widget:    buildWidgetSnippet(h.apiBaseURL, form),
 		ShareURL:  h.apiBaseURL + "/f/" + url.PathEscape(form.PublicKey),
+
+		ShareUnavailable: hostedOffline(h.hostedSettings, h.workspaces, form),
 	})
 }
 

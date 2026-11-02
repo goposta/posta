@@ -543,6 +543,20 @@ onMounted(load);
           <p class="muted" style="margin: 0 0 12px">
             A page Posta hosts for this form. Send it to people, or post it anywhere; no website needed.
           </p>
+          <div v-if="snippet?.share_unavailable" class="app-banner app-banner--warning" role="status" style="margin-bottom: 12px">
+            <div class="app-banner-content">
+              <p class="app-banner-text">
+                <template v-if="snippet.share_unavailable === 'workspace'">
+                  A platform administrator has taken this workspace's hosted form pages offline, so this link
+                  shows "not found". The website widget keeps working. Contact your Posta administrator to restore it.
+                </template>
+                <template v-else>
+                  Hosted form pages are turned off on this Posta instance, so this link shows "not found". The
+                  website widget keeps working.
+                </template>
+              </p>
+            </div>
+          </div>
           <div class="form-group">
             <div style="display: flex; gap: 8px">
               <input class="form-input" :value="snippet?.share_url || ''" readonly />

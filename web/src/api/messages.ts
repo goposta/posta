@@ -20,6 +20,7 @@ import type {
   RuleTestResult,
   Team,
   TeamInput,
+  TeamDetail,
 } from './types'
 
 const WORKSPACE_KEY = 'posta_workspace_id'
@@ -279,6 +280,9 @@ export const formRulesApi = {
 export const teamsApi = {
   list() {
     return api.get<ApiResponse<Team[]>>('/workspaces/current/teams')
+  },
+  get(id: number) {
+    return api.get<ApiResponse<TeamDetail>>(`/workspaces/current/teams/${id}`)
   },
   create(team: TeamInput) {
     return api.post<ApiResponse<Team>>('/workspaces/current/teams', team)

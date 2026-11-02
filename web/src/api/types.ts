@@ -453,6 +453,8 @@ export interface AdminWorkspaceRow {
   plan_id: number | null
   plan_name: string
   member_count: number
+  /** A platform admin took the workspace's hosted form pages offline. */
+  hosted_forms_disabled: boolean
   created_at: string
 }
 
@@ -1432,6 +1434,8 @@ export interface FormSnippet {
   fetch: string
   widget: string
   share_url: string
+  /** Why the share link is offline: the instance serves no hosted pages, or an admin took this workspace's offline. */
+  share_unavailable?: 'platform' | 'workspace'
 }
 
 export interface SubmissionOptionCount {
@@ -1560,6 +1564,35 @@ export interface Team {
   email: string
   members?: { team_id: number; user_id: number; user?: { id: number; name: string } | null }[]
   created_at: string
+}
+
+export interface TeamMemberView {
+  user_id: number
+  name: string
+  email: string
+  role: string
+}
+
+export interface TeamRuleRef {
+  id: number
+  name: string
+  enabled: boolean
+  form_id: number
+  form_name: string
+}
+
+export interface TeamDetail {
+  id: number
+  uuid: string
+  name: string
+  email: string
+  created_at: string
+  members: TeamMemberView[]
+  /** Routing rules that notify or assign this team. */
+  rules: TeamRuleRef[]
+  /** Submissions routed to the team that are new or open. */
+  open_messages: number
+  messages: number
 }
 
 export interface TeamInput {

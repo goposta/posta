@@ -23,33 +23,38 @@ import (
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 	"gorm.io/gorm"
 )
 
 type AdminWorkspaceHandler struct {
-	db   *gorm.DB
-	repo *repositories.WorkspaceRepository
+	db    *gorm.DB
+	repo  *repositories.WorkspaceRepository
+	audit *audit.Logger
 }
 
-func NewAdminWorkspaceHandler(db *gorm.DB, repo *repositories.WorkspaceRepository) *AdminWorkspaceHandler {
-	return &AdminWorkspaceHandler{db: db, repo: repo}
+func NewAdminWorkspaceHandler(db *gorm.DB, repo *repositories.WorkspaceRepository, auditLogger *audit.Logger) *AdminWorkspaceHandler {
+	return &AdminWorkspaceHandler{db: db, repo: repo, audit: auditLogger}
 }
 
 // AdminWorkspaceRow is one line of the platform-wide workspace table.
 type AdminWorkspaceRow struct {
-	ID          uint      `json:"id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	System      bool      `json:"system"`
-	OwnerID     uint      `json:"owner_id"`
-	OwnerName   string    `json:"owner_name"`
-	OwnerEmail  string    `json:"owner_email"`
-	PlanID      *uint     `json:"plan_id"`
-	PlanName    string    `json:"plan_name"`
-	MemberCount int64     `json:"member_count"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	System      bool   `json:"system"`
+	OwnerID     uint   `json:"owner_id"`
+	OwnerName   string `json:"owner_name"`
+	OwnerEmail  string `json:"owner_email"`
+	PlanID      *uint  `json:"plan_id"`
+	PlanName    string `json:"plan_name"`
+	MemberCount int64  `json:"member_count"`
+	// HostedFormsDisabled is set when a platform admin took the workspace's
+	// hosted form pages offline.
+	HostedFormsDisabled bool      `json:"hosted_forms_disabled"`
+	CreatedAt           time.Time `json:"created_at"`
 }
 
 // AdminWorkspaceMember is a workspace member with the account details an
@@ -97,6 +102,41 @@ type AdminListWorkspacesRequest struct {
 
 type AdminWorkspaceIDRequest struct {
 	ID int `param:"id"`
+}
+
+type AdminSetHostedFormsRequest struct {
+	ID   int `param:"id"`
+	Body struct {
+		Enabled bool `json:"enabled" doc:"false takes the workspace's hosted form pages offline"`
+	} `json:"body"`
+}
+
+// SetHostedForms turns a workspace's hosted form pages (/f/{key}) on or off.
+// Off, the pages answer 404 and the widget refuses to load or submit from
+// Posta's own domain, so a phishing form stops at once. Forms embedded on the
+// workspace's own sites, its submissions and its data are untouched.
+func (h *AdminWorkspaceHandler) SetHostedForms(c *okapi.Context, req *AdminSetHostedFormsRequest) error {
+	ws, err := h.repo.FindByID(uint(req.ID))
+	if err != nil {
+		return c.AbortNotFound("workspace not found")
+	}
+	disabled := !req.Body.Enabled
+	if ws.HostedFormsDisabled != disabled {
+		if err := h.db.Model(&models.Workspace{}).Where("id = ?", ws.ID).
+			Update("hosted_forms_disabled", disabled).Error; err != nil {
+			return c.AbortInternalServerError("failed to update workspace")
+		}
+		ws.HostedFormsDisabled = disabled
+		if h.audit != nil {
+			action, message := "workspace.hosted_forms_enabled", "Hosted form pages turned back on: "+ws.Name
+			if disabled {
+				action, message = "workspace.hosted_forms_disabled", "Hosted form pages taken offline: "+ws.Name
+			}
+			h.audit.LogCtxScoped(c, ws.ID, action, message, map[string]any{"workspace_id": ws.ID})
+		}
+	}
+	one := []models.Workspace{*ws}
+	return ok(c, h.row(ws, h.owners(one), h.planNames(one), h.memberCounts(one)))
 }
 
 func (h *AdminWorkspaceHandler) List(c *okapi.Context, req *AdminListWorkspacesRequest) error {
@@ -179,6 +219,8 @@ func (h *AdminWorkspaceHandler) row(ws *models.Workspace, owners map[uint]models
 		PlanID:      ws.PlanID,
 		MemberCount: members[ws.ID],
 		CreatedAt:   ws.CreatedAt,
+
+		HostedFormsDisabled: ws.HostedFormsDisabled,
 	}
 	if ws.PlanID != nil {
 		row.PlanName = plans[*ws.PlanID]
