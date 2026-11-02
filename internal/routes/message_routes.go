@@ -548,7 +548,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/teams/{id:int}",
+			Path:        pathTeamByID,
 			Handler:     okapi.H(r.h.team.Get),
 			Group:       opsGroup,
 			Middlewares: r.licensed(),
@@ -560,7 +560,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPut,
-			Path:        "/teams/{id:int}",
+			Path:        pathTeamByID,
 			Handler:     okapi.H(r.h.team.Update),
 			Group:       opsGroup,
 			Middlewares: r.licensedToChange(),
@@ -571,7 +571,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/teams/{id:int}",
+			Path:        pathTeamByID,
 			Handler:     okapi.H(r.h.team.Delete),
 			Group:       opsGroup,
 			Middlewares: r.licensedToChange(),

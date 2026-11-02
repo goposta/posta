@@ -31,4 +31,4 @@ jobs:
         with:
           # Pinned rather than floating: a new linter release must not turn a
           # green branch red on a day nobody touched the code.
-          version: v2.13.2
+          version: v2.15.0

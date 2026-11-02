@@ -120,7 +120,7 @@ func TestCSVSafe(t *testing.T) {
 
 func TestExportColumnsOrderAndPII(t *testing.T) {
 	keys := func(cols []models.FieldDef) []string {
-		out := []string{}
+		out := make([]string, 0, len(cols))
 		for _, c := range cols {
 			out = append(out, c.Key)
 		}

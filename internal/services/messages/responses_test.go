@@ -59,7 +59,7 @@ func TestSummarizerCountsEveryQuestionType(t *testing.T) {
 	if got.Total != 3 {
 		t.Fatalf("total = %d, want 3", got.Total)
 	}
-	keys := []string{}
+	keys := make([]string, 0, len(got.Fields))
 	byKey := map[string]FieldSummary{}
 	for _, f := range got.Fields {
 		keys = append(keys, f.Key)
