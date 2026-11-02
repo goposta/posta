@@ -20,6 +20,7 @@
 package repositories
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -37,6 +38,80 @@ type MessageFilterQuery struct {
 	Query    string
 	From     *time.Time
 	To       *time.Time
+
+	// SubmissionsOnly leaves out quarantined and rejected messages unless
+	// Status asks for one: spam is not a response.
+	SubmissionsOnly bool
+	// DataEquals matches typed answers by containment (data @> ...), so it is
+	// served by the GIN index. A multiselect value is a one-element array.
+	DataEquals map[string]any
+	// DataRanges bound answers from below or above. Keys are checked against
+	// the form schema by the caller and always bound as parameters.
+	DataRanges []DataRange
+}
+
+// DataRange is one bound on a typed answer. Numeric compares numbers and
+// skips answers that are not numbers; otherwise the text is compared, which
+// orders YYYY-MM-DD dates and HH:MM times correctly.
+type DataRange struct {
+	Key     string
+	Op      string // gte | lte
+	Value   any
+	Numeric bool
+}
+
+// applyMessageFilter narrows q to the messages f selects.
+func applyMessageFilter(q *gorm.DB, scope ResourceScope, f MessageFilterQuery) *gorm.DB {
+	q = ApplyWorkspaceScope(q, scope)
+	if f.FormID > 0 {
+		q = q.Where("form_id = ?", f.FormID)
+	}
+	switch {
+	case f.Status != "":
+		q = q.Where("status = ?", f.Status)
+	case f.SubmissionsOnly:
+		q = q.Where("status IN ?", []models.MessageStatus{models.MessageStatusReceived, models.MessageStatusFlagged})
+	default:
+		q = q.Where("status <> ?", models.MessageStatusRejected)
+	}
+	if f.State != "" {
+		q = q.Where("state = ?", f.State)
+	}
+	if f.Assigned != nil {
+		q = q.Where("assigned_to_id = ?", *f.Assigned)
+	}
+	if f.Unread {
+		q = q.Where("read_at IS NULL")
+	}
+	if f.Query != "" {
+		like := "%" + strings.ToLower(f.Query) + "%"
+		q = q.Where(
+			"LOWER(subject) LIKE ? OR LOWER(body) LIKE ? OR LOWER(sender_email) LIKE ? OR LOWER(sender_name) LIKE ? OR sender_phone LIKE ? OR LOWER(COALESCE(data::text, '')) LIKE ?",
+			like, like, like, like, like, like)
+	}
+	if f.From != nil {
+		q = q.Where("created_at >= ?", *f.From)
+	}
+	if f.To != nil {
+		q = q.Where("created_at <= ?", *f.To)
+	}
+	if len(f.DataEquals) > 0 {
+		if raw, err := json.Marshal(f.DataEquals); err == nil {
+			q = q.Where("data @> ?::jsonb", string(raw))
+		}
+	}
+	for _, r := range f.DataRanges {
+		op := ">="
+		if r.Op == "lte" {
+			op = "<="
+		}
+		if r.Numeric {
+			q = q.Where("(CASE WHEN jsonb_typeof(data -> ?) = 'number' THEN (data ->> ?)::numeric END) "+op+" ?", r.Key, r.Key, r.Value)
+		} else {
+			q = q.Where("(data ->> ?) "+op+" ?", r.Key, r.Value)
+		}
+	}
+	return q
 }
 
 type MessageRepository struct {
@@ -145,39 +220,7 @@ func (r *MessageRepository) FindByScopeFiltered(scope ResourceScope, f MessageFi
 	var items []models.Message
 	var total int64
 
-	apply := func(q *gorm.DB) *gorm.DB {
-		q = ApplyWorkspaceScope(q, scope)
-		if f.FormID > 0 {
-			q = q.Where("form_id = ?", f.FormID)
-		}
-		if f.Status != "" {
-			q = q.Where("status = ?", f.Status)
-		} else {
-			q = q.Where("status <> ?", models.MessageStatusRejected)
-		}
-		if f.State != "" {
-			q = q.Where("state = ?", f.State)
-		}
-		if f.Assigned != nil {
-			q = q.Where("assigned_to_id = ?", *f.Assigned)
-		}
-		if f.Unread {
-			q = q.Where("read_at IS NULL")
-		}
-		if f.Query != "" {
-			like := "%" + strings.ToLower(f.Query) + "%"
-			q = q.Where(
-				"LOWER(subject) LIKE ? OR LOWER(body) LIKE ? OR LOWER(sender_email) LIKE ? OR LOWER(sender_name) LIKE ? OR sender_phone LIKE ?",
-				like, like, like, like, like)
-		}
-		if f.From != nil {
-			q = q.Where("created_at >= ?", *f.From)
-		}
-		if f.To != nil {
-			q = q.Where("created_at <= ?", *f.To)
-		}
-		return q
-	}
+	apply := func(q *gorm.DB) *gorm.DB { return applyMessageFilter(q, scope, f) }
 
 	apply(r.db.Model(&models.Message{})).Count(&total)
 
@@ -190,6 +233,49 @@ func (r *MessageRepository) FindByScopeFiltered(scope ResourceScope, f MessageFi
 		return nil, 0, err
 	}
 	return items, total, nil
+}
+
+// EachMessage walks the messages f selects, newest first, handing them to fn
+// in batches. It pages by id rather than offset, so submissions arriving
+// during an export neither repeat nor shift rows. It stops after max messages
+// (0 means no limit) and reports whether it stopped early.
+func (r *MessageRepository) EachMessage(scope ResourceScope, f MessageFilterQuery, batch, max int, fn func([]models.Message) error) (bool, error) {
+	if batch <= 0 {
+		batch = 500
+	}
+	var lastID uint
+	seen := 0
+	for {
+		size := batch
+		if max > 0 && max-seen < size {
+			size = max - seen
+		}
+		q := applyMessageFilter(r.db.Model(&models.Message{}), scope, f)
+		if lastID > 0 {
+			q = q.Where("id < ?", lastID)
+		}
+		var items []models.Message
+		if err := q.Order("id DESC").Limit(size + 1).Find(&items).Error; err != nil {
+			return false, err
+		}
+		more := len(items) > size
+		if more {
+			items = items[:size]
+		}
+		if len(items) > 0 {
+			if err := fn(items); err != nil {
+				return false, err
+			}
+			seen += len(items)
+			lastID = items[len(items)-1].ID
+		}
+		if !more {
+			return false, nil
+		}
+		if max > 0 && seen >= max {
+			return true, nil
+		}
+	}
 }
 
 func (r *MessageRepository) FindRecentDuplicate(formID uint, hash string, since time.Time) (*models.Message, error) {

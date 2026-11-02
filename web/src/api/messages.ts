@@ -10,6 +10,8 @@ import type {
   MessageFilterRule,
   MessageReply,
   MessageStats,
+  SubmissionQuery,
+  SubmissionSummary,
 } from './types'
 
 const WORKSPACE_KEY = 'posta_workspace_id'
@@ -186,5 +188,42 @@ export const messageFiltersApi = {
   },
   test(payload: { kind: string; pattern: string; case_sensitive?: boolean; limit?: number }) {
     return api.post<ApiResponse<FilterTestResult>>('/workspaces/current/message-filters/test', payload)
+  },
+}
+
+// Submission filters become flat query parameters: field.<key>=v for
+// equality, field.<key>[gte]=n and field.<key>[lte]=n for ranges.
+function submissionParams(formId: number, query: SubmissionQuery): Record<string, string | number> {
+  const params: Record<string, string | number> = { form_id: formId }
+  for (const k of ['page', 'size', 'status', 'q', 'after', 'before'] as const) {
+    const v = query[k]
+    if (v !== undefined && v !== '') params[k] = v
+  }
+  for (const f of query.filters || []) {
+    params[f.op === 'eq' ? `field.${f.key}` : `field.${f.key}[${f.op}]`] = f.value
+  }
+  return params
+}
+
+export const formSubmissionsApi = {
+  list(formId: number, query: SubmissionQuery = {}) {
+    return api.get<PaginatedResponse<Message>>('/workspaces/current/form-submissions', {
+      params: submissionParams(formId, { page: 0, size: 25, ...query }),
+    })
+  },
+  summary(formId: number, query: SubmissionQuery = {}) {
+    return api.get<ApiResponse<SubmissionSummary>>('/workspaces/current/form-submissions/summary', {
+      params: submissionParams(formId, query),
+    })
+  },
+  // A browser download cannot send the workspace header, so the workspace
+  // travels as a query parameter (WorkspaceFromQueryOrHeader).
+  exportUrl(formId: number, format: 'csv' | 'json', query: SubmissionQuery = {}) {
+    const { page: _page, size: _size, ...rest } = query
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(submissionParams(formId, rest))) params.set(k, String(v))
+    params.set('format', format)
+    const ws = workspaceParam()
+    return `/api/v1/workspaces/current/form-submissions/export?${params.toString()}${ws ? '&' + ws : ''}`
   },
 }

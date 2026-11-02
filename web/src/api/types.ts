@@ -1370,6 +1370,9 @@ export interface Message {
   created_at: string
   updated_at?: string | null
   fields?: MessageField[]
+  /** Typed answers, for forms with questions. */
+  data?: Record<string, unknown> | null
+  schema_version?: number
   attachments?: InboundAttachmentMeta[]
   form?: Form | null
   assigned_to?: { id: number; name: string; email: string } | null
@@ -1408,4 +1411,47 @@ export interface FormSnippet {
   fetch: string
   widget: string
   share_url: string
+}
+
+export interface SubmissionOptionCount {
+  value: string
+  label: string
+  count: number
+}
+
+export interface SubmissionFieldSummary {
+  key: string
+  label: string
+  type: FormFieldType
+  pii?: boolean
+  answered: number
+  options?: SubmissionOptionCount[]
+  mean?: number
+  min?: number
+  max?: number
+  samples?: string[]
+  samples_hidden?: boolean
+}
+
+export interface SubmissionSummary {
+  total: number
+  truncated: boolean
+  fields: SubmissionFieldSummary[]
+}
+
+/** One answer filter: equality, or a bound on number, scale, rating, date and time questions. */
+export interface SubmissionFieldFilter {
+  key: string
+  op: 'eq' | 'gte' | 'lte'
+  value: string
+}
+
+export interface SubmissionQuery {
+  page?: number
+  size?: number
+  status?: string
+  q?: string
+  after?: string
+  before?: string
+  filters?: SubmissionFieldFilter[]
 }

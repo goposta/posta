@@ -6,6 +6,7 @@ import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
 import type { Form, FormSnippet } from "../../api/types";
 import FormFields from "./FormFields.vue";
+import FormResponses from "./FormResponses.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -17,7 +18,17 @@ const saving = ref(false);
 const form = ref<Form | null>(null);
 const snippet = ref<FormSnippet | null>(null);
 const loadFailed = ref(false);
-const tab = ref<"questions" | "setup" | "responses" | "spam" | "notifications" | "embed">("questions");
+const TABS = [
+  { key: "questions", label: "Questions" },
+  { key: "responses", label: "Responses" },
+  { key: "setup", label: "Setup" },
+  { key: "settings", label: "Response settings" },
+  { key: "spam", label: "Spam" },
+  { key: "notifications", label: "Notifications" },
+  { key: "embed", label: "Share & embed" },
+] as const;
+type Tab = (typeof TABS)[number]["key"];
+const tab = ref<Tab>("questions");
 
 const originsText = ref("");
 // close_at is edited in the browser's local time and stored as UTC.
@@ -243,18 +254,20 @@ onMounted(load);
       <div class="card" style="margin-bottom: 20px">
         <div class="card-body" style="display: flex; gap: 8px; flex-wrap: wrap">
           <button
-            v-for="t in (['questions', 'setup', 'responses', 'spam', 'notifications', 'embed'] as const)"
-            :key="t"
+            v-for="t in TABS"
+            :key="t.key"
             class="btn"
-            :class="tab === t ? 'btn-primary' : 'btn-secondary'"
-            @click="tab = t"
+            :class="tab === t.key ? 'btn-primary' : 'btn-secondary'"
+            @click="tab = t.key"
           >
-            {{ t }}
+            {{ t.label }}
           </button>
         </div>
       </div>
 
       <FormFields v-show="tab === 'questions'" :form="form" @saved="onFieldsSaved" />
+      <!-- Mounted on demand: it loads responses, and has no edits to keep. -->
+      <FormResponses v-if="tab === 'responses'" :form="form" />
 
       <div v-show="tab === 'setup'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Setup</h2></div>
@@ -365,7 +378,7 @@ onMounted(load);
         </div>
       </div>
 
-      <div v-show="tab === 'responses'" class="card" style="margin-bottom: 20px">
+      <div v-show="tab === 'settings'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Responses</h2></div>
         <div class="card-body">
           <div class="form-group">
@@ -583,8 +596,8 @@ onMounted(load);
         </div>
       </div>
 
-      <!-- The Questions tab has its own save bar; this one saves the other tabs. -->
-      <div v-show="tab !== 'questions'" class="card">
+      <!-- Questions has its own save bar and Responses saves nothing; this saves the other tabs. -->
+      <div v-show="tab !== 'questions' && tab !== 'responses'" class="card">
         <div class="card-body">
           <button class="btn btn-primary" :disabled="saving" @click="save">
             {{ saving ? "Saving..." : "Save changes" }}

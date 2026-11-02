@@ -614,9 +614,7 @@ func stringify(v any) string {
 		}
 		return "false"
 	case float64:
-		if t == float64(int64(t)) {
-			return strings.TrimSuffix(strings.TrimRight(strings.TrimRight(formatFloat(t), "0"), "."), ".")
-		}
+		// The shortest exact form: 30 stays "30", 2.50 becomes "2.5".
 		return formatFloat(t)
 	case []any:
 		parts := make([]string, 0, len(t))
