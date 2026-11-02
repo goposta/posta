@@ -61,6 +61,9 @@ export const adminApi = {
   getWorkspace(id: number) {
     return api.get<ApiResponse<AdminWorkspaceDetail>>(`/admin/workspaces/${id}`)
   },
+  setWorkspaceHostedForms(id: number, enabled: boolean) {
+    return api.put<ApiResponse<AdminWorkspaceRow>>(`/admin/workspaces/${id}/hosted-forms`, { enabled })
+  },
 
   createUser(name: string, email: string, password: string, role: string) {
     return api.post<ApiResponse<User>>('/admin/users', { name, email, password, role })

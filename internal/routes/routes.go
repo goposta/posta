@@ -294,7 +294,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			dashboard:        handlers.NewDashboardHandler(db, statsCache, webhookDeliveryRepo),
 			domain:           handlers.NewDomainHandler(domainRepo),
 			adminDomain:      handlers.NewAdminDomainHandler(db, domainRepo, auditLogger),
-			adminWorkspace:   handlers.NewAdminWorkspaceHandler(db, workspaceRepo),
+			adminWorkspace:   handlers.NewAdminWorkspaceHandler(db, workspaceRepo, auditLogger),
 			notification:     handlers.NewNotificationHandler(notificationRepo, inboxService),
 			announcement:     handlers.NewAdminAnnouncementHandler(db, inboxService, auditLogger),
 			bounce:           handlers.NewBounceHandler(bounceRepo, suppressionRepo, emailRepo, dispatcher),
@@ -500,7 +500,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			inbound.NewIPRateLimiter(cfg.MessagesIPRateLimit, time.Duration(cfg.MessagesIPRateWindow)*time.Second),
 			cfg.MessagesMaxAttachSize,
 		)
-		r.h.formIngest.SetHostedPages(settingsProvider, cfg.AdminEmail)
+		r.h.formIngest.SetHostedPages(settingsProvider, cfg.AdminEmail, workspaceRepo)
+		r.h.form.SetHostedPageChecks(settingsProvider, workspaceRepo)
 		if blobStore != nil {
 			r.h.message.SetBlobStore(blobStore)
 			r.h.formIngest.SetBlobStore(blobStore)

@@ -30,6 +30,7 @@ import (
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/settings"
+	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
 
@@ -51,10 +52,40 @@ const hostedPageCSP = "default-src 'none'; script-src 'self'; connect-src 'self'
 	"frame-ancestors 'none'; base-uri 'none'"
 
 // SetHostedPages enables the hosted form pages. adminEmail is the abuse
-// contact when the platform setting abuse_report_email is empty.
-func (h *FormIngestHandler) SetHostedPages(p *settings.Provider, adminEmail string) {
+// contact when the platform setting abuse_report_email is empty; workspaces
+// says which workspaces a platform admin has taken offline.
+func (h *FormIngestHandler) SetHostedPages(p *settings.Provider, adminEmail string, workspaces *repositories.WorkspaceRepository) {
 	h.settings = p
 	h.abuseFallback = adminEmail
+	h.workspaces = workspaces
+}
+
+// Why a form's hosted page is offline (FormSnippetResponse.ShareUnavailable).
+const (
+	hostedOffPlatform  = "platform"  // the platform setting hosted_forms_enabled is off
+	hostedOffWorkspace = "workspace" // a platform admin took the workspace's pages offline
+)
+
+// hostedOffline says why form may not be used from Posta's own domain, or ""
+// when it may. The workspace flag is read on every request, so turning it off
+// takes effect at once, past any cached form.
+func hostedOffline(p *settings.Provider, workspaces *repositories.WorkspaceRepository, form *models.Form) string {
+	if p != nil && !p.HostedFormsEnabled() {
+		return hostedOffPlatform
+	}
+	if workspaces == nil || form.WorkspaceID == nil {
+		return ""
+	}
+	ws, err := workspaces.FindByID(*form.WorkspaceID)
+	// Fail closed: a page that cannot be checked is not served.
+	if err != nil || ws.HostedFormsDisabled {
+		return hostedOffWorkspace
+	}
+	return ""
+}
+
+func (h *FormIngestHandler) hostedAllowed(form *models.Form) bool {
+	return hostedOffline(h.settings, h.workspaces, form) == ""
 }
 
 type hostedPageData struct {
@@ -75,7 +106,7 @@ func (h *FormIngestHandler) HostedPage(c *okapi.Context) error {
 	}
 	key := c.Param("key")
 	form, err := h.svc.FindFormByKey(key)
-	if err != nil || form.Status == models.FormStatusArchived {
+	if err != nil || form.Status == models.FormStatusArchived || !h.hostedAllowed(form) {
 		return trackingNotice(c, http.StatusNotFound, "Form not found", "This form does not exist.", "error")
 	}
 

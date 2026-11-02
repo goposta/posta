@@ -129,7 +129,9 @@ onMounted(async () => {
             </thead>
             <tbody>
               <tr v-for="team in teams" :key="team.id">
-                <td><strong>{{ team.name }}</strong></td>
+                <td>
+                  <router-link :to="`/teams/${team.id}`"><strong>{{ team.name }}</strong></router-link>
+                </td>
                 <td class="team-members">{{ memberList(team) }}</td>
                 <td>{{ team.email || "—" }}</td>
                 <td class="team-actions">

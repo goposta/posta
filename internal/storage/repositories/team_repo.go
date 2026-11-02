@@ -57,6 +57,17 @@ func (r *TeamRepository) FindByID(id uint) (*models.Team, error) {
 	return &team, nil
 }
 
+// MessageCounts counts the submissions routed to a team: those still to handle
+// (new or open) and all of them.
+func (r *TeamRepository) MessageCounts(teamID uint) (open, total int64, err error) {
+	q := func() *gorm.DB { return r.db.Model(&models.Message{}).Where("team_id = ?", teamID) }
+	if err = q().Count(&total).Error; err != nil {
+		return 0, 0, err
+	}
+	err = q().Where("state IN ?", []models.MessageState{models.MessageStateNew, models.MessageStateOpen}).Count(&open).Error
+	return open, total, err
+}
+
 func (r *TeamRepository) NameTaken(workspaceID uint, name string, exceptID uint) bool {
 	var count int64
 	r.db.Model(&models.Team{}).Where("workspace_id = ? AND LOWER(name) = LOWER(?) AND id <> ?", workspaceID, name, exceptID).Count(&count)

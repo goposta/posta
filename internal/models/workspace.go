@@ -49,9 +49,13 @@ type Workspace struct {
 	// System marks the single built-in platform workspace. It owns
 	// platform-managed resources, is created on first boot, cannot be renamed or
 	// deleted, and admits only platform admins.
-	System    bool      `json:"system" gorm:"not null;default:false"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	System bool `json:"system" gorm:"not null;default:false"`
+	// HostedFormsDisabled lets a platform admin take the workspace's hosted
+	// form pages (/f/{key}) offline, for example when they are used for
+	// phishing. Forms embedded on the workspace's own sites keep working.
+	HostedFormsDisabled bool      `json:"hosted_forms_disabled" gorm:"not null;default:false"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 
 	Owner   User              `json:"-" gorm:"foreignKey:OwnerID"`
 	Plan    Plan              `json:"-" gorm:"foreignKey:PlanID"`

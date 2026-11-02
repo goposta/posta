@@ -38,6 +38,7 @@ import (
 	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/services/settings"
 	"github.com/goposta/posta/internal/storage/blob"
+	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/goposta/posta/internal/web/widget"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
@@ -48,6 +49,7 @@ const genericAcceptMessage = "Thanks — your message has been received."
 type FormIngestHandler struct {
 	settings      *settings.Provider
 	abuseFallback string
+	workspaces    *repositories.WorkspaceRepository
 
 	svc       *messages.Service
 	blobStore blob.Store
@@ -236,6 +238,9 @@ func (h *FormIngestHandler) WidgetConfig(c *okapi.Context) error {
 	if err != nil {
 		form = nil
 	}
+	if form != nil && isSelfOrigin(c.Request()) && !h.hostedAllowed(form) {
+		form = nil
+	}
 	cfg := widgetConfig(form, form != nil && originAllowed(c.Request(), form), time.Now())
 	if !cfg.Enabled {
 		// A disabled answer carries no form data, so any origin may read it.
@@ -285,6 +290,9 @@ func (h *FormIngestHandler) Submit(c *okapi.Context) error {
 	}
 
 	origin := req.Header.Get("Origin")
+	if isSelfOrigin(req) && !h.hostedAllowed(form) {
+		return h.respond(c, form, nil, http.StatusForbidden, "unavailable", "This form is not available.")
+	}
 	if !originAllowed(req, form) {
 		return h.respond(c, form, nil, http.StatusForbidden, "origin_not_allowed", "This origin is not allowed to submit to this form.")
 	}
