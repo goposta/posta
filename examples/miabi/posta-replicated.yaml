@@ -146,7 +146,9 @@ spec:
           POSTA_ADMIN_EMAIL: admin@example.com
           POSTA_ADMIN_PASSWORD: "{{ .secrets.posta-admin-password }}"
 
-          POSTA_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12"
+          # Default miabi-proxy subnet (the gateway network); use your
+          # MIABI_SUBNET if the install set one.
+          POSTA_TRUSTED_PROXIES: "10.63.0.0/16"
           POSTA_EMBEDDED_WORKER: "false"
           POSTA_METRICS_ENABLED: "true"
 
