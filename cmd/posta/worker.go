@@ -58,6 +58,7 @@ func runWorker() error {
 
 	// Initialize SMTP password encryption
 	crypto.Init(cfg.EncryptionKey)
+	edition := newEdition(db, cfg)
 
 	// Initialize blob storage for attachment retrieval
 	var blobStore blob.Store
@@ -222,7 +223,7 @@ func runWorker() error {
 		)
 		messageHandler.OnNotified(metrics.IncrementMessageNotification)
 		messageHandler.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
-		messageHandler.SetRouting(repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
+		messageHandler.SetRouting(edition, repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
 			Workspaces: repositories.NewWorkspaceRepository(db),
 			Teams:      repositories.NewTeamRepository(db),
 		})

@@ -401,6 +401,19 @@ tbody tr:hover td { background: var(--bg-hover); }
 .badge-info { background: var(--primary-50); color: var(--primary-500); }
 .badge-neutral { background: var(--bg-tertiary); color: var(--text-tertiary); }
 .badge-secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
+/* Marks a Posta Enterprise feature (see EnterpriseLock). */
+.ee-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
 
 /* ─── Banners / Inline notices ─── */
 /* A cohesive inline banner. Set the accent with a variant class

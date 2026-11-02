@@ -8,6 +8,7 @@ import type { Form, FormSnippet } from "../../api/types";
 import FormFields from "./FormFields.vue";
 import FormResponses from "./FormResponses.vue";
 import FormRules from "./FormRules.vue";
+import EnterpriseLock from "../../components/EnterpriseLock.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -111,6 +112,7 @@ async function save() {
       notify_emails: splitList(notifyText.value),
       notify_mode: form.value.notify_mode,
       notify_on_flagged: form.value.notify_on_flagged,
+      redact_pii_in_webhooks: form.value.redact_pii_in_webhooks,
       reply_from: form.value.reply_from,
       reply_from_name: form.value.reply_from_name,
       retention_days: form.value.retention_days,
@@ -275,7 +277,13 @@ onMounted(load);
       <FormFields v-show="tab === 'questions'" :form="form" @saved="onFieldsSaved" />
       <!-- Mounted on demand: it loads responses, and has no edits to keep. -->
       <FormResponses v-if="tab === 'responses'" :form="form" :share-url="snippet?.share_url" />
-      <FormRules v-if="tab === 'routing'" :form="form" />
+      <EnterpriseLock
+        v-if="tab === 'routing'"
+        feature="Routing rules"
+        description="Send each submission to the right people by its answers: notify or assign a team or a member, tag it, raise its priority, or call a webhook."
+      >
+        <FormRules :form="form" />
+      </EnterpriseLock>
 
       <div v-show="tab === 'setup'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Setup</h2></div>
@@ -501,6 +509,26 @@ onMounted(load);
               <input v-model="form.notify_on_flagged" type="checkbox" />
               Also notify for flagged messages
             </label>
+          </div>
+          <p class="muted" style="font-size: 13px; margin: 0">
+            Notification emails never show answers to questions marked as personal data; recipients open them in Posta.
+          </p>
+        </div>
+      </div>
+
+      <div v-show="tab === 'notifications'" class="card" style="margin-bottom: 20px">
+        <div class="card-header"><h2>Webhooks</h2></div>
+        <div class="card-body">
+          <div class="form-group" style="margin: 0">
+            <label class="checkbox-label">
+              <input v-model="form.redact_pii_in_webhooks" type="checkbox" />
+              Leave personal-data answers out of webhooks
+            </label>
+            <small class="muted">
+              Answers to questions marked as personal data, and the sender details they fill, are removed from this
+              form's webhook payloads. The payload's <code>redacted_fields</code> lists what was removed. Off by
+              default, since integrations often need those answers.
+            </small>
           </div>
         </div>
       </div>

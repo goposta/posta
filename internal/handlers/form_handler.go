@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"maps"
 	"math/big"
 	"net/mail"
 	"net/url"
@@ -31,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/messages"
@@ -52,6 +54,7 @@ type FormHandler struct {
 	audit       *audit.Logger
 	apiBaseURL  string
 	keyCache    FormKeyInvalidator
+	edition     enterprise.EE
 }
 
 // FormKeyInvalidator drops cached public-key lookups; *messages.Service
@@ -59,6 +62,10 @@ type FormHandler struct {
 type FormKeyInvalidator interface {
 	InvalidateFormKey(keys ...string)
 }
+
+// SetEdition enables the Posta Enterprise parts of the form schema
+// (branching). Without it they are refused, as in Community.
+func (h *FormHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 
 // SetKeyCache makes form edits take effect on the public endpoint immediately
 // instead of after the lookup cache expires.
@@ -99,6 +106,7 @@ type CreateFormRequest struct {
 		RequireNonce     bool     `json:"require_nonce"`
 		NotifyEmails     []string `json:"notify_emails"`
 		NotifyMode       string   `json:"notify_mode" enum:"immediate,hourly,daily,off"`
+		RedactPII        bool     `json:"redact_pii_in_webhooks" doc:"Leave answers to personal-data questions out of webhook payloads"`
 		ReplyFrom        string   `json:"reply_from"`
 		ReplyFromName    string   `json:"reply_from_name"`
 
@@ -150,6 +158,7 @@ type UpdateFormRequest struct {
 		Appearance           *models.FormAppearance `json:"appearance" doc:"Accent colour (#RRGGBB), theme (light, dark, auto) and https header image for the hosted page and widget"`
 		NotifyMode           *string                `json:"notify_mode" doc:"One of: immediate, hourly, daily, off"`
 		NotifyOnFlagged      *bool                  `json:"notify_on_flagged"`
+		RedactPII            *bool                  `json:"redact_pii_in_webhooks" doc:"Leave answers to personal-data questions out of webhook payloads"`
 		ReplyFrom            *string                `json:"reply_from"`
 		ReplyFromName        *string                `json:"reply_from_name"`
 		RetentionDays        *int                   `json:"retention_days"`
@@ -253,6 +262,7 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		NotifyEmails:        notify,
 		NotifyMode:          notifyMode,
 		NotifyOnFlagged:     true,
+		RedactPIIInWebhooks: req.Body.RedactPII,
 		ReplyFrom:           replyFrom,
 		ReplyFromName:       strings.TrimSpace(req.Body.ReplyFromName),
 		LastEditedByID:      &userID,
@@ -262,7 +272,10 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 	if req.Body.Fields != nil {
 		fields = &req.Body.Fields
 	}
-	if err := applySchema(form, fields, optionalString(req.Body.UnknownFields), optionalString(req.Body.ErrorRedirectURL)); err != nil {
+	if err := applySchema(form, fields, optionalString(req.Body.UnknownFields), optionalString(req.Body.ErrorRedirectURL), h.edition); err != nil {
+		if resp := licenseAbort(c, err); resp != nil {
+			return resp
+		}
 		return c.AbortBadRequest(err.Error())
 	}
 	b := req.Body
@@ -414,6 +427,9 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	if b.NotifyOnFlagged != nil {
 		form.NotifyOnFlagged = *b.NotifyOnFlagged
 	}
+	if b.RedactPII != nil {
+		form.RedactPIIInWebhooks = *b.RedactPII
+	}
 	if b.ReplyFrom != nil {
 		replyFrom := strings.TrimSpace(*b.ReplyFrom)
 		if replyFrom != "" {
@@ -429,7 +445,10 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	if b.RetentionDays != nil {
 		form.RetentionDays = clampInt(*b.RetentionDays, 0, 3650)
 	}
-	if err := applySchema(form, b.Fields, b.UnknownFields, b.ErrorRedirectURL); err != nil {
+	if err := applySchema(form, b.Fields, b.UnknownFields, b.ErrorRedirectURL, h.edition); err != nil {
+		if resp := licenseAbort(c, err); resp != nil {
+			return resp
+		}
 		return c.AbortBadRequest(err.Error())
 	}
 	if err := applyResponseSettings(form, responseSettings{
@@ -665,7 +684,12 @@ func clampInt64(v, lo, hi int64) int64 {
 // applySchema sets a form's schema settings from a create or update request.
 // Nil arguments leave the setting as it is. A changed schema gets the next
 // version, so each submission records which schema validated it.
-func applySchema(form *models.Form, fields *models.FieldDefs, unknownFields, errorRedirect *string) error {
+//
+// Branching is a Posta Enterprise feature. Adding or changing it needs a
+// license that allows changes; removing it, or editing a branching form
+// without touching its branches, does not. A form keeps branching for its
+// respondents whatever the license says.
+func applySchema(form *models.Form, fields *models.FieldDefs, unknownFields, errorRedirect *string, edition enterprise.EE) error {
 	if unknownFields != nil {
 		switch policy := models.UnknownFieldsPolicy(strings.TrimSpace(*unknownFields)); policy {
 		case models.UnknownFieldsKeep, models.UnknownFieldsDrop, models.UnknownFieldsReject:
@@ -685,6 +709,14 @@ func applySchema(form *models.Form, fields *models.FieldDefs, unknownFields, err
 		next := append(models.FieldDefs{}, (*fields)...)
 		if err := messages.CheckSchema(next, form.Fields, form.Honeypot()); err != nil {
 			return err
+		}
+		if branching := messages.BranchTargets(next); len(branching) > 0 && !maps.Equal(branching, messages.BranchTargets(form.Fields)) {
+			if edition == nil {
+				edition = enterprise.Community()
+			}
+			if err := edition.RequireMutable(); err != nil {
+				return err
+			}
 		}
 		// The honeypot, _nonce and _redirect count towards max_fields too.
 		if active := len(next.Active().Questions()); active+3 > form.FieldLimit() {

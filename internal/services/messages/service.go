@@ -316,6 +316,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 	if msg.IsSpam() {
 		msg.State = models.MessageStateSpam
 	}
+	msg.SealPII(form.Fields)
 
 	if err := s.messageRepo.Create(msg); err != nil {
 		return nil, err

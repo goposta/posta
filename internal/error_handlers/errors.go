@@ -20,21 +20,34 @@
 package errorhandlers
 
 import (
+	"errors"
+
 	"github.com/goposta/posta/internal/dto"
 	"github.com/jkaninda/okapi"
 )
 
+// codedError is an error that names its own API error code, such as the
+// Enterprise license gates (LICENSE_REQUIRED); its text is the message.
+type codedError interface {
+	error
+	Code() string
+}
+
 // CustomErrorHandler returns an okapi.ErrorHandler that formats errors
 func CustomErrorHandler() okapi.ErrorHandler {
 	return func(c *okapi.Context, code int, message string, err error) error {
+		info := &dto.ErrorInfo{Code: httpStatusToCode(code), Message: message}
+		if err != nil {
+			info.Error = err.Error()
+		}
+		var coded codedError
+		if errors.As(err, &coded) {
+			info.Code, info.Message = coded.Code(), coded.Error()
+		}
 		return c.JSON(code, dto.ErrorResponseBody{
 			Success: false,
 			Data:    nil,
-			Error: &dto.ErrorInfo{
-				Code:    httpStatusToCode(code),
-				Error:   err.Error(),
-				Message: message,
-			},
+			Error:   info,
 		})
 	}
 }
@@ -43,6 +56,8 @@ func httpStatusToCode(status int) string {
 	switch status {
 	case 400:
 		return "BAD_REQUEST"
+	case 402:
+		return "PAYMENT_REQUIRED"
 	case 401:
 		return "UNAUTHORIZED"
 	case 403:

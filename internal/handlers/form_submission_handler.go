@@ -132,6 +132,9 @@ func parseFieldFilters(defs models.FieldDefs, query url.Values) (map[string]any,
 		if def == nil {
 			return nil, nil, fmt.Errorf("unknown field %q", key)
 		}
+		if def.PII && models.EncryptsPII() {
+			return nil, nil, fmt.Errorf("answers to %q are personal data, encrypted at rest, so they cannot be filtered", key)
+		}
 		raw := strings.TrimSpace(values[0])
 		numeric := def.Type == models.FieldNumber || def.Type == models.FieldScale || def.Type == models.FieldRating
 

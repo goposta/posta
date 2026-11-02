@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/formrules"
 	"github.com/goposta/posta/internal/services/messages"
@@ -65,6 +66,51 @@ type MessageWebhookPayload struct {
 	TeamID        *uint                 `json:"team_id,omitempty"`
 	AssignedToID  *uint                 `json:"assigned_to_id,omitempty"`
 	MatchedRules  []string              `json:"matched_rules,omitempty"`
+	// RedactedFields lists the personal-data answers left out because the
+	// form redacts them from webhooks, so a receiver can tell a removed
+	// answer from one never given.
+	RedactedFields []string `json:"redacted_fields,omitempty"`
+}
+
+// redactPII strips answers to personal-data questions from a payload, and
+// the summary values those questions fill.
+func redactPII(body *MessageWebhookPayload, form *models.Form) {
+	mask := messages.NewPIIMask(form.Fields)
+	if !form.RedactPIIInWebhooks || mask.Empty() {
+		return
+	}
+	for _, f := range form.Fields {
+		if f.PII && !f.IsSection() {
+			body.RedactedFields = append(body.RedactedFields, f.Key)
+		}
+	}
+	if body.Data != nil {
+		data := make(models.SubmissionData, len(body.Data))
+		for k, v := range body.Data {
+			if !mask.Key(k) {
+				data[k] = v
+			}
+		}
+		body.Data = data
+	}
+	kept := body.Fields[:0:0]
+	for _, f := range body.Fields {
+		if !mask.Key(f.Key) {
+			kept = append(kept, f)
+		}
+	}
+	body.Fields = kept
+	for role, value := range map[models.FieldRole]*string{
+		models.RoleSenderEmail: &body.SenderEmail,
+		models.RoleSenderName:  &body.SenderName,
+		models.RoleSenderPhone: &body.SenderPhone,
+		models.RoleSubject:     &body.Subject,
+		models.RoleBody:        &body.Body,
+	} {
+		if mask.Hides(role) {
+			*value = ""
+		}
+	}
 }
 
 // messageStore is the slice of MessageRepository the worker needs; an interface
@@ -106,6 +152,7 @@ type MessageProcessHandler struct {
 	realtime      realtime.Bus
 	rules         ruleStore
 	directory     formrules.Directory
+	edition       enterprise.EE
 	appURL        string
 	onNotified    func()
 	// retryCount reports how many times Asynq has already tried this task.
@@ -144,12 +191,13 @@ func NewMessageProcessHandler(
 
 func (h *MessageProcessHandler) OnNotified(fn func()) { h.onNotified = fn }
 
-// SetRouting enables a form's routing rules.
-func (h *MessageProcessHandler) SetRouting(rules *repositories.FormRuleRepository, dir formrules.Directory) {
+// SetRouting enables a form's routing rules. Rules are a Posta Enterprise
+// feature: without a license, submissions go to the form's recipients.
+func (h *MessageProcessHandler) SetRouting(edition enterprise.EE, rules *repositories.FormRuleRepository, dir formrules.Directory) {
 	if rules != nil {
 		h.rules = rules
 	}
-	h.directory = dir
+	h.directory, h.edition = dir, edition
 }
 
 // SetRealtime enables live dashboard events for processed messages.
@@ -225,7 +273,7 @@ func (h *MessageProcessHandler) shouldNotify(msg *models.Message, form *models.F
 // stored matches are replayed instead of re-evaluated, so a rule edited in
 // between cannot route the same submission twice.
 func (h *MessageProcessHandler) route(msg *models.Message, form *models.Form) formrules.Outcome {
-	if h.rules == nil || !formrules.Routable(msg.Status) {
+	if h.rules == nil || h.edition == nil || !h.edition.Licensed() || !formrules.Routable(msg.Status) {
 		return formrules.Outcome{}
 	}
 	rules, err := h.rules.ListByForm(form.ID)
@@ -355,6 +403,7 @@ func (h *MessageProcessHandler) dispatch(msg *models.Message, form *models.Form,
 	if body.Tags == nil {
 		body.Tags = []string{}
 	}
+	redactPII(&body, form)
 	if body.Priority == "" {
 		body.Priority = string(models.MessagePriorityNormal)
 	}
@@ -597,6 +646,15 @@ func (h *MessageProcessHandler) dispatchReply(msg *models.Message, form *models.
 		EmailID:        reply.EmailUUID,
 		SenderMismatch: reply.SenderMismatch,
 		CreatedAt:      reply.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	// The thread is free text, not answers, but the submitter's address is
+	// one when it came from a personal-data question.
+	if form.RedactPIIInWebhooks && messages.NewPIIMask(form.Fields).Hides(models.RoleSenderEmail) {
+		if reply.Kind == models.MessageReplyKindInbound {
+			body.From = ""
+		} else {
+			body.To = ""
+		}
 	}
 	encoded, err := json.Marshal(body)
 	if err != nil {

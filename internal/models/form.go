@@ -106,6 +106,14 @@ type Form struct {
 	NotifyMode      NotifyMode     `json:"notify_mode" gorm:"type:varchar(16);default:'immediate';not null"`
 	NotifyOnFlagged bool           `json:"notify_on_flagged" gorm:"default:true;not null"`
 
+	// RedactPIIInWebhooks leaves answers to personal-data questions, and the
+	// summary values they fill, out of this form's webhook payloads.
+	RedactPIIInWebhooks bool `json:"redact_pii_in_webhooks" gorm:"default:false;not null"`
+	// PIIEncrypted reports that this deployment encrypts personal-data answers
+	// at rest (POSTA_ENCRYPTION_KEY is set, under an Enterprise license). Not
+	// stored.
+	PIIEncrypted bool `json:"pii_encrypted" gorm:"-"`
+
 	ReplyFrom     string `json:"reply_from"`
 	ReplyFromName string `json:"reply_from_name"`
 
@@ -123,6 +131,18 @@ type Form struct {
 }
 
 func (f *Form) IsActive() bool { return f.Status == FormStatusActive }
+
+// AfterFind fills PIIEncrypted, so the dashboard can say why personal-data
+// answers cannot be filtered or searched.
+func (f *Form) AfterFind(*gorm.DB) error {
+	f.PIIEncrypted = EncryptsPII()
+	return nil
+}
+
+func (f *Form) AfterSave(*gorm.DB) error {
+	f.PIIEncrypted = EncryptsPII()
+	return nil
+}
 
 // Closed reports whether the form has stopped accepting submissions: it is
 // paused, its close time has passed, or it has reached its response limit.

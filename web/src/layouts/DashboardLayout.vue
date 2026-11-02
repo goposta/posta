@@ -9,12 +9,15 @@ import { adminApi } from '../api/admin'
 import NotificationBell from '../components/NotificationBell.vue'
 import type { UpdateInfo } from '../api/types'
 import EmailVerificationBanner from '../components/EmailVerificationBanner.vue'
+import { useLicenseStore } from '../stores/license'
+import { licenseApi } from '../api/license'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const theme = useThemeStore()
 const wsStore = useWorkspaceStore()
+const license = useLicenseStore()
 const sidebarCollapsed = ref(localStorage.getItem('posta_sidebar_collapsed') === 'true')
 const mobileOpen = ref(false)
 const appInfo = ref<AppInfo | null>(null)
@@ -59,6 +62,56 @@ async function loadUpdate() {
   }
 }
 
+// License warnings (platform admins only): expiring, expired, or bound to
+// another installation. Each links to the License page.
+const licenseWarnings = ref<string[]>([])
+const LICENSE_WARNINGS: Record<string, { title: string; text: string; variant: string }> = {
+  nearing_expiry: {
+    title: 'Your Posta Enterprise license expires soon',
+    text: 'Renew it to keep Enterprise settings editable.',
+    variant: 'app-banner--warning',
+  },
+  license_grace: {
+    title: 'Your Posta Enterprise license has expired',
+    text: 'Everything still works during the grace period. Renew before it ends.',
+    variant: 'app-banner--warning',
+  },
+  license_expired: {
+    title: 'Your Posta Enterprise license has expired',
+    text: 'Enterprise features keep running, but their settings are read-only until it is renewed.',
+    variant: 'app-banner--danger',
+  },
+  binding_mismatch: {
+    title: 'Enterprise features are off',
+    text: 'The installed license is bound to a different installation.',
+    variant: 'app-banner--danger',
+  },
+  unknown_signing_key: {
+    title: 'Enterprise features are off',
+    text: 'The installed license is signed by a key this version of Posta does not know.',
+    variant: 'app-banner--danger',
+  },
+}
+const licenseBanner = computed(() => {
+  if (!auth.isAdmin || route.path === '/admin/license') return null
+  const w = licenseWarnings.value.find((k) => LICENSE_WARNINGS[k])
+  return w ? LICENSE_WARNINGS[w] : null
+})
+
+async function loadLicenseWarnings() {
+  if (!auth.isAdmin) return
+  try {
+    licenseWarnings.value = (await licenseApi.get()).data.data.warnings ?? []
+  } catch {
+    // Non-critical; the License page shows the same.
+  }
+}
+
+/** The "EE" marker on an Enterprise nav entry, while no license is installed. */
+function showEnterpriseBadge(item: NavItem) {
+  return !!item.enterprise && license.ready && !license.licensed
+}
+
 async function dismissUpdate() {
   const version = update.value?.latest_version
   if (!version) return
@@ -81,6 +134,8 @@ onMounted(async () => {
   }
 
   loadUpdate()
+  loadLicenseWarnings()
+  license.load()
   wsStore.fetchWorkspaces()
 })
 onBeforeUnmount(() => {
@@ -109,6 +164,8 @@ interface NavItem {
   workspaceSubpath?: string
   /** Additional route path prefixes that should keep this item highlighted (grouped tab pages). */
   matchPaths?: string[]
+  /** A Posta Enterprise feature: marked "EE" while no license is installed. */
+  enterprise?: boolean
   /** Nested items shown indented under this entry. */
   children?: NavItem[]
 }
@@ -162,7 +219,7 @@ const workspaceNavSections: NavSection[] = [
         icon: 'message-square',
         children: [
           { name: 'Forms', path: '/forms', icon: 'edit-3' },
-          { name: 'Teams', path: '/teams', icon: 'users' },
+          { name: 'Teams', path: '/teams', icon: 'users', enterprise: true },
           { name: 'Spam Filters', path: '/message-filters', icon: 'shield' },
         ],
       },
@@ -263,6 +320,7 @@ const adminNavSections: NavSection[] = [
     title: 'Platform',
     items: [
       { name: 'Platform Settings', path: '/admin/settings', icon: 'settings' },
+      { name: 'License', path: '/admin/license', icon: 'key' },
     ],
   },
 ]
@@ -559,11 +617,15 @@ function getIcon(name: string): string {
                   :title="sidebarCollapsed ? item.name : ''" :to="itemTo(item)">
                   <span class="nav-icon" v-html="getIcon(item.icon)"></span>
                   <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
+                  <span v-if="!sidebarCollapsed && showEnterpriseBadge(item)" class="ee-badge nav-ee"
+                    title="Posta Enterprise">EE</span>
                 </router-link>
                 <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
                   :class="{ active: isItemActive(child) }" :title="sidebarCollapsed ? child.name : ''" :to="child.path">
                   <span class="nav-icon" v-html="getIcon(child.icon)"></span>
                   <span v-if="!sidebarCollapsed" class="nav-label">{{ child.name }}</span>
+                  <span v-if="!sidebarCollapsed && showEnterpriseBadge(child)" class="ee-badge nav-ee"
+                    title="Posta Enterprise">EE</span>
                 </router-link>
               </template>
             </div>
@@ -700,6 +762,15 @@ function getIcon(name: string): string {
               aria-label="Dismiss until the next release" @click="dismissUpdate">×</button>
           </div>
         </div>
+        <div v-if="licenseBanner" class="app-banner" :class="licenseBanner.variant" role="status">
+          <div class="app-banner-content">
+            <p class="app-banner-title">{{ licenseBanner.title }}</p>
+            <p class="app-banner-text">{{ licenseBanner.text }}</p>
+          </div>
+          <div class="app-banner-actions">
+            <router-link class="app-banner-btn" to="/admin/license">License</router-link>
+          </div>
+        </div>
         <router-view />
       </main>
       <footer class="main-footer">
@@ -819,11 +890,13 @@ function getIcon(name: string): string {
                   @click="mobileOpen = false" :to="itemTo(item)">
                   <span class="nav-icon" v-html="getIcon(item.icon)"></span>
                   <span class="nav-label">{{ item.name }}</span>
+                  <span v-if="showEnterpriseBadge(item)" class="ee-badge nav-ee" title="Posta Enterprise">EE</span>
                 </router-link>
                 <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
                   :class="{ active: isItemActive(child) }" @click="mobileOpen = false" :to="child.path">
                   <span class="nav-icon" v-html="getIcon(child.icon)"></span>
                   <span class="nav-label">{{ child.name }}</span>
+                  <span v-if="showEnterpriseBadge(child)" class="ee-badge nav-ee" title="Posta Enterprise">EE</span>
                 </router-link>
               </template>
             </div>
@@ -1053,6 +1126,15 @@ function getIcon(name: string): string {
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
+}
+
+.nav-ee {
+  margin-left: auto;
+}
+
+/* Banners above the page (new release, license) keep clear of its heading. */
+.main-content > .app-banner {
+  margin-bottom: 20px;
 }
 
 .nav-item:hover {

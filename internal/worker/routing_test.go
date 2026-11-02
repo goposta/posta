@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goposta/posta/internal/enterprise/enterprisetest"
 	"github.com/goposta/posta/internal/models"
 )
 
@@ -85,7 +86,7 @@ func routedFixture(suppress bool) (*MessageProcessHandler, *fakeMessageStore, *f
 	}}
 	h, d, n := newTestHandler(store, form)
 	rules := &fakeRules{rules: []models.FormRule{salesRule(suppress)}}
-	h.rules, h.directory = rules, fakeDirectory{ws: ws}
+	h.rules, h.directory, h.edition = rules, fakeDirectory{ws: ws}, enterprisetest.Licensed
 	return h, store, d, n, rules
 }
 
@@ -157,11 +158,75 @@ func TestProcessTaskNoMatchKeepsDefault(t *testing.T) {
 	}
 }
 
+func TestRulesNeedALicense(t *testing.T) {
+	// Without a license the rules are skipped: the form's recipients get the
+	// submission, and it stays unrouted for when a license is installed.
+	h, store, d, n, rules := routedFixture(false)
+	h.edition = enterprisetest.Community
+	if err := h.ProcessTask(context.Background(), processTask(t)); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(n.sent, []string{"admins"}) || len(d.direct) != 0 || len(rules.hits) != 0 {
+		t.Errorf("unlicensed: sent %v direct %v hits %v", n.sent, d.direct, rules.hits)
+	}
+	if m := store.msg; m.RoutedAt != nil || m.TeamID != nil || len(m.MatchedRules) != 0 {
+		t.Errorf("unlicensed submission was routed: %+v", m)
+	}
+
+	// An expired license keeps routing running.
+	h, store, _, _, _ = routedFixture(false)
+	h.edition = enterprisetest.Degraded
+	if err := h.ProcessTask(context.Background(), processTask(t)); err != nil {
+		t.Fatal(err)
+	}
+	if store.msg.RoutedAt == nil {
+		t.Error("a degraded license stopped routing")
+	}
+}
+
 func TestRulesNeverLowerPriority(t *testing.T) {
 	if higherPriority("high", "urgent") || !higherPriority("high", "") || higherPriority("", "low") {
 		t.Error("higherPriority")
 	}
 	if got := mergeTags([]string{"a"}, []string{"a", "b"}); !reflect.DeepEqual(got, []string{"a", "b"}) {
 		t.Errorf("mergeTags = %v", got)
+	}
+}
+
+func TestRedactPIIFromWebhook(t *testing.T) {
+	form := &models.Form{Fields: models.FieldDefs{
+		{Key: "email", Type: models.FieldEmail, Role: models.RoleSenderEmail, PII: true},
+		{Key: "salary", Type: models.FieldNumber, PII: true},
+		{Key: "dept", Type: models.FieldSelect, Role: models.RoleSubject},
+	}}
+	payload := func() MessageWebhookPayload {
+		return MessageWebhookPayload{
+			SenderEmail: "ada@example.com", Subject: "sales",
+			Data:   models.SubmissionData{"email": "ada@example.com", "salary": float64(90000), "dept": "sales"},
+			Fields: []models.MessageField{{Key: "email", Value: "ada@example.com"}, {Key: "salary", Value: "90000"}, {Key: "dept", Value: "Sales"}},
+		}
+	}
+
+	off := payload()
+	redactPII(&off, form)
+	if off.SenderEmail == "" || len(off.Data) != 3 || off.RedactedFields != nil {
+		t.Errorf("redaction is opt-in: %+v", off)
+	}
+
+	form.RedactPIIInWebhooks = true
+	on := payload()
+	redactPII(&on, form)
+	if on.SenderEmail != "" || on.Subject != "sales" {
+		t.Errorf("summary values: email %q subject %q", on.SenderEmail, on.Subject)
+	}
+	if !reflect.DeepEqual(on.Data, models.SubmissionData{"dept": "sales"}) || len(on.Fields) != 1 || on.Fields[0].Key != "dept" {
+		t.Errorf("answers: data %v fields %v", on.Data, on.Fields)
+	}
+	if !reflect.DeepEqual(on.RedactedFields, []string{"email", "salary"}) {
+		t.Errorf("redacted_fields %v", on.RedactedFields)
+	}
+	original := payload()
+	if original.Data["salary"] != float64(90000) {
+		t.Error("redaction changed the message itself")
 	}
 }

@@ -125,3 +125,21 @@ func branches(q *models.FieldDef) bool {
 	}
 	return false
 }
+
+// BranchTargets lists a schema's branching, keyed by where each target is
+// set: "section:<key>" for a section's Next, "option:<question>=<value>" for
+// an option's Goto. It is empty when the form does not branch.
+func BranchTargets(defs models.FieldDefs) map[string]string {
+	out := map[string]string{}
+	for _, d := range defs {
+		if d.IsSection() && d.Next != "" {
+			out["section:"+d.Key] = d.Next
+		}
+		for _, o := range d.Options {
+			if o.Goto != "" {
+				out["option:"+d.Key+"="+o.Value] = o.Goto
+			}
+		}
+	}
+	return out
+}
