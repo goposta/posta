@@ -55,6 +55,10 @@ const (
 // from the raw query: field.<key>=value for equality, field.<key>[gte]=n and
 // field.<key>[lte]=n for ranges on number, scale, rating, date and time
 // questions.
+
+// formatCSV is the default export format.
+const formatCSV = "csv"
+
 type SubmissionQueryRequest struct {
 	FormID   int    `query:"form_id" doc:"The form whose submissions to read (required)"`
 	Page     int    `query:"page" default:"0"`
@@ -313,7 +317,7 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 	}
 	format := req.Format
 	if format != "json" {
-		format = "csv"
+		format = formatCSV
 	}
 	showPII := canSeePII(c)
 	cols, withheld := exportColumns(form.Fields, showPII)
@@ -328,7 +332,7 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 	}
 	filename := fmt.Sprintf("%s-responses-%s.%s", slug, time.Now().UTC().Format("20060102"), format)
 	hdr := c.ResponseWriter().Header()
-	if format == "csv" {
+	if format == formatCSV {
 		hdr.Set("Content-Type", "text/csv; charset=utf-8")
 	} else {
 		hdr.Set("Content-Type", "application/json; charset=utf-8")
@@ -348,7 +352,7 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 	var write func(m *models.Message) error
 	var finish func() error
 
-	if format == "csv" {
+	if format == formatCSV {
 		// The byte-order mark makes Excel read the file as UTF-8.
 		_, _ = out.WriteString("\ufeff")
 		w := csv.NewWriter(out)

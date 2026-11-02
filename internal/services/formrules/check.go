@@ -173,7 +173,7 @@ func checkCondition(c *models.RuleCondition, form *models.Form) error {
 		}
 		c.Value = s
 		return nil
-	case "gt", "gte", "lt", "lte":
+	case opGT, opGTE, opLT, opLTE:
 		s, err := single(c.Value)
 		if err != nil {
 			return err

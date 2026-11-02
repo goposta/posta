@@ -46,6 +46,7 @@ const (
 	pathSubscriberByID        = "/subscribers/{id:int}"
 	pathSubscriberListByID    = "/subscriber-lists/{id:int}"
 	pathSubscriberListMembers = "/subscriber-lists/{id:int}/members"
+	pathTeamByID              = "/teams/{id:int}"
 	pathUnsubscribeListByID   = "/unsubscribe-lists/{id:int}"
 	pathWorkspaceByID         = "/workspaces/{id:int}"
 )

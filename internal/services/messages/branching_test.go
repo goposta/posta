@@ -49,8 +49,9 @@ func branchingForm() models.FieldDefs {
 }
 
 func routeKeys(defs models.FieldDefs, answers map[string]string) []string {
-	var out []string
-	for k := range Route(defs, func(key string) string { return answers[key] }) {
+	route := Route(defs, func(key string) string { return answers[key] })
+	out := make([]string, 0, len(route))
+	for k := range route {
 		out = append(out, k)
 	}
 	sort.Strings(out)

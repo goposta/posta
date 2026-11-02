@@ -381,7 +381,7 @@ func test(c models.RuleCondition, f Facts) bool {
 	case "matches":
 		re := compiled(toString(c.Value))
 		return v.present && re != nil && re.MatchString(v.text)
-	case "gt", "gte", "lt", "lte":
+	case opGT, opGTE, opLT, opLTE:
 		return v.present && compare(v, toString(c.Value), c.Op)
 	}
 	return false
@@ -457,15 +457,24 @@ func compare(v value, w string, op string) bool {
 		cmp = strings.Compare(v.text, strings.TrimSpace(w))
 	}
 	switch op {
-	case "gt":
+	case opGT:
 		return cmp > 0
-	case "gte":
+	case opGTE:
 		return cmp >= 0
-	case "lt":
+	case opLT:
 		return cmp < 0
 	}
 	return cmp <= 0
 }
+
+// The comparison operators: numbers, dates and times compare as such, other
+// values as text.
+const (
+	opGT  = "gt"
+	opGTE = "gte"
+	opLT  = "lt"
+	opLTE = "lte"
+)
 
 var regexCache sync.Map // pattern → *regexp.Regexp (nil when it does not compile)
 
