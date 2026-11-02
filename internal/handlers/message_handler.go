@@ -36,6 +36,7 @@ import (
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
+	"github.com/lib/pq"
 )
 
 const (
@@ -82,6 +83,8 @@ type MessageListRequest struct {
 	After    string `query:"after" doc:"RFC 3339 lower bound on received time"`
 	Before   string `query:"before" doc:"RFC 3339 upper bound on received time"`
 	Assigned int    `query:"assigned_to"`
+	Tag      string `query:"tag" doc:"Only messages carrying this tag"`
+	Priority string `query:"priority" enum:"low,normal,high,urgent"`
 }
 
 type MessageIDRequest struct {
@@ -117,6 +120,21 @@ type AssignMessageRequest struct {
 	} `json:"body"`
 }
 
+type UpdateMessageTagsRequest struct {
+	ID   string `param:"id"`
+	Body struct {
+		Add    []string `json:"add" doc:"Tags to add. Tags are lowercased; at most 20 per message, 32 characters each."`
+		Remove []string `json:"remove" doc:"Tags to remove"`
+	} `json:"body"`
+}
+
+type UpdateMessagePriorityRequest struct {
+	ID   string `param:"id"`
+	Body struct {
+		Priority string `json:"priority" required:"true" enum:"low,normal,high,urgent"`
+	} `json:"body"`
+}
+
 type MarkSpamRequest struct {
 	ID   string `param:"id"`
 	Body struct {
@@ -147,12 +165,21 @@ func (h *MessageHandler) List(c *okapi.Context, req *MessageListRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
 	filter := repositories.MessageFilterQuery{
-		FormID: uint(req.FormID),
-		Status: req.Status,
-		State:  req.State,
-		Unread: req.Unread,
-		Query:  strings.TrimSpace(req.Q),
+		FormID:   uint(req.FormID),
+		Status:   req.Status,
+		State:    req.State,
+		Unread:   req.Unread,
+		Query:    strings.TrimSpace(req.Q),
+		Priority: req.Priority,
+		// Collect-mode responses show in the inbox only when their form is
+		// picked: the inbox is for conversations.
+		InboxOnly: req.FormID == 0,
 	}
+	tags, err := tagFilter(req.Tag)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	filter.Tags = tags
 	if req.Assigned > 0 {
 		assigned := uint(req.Assigned)
 		filter.Assigned = &assigned
@@ -321,6 +348,66 @@ func (h *MessageHandler) Assign(c *okapi.Context, req *AssignMessageRequest) err
 	hydrate(msg)
 	h.publish(c, messages.EventUpdated, msg)
 	return ok(c, msg)
+}
+
+// UpdateTags adds and removes tags on a message.
+func (h *MessageHandler) UpdateTags(c *okapi.Context, req *UpdateMessageTagsRequest) error {
+	if err := requireEdit(c); err != nil {
+		return c.AbortForbidden("insufficient workspace permissions", err)
+	}
+	msg, err := h.repo.FindByUUIDForScope(getScope(c), req.ID)
+	if err != nil {
+		return c.AbortNotFound("message not found")
+	}
+	tags, err := messages.ApplyTags(msg.Tags, req.Body.Add, req.Body.Remove)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	now := time.Now()
+	msg.Tags = tags
+	msg.UpdatedAt = &now
+	if err := h.repo.UpdateFields(msg.ID, map[string]any{"tags": pq.StringArray(tags), "updated_at": now}); err != nil {
+		return c.AbortInternalServerError("failed to update message")
+	}
+	hydrate(msg)
+	h.publish(c, messages.EventUpdated, msg)
+	return ok(c, msg)
+}
+
+// UpdatePriority sets a message's priority.
+func (h *MessageHandler) UpdatePriority(c *okapi.Context, req *UpdateMessagePriorityRequest) error {
+	if err := requireEdit(c); err != nil {
+		return c.AbortForbidden("insufficient workspace permissions", err)
+	}
+	priority := models.MessagePriority(strings.ToLower(strings.TrimSpace(req.Body.Priority)))
+	if !models.ValidPriority(priority) {
+		return c.AbortBadRequest("priority must be one of: low, normal, high, urgent")
+	}
+	msg, err := h.repo.FindByUUIDForScope(getScope(c), req.ID)
+	if err != nil {
+		return c.AbortNotFound("message not found")
+	}
+	now := time.Now()
+	msg.Priority = priority
+	msg.UpdatedAt = &now
+	if err := h.repo.UpdateFields(msg.ID, map[string]any{"priority": priority, "updated_at": now}); err != nil {
+		return c.AbortInternalServerError("failed to update message")
+	}
+	hydrate(msg)
+	h.publish(c, messages.EventUpdated, msg)
+	return ok(c, msg)
+}
+
+// Tags lists the tags in use on recent messages, most used first.
+func (h *MessageHandler) Tags(c *okapi.Context) error {
+	tags, err := h.repo.RecentTags(getScope(c), 5000, 100)
+	if err != nil {
+		return c.AbortInternalServerError("failed to list tags")
+	}
+	if tags == nil {
+		tags = []repositories.TagCount{}
+	}
+	return ok(c, tags)
 }
 
 func (h *MessageHandler) MarkSpam(c *okapi.Context, req *MarkSpamRequest) error {
@@ -531,7 +618,25 @@ func (h *MessageHandler) publish(c *okapi.Context, eventType string, msg *models
 		map[string]any{metaMessageID: msg.UUID, metaFormID: msg.FormID})
 }
 
+// tagFilter turns a tag query parameter into a filter, nil when empty.
+func tagFilter(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	tag, err := messages.NormalizeTag(raw)
+	if err != nil {
+		return nil, err
+	}
+	return []string{tag}, nil
+}
+
 func hydrate(msg *models.Message) {
+	if msg.Tags == nil {
+		msg.Tags = pq.StringArray{}
+	}
+	if msg.Priority == "" {
+		msg.Priority = models.MessagePriorityNormal
+	}
 	if msg.FieldsJSON != "" {
 		var fields []models.MessageField
 		if err := json.Unmarshal([]byte(msg.FieldsJSON), &fields); err == nil {

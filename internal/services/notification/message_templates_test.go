@@ -154,3 +154,29 @@ func TestNewMessageTemplateOmitsPhoneWhenAbsent(t *testing.T) {
 		t.Fatal("no phone row should render when no phone was submitted")
 	}
 }
+
+func TestCollectFormTemplatesSayResponse(t *testing.T) {
+	out := renderedText(t, TemplateNewMessage, map[string]any{
+		"UserName": "Ada", "FormName": "Survey", "Collect": true,
+		"Fields":     []models.MessageField{{Key: "From", Value: "•••• (hidden, view in Posta)"}},
+		"MessageURL": "https://posta.test/messages/abc",
+	})
+	for _, want := range []string{"New response on Survey", "Open response", "hidden, view in Posta"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("collect notification is missing %q", want)
+		}
+	}
+	if strings.Contains(out, "Open and reply") || strings.Contains(out, "before replying") {
+		t.Fatal("a collect-mode notification must not offer to reply")
+	}
+
+	digest := renderedText(t, TemplateMessageDigest, map[string]any{
+		"UserName": "Ada", "Period": "Daily", "FormName": "Survey", "Collect": true,
+		"Total": 2, "InboxURL": "https://posta.test/forms/1?tab=responses",
+	})
+	for _, want := range []string{"Daily response digest", "2</strong> new responses", "Open responses"} {
+		if !strings.Contains(digest, want) {
+			t.Fatalf("collect digest is missing %q", want)
+		}
+	}
+}

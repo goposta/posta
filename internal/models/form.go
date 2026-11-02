@@ -43,6 +43,16 @@ const (
 	NotifyModeOff       NotifyMode = "off"
 )
 
+// FormMode decides what the dashboard makes of submissions. An inbox form's
+// submissions are conversations to answer; a collect form's are responses to
+// read as a table (surveys, signups, RSVPs). Both share ingest and storage.
+type FormMode string
+
+const (
+	FormModeInbox   FormMode = "inbox"
+	FormModeCollect FormMode = "collect"
+)
+
 const (
 	DefaultHoneypotField = "_gotcha"
 	DefaultMaxBodyBytes  = 65536
@@ -58,6 +68,7 @@ type Form struct {
 	Description string     `json:"description"`
 	PublicKey   string     `json:"public_key" gorm:"uniqueIndex;not null"`
 	Status      FormStatus `json:"status" gorm:"type:varchar(20);default:'active';index;not null"`
+	Mode        FormMode   `json:"mode" gorm:"type:varchar(16);default:'inbox';not null"`
 
 	AllowedOrigins   pq.StringArray `json:"allowed_origins" gorm:"type:text[]"`
 	StrictOrigin     bool           `json:"strict_origin" gorm:"default:false;not null"`
@@ -125,6 +136,10 @@ func (f *Form) Closed(now time.Time) bool {
 	}
 	return f.MaxResponses > 0 && f.MessageCount-f.SpamCount >= int64(f.MaxResponses)
 }
+
+// IsCollect reports whether submissions are responses to read, not
+// conversations: they stay out of the inbox and cannot be replied to.
+func (f *Form) IsCollect() bool { return f != nil && f.Mode == FormModeCollect }
 
 // HasSchema reports whether submissions are validated against Fields.
 func (f *Form) HasSchema() bool { return f != nil && len(f.Fields.Active()) > 0 }

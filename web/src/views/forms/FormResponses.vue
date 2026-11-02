@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { formSubmissionsApi } from "../../api/messages";
+import { formSubmissionsApi, messagesApi } from "../../api/messages";
 import { apiMessage } from "../../composables/apiError";
 import { useNotificationStore } from "../../stores/notification";
 import Pagination from "../../components/Pagination.vue";
@@ -18,7 +18,7 @@ import type {
 // A form's responses: a per-question summary and a table, over one set of
 // filters, with CSV and JSON export of exactly what is shown.
 
-const props = defineProps<{ form: Form }>();
+const props = defineProps<{ form: Form; shareUrl?: string }>();
 const notify = useNotificationStore();
 
 const view = ref<"summary" | "table">("summary");
@@ -33,6 +33,9 @@ const search = ref("");
 const after = ref("");
 const before = ref("");
 const fieldFilters = ref<SubmissionFieldFilter[]>([]);
+const tag = ref("");
+const priority = ref("");
+const knownTags = ref<string[]>([]);
 
 // Archived and hidden questions can still be filtered on: old answers keep them.
 const questions = computed(() => props.form.fields || []);
@@ -50,6 +53,8 @@ function query(): SubmissionQuery {
   return {
     status: status.value,
     q: search.value.trim(),
+    tag: tag.value,
+    priority: priority.value,
     // Dates are picked in local time; the day bounds are inclusive.
     after: after.value ? new Date(`${after.value}T00:00:00`).toISOString() : "",
     before: before.value ? new Date(`${before.value}T23:59:59`).toISOString() : "",
@@ -80,7 +85,7 @@ watch(search, () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(reload, 300);
 });
-watch([status, after, before, fieldFilters], reload, { deep: true });
+watch([status, after, before, tag, priority, fieldFilters], reload, { deep: true });
 
 function reload() {
   page.value = 0;
@@ -121,11 +126,22 @@ function clearFilters() {
   search.value = "";
   after.value = "";
   before.value = "";
+  tag.value = "";
+  priority.value = "";
   fieldFilters.value = [];
 }
 
 const filtered = computed(
-  () => !!(status.value || search.value.trim() || after.value || before.value || fieldFilters.value.some((f) => f.value !== "")),
+  () =>
+    !!(
+      status.value ||
+      search.value.trim() ||
+      after.value ||
+      before.value ||
+      tag.value ||
+      priority.value ||
+      fieldFilters.value.some((f) => f.value !== "")
+    ),
 );
 
 function exportUrl(format: "csv" | "json") {
@@ -177,7 +193,16 @@ function scaleTop(s: SubmissionFieldSummary) {
   return opts.length ? opts[opts.length - 1].value : "";
 }
 
-onMounted(load);
+const PRIORITY_LABELS: Record<string, string> = { low: "Low", high: "High", urgent: "Urgent" };
+
+onMounted(async () => {
+  load();
+  try {
+    knownTags.value = (await messagesApi.tags()).data.data.map((t) => t.tag);
+  } catch {
+    /* the tag filter just stays hidden */
+  }
+});
 </script>
 
 <template>
@@ -207,6 +232,17 @@ onMounted(load);
             <option value="">Responses</option>
             <option value="flagged">Flagged only</option>
             <option value="quarantined">Quarantined (spam)</option>
+          </select>
+          <select v-model="priority" class="form-select rf-status" aria-label="Priority">
+            <option value="">Any priority</option>
+            <option value="urgent">Urgent</option>
+            <option value="high">High</option>
+            <option value="normal">Normal</option>
+            <option value="low">Low</option>
+          </select>
+          <select v-if="knownTags.length" v-model="tag" class="form-select rf-status" aria-label="Tag">
+            <option value="">Any tag</option>
+            <option v-for="t in knownTags" :key="t" :value="t">{{ t }}</option>
           </select>
           <div class="rf-export">
             <a class="btn btn-secondary btn-sm" :href="exportUrl('csv')" download>Download CSV</a>
@@ -264,7 +300,12 @@ onMounted(load);
     <div v-else-if="summary && summary.total === 0" class="card">
       <div class="empty-state">
         <h3>{{ filtered ? "No responses match these filters" : "No responses yet" }}</h3>
-        <p v-if="!filtered">Share the form's link or embed it on your site from the Share &amp; embed tab.</p>
+        <template v-if="!filtered">
+          <p>Share this link, or embed the form on your site from the Share &amp; embed tab.</p>
+          <p v-if="props.shareUrl" class="share-line">
+            <a :href="props.shareUrl" target="_blank" rel="noopener">{{ props.shareUrl }}</a>
+          </p>
+        </template>
         <button v-else class="btn btn-secondary" @click="clearFilters">Clear filters</button>
       </div>
     </div>
@@ -372,6 +413,8 @@ onMounted(load);
                 <th>Subject</th>
                 <th>Message</th>
               </template>
+              <th>Priority</th>
+              <th>Tags</th>
             </tr>
           </thead>
           <tbody>
@@ -391,6 +434,8 @@ onMounted(load);
                 <td>{{ m.subject }}</td>
                 <td class="rt-long">{{ m.body }}</td>
               </template>
+              <td>{{ PRIORITY_LABELS[m.priority] || "" }}</td>
+              <td class="rt-tags">{{ (m.tags || []).join(", ") }}</td>
             </tr>
           </tbody>
         </table>
@@ -693,6 +738,14 @@ onMounted(load);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.share-line {
+  overflow-wrap: anywhere;
+}
+
+.rt-tags {
+  color: var(--text-secondary);
 }
 
 .rt-when {

@@ -1231,6 +1231,9 @@ export interface CampaignAnalyticsData {
 }
 
 export type FormStatus = 'active' | 'paused' | 'archived'
+/** inbox: submissions are conversations. collect: responses read as a table. */
+export type FormMode = 'inbox' | 'collect'
+export type MessagePriority = 'low' | 'normal' | 'high' | 'urgent'
 export type NotifyMode = 'immediate' | 'hourly' | 'daily' | 'off'
 export type MessageStatus = 'received' | 'flagged' | 'quarantined' | 'rejected'
 export type MessageState = 'new' | 'open' | 'replied' | 'closed' | 'spam'
@@ -1247,6 +1250,7 @@ export interface Form {
   description: string
   public_key: string
   status: FormStatus
+  mode: FormMode
   allowed_origins: string[]
   strict_origin: boolean
   redirect_url: string
@@ -1362,6 +1366,8 @@ export interface Message {
   state: MessageState
   spam_score: number
   scan_reasons: string[] | null
+  tags: string[]
+  priority: MessagePriority
   notified_at?: string | null
   assigned_to_id?: number | null
   read_at?: string | null
@@ -1453,5 +1459,12 @@ export interface SubmissionQuery {
   q?: string
   after?: string
   before?: string
+  tag?: string
+  priority?: string
   filters?: SubmissionFieldFilter[]
+}
+
+export interface TagCount {
+  tag: string
+  count: number
 }

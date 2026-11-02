@@ -123,6 +123,12 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
+	// Tag filters are array containment (tags @> '{vip}').
+	db.Exec(`DO $$ BEGIN
+		CREATE INDEX IF NOT EXISTS idx_messages_tags ON messages USING GIN (tags) WHERE tags IS NOT NULL;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
 	// One thread reply per inbound email, so a retried parse task cannot attach
 	// the same answer twice. Its own block: a failure must not skip the others.
 	db.Exec(`DO $$ BEGIN

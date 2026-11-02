@@ -5,13 +5,16 @@ import type {
   Form,
   FormAppearance,
   FormField,
+  FormMode,
   FormSnippet,
   Message,
   MessageFilterRule,
+  MessagePriority,
   MessageReply,
   MessageStats,
   SubmissionQuery,
   SubmissionSummary,
+  TagCount,
 } from './types'
 
 const WORKSPACE_KEY = 'posta_workspace_id'
@@ -26,6 +29,7 @@ export interface FormPayload {
   slug?: string
   description?: string
   status?: string
+  mode?: FormMode
   allowed_origins?: string[]
   strict_origin?: boolean
   redirect_url?: string
@@ -67,6 +71,8 @@ export interface MessageListParams {
   q?: string
   after?: string
   before?: string
+  tag?: string
+  priority?: string
 }
 
 export interface FilterPayload {
@@ -147,6 +153,15 @@ export const messagesApi = {
       user_id: userId,
     })
   },
+  updateTags(uuid: string, payload: { add?: string[]; remove?: string[] }) {
+    return api.put<ApiResponse<Message>>(`/workspaces/current/messages/${uuid}/tags`, payload)
+  },
+  setPriority(uuid: string, priority: MessagePriority) {
+    return api.put<ApiResponse<Message>>(`/workspaces/current/messages/${uuid}/priority`, { priority })
+  },
+  tags() {
+    return api.get<ApiResponse<TagCount[]>>('/workspaces/current/message-tags')
+  },
   markSpam(uuid: string, payload: { create_filter?: boolean; pattern?: string; kind?: string } = {}) {
     return api.post<ApiResponse<Message>>(`/workspaces/current/messages/${uuid}/spam`, payload)
   },
@@ -195,7 +210,7 @@ export const messageFiltersApi = {
 // equality, field.<key>[gte]=n and field.<key>[lte]=n for ranges.
 function submissionParams(formId: number, query: SubmissionQuery): Record<string, string | number> {
   const params: Record<string, string | number> = { form_id: formId }
-  for (const k of ['page', 'size', 'status', 'q', 'after', 'before'] as const) {
+  for (const k of ['page', 'size', 'status', 'q', 'after', 'before', 'tag', 'priority'] as const) {
     const v = query[k]
     if (v !== undefined && v !== '') params[k] = v
   }
