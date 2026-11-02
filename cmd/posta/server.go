@@ -545,6 +545,10 @@ func startEmbeddedWorker(db *gorm.DB,
 		)
 		messageHandler.OnNotified(metrics.IncrementMessageNotification)
 		messageHandler.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
+		messageHandler.SetRouting(repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
+			Workspaces: repositories.NewWorkspaceRepository(db),
+			Teams:      repositories.NewTeamRepository(db),
+		})
 		mux.HandleFunc(worker.TypeMessageProcess, messageHandler.ProcessTask)
 		mux.HandleFunc(worker.TypeMessageReply, messageHandler.ProcessReplyTask)
 	}
@@ -621,13 +625,18 @@ func initCronManager(
 	if cfg.MessagesEnabled {
 		retentionJob.SetMessageRepo(repositories.NewMessageRepository(db))
 		retentionJob.SetFormRepo(repositories.NewFormRepository(db))
-		manager.Register(jobs.NewMessageDigestJob(
+		digest := jobs.NewMessageDigestJob(
 			notifier,
 			repositories.NewFormRepository(db),
 			repositories.NewMessageRepository(db),
 			repositories.NewWorkspaceRepository(db),
 			cfg.AppWebURL,
-		))
+		)
+		digest.SetRouting(repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
+			Workspaces: repositories.NewWorkspaceRepository(db),
+			Teams:      repositories.NewTeamRepository(db),
+		})
+		manager.Register(digest)
 	}
 	return manager
 }

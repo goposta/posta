@@ -54,6 +54,8 @@ type MessageHandler struct {
 	bus        *eventbus.EventBus
 	realtime   realtime.Bus
 	audit      *audit.Logger
+	teamRepo   *repositories.TeamRepository
+	ruleRepo   *repositories.FormRuleRepository
 }
 
 func NewMessageHandler(
@@ -72,6 +74,12 @@ func (h *MessageHandler) SetEventBus(b *eventbus.EventBus) { h.bus = b }
 // SetRealtime configures the cross-process bus behind the live message stream.
 func (h *MessageHandler) SetRealtime(b realtime.Bus) { h.realtime = b }
 
+// SetRouting lets the inbox filter by team and name the rules that routed a
+// submission.
+func (h *MessageHandler) SetRouting(teams *repositories.TeamRepository, rules *repositories.FormRuleRepository) {
+	h.teamRepo, h.ruleRepo = teams, rules
+}
+
 type MessageListRequest struct {
 	Page     int    `query:"page" default:"0"`
 	Size     int    `query:"size" default:"20"`
@@ -85,6 +93,15 @@ type MessageListRequest struct {
 	Assigned int    `query:"assigned_to"`
 	Tag      string `query:"tag" doc:"Only messages carrying this tag"`
 	Priority string `query:"priority" enum:"low,normal,high,urgent"`
+	TeamID   int    `query:"team_id" doc:"Only messages routed to this team"`
+	Mine     bool   `query:"mine" doc:"Only messages assigned to the caller or routed to one of their teams"`
+}
+
+type UpdateMessageTeamRequest struct {
+	ID   string `param:"id"`
+	Body struct {
+		TeamID *uint `json:"team_id" doc:"A team of this workspace, or null to clear"`
+	} `json:"body"`
 }
 
 type MessageIDRequest struct {
@@ -180,6 +197,18 @@ func (h *MessageHandler) List(c *okapi.Context, req *MessageListRequest) error {
 		return c.AbortBadRequest(err.Error())
 	}
 	filter.Tags = tags
+	if req.TeamID > 0 {
+		filter.TeamID = uint(req.TeamID)
+	}
+	if req.Mine {
+		mine := &repositories.MineFilter{UserID: uint(c.GetInt("user_id"))}
+		if scope := getScope(c); h.teamRepo != nil && scope.WorkspaceID != nil {
+			mine.TeamIDs, _ = h.teamRepo.IDsForUser(*scope.WorkspaceID, mine.UserID)
+		}
+		filter.Mine = mine
+		// Your own work includes collect-mode responses routed to you.
+		filter.InboxOnly = false
+	}
 	if req.Assigned > 0 {
 		assigned := uint(req.Assigned)
 		filter.Assigned = &assigned
@@ -208,6 +237,7 @@ func (h *MessageHandler) Get(c *okapi.Context, req *MessageIDRequest) error {
 		return c.AbortNotFound("message not found")
 	}
 	hydrate(msg)
+	h.nameRules(msg)
 
 	if msg.ReadAt == nil {
 		now := time.Now()
@@ -396,6 +426,58 @@ func (h *MessageHandler) UpdatePriority(c *okapi.Context, req *UpdateMessagePrio
 	hydrate(msg)
 	h.publish(c, messages.EventUpdated, msg)
 	return ok(c, msg)
+}
+
+// UpdateTeam routes a message to a team by hand, or clears its team.
+func (h *MessageHandler) UpdateTeam(c *okapi.Context, req *UpdateMessageTeamRequest) error {
+	if err := requireEdit(c); err != nil {
+		return c.AbortForbidden("insufficient workspace permissions", err)
+	}
+	scope := getScope(c)
+	msg, err := h.repo.FindByUUIDForScope(scope, req.ID)
+	if err != nil {
+		return c.AbortNotFound("message not found")
+	}
+	if req.Body.TeamID != nil {
+		if h.teamRepo == nil || scope.WorkspaceID == nil {
+			return c.AbortBadRequest("teams are not available")
+		}
+		team, err := h.teamRepo.FindForWorkspace(*scope.WorkspaceID, *req.Body.TeamID)
+		if err != nil {
+			return c.AbortBadRequest("choose one of this workspace's teams")
+		}
+		msg.Team = &models.TeamRef{ID: team.ID, Name: team.Name}
+	} else {
+		msg.Team = nil
+	}
+	now := time.Now()
+	msg.TeamID, msg.UpdatedAt = req.Body.TeamID, &now
+	if err := h.repo.UpdateFields(msg.ID, map[string]any{"team_id": req.Body.TeamID, "updated_at": now}); err != nil {
+		return c.AbortInternalServerError("failed to update message")
+	}
+	hydrate(msg)
+	h.nameRules(msg)
+	h.publish(c, messages.EventUpdated, msg)
+	return ok(c, msg)
+}
+
+// nameRules fills RoutedBy from the rules that matched, so the dashboard can
+// show why a submission went where it did. A deleted rule keeps its ID.
+func (h *MessageHandler) nameRules(msg *models.Message) {
+	if h.ruleRepo == nil || len(msg.MatchedRules) == 0 {
+		return
+	}
+	names, err := h.ruleRepo.NamesByUUID(msg.MatchedRules)
+	if err != nil {
+		return
+	}
+	for _, id := range msg.MatchedRules {
+		name := names[id]
+		if name == "" {
+			name = "Deleted rule"
+		}
+		msg.RoutedBy = append(msg.RoutedBy, models.RuleRef{UUID: id, Name: name})
+	}
 }
 
 // Tags lists the tags in use on recent messages, most used first.

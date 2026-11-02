@@ -28,6 +28,7 @@ import (
 
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/formrules"
 	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/services/notification"
 	"github.com/goposta/posta/internal/services/realtime"
@@ -35,6 +36,7 @@ import (
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/hibiken/asynq"
 	"github.com/jkaninda/logger"
+	"github.com/lib/pq"
 )
 
 type MessageWebhookPayload struct {
@@ -54,6 +56,15 @@ type MessageWebhookPayload struct {
 	ScanReasons []string              `json:"scan_reasons,omitempty"`
 	ClientIP    string                `json:"client_ip,omitempty"`
 	ReceivedAt  string                `json:"received_at"`
+
+	// Typed answers and routing, for forms with questions and rules.
+	Data          models.SubmissionData `json:"data,omitempty"`
+	SchemaVersion int                   `json:"schema_version,omitempty"`
+	Tags          []string              `json:"tags"`
+	Priority      string                `json:"priority"`
+	TeamID        *uint                 `json:"team_id,omitempty"`
+	AssignedToID  *uint                 `json:"assigned_to_id,omitempty"`
+	MatchedRules  []string              `json:"matched_rules,omitempty"`
 }
 
 // messageStore is the slice of MessageRepository the worker needs; an interface
@@ -71,6 +82,12 @@ type formStore interface {
 
 type jsonDispatcher interface {
 	DispatchJSON(userID uint, workspaceID *uint, event string, body []byte, fromAddr string)
+	DispatchJSONTo(workspaceID uint, webhookIDs []uint, event string, body []byte)
+}
+
+type ruleStore interface {
+	ListByForm(formID uint) ([]models.FormRule, error)
+	RecordHits(uuids []string, at time.Time) error
 }
 
 type messageNotifier interface {
@@ -87,6 +104,8 @@ type MessageProcessHandler struct {
 	dispatcher    jsonDispatcher
 	notifier      messageNotifier
 	realtime      realtime.Bus
+	rules         ruleStore
+	directory     formrules.Directory
 	appURL        string
 	onNotified    func()
 	// retryCount reports how many times Asynq has already tried this task.
@@ -125,6 +144,14 @@ func NewMessageProcessHandler(
 
 func (h *MessageProcessHandler) OnNotified(fn func()) { h.onNotified = fn }
 
+// SetRouting enables a form's routing rules.
+func (h *MessageProcessHandler) SetRouting(rules *repositories.FormRuleRepository, dir formrules.Directory) {
+	if rules != nil {
+		h.rules = rules
+	}
+	h.directory = dir
+}
+
 // SetRealtime enables live dashboard events for processed messages.
 func (h *MessageProcessHandler) SetRealtime(b realtime.Bus) { h.realtime = b }
 
@@ -151,8 +178,10 @@ func (h *MessageProcessHandler) ProcessTask(ctx context.Context, t *asynq.Task) 
 		return fmt.Errorf("form not found: %w", err)
 	}
 
+	outcome := h.route(msg, form)
+
 	if msg.WebhookDispatchedAt == nil {
-		h.dispatch(msg, form)
+		h.dispatch(msg, form, outcome.Webhooks)
 		now := time.Now().UTC()
 		if err := h.messageRepo.UpdateFields(msg.ID, map[string]any{"webhook_dispatched_at": now}); err != nil {
 			logger.Error("failed to mark message webhook dispatched", "message_id", msg.ID, "error", err)
@@ -163,7 +192,7 @@ func (h *MessageProcessHandler) ProcessTask(ctx context.Context, t *asynq.Task) 
 	}
 
 	if msg.NotifiedAt == nil && h.shouldNotify(msg, form) {
-		if err := h.notify(msg, form); err != nil {
+		if err := h.notify(msg, form, outcome); err != nil {
 			return fmt.Errorf("notify message %d: %w", msg.ID, err)
 		}
 		if err := h.messageRepo.MarkNotified([]uint{msg.ID}, time.Now().UTC()); err != nil {
@@ -190,7 +219,99 @@ func (h *MessageProcessHandler) shouldNotify(msg *models.Message, form *models.F
 	return true
 }
 
-func (h *MessageProcessHandler) dispatch(msg *models.Message, form *models.Form) {
+// route applies the form's rules to a submission once: assignment, team,
+// tags, priority and the matched rules are stored, and the outcome is
+// returned for the webhooks and notifications that follow. On a retry the
+// stored matches are replayed instead of re-evaluated, so a rule edited in
+// between cannot route the same submission twice.
+func (h *MessageProcessHandler) route(msg *models.Message, form *models.Form) formrules.Outcome {
+	if h.rules == nil || !formrules.Routable(msg.Status) {
+		return formrules.Outcome{}
+	}
+	rules, err := h.rules.ListByForm(form.ID)
+	if err != nil {
+		logger.Error("failed to load routing rules", "form_id", form.ID, "error", err)
+		return formrules.Outcome{}
+	}
+	if msg.RoutedAt != nil {
+		return formrules.Combine(rules, msg.MatchedRules)
+	}
+	out := formrules.Evaluate(rules, formrules.FactsFor(msg, form))
+	now := time.Now().UTC()
+	fields := map[string]any{"routed_at": now}
+	if len(out.Matched) > 0 {
+		fields["matched_rules"] = pq.StringArray(out.Matched)
+		msg.MatchedRules = out.Matched
+		if out.AssignUser != nil && msg.AssignedToID == nil && h.isMember(form, *out.AssignUser) {
+			fields["assigned_to_id"], msg.AssignedToID = *out.AssignUser, out.AssignUser
+		}
+		if out.AssignTeam != nil && msg.TeamID == nil && h.ownsTeam(form, *out.AssignTeam) {
+			fields["team_id"], msg.TeamID = *out.AssignTeam, out.AssignTeam
+		}
+		if len(out.Tags) > 0 {
+			tags := mergeTags(msg.Tags, out.Tags)
+			fields["tags"], msg.Tags = pq.StringArray(tags), tags
+		}
+		if higherPriority(out.Priority, string(msg.Priority)) {
+			fields["priority"], msg.Priority = out.Priority, models.MessagePriority(out.Priority)
+		}
+	}
+	if err := h.messageRepo.UpdateFields(msg.ID, fields); err != nil {
+		logger.Error("failed to store routing", "message_id", msg.ID, "error", err)
+		return out
+	}
+	msg.RoutedAt = &now
+	if err := h.rules.RecordHits(out.Matched, now); err != nil {
+		logger.Warn("failed to count rule hits", "form_id", form.ID, "error", err)
+	}
+	return out
+}
+
+func (h *MessageProcessHandler) isMember(form *models.Form, userID uint) bool {
+	if h.directory == nil || form.WorkspaceID == nil {
+		return false
+	}
+	members, err := h.directory.Members(*form.WorkspaceID)
+	_, ok := members[userID]
+	return err == nil && ok
+}
+
+func (h *MessageProcessHandler) ownsTeam(form *models.Form, teamID uint) bool {
+	if h.directory == nil || form.WorkspaceID == nil {
+		return false
+	}
+	team, err := h.directory.Team(teamID)
+	return err == nil && team.WorkspaceID != nil && *team.WorkspaceID == *form.WorkspaceID
+}
+
+// mergeTags adds rule tags to the submission's, keeping within MaxTags.
+func mergeTags(current, add []string) []string {
+	out := append([]string{}, current...)
+	seen := map[string]bool{}
+	for _, t := range out {
+		seen[t] = true
+	}
+	for _, t := range add {
+		if !seen[t] && len(out) < messages.MaxTags {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+var priorityRank = map[string]int{"low": 1, "normal": 2, "high": 3, "urgent": 4}
+
+// higherPriority: a rule only raises priority, so it never quietens a
+// submission an operator already marked urgent.
+func higherPriority(candidate, current string) bool {
+	if current == "" {
+		current = string(models.MessagePriorityNormal)
+	}
+	return candidate != "" && priorityRank[candidate] > priorityRank[current]
+}
+
+func (h *MessageProcessHandler) dispatch(msg *models.Message, form *models.Form, ruleWebhooks []uint) {
 	if h.dispatcher == nil {
 		return
 	}
@@ -222,6 +343,20 @@ func (h *MessageProcessHandler) dispatch(msg *models.Message, form *models.Form)
 		ScanReasons: []string(msg.ScanReasons),
 		ClientIP:    msg.ClientIP,
 		ReceivedAt:  msg.CreatedAt.UTC().Format(time.RFC3339),
+
+		Data:          msg.Data,
+		SchemaVersion: msg.SchemaVersion,
+		Tags:          []string(msg.Tags),
+		Priority:      string(msg.Priority),
+		TeamID:        msg.TeamID,
+		AssignedToID:  msg.AssignedToID,
+		MatchedRules:  []string(msg.MatchedRules),
+	}
+	if body.Tags == nil {
+		body.Tags = []string{}
+	}
+	if body.Priority == "" {
+		body.Priority = string(models.MessagePriorityNormal)
 	}
 
 	encoded, err := json.Marshal(body)
@@ -230,9 +365,12 @@ func (h *MessageProcessHandler) dispatch(msg *models.Message, form *models.Form)
 		return
 	}
 	h.dispatcher.DispatchJSON(0, msg.WorkspaceID, event, encoded, msg.SenderEmail)
+	if len(ruleWebhooks) > 0 && msg.WorkspaceID != nil {
+		h.dispatcher.DispatchJSONTo(*msg.WorkspaceID, ruleWebhooks, event, encoded)
+	}
 }
 
-func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form) error {
+func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form, outcome formrules.Outcome) error {
 	if h.notifier == nil || !h.notifier.IsConfigured() {
 		return nil
 	}
@@ -269,7 +407,40 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form) e
 		"MessageURL":  h.messageURL(msg.UUID),
 	}
 
-	return h.sendToFormRecipients(msg, form, subject, data)
+	return h.sendRouted(msg, form, outcome, subject, data)
+}
+
+// sendRouted notifies the form's default route, unless a rule suppressed it,
+// and the recipients the rules added. It returns the last error, so a retry
+// may repeat a notification that already went out; that beats one never
+// arriving.
+func (h *MessageProcessHandler) sendRouted(msg *models.Message, form *models.Form, outcome formrules.Outcome, subject string, data map[string]any) error {
+	res := formrules.Resolved{Default: true}
+	if h.directory != nil {
+		resolved, err := formrules.Resolve(form, outcome, h.directory)
+		if err != nil {
+			return fmt.Errorf("resolve rule recipients: %w", err)
+		}
+		res = resolved
+	}
+	h.addWorkspaceName(msg, data)
+	var lastErr error
+	if res.Default {
+		lastErr = h.sendToFormRecipients(msg, form, subject, data)
+	}
+	for _, to := range res.Emails {
+		payload := cloneData(data)
+		payload["UserName"] = "there"
+		if err := h.notifier.Send(to, subject, notification.TemplateNewMessage, payload); err != nil {
+			lastErr = err
+		}
+	}
+	for _, id := range res.UserIDs {
+		if err := h.notifier.SendToUser(id, subject, notification.TemplateNewMessage, cloneData(data)); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
 }
 
 // sendToFormRecipients delivers to the form's explicit notification list, or
@@ -277,13 +448,7 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form) e
 // addresses it returns the last error: a retry may then repeat a notification
 // to an address that already got it, which beats one never arriving.
 func (h *MessageProcessHandler) sendToFormRecipients(msg *models.Message, form *models.Form, subject string, data map[string]any) error {
-	if h.workspaceRepo != nil && msg.WorkspaceID != nil {
-		if _, ok := data["WorkspaceName"]; !ok {
-			if ws, err := h.workspaceRepo.FindByID(*msg.WorkspaceID); err == nil && ws.Name != "" {
-				data["WorkspaceName"] = ws.Name
-			}
-		}
-	}
+	h.addWorkspaceName(msg, data)
 	if len(form.NotifyEmails) > 0 {
 		var lastErr error
 		for _, to := range form.NotifyEmails {
@@ -304,6 +469,17 @@ func (h *MessageProcessHandler) sendToFormRecipients(msg *models.Message, form *
 		return nil
 	}
 	return h.notifier.SendToWorkspaceAdmins(*msg.WorkspaceID, subject, notification.TemplateNewMessage, data)
+}
+
+func (h *MessageProcessHandler) addWorkspaceName(msg *models.Message, data map[string]any) {
+	if h.workspaceRepo == nil || msg.WorkspaceID == nil {
+		return
+	}
+	if _, ok := data["WorkspaceName"]; !ok {
+		if ws, err := h.workspaceRepo.FindByID(*msg.WorkspaceID); err == nil && ws.Name != "" {
+			data["WorkspaceName"] = ws.Name
+		}
+	}
 }
 
 func (h *MessageProcessHandler) messageURL(uuid string) string {

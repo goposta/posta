@@ -7,6 +7,7 @@ import { apiMessage } from "../../composables/apiError";
 import type { Form, FormSnippet } from "../../api/types";
 import FormFields from "./FormFields.vue";
 import FormResponses from "./FormResponses.vue";
+import FormRules from "./FormRules.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -21,6 +22,7 @@ const loadFailed = ref(false);
 const TABS = [
   { key: "questions", label: "Questions" },
   { key: "responses", label: "Responses" },
+  { key: "routing", label: "Routing" },
   { key: "setup", label: "Setup" },
   { key: "settings", label: "Response settings" },
   { key: "spam", label: "Spam" },
@@ -173,7 +175,7 @@ function copy(text: string) {
   notify.success("Copied to clipboard.");
 }
 
-const hasQuestions = computed(() => (form.value?.fields || []).some((f) => !f.archived));
+const hasQuestions = computed(() => (form.value?.fields || []).some((f) => !f.archived && f.type !== "section"));
 
 const endpoint = computed(() => snippet.value?.endpoint || "");
 
@@ -273,6 +275,7 @@ onMounted(load);
       <FormFields v-show="tab === 'questions'" :form="form" @saved="onFieldsSaved" />
       <!-- Mounted on demand: it loads responses, and has no edits to keep. -->
       <FormResponses v-if="tab === 'responses'" :form="form" :share-url="snippet?.share_url" />
+      <FormRules v-if="tab === 'routing'" :form="form" />
 
       <div v-show="tab === 'setup'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Setup</h2></div>
@@ -625,7 +628,7 @@ onMounted(load);
       </div>
 
       <!-- Questions has its own save bar and Responses saves nothing; this saves the other tabs. -->
-      <div v-show="tab !== 'questions' && tab !== 'responses'" class="card">
+      <div v-show="!['questions', 'responses', 'routing'].includes(tab)" class="card">
         <div class="card-body">
           <button class="btn btn-primary" :disabled="saving" @click="save">
             {{ saving ? "Saving..." : "Save changes" }}

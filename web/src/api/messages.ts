@@ -15,6 +15,11 @@ import type {
   SubmissionQuery,
   SubmissionSummary,
   TagCount,
+  FormRule,
+  FormRuleInput,
+  RuleTestResult,
+  Team,
+  TeamInput,
 } from './types'
 
 const WORKSPACE_KEY = 'posta_workspace_id'
@@ -73,6 +78,8 @@ export interface MessageListParams {
   before?: string
   tag?: string
   priority?: string
+  team_id?: number
+  mine?: boolean
 }
 
 export interface FilterPayload {
@@ -162,6 +169,9 @@ export const messagesApi = {
   tags() {
     return api.get<ApiResponse<TagCount[]>>('/workspaces/current/message-tags')
   },
+  setTeam(uuid: string, teamId: number | null) {
+    return api.put<ApiResponse<Message>>(`/workspaces/current/messages/${uuid}/team`, { team_id: teamId })
+  },
   markSpam(uuid: string, payload: { create_filter?: boolean; pattern?: string; kind?: string } = {}) {
     return api.post<ApiResponse<Message>>(`/workspaces/current/messages/${uuid}/spam`, payload)
   },
@@ -240,5 +250,42 @@ export const formSubmissionsApi = {
     params.set('format', format)
     const ws = workspaceParam()
     return `/api/v1/workspaces/current/form-submissions/export?${params.toString()}${ws ? '&' + ws : ''}`
+  },
+}
+
+// Routing rules belong to a form and run in order.
+export const formRulesApi = {
+  list(formId: number) {
+    return api.get<ApiResponse<FormRule[]>>(`/workspaces/current/forms/${formId}/rules`)
+  },
+  create(formId: number, rule: FormRuleInput) {
+    return api.post<ApiResponse<FormRule>>(`/workspaces/current/forms/${formId}/rules`, rule)
+  },
+  update(formId: number, ruleId: number, rule: FormRuleInput) {
+    return api.put<ApiResponse<FormRule>>(`/workspaces/current/forms/${formId}/rules/${ruleId}`, rule)
+  },
+  delete(formId: number, ruleId: number) {
+    return api.delete(`/workspaces/current/forms/${formId}/rules/${ruleId}`)
+  },
+  reorder(formId: number, ids: number[]) {
+    return api.put<ApiResponse<FormRule[]>>(`/workspaces/current/forms/${formId}/rules/order`, { ids })
+  },
+  test(formId: number, rules?: FormRuleInput[], limit = 100) {
+    return api.post<ApiResponse<RuleTestResult>>(`/workspaces/current/forms/${formId}/rules/test`, { rules, limit })
+  },
+}
+
+export const teamsApi = {
+  list() {
+    return api.get<ApiResponse<Team[]>>('/workspaces/current/teams')
+  },
+  create(team: TeamInput) {
+    return api.post<ApiResponse<Team>>('/workspaces/current/teams', team)
+  },
+  update(id: number, team: TeamInput) {
+    return api.put<ApiResponse<Team>>(`/workspaces/current/teams/${id}`, team)
+  },
+  delete(id: number) {
+    return api.delete(`/workspaces/current/teams/${id}`)
   },
 }

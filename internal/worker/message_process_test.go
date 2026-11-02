@@ -30,6 +30,7 @@ import (
 	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/services/realtime"
 	"github.com/hibiken/asynq"
+	"github.com/lib/pq"
 )
 
 type fakeMessageStore struct {
@@ -52,6 +53,12 @@ func (f *fakeMessageStore) UpdateFields(_ uint, fields map[string]any) error {
 	if v, ok := fields["webhook_dispatched_at"].(time.Time); ok {
 		f.msg.WebhookDispatchedAt = &v
 	}
+	if v, ok := fields["routed_at"].(time.Time); ok {
+		f.msg.RoutedAt = &v
+		if m, ok := fields["matched_rules"].(pq.StringArray); ok {
+			f.msg.MatchedRules = m
+		}
+	}
 	return nil
 }
 
@@ -72,15 +79,23 @@ type fakeFormStore struct{ form *models.Form }
 
 func (f fakeFormStore) FindByID(uint) (*models.Form, error) { return f.form, nil }
 
-type fakeDispatcher struct{ events []string }
+type fakeDispatcher struct {
+	events []string
+	direct []uint
+}
 
 func (f *fakeDispatcher) DispatchJSON(_ uint, _ *uint, event string, _ []byte, _ string) {
 	f.events = append(f.events, event)
 }
 
+func (f *fakeDispatcher) DispatchJSONTo(_ uint, ids []uint, _ string, _ []byte) {
+	f.direct = append(f.direct, ids...)
+}
+
 type fakeNotifier struct {
-	err  error
-	sent []string // "to:<addr>", "user", or "admins"
+	err   error
+	sent  []string // "to:<addr>", "user", or "admins"
+	users []uint
 }
 
 func (f *fakeNotifier) IsConfigured() bool { return true }
@@ -90,6 +105,7 @@ func (f *fakeNotifier) Send(to, _, _ string, _ map[string]any) error {
 }
 func (f *fakeNotifier) SendToUser(userID uint, _, _ string, _ map[string]any) error {
 	f.sent = append(f.sent, "user")
+	f.users = append(f.users, userID)
 	return f.err
 }
 func (f *fakeNotifier) SendToWorkspaceAdmins(uint, string, string, map[string]any) error {

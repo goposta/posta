@@ -105,9 +105,16 @@ type Message struct {
 	SpamScore   float64        `json:"spam_score" gorm:"default:0;not null"`
 	ScanReasons pq.StringArray `json:"scan_reasons" gorm:"type:text[]"`
 
-	// Tags and Priority are set by operators (and later by routing rules).
+	// Tags and Priority are set by operators and by routing rules.
 	Tags     pq.StringArray  `json:"tags" gorm:"type:text[]"`
 	Priority MessagePriority `json:"priority" gorm:"type:varchar(8);default:'normal';not null"`
+
+	// TeamID is the team the submission is routed to. MatchedRules lists the
+	// rules that routed it (UUIDs), for "why did this go here". RoutedAt
+	// records that the rules ran, so a retried task never applies them twice.
+	TeamID       *uint          `json:"team_id,omitempty" gorm:"index"`
+	MatchedRules pq.StringArray `json:"matched_rules,omitempty" gorm:"type:text[]"`
+	RoutedAt     *time.Time     `json:"-"`
 
 	ThreadToken   string `json:"-" gorm:"uniqueIndex"`
 	RootMessageID string `json:"-"`
@@ -134,9 +141,12 @@ type Message struct {
 	// GORM creates these foreign keys whatever the tag (only "constraint:-"
 	// skips one), so declare the cascade the schema relies on: deleting a form
 	// or a message must take its messages or replies with it.
-	Form       *Form          `json:"form,omitempty" gorm:"foreignKey:FormID;constraint:OnDelete:CASCADE"`
-	AssignedTo *ActorRef      `json:"assigned_to,omitempty" gorm:"->;foreignKey:AssignedToID;references:ID;constraint:false"`
-	Replies    []MessageReply `json:"replies,omitempty" gorm:"foreignKey:MessageID;constraint:OnDelete:CASCADE"`
+	Form       *Form     `json:"form,omitempty" gorm:"foreignKey:FormID;constraint:OnDelete:CASCADE"`
+	AssignedTo *ActorRef `json:"assigned_to,omitempty" gorm:"->;foreignKey:AssignedToID;references:ID;constraint:false"`
+	Team       *TeamRef  `json:"team,omitempty" gorm:"->;foreignKey:TeamID;references:ID;constraint:false"`
+	// RoutedBy names MatchedRules for display; filled by the handler.
+	RoutedBy []RuleRef      `json:"routed_by,omitempty" gorm:"-"`
+	Replies  []MessageReply `json:"replies,omitempty" gorm:"foreignKey:MessageID;constraint:OnDelete:CASCADE"`
 }
 
 func (m *Message) IsSpam() bool {

@@ -43,7 +43,14 @@ const (
 	FieldScale       FieldType = "scale"
 	FieldRating      FieldType = "rating"
 	FieldHidden      FieldType = "hidden"
+	// FieldSection is not a question: it starts a new page of the form. The
+	// questions after it, up to the next section, are that page.
+	FieldSection FieldType = "section"
 )
+
+// GotoSubmit is a branch target that ends the form: the respondent submits
+// from the page they are on.
+const GotoSubmit = "submit"
 
 // FieldRole marks the field that carries one of a message's summary values,
 // replacing the key-name guessing of messages.Extract.
@@ -83,6 +90,10 @@ const (
 type FieldOption struct {
 	Value string `json:"value"`
 	Label string `json:"label,omitempty"`
+	// Goto, on a single-choice question, is where choosing this option leads
+	// after its page: a later section's key, or GotoSubmit. Empty follows
+	// the page's own next.
+	Goto string `json:"goto,omitempty"`
 }
 
 // FieldDef declares one question of a form. A key, once saved, can be
@@ -109,7 +120,15 @@ type FieldDef struct {
 	Placeholder string `json:"placeholder,omitempty"`
 	Help        string `json:"help,omitempty"`
 	Archived    bool   `json:"archived,omitempty"`
+
+	// Next, on a section, is where its page leads when no answer branches: a
+	// later section's key, or GotoSubmit. Empty continues to the next page.
+	Next string `json:"next,omitempty"`
 }
+
+// IsSection reports whether the entry starts a page rather than asking a
+// question.
+func (f *FieldDef) IsSection() bool { return f.Type == FieldSection }
 
 // FieldDefs is a form's schema, stored as jsonb. Nil means the form has no
 // schema and accepts any fields, as before schemas existed.
@@ -136,6 +155,18 @@ func (d FieldDefs) Active() FieldDefs {
 	out := make(FieldDefs, 0, len(d))
 	for _, f := range d {
 		if !f.Archived {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// Questions returns the entries that ask something, archived ones included,
+// leaving out sections.
+func (d FieldDefs) Questions() FieldDefs {
+	out := make(FieldDefs, 0, len(d))
+	for _, f := range d {
+		if !f.IsSection() {
 			out = append(out, f)
 		}
 	}

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { messagesApi } from "../../api/messages";
+import { messagesApi, teamsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
-import type { Message, MessagePriority } from "../../api/types";
+import type { Message, MessagePriority, Team } from "../../api/types";
 
 // Tags and priority on one message. Each change saves at once and hands the
 // updated message back, so the page never holds unsaved triage.
@@ -14,6 +14,7 @@ const notify = useNotificationStore();
 const busy = ref(false);
 const draft = ref("");
 const suggestions = ref<string[]>([]);
+const teams = ref<Team[]>([]);
 const listId = `tag-suggestions-${props.message.uuid}`;
 
 const PRIORITIES: { value: MessagePriority; label: string }[] = [
@@ -30,7 +31,17 @@ onMounted(async () => {
   } catch {
     /* suggestions are a convenience */
   }
+  try {
+    teams.value = (await teamsApi.list()).data.data;
+  } catch {
+    /* without teams the picker stays hidden */
+  }
 });
+
+async function setTeam(event: Event) {
+  const raw = (event.target as HTMLSelectElement).value;
+  await run(() => messagesApi.setTeam(props.message.uuid, raw ? Number(raw) : null), "Failed to change the team");
+}
 
 async function run(action: () => Promise<{ data: { data: Message } }>, failure: string) {
   busy.value = true;
@@ -89,6 +100,14 @@ function onKey(event: KeyboardEvent) {
         @change="setPriority"
       >
         <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
+      </select>
+    </label>
+
+    <label v-if="teams.length || message.team" class="triage-priority">
+      <span class="triage-label">Team</span>
+      <select class="form-select" :value="message.team_id || ''" :disabled="busy" @change="setTeam">
+        <option value="">No team</option>
+        <option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option>
       </select>
     </label>
 

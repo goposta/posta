@@ -687,7 +687,7 @@ func applySchema(form *models.Form, fields *models.FieldDefs, unknownFields, err
 			return err
 		}
 		// The honeypot, _nonce and _redirect count towards max_fields too.
-		if active := len(next.Active()); active+3 > form.FieldLimit() {
+		if active := len(next.Active().Questions()); active+3 > form.FieldLimit() {
 			return fmt.Errorf("the schema has %d fields but max_fields is %d; raise max_fields to at least %d", active, form.FieldLimit(), active+3)
 		}
 		if schemaChanged(form.Fields, next) {

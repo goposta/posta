@@ -52,6 +52,13 @@ func TestWorkspaceScopeForMessageRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v1/workspaces/current/form-submissions/export", models.ScopeRead},
 
 		{http.MethodGet, "/api/v1/workspaces/current/message-filters", models.ScopeAdmin},
+
+		// Rules and teams decide who is sent submissions: tenant administration.
+		{http.MethodGet, "/api/v1/workspaces/current/forms/1/rules", models.ScopeAdmin},
+		{http.MethodPost, "/api/v1/workspaces/current/forms/1/rules/test", models.ScopeAdmin},
+		{http.MethodGet, "/api/v1/workspaces/current/teams", models.ScopeAdmin},
+		{http.MethodPost, "/api/v1/workspaces/current/teams", models.ScopeAdmin},
+		{http.MethodPut, "/api/v1/workspaces/current/messages/abc/team", models.ScopeWrite},
 		{http.MethodPost, "/api/v1/workspaces/current/message-filters", models.ScopeAdmin},
 	}
 

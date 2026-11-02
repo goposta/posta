@@ -1291,11 +1291,15 @@ export interface Form {
 export interface FormFieldOption {
   value: string
   label?: string
+  /** Single choice only: a later section's key, or "submit". */
+  goto?: string
 }
 
 export type FormFieldType =
   | 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'url' | 'date' | 'time'
   | 'select' | 'multiselect' | 'checkbox' | 'scale' | 'rating' | 'hidden'
+  /** Not a question: starts a new page. */
+  | 'section'
 
 export type FormFieldRole = '' | 'sender_email' | 'sender_name' | 'sender_phone' | 'subject' | 'body'
 
@@ -1318,6 +1322,8 @@ export interface FormField {
   placeholder?: string
   help?: string
   archived?: boolean
+  /** Sections only: where the page leads, a later section's key or "submit". */
+  next?: string
 }
 
 export interface FormAppearance {
@@ -1368,6 +1374,11 @@ export interface Message {
   scan_reasons: string[] | null
   tags: string[]
   priority: MessagePriority
+  team_id?: number | null
+  team?: { id: number; name: string } | null
+  matched_rules?: string[] | null
+  /** The rules that routed this submission, by name. */
+  routed_by?: { uuid: string; name: string }[]
   notified_at?: string | null
   assigned_to_id?: number | null
   read_at?: string | null
@@ -1467,4 +1478,88 @@ export interface SubmissionQuery {
 export interface TagCount {
   tag: string
   count: number
+}
+
+export type RuleOp =
+  | 'eq' | 'neq' | 'in' | 'not_in' | 'contains' | 'not_contains' | 'matches'
+  | 'exists' | 'not_exists' | 'gt' | 'gte' | 'lt' | 'lte'
+
+export interface RuleCondition {
+  /** A question key, or a built-in: $origin, $referer, $sender_email, $spam_score, $status. */
+  field: string
+  op: RuleOp
+  value?: string | number | boolean | string[] | null
+}
+
+export type RuleActionType =
+  | 'notify_emails' | 'notify_members' | 'notify_team' | 'assign_member' | 'assign_team'
+  | 'add_tags' | 'set_priority' | 'webhook' | 'suppress_default'
+
+export interface RuleAction {
+  type: RuleActionType
+  emails?: string[]
+  user_ids?: number[]
+  team_id?: number | null
+  tags?: string[]
+  priority?: string
+  webhook_id?: number | null
+}
+
+export interface FormRule {
+  id: number
+  uuid: string
+  form_id: number
+  name: string
+  position: number
+  enabled: boolean
+  match: 'all' | 'any'
+  conditions: RuleCondition[]
+  actions: RuleAction[]
+  stop: boolean
+  hit_count: number
+  last_hit_at?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
+export type FormRuleInput = Pick<FormRule, 'name' | 'enabled' | 'match' | 'conditions' | 'actions' | 'stop'>
+
+export interface RuleOutcome {
+  notify?: { email?: string; user_id?: number; team_id?: number }[]
+  assign_user?: number
+  assign_team?: number
+  tags?: string[]
+  priority?: string
+  webhooks?: number[]
+  suppress_default?: boolean
+  matched?: string[]
+}
+
+export interface RuleTestResult {
+  scanned: number
+  matched: number
+  rules: { index: number; name: string; matches: number }[]
+  samples: {
+    message_uuid: string
+    sender: string
+    subject: string
+    received_at: string
+    matched: number[]
+    outcome: RuleOutcome
+  }[]
+}
+
+export interface Team {
+  id: number
+  uuid: string
+  name: string
+  email: string
+  members?: { team_id: number; user_id: number; user?: { id: number; name: string } | null }[]
+  created_at: string
+}
+
+export interface TeamInput {
+  name: string
+  email?: string
+  user_ids: number[]
 }

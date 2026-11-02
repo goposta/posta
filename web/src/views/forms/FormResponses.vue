@@ -38,8 +38,10 @@ const priority = ref("");
 const knownTags = ref<string[]>([]);
 
 // Archived and hidden questions can still be filtered on: old answers keep them.
-const questions = computed(() => props.form.fields || []);
-const activeQuestions = computed(() => (props.form.fields || []).filter((f) => !f.archived && f.type !== "hidden"));
+const questions = computed(() => (props.form.fields || []).filter((f) => f.type !== "section"));
+const activeQuestions = computed(() =>
+  (props.form.fields || []).filter((f) => !f.archived && f.type !== "hidden" && f.type !== "section"),
+);
 const hasSchema = computed(() => (props.form.fields || []).length > 0);
 const byKey = computed(() => {
   const out: Record<string, FormField> = {};

@@ -162,6 +162,7 @@ type WidgetField struct {
 	MaxLabel    string               `json:"max_label,omitempty"`
 	Placeholder string               `json:"placeholder,omitempty"`
 	Help        string               `json:"help,omitempty"`
+	Next        string               `json:"next,omitempty" doc:"Sections only: where the page leads, a section key or submit"`
 }
 
 func widgetFields(defs models.FieldDefs) []WidgetField {
@@ -173,7 +174,7 @@ func widgetFields(defs models.FieldDefs) []WidgetField {
 			Key: f.Key, Label: f.Label, Type: f.Type, Required: f.Required,
 			MinLen: f.MinLen, Min: f.Min, Max: f.Max, Pattern: f.Pattern,
 			Options: f.Options, Display: f.Display, MinLabel: f.MinLabel, MaxLabel: f.MaxLabel,
-			Placeholder: f.Placeholder, Help: f.Help,
+			Placeholder: f.Placeholder, Help: f.Help, Next: f.Next,
 		}
 		switch f.Type {
 		case models.FieldText, models.FieldTextarea, models.FieldHidden:

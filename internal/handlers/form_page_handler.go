@@ -141,7 +141,7 @@ func prefillAttrs(form *models.Form, query url.Values) []template.HTMLAttr {
 	}
 	for _, f := range form.Fields.Active() {
 		values := query[f.Key]
-		if f.PII || len(values) == 0 {
+		if f.PII || f.IsSection() || len(values) == 0 {
 			continue
 		}
 		if f.Type == models.FieldMultiSelect {

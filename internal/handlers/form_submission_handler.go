@@ -124,7 +124,7 @@ func parseFieldFilters(defs models.FieldDefs, query url.Values) (map[string]any,
 		}
 		var def *models.FieldDef
 		for i := range defs {
-			if defs[i].Key == key {
+			if defs[i].Key == key && !defs[i].IsSection() {
 				def = &defs[i]
 				break
 			}
@@ -280,7 +280,7 @@ func tagsOf(m *models.Message) []string {
 func exportColumns(defs models.FieldDefs, showPII bool) (cols []models.FieldDef, withheld int) {
 	for _, archived := range []bool{false, true} {
 		for _, f := range defs {
-			if f.Archived != archived {
+			if f.Archived != archived || f.IsSection() {
 				continue
 			}
 			if f.PII && !showPII {

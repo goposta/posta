@@ -30,6 +30,12 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// MineFilter is a member's own work: assigned to them, or to their teams.
+type MineFilter struct {
+	UserID  uint
+	TeamIDs []uint
+}
+
 type MessageFilterQuery struct {
 	FormID   uint
 	Status   string
@@ -43,6 +49,10 @@ type MessageFilterQuery struct {
 	// Tags keeps messages carrying every listed tag; Priority one priority.
 	Tags     []string
 	Priority string
+	// TeamID keeps one team's submissions. Mine keeps what is assigned to
+	// Mine.UserID or routed to one of Mine.TeamIDs: the "My teams" view.
+	TeamID uint
+	Mine   *MineFilter
 	// InboxOnly leaves out collect-mode forms, whose responses are read as a
 	// table on the form rather than worked as conversations.
 	InboxOnly bool
@@ -96,6 +106,16 @@ func applyMessageFilter(q *gorm.DB, scope ResourceScope, f MessageFilterQuery) *
 	}
 	if f.Priority != "" {
 		q = q.Where("priority = ?", f.Priority)
+	}
+	if f.TeamID > 0 {
+		q = q.Where("team_id = ?", f.TeamID)
+	}
+	if f.Mine != nil {
+		if len(f.Mine.TeamIDs) > 0 {
+			q = q.Where("(assigned_to_id = ? OR team_id IN ?)", f.Mine.UserID, f.Mine.TeamIDs)
+		} else {
+			q = q.Where("assigned_to_id = ?", f.Mine.UserID)
+		}
 	}
 	if f.InboxOnly {
 		q = q.Where(notCollectForm)
@@ -215,6 +235,7 @@ func (r *MessageRepository) FindByUUIDForScope(scope ResourceScope, uuid string)
 	err := ApplyWorkspaceScope(r.db, scope).
 		Preload("Form").
 		Preload("AssignedTo").
+		Preload("Team").
 		Preload("Replies", func(db *gorm.DB) *gorm.DB {
 			return db.Order("created_at ASC").Preload("Author")
 		}).
@@ -244,6 +265,7 @@ func (r *MessageRepository) FindByScopeFiltered(scope ResourceScope, f MessageFi
 	if err := apply(r.db).
 		Preload("Form").
 		Preload("AssignedTo").
+		Preload("Team").
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&items).Error; err != nil {
