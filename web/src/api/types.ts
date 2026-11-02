@@ -1289,12 +1289,18 @@ export interface FormFieldOption {
   label?: string
 }
 
+export type FormFieldType =
+  | 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'url' | 'date' | 'time'
+  | 'select' | 'multiselect' | 'checkbox' | 'scale' | 'rating' | 'hidden'
+
+export type FormFieldRole = '' | 'sender_email' | 'sender_name' | 'sender_phone' | 'subject' | 'body'
+
 export interface FormField {
   key: string
   label: string
-  type: string
+  type: FormFieldType
   required?: boolean
-  role?: string
+  role?: FormFieldRole
   pii?: boolean
   min_len?: number
   max_len?: number
@@ -1302,7 +1308,7 @@ export interface FormField {
   max?: number
   pattern?: string
   options?: FormFieldOption[]
-  display?: string
+  display?: '' | 'radio' | 'dropdown' | 'checkboxes' | 'list'
   min_label?: string
   max_label?: string
   placeholder?: string

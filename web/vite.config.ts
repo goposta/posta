@@ -36,6 +36,11 @@ export default defineConfig({
         target: 'http://localhost:9000',
         changeOrigin: true,
       },
+      // The form builder previews with the server's own widget script.
+      '/widget': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+      },
     },
   },
 })
