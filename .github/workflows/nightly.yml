@@ -44,8 +44,9 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - run: go vet -tags enterprise ./...
       - run: go vet ./...
-      - run: go test ./...
+      - run: go test -tags enterprise ./...
         env:
           TEST_DATABASE_DSN: host=localhost user=posta password=posta dbname=posta port=5432 sslmode=disable
 
@@ -68,6 +69,9 @@ jobs:
     name: Image
     needs: [backend, frontend]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       # Full history and tags, so the newest release tag can be found.
       - uses: actions/checkout@v7
@@ -85,6 +89,8 @@ jobs:
           {
             echo "VERSION=${LATEST#v}-$(date -u +%Y%m%d)-g${GITHUB_SHA::7}"
             echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            # ghcr.io image names must be lowercase.
+            echo "GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}"
           } >> "$GITHUB_ENV"
 
       - uses: docker/setup-qemu-action@v4
@@ -95,6 +101,13 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -107,8 +120,10 @@ jobs:
             VERSION=${{ env.VERSION }}
             BUILD_DATE=${{ env.BUILD_TIME }}
             COMMIT=${{ github.sha }}
+            LICENSE_KEYRING=${{ vars.LICENSE_KEYRING }}
           tags: |
             ${{ vars.BUILDKIT_IMAGE }}:nightly
+            ${{ env.GHCR_IMAGE }}:nightly
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -120,6 +135,7 @@ jobs:
             echo "| Image | Tag |"
             echo "|---|---|"
             echo "| \`${{ vars.BUILDKIT_IMAGE }}\` | \`nightly\` |"
+            echo "| \`${GHCR_IMAGE}\` | \`nightly\` |"
             echo
             echo "Built from \`${GITHUB_SHA::7}\`, reported as \`${VERSION}\`."
             echo

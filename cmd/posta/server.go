@@ -30,6 +30,7 @@ import (
 	"github.com/goposta/posta/internal/config"
 	cronpkg "github.com/goposta/posta/internal/cron"
 	"github.com/goposta/posta/internal/cron/jobs"
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/metrics"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/routes"
@@ -71,6 +72,7 @@ type serverResources struct {
 	redis       *redis.Client
 	smtpInbound *smtp.Server
 	smtpRelay   *smtp.Server
+	edition     enterprise.EE
 }
 
 func runServer(cli *okapicli.CLI) {
@@ -102,6 +104,7 @@ func runServer(cli *okapicli.CLI) {
 
 			// Initialize SMTP password encryption
 			crypto.Init(cfg.EncryptionKey)
+			res.edition = newEdition(res.db, cfg)
 
 			if err := storage.SeedAdmin(res.db, cfg.AdminEmail, cfg.AdminPassword, cfg.ValidateAdminSeedPassword); err != nil {
 				logger.Fatal("failed to seed admin user", "error", err)
@@ -166,7 +169,7 @@ func runServer(cli *okapicli.CLI) {
 			if !cfg.DevMode {
 				res.producer = worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 				if cfg.EmbeddedWorker {
-					startEmbeddedWorker(res.db, cfg, res.blobStore, notifier, inboundBus)
+					startEmbeddedWorker(res.db, cfg, res.edition, res.blobStore, notifier, inboundBus)
 				}
 			}
 
@@ -179,12 +182,13 @@ func runServer(cli *okapicli.CLI) {
 			}
 
 			if !cfg.DevMode {
-				res.cronManager = initCronManager(res.db, cfg, notifier, res.blobStore, res.producer)
+				res.cronManager = initCronManager(res.db, cfg, res.edition, notifier, res.blobStore, res.producer)
 			}
 
 			emailSvc := routes.InitRoutes(app, res.db,
 				res.redis,
 				cfg,
+				res.edition,
 				res.producer,
 				res.cronManager,
 				res.blobStore,
@@ -219,6 +223,23 @@ func runServer(cli *okapicli.CLI) {
 	}); err != nil {
 		logger.Fatal("server error", "error", err)
 	}
+}
+
+// newEdition loads the Posta Enterprise license, if any, and switches on the
+// Enterprise behaviour that lives below the HTTP layer.
+func newEdition(db *gorm.DB, cfg *config.Config) enterprise.EE {
+	installID, err := enterprise.EnsureInstallID(db)
+	if err != nil {
+		logger.Error("failed to create the install id", "error", err)
+	}
+	edition := enterprise.New(db, enterprise.Options{
+		License:     cfg.License,
+		LicenseFile: cfg.LicenseFile,
+		InstanceURL: cfg.AppWebURL,
+		InstallID:   installID,
+	})
+	models.SetPIIEncryptionGate(edition.Licensed)
+	return edition
 }
 
 func checkDefaultPlan(db *gorm.DB, cfg *config.Config) {
@@ -422,6 +443,7 @@ func startSMTPRelayServer(db *gorm.DB, cfg *config.Config, emailSvc *email.Servi
 // email.inbound.received events; it may be nil when inbound is disabled.
 func startEmbeddedWorker(db *gorm.DB,
 	cfg *config.Config,
+	edition enterprise.EE,
 	blobStore blob.Store,
 	notifier *notification.Service,
 	bus *eventbus.EventBus) {
@@ -545,7 +567,7 @@ func startEmbeddedWorker(db *gorm.DB,
 		)
 		messageHandler.OnNotified(metrics.IncrementMessageNotification)
 		messageHandler.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
-		messageHandler.SetRouting(repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
+		messageHandler.SetRouting(edition, repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
 			Workspaces: repositories.NewWorkspaceRepository(db),
 			Teams:      repositories.NewTeamRepository(db),
 		})
@@ -568,6 +590,7 @@ func startEmbeddedWorker(db *gorm.DB,
 func initCronManager(
 	db *gorm.DB,
 	cfg *config.Config,
+	edition enterprise.EE,
 	notifier *notification.Service,
 	blobStore blob.Store,
 	producer *worker.Producer,
@@ -632,7 +655,7 @@ func initCronManager(
 			repositories.NewWorkspaceRepository(db),
 			cfg.AppWebURL,
 		)
-		digest.SetRouting(repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
+		digest.SetRouting(edition, repositories.NewFormRuleRepository(db), repositories.RoutingDirectory{
 			Workspaces: repositories.NewWorkspaceRepository(db),
 			Teams:      repositories.NewTeamRepository(db),
 		})

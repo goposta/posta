@@ -1,11 +1,4 @@
 # UI build stage.
-#
-# Built on a glibc image, not alpine: Vite 8 bundles with rolldown, which needs a
-# native binding, and `npm ci` on musl trips the npm optional-deps bug
-# (npm/cli#4828) — it silently skips the musl binaries, so the build then fails
-# on a missing package. glibc uses the well-supported -gnu bindings. This is a
-# throwaway builder stage (only web/dist is copied out), so it has no effect on
-# the size or base of the final image.
 FROM node:24-bookworm-slim AS ui-builder
 
 WORKDIR /app/web
@@ -21,6 +14,9 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=2026-03-15
 
+ARG GO_TAGS=enterprise
+ARG LICENSE_KEYRING=""
+
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -33,8 +29,8 @@ COPY internal/ internal/
 # clobber it.
 COPY --from=ui-builder /app/web/dist ./internal/web/dist
 
-RUN CGO_ENABLED=0 go build \
-    -ldflags "-s -w -X 'github.com/goposta/posta/internal/config.Version=${VERSION}' -X 'github.com/goposta/posta/internal/config.CommitID=${COMMIT}' -X 'github.com/goposta/posta/internal/config.BuildDate=${BUILD_DATE}'" \
+RUN CGO_ENABLED=0 go build -tags "${GO_TAGS}" \
+    -ldflags "-s -w -X 'github.com/goposta/posta/internal/config.Version=${VERSION}' -X 'github.com/goposta/posta/internal/config.CommitID=${COMMIT}' -X 'github.com/goposta/posta/internal/config.BuildDate=${BUILD_DATE}' -X 'github.com/goposta/posta/internal/enterprise.embeddedKeyring=${LICENSE_KEYRING}'" \
     -o /bin/posta ./cmd/posta
 
 # Runtime stage
@@ -58,6 +54,8 @@ RUN apk add --no-cache ca-certificates tzdata \
 # static files to copy and no POSTA_WEB_DIR to set.
 COPY --from=builder /bin/posta /bin/posta
 COPY docker/healthcheck.sh /usr/local/bin/posta-healthcheck
+COPY LICENSE NOTICE LICENSING.md /usr/share/doc/posta/
+COPY internal/enterprise/LICENSE.md /usr/share/doc/posta/ENTERPRISE-LICENSE.md
 RUN ln -s /bin/posta /posta && chmod +x /usr/local/bin/posta-healthcheck
 
 USER posta

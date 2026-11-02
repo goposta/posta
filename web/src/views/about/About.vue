@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { infoApi, type AppInfo } from '../../api/info'
+import { useLicenseStore } from '../../stores/license'
+
+const license = useLicenseStore()
 
 const loading = ref(true)
 const appInfo = ref<AppInfo | null>(null)
+
+// The edition this instance runs as: Enterprise once a license is installed.
+const edition = computed(() => {
+  if (!license.licensed) return { label: 'Community Edition', badge: 'badge-secondary' }
+  if (license.readOnly) return { label: 'Enterprise Edition · expired', badge: 'badge-warning' }
+  return { label: 'Enterprise Edition', badge: 'badge-success' }
+})
 
 const links = [
   { title: 'Website', url: 'https://goposta.dev/', mdi: 'mdi-web' },
@@ -75,6 +85,7 @@ const capabilities = [
 
 
 onMounted(async () => {
+  license.load()
   try {
     const res = await infoApi.get()
     appInfo.value = res.data.data
@@ -113,6 +124,7 @@ onMounted(async () => {
                   v{{ appInfo.version }}
                   <template v-if="appInfo.commit_id"> ({{ appInfo.commit_id.slice(0, 7) }})</template>
                 </span>
+                <span class="badge" :class="edition.badge">{{ edition.label }}</span>
                 <span class="badge badge-secondary">AGPL-3.0</span>
               </div>
             </div>
@@ -173,7 +185,7 @@ onMounted(async () => {
             <span class="mdi mdi-github"></span> Okapi
           </a>
         </p>
-        <p>&copy; {{ new Date().getFullYear() }} Jonas Kaninda and contributors</p>
+        <p>&copy; {{ new Date().getFullYear() }} Jonas Kaninda</p>
       </div>
     </template>
   </div>

@@ -33,6 +33,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Resolve version and channel
         run: |
           set -euo pipefail
@@ -47,6 +54,8 @@ jobs:
             echo "VERSION=${VERSION}"
             echo "CHANNEL_TAG=${CHANNEL_TAG}"
             echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            # ghcr.io image names must be lowercase.
+            echo "GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}"
           } >> "$GITHUB_ENV"
 
       - name: Build and push
@@ -59,8 +68,11 @@ jobs:
             VERSION=${{ env.VERSION }}
             BUILD_DATE=${{ env.BUILD_TIME }}
             COMMIT=${{ github.sha }}
+            LICENSE_KEYRING=${{ vars.LICENSE_KEYRING }}
           tags: |
             ${{ vars.BUILDKIT_IMAGE }}:${{ env.VERSION }}
             ${{ vars.BUILDKIT_IMAGE }}:${{ env.CHANNEL_TAG }}
+            ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}
+            ${{ env.GHCR_IMAGE }}:${{ env.CHANNEL_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

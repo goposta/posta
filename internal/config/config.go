@@ -128,6 +128,11 @@ type Config struct {
 	// Encryption key for SMTP password encryption (if empty, base64 encoding is used)
 	EncryptionKey string
 
+	// Posta Enterprise license to install at boot when none is stored: the
+	// token itself, or a file holding it.
+	License     string
+	LicenseFile string
+
 	// Blob storage settings (S3-compatible or filesystem)
 	BlobProvider    string
 	BlobS3Endpoint  string
@@ -340,6 +345,8 @@ func New() *Config {
 		EmailVerificationRequired: goutils.EnvBool("POSTA_EMAIL_VERIFICATION_REQUIRED", false),
 
 		EncryptionKey: goutils.Env("POSTA_ENCRYPTION_KEY", ""),
+		License:       goutils.Env("POSTA_LICENSE", ""),
+		LicenseFile:   goutils.Env("POSTA_LICENSE_FILE", ""),
 
 		BlobProvider:    goutils.Env("POSTA_BLOB_PROVIDER", ""),
 		BlobS3Endpoint:  goutils.Env("POSTA_BLOB_S3_ENDPOINT", ""),

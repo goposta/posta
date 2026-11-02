@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/formrules"
 	"github.com/goposta/posta/internal/services/messages"
@@ -47,6 +48,7 @@ type MessageDigestJob struct {
 	workspaceRepo *repositories.WorkspaceRepository
 	ruleRepo      *repositories.FormRuleRepository
 	directory     formrules.Directory
+	edition       enterprise.EE
 	appURL        string
 }
 
@@ -67,9 +69,10 @@ func NewMessageDigestJob(
 }
 
 // SetRouting groups digests by the recipients routing rules chose, so a team
-// is sent its own submissions rather than everyone everything.
-func (j *MessageDigestJob) SetRouting(rules *repositories.FormRuleRepository, dir formrules.Directory) {
-	j.ruleRepo, j.directory = rules, dir
+// is sent its own submissions rather than everyone everything. Rules are a
+// Posta Enterprise feature: without a license, the form's recipients get all.
+func (j *MessageDigestJob) SetRouting(edition enterprise.EE, rules *repositories.FormRuleRepository, dir formrules.Directory) {
+	j.ruleRepo, j.directory, j.edition = rules, dir, edition
 }
 
 func (j *MessageDigestJob) Name() string     { return "message-digest" }
@@ -113,7 +116,7 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 
 		mask := messages.NewPIIMask(form.Fields)
 		var rules []models.FormRule
-		if j.ruleRepo != nil {
+		if j.ruleRepo != nil && j.edition != nil && j.edition.Licensed() {
 			rules, _ = j.ruleRepo.ListByForm(form.ID)
 		}
 		var dir formrules.Directory

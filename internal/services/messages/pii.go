@@ -57,6 +57,12 @@ func NewPIIMask(defs models.FieldDefs) PIIMask {
 // Key reports whether the answer submitted under key is hidden.
 func (m PIIMask) Key(key string) bool { return m.keys[key] }
 
+// Hides reports whether the question filling role is personal data.
+func (m PIIMask) Hides(role models.FieldRole) bool { return m.roles[role] }
+
+// Empty reports whether the form has no personal-data questions.
+func (m PIIMask) Empty() bool { return len(m.keys) == 0 }
+
 // Value returns v, or HiddenValue when the question filling role is personal
 // data. An empty value stays empty, so nothing is shown as hidden that was
 // never given.

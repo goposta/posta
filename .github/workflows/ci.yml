@@ -43,11 +43,16 @@ jobs:
         with:
           # Read the version from go.mod so the toolchain has one source of truth.
           go-version-file: go.mod
+      # Both builds: the published Enterprise one, and the Community one, whose
+      # compiling proves core never needs Enterprise code.
+      - run: go vet -tags enterprise ./...
       - run: go vet ./...
-      - run: go test ./...
+      - run: go test -tags enterprise ./...
         env:
           TEST_DATABASE_DSN: host=localhost user=posta password=posta dbname=posta port=5432 sslmode=disable
-      - run: go build -o posta ./cmd/posta
+      - run: go test ./internal/enterprise/... ./internal/handlers/... ./internal/worker/...
+      - run: go build -tags enterprise -o posta ./cmd/posta
+      - run: go build -o posta-ce ./cmd/posta
 
   frontend:
     runs-on: ubuntu-latest

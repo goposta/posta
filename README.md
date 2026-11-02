@@ -474,4 +474,4 @@ Commercial support and hosted Posta services may be offered separately.
 
 ## Copyright
 
-Copyright (c) 2026 Jonas Kaninda and contributors
+Copyright (c) 2026 Jonas Kaninda

@@ -145,8 +145,10 @@ type Message struct {
 	AssignedTo *ActorRef `json:"assigned_to,omitempty" gorm:"->;foreignKey:AssignedToID;references:ID;constraint:false"`
 	Team       *TeamRef  `json:"team,omitempty" gorm:"->;foreignKey:TeamID;references:ID;constraint:false"`
 	// RoutedBy names MatchedRules for display; filled by the handler.
-	RoutedBy []RuleRef      `json:"routed_by,omitempty" gorm:"-"`
-	Replies  []MessageReply `json:"replies,omitempty" gorm:"foreignKey:MessageID;constraint:OnDelete:CASCADE"`
+	RoutedBy []RuleRef `json:"routed_by,omitempty" gorm:"-"`
+
+	seal    *piiSeal       // which values are kept encrypted at rest (message_pii.go)
+	Replies []MessageReply `json:"replies,omitempty" gorm:"foreignKey:MessageID;constraint:OnDelete:CASCADE"`
 }
 
 func (m *Message) IsSpam() bool {

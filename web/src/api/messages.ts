@@ -52,6 +52,7 @@ export interface FormPayload {
   notify_emails?: string[]
   notify_mode?: string
   notify_on_flagged?: boolean
+  redact_pii_in_webhooks?: boolean
   reply_from?: string
   reply_from_name?: string
   retention_days?: number

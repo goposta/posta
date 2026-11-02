@@ -39,6 +39,8 @@ const knownTags = ref<string[]>([]);
 
 // Archived and hidden questions can still be filtered on: old answers keep them.
 const questions = computed(() => (props.form.fields || []).filter((f) => f.type !== "section"));
+// Encrypted personal-data answers cannot be compared by the database.
+const filterable = computed(() => questions.value.filter((f) => !(f.pii && props.form.pii_encrypted)));
 const activeQuestions = computed(() =>
   (props.form.fields || []).filter((f) => !f.archived && f.type !== "hidden" && f.type !== "section"),
 );
@@ -102,7 +104,7 @@ function goPage(p: number) {
 // ─── Field filters ────────────────────────────────────────────────────────
 
 function addFilter() {
-  const first = activeQuestions.value[0];
+  const first = filterable.value.find((f) => !f.archived && f.type !== "hidden") || filterable.value[0];
   if (!first) return;
   fieldFilters.value.push({ key: first.key, op: "eq", value: "" });
 }
@@ -255,7 +257,7 @@ onMounted(async () => {
         <div v-if="hasSchema" class="rf-fields">
           <div v-for="(f, i) in fieldFilters" :key="i" class="rf-field">
             <select v-model="f.key" class="form-select" aria-label="Question" @change="onFilterKey(f)">
-              <option v-for="q in questions" :key="q.key" :value="q.key">
+              <option v-for="q in filterable" :key="q.key" :value="q.key">
                 {{ q.label || q.key }}{{ q.archived ? " (archived)" : "" }}
               </option>
             </select>
@@ -288,7 +290,7 @@ onMounted(async () => {
             />
             <button class="btn btn-ghost btn-xs" aria-label="Remove filter" @click="fieldFilters.splice(i, 1)">×</button>
           </div>
-          <button class="btn btn-ghost btn-sm" :disabled="!activeQuestions.length" @click="addFilter">+ Filter by answer</button>
+          <button class="btn btn-ghost btn-sm" :disabled="!filterable.length" @click="addFilter">+ Filter by answer</button>
           <button v-if="filtered" class="btn btn-ghost btn-sm" @click="clearFilters">Clear filters</button>
         </div>
         <small class="muted">

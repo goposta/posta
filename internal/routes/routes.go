@@ -25,6 +25,7 @@ import (
 
 	"github.com/goposta/posta/internal/config"
 	cronpkg "github.com/goposta/posta/internal/cron"
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/handlers"
 	"github.com/goposta/posta/internal/metrics"
 	"github.com/goposta/posta/internal/middlewares"
@@ -58,6 +59,7 @@ import (
 	"github.com/goposta/posta/internal/web"
 	"github.com/goposta/posta/internal/worker"
 	"github.com/hibiken/asynq"
+	"github.com/jkaninda/logger"
 	"github.com/jkaninda/okapi"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -69,6 +71,8 @@ type Router struct {
 	v1  *okapi.Group
 	mw  routerMiddleware
 	h   routerHandlers
+	// ee gates Posta Enterprise routes.
+	ee enterprise.EE
 }
 
 type routerMiddleware struct {
@@ -142,9 +146,10 @@ type routerHandlers struct {
 	formRule         *handlers.FormRuleHandler
 	team             *handlers.TeamHandler
 	formIngest       *handlers.FormIngestHandler
+	license          *handlers.LicenseHandler
 }
 
-func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) *email.Service {
+func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, edition enterprise.EE, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) *email.Service {
 
 	// Repositories
 	userRepo := repositories.NewUserRepository(db)
@@ -245,9 +250,18 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	jwtAuth := middlewares.JWTAuth(cfg, sessionStore)
 	jwtAdminAuth := middlewares.JWTAdminAuth(cfg, sessionStore)
 
+	if edition == nil {
+		edition = enterprise.Community()
+	}
+	installID, err := enterprise.EnsureInstallID(db)
+	if err != nil {
+		logger.Error("failed to read the install id", "error", err)
+	}
+
 	r := &Router{
 		app: app,
 		cfg: cfg,
+		ee:  edition,
 		v1:  app.Group("/api/v1"),
 		mw: routerMiddleware{
 			jwtAdminAuth:      jwtAdminAuth,
@@ -260,7 +274,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			workspaceQuery:    middlewares.WorkspaceFromQueryOrHeader(workspaceRepo, userRepo),
 		},
 		h: routerHandlers{
-			health: handlers.NewHealthHandler(db, redisClient),
+			health:  handlers.NewHealthHandler(db, redisClient),
+			license: handlers.NewLicenseHandler(edition, installID, auditLogger),
 			// A second Service instance also exists for the cron job. They share no
 			// in-memory state — the cached verdict is a single database row — so
 			// constructing one per consumer is equivalent to threading one through.
@@ -470,6 +485,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 
 		r.h.form = handlers.NewFormHandler(formRepo, messageRepo, domainRepo, auditLogger, cfg.ApiBaseURL)
 		r.h.form.SetKeyCache(messageSvc)
+		r.h.form.SetEdition(edition)
 		r.h.message = handlers.NewMessageHandler(messageRepo, formRepo, messageFilterRepo, messageSvc, auditLogger)
 		r.h.message.SetEventBus(bus)
 		r.h.message.SetRealtime(realtime.NewRedis(redisClient))
@@ -592,6 +608,7 @@ func (r *Router) registerRoutes() {
 	}
 	r.app.Register(r.adminSSERoutes()...)
 	r.app.Register(r.adminRoutes()...)
+	r.app.Register(r.licenseRoutes()...)
 
 	// Documentation-only OpenAPI webhooks (events Posta POSTs to subscribers).
 	r.registerWebhookDocs()

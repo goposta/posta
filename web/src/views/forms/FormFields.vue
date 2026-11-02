@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave } from "vue-router";
 import { formsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
+import { useLicenseStore } from "../../stores/license";
 import { apiMessage } from "../../composables/apiError";
 import type { Form, FormField, FormFieldOption, FormFieldRole, FormFieldType } from "../../api/types";
 
@@ -110,6 +111,13 @@ function pageNumber(d: Draft) {
   const opensWithSection = list.length > 0 && isSection(list[0]);
   return before.filter(isSection).length + (opensWithSection ? 0 : 1);
 }
+
+// Branching is a Posta Enterprise feature. Without a license (or once it has
+// expired past grace) new branches cannot be added; existing ones keep working
+// and can still be removed.
+const license = useLicenseStore();
+license.load();
+const canBranch = computed(() => license.mutable);
 
 const branchUids = ref(new Set<number>());
 function branches(d: Draft) {
@@ -563,13 +571,16 @@ onBeforeUnmount(() => {
           </div>
           <div class="form-group">
             <label class="form-label">After this section</label>
-            <select v-model="d.next" class="form-select" style="max-width: 360px">
+            <select v-model="d.next" class="form-select" style="max-width: 360px" :disabled="!canBranch && !d.next">
               <option :value="undefined">Continue to the next section</option>
               <option v-for="s in laterSections(d)" :key="s.uid" :value="s.key">Go to “{{ s.label || s.key }}”</option>
               <option value="submit">Submit the form</option>
             </select>
             <small v-if="staleTarget(d, d.next)" class="form-hint warn">
               “{{ sectionTitle(d.next) }}” is no longer after this section. Pick where this page leads again.
+            </small>
+            <small v-else-if="!canBranch" class="form-hint">
+              <span class="ee-badge">Enterprise</span> Sending respondents to another section needs a Posta Enterprise license.
             </small>
             <small v-else class="form-hint">A branching question on this page takes precedence for the answers it covers.</small>
           </div>
@@ -638,8 +649,14 @@ onBeforeUnmount(() => {
               class="checkbox-label"
               style="margin-top: 8px"
             >
-              <input type="checkbox" :checked="branches(d)" @change="toggleBranch(d, ($event.target as HTMLInputElement).checked)" />
+              <input
+                type="checkbox"
+                :checked="branches(d)"
+                :disabled="!canBranch && !branches(d)"
+                @change="toggleBranch(d, ($event.target as HTMLInputElement).checked)"
+              />
               Go to a section based on the answer
+              <span v-if="!canBranch" class="ee-badge" title="Branching needs a Posta Enterprise license">Enterprise</span>
             </label>
             <small v-if="d.type === 'select' && !laterSections(d).length && !branches(d)" class="form-hint">
               Add a section below this question to send respondents to different pages by their answer.
@@ -732,7 +749,10 @@ onBeforeUnmount(() => {
             <label v-if="d.type !== 'hidden'" class="checkbox-label">
               <input v-model="d.required" type="checkbox" /> Required
             </label>
-            <label class="checkbox-label" title="Never prefilled from links; masked in notifications later">
+            <label
+              class="checkbox-label"
+              :title="`Hidden in notification emails and never prefilled from links${form.pii_encrypted ? '; encrypted at rest, so not filterable or searchable' : ''}`"
+            >
               <input v-model="d.pii" type="checkbox" /> Personal data
             </label>
             <div v-if="rolesFor(d).length" class="qcard-role">

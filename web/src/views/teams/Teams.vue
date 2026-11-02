@@ -4,12 +4,16 @@ import { teamsApi } from "../../api/messages";
 import { workspaceApi } from "../../api/workspaces";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
+import { useLicenseStore } from "../../stores/license";
+import EnterpriseLock from "../../components/EnterpriseLock.vue";
 import type { Team, WorkspaceMember } from "../../api/types";
 
 // Teams group workspace members so routing rules can notify or assign them
-// together. Any member can see them; owners and admins change them.
+// together. Any member can see them; owners and admins change them. Teams are
+// a Posta Enterprise feature.
 
 const notify = useNotificationStore();
+const license = useLicenseStore();
 const loading = ref(true);
 const teams = ref<Team[]>([]);
 const members = ref<WorkspaceMember[]>([]);
@@ -85,52 +89,62 @@ function memberList(team: Team) {
   return names.length ? names.join(", ") : "No members";
 }
 
-onMounted(load);
+onMounted(async () => {
+  await license.load();
+  if (license.licensed) await load();
+});
 </script>
 
 <template>
   <div>
     <div class="page-header">
       <h1>Teams</h1>
-      <button class="btn btn-primary" @click="openEditor(null)">New team</button>
+      <button v-if="license.mutable" class="btn btn-primary" @click="openEditor(null)">New team</button>
     </div>
 
-    <div v-if="loading" class="loading-page"><div class="spinner"></div></div>
+    <EnterpriseLock
+      feature="Teams"
+      description="Group members into teams like Sales or Billing. Routing rules notify a team or assign submissions to it, and its members see them under “My work” in Messages."
+    >
+      <div v-if="loading" class="loading-page"><div class="spinner"></div></div>
 
-    <div v-else class="card">
-      <div v-if="!teams.length" class="empty-state">
-        <h3>No teams yet</h3>
-        <p>
-          A team is a group of members, like Sales or Billing. Form routing rules can notify a team or assign
-          submissions to it, and everyone on it sees them under "My work" in Messages.
-        </p>
-        <button class="btn btn-primary" @click="openEditor(null)">Create a team</button>
+      <div v-else class="card">
+        <div v-if="!teams.length" class="empty-state">
+          <h3>No teams yet</h3>
+          <p>
+            A team is a group of members, like Sales or Billing. Form routing rules can notify a team or assign
+            submissions to it, and everyone on it sees them under "My work" in Messages.
+          </p>
+          <button v-if="license.mutable" class="btn btn-primary" @click="openEditor(null)">Create a team</button>
+        </div>
+        <div v-else class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Members</th>
+                <th>Shared address</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="team in teams" :key="team.id">
+                <td><strong>{{ team.name }}</strong></td>
+                <td class="team-members">{{ memberList(team) }}</td>
+                <td>{{ team.email || "—" }}</td>
+                <td class="team-actions">
+                  <router-link class="btn btn-ghost btn-sm" :to="`/messages?team_id=${team.id}`">Messages</router-link>
+                  <template v-if="license.mutable">
+                    <button class="btn btn-secondary btn-sm" @click="openEditor(team)">Edit</button>
+                    <button class="btn btn-ghost btn-sm" @click="remove(team)">Delete</button>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div v-else class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Team</th>
-              <th>Members</th>
-              <th>Shared address</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="team in teams" :key="team.id">
-              <td><strong>{{ team.name }}</strong></td>
-              <td class="team-members">{{ memberList(team) }}</td>
-              <td>{{ team.email || "—" }}</td>
-              <td class="team-actions">
-                <router-link class="btn btn-ghost btn-sm" :to="`/messages?team_id=${team.id}`">Messages</router-link>
-                <button class="btn btn-secondary btn-sm" @click="openEditor(team)">Edit</button>
-                <button class="btn btn-ghost btn-sm" @click="remove(team)">Delete</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    </EnterpriseLock>
 
     <div v-if="showEditor" class="modal-overlay" @click.self="showEditor = false">
       <div class="modal">

@@ -22,11 +22,13 @@ package repositories_test
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/services/crypto"
 	"github.com/goposta/posta/internal/storage/migration"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"gorm.io/driver/postgres"
@@ -335,5 +337,61 @@ func TestEraseMessagesBySender(t *testing.T) {
 	tx.Unscoped().Model(&models.InboundEmail{}).Where("id = ?", inbound.ID).Count(&count)
 	if count != 0 {
 		t.Fatal("the inbound email behind a thread reply must be erased too")
+	}
+}
+
+// Personal-data answers reach the database encrypted and come back readable.
+func TestMessagePIIEncryptedInDatabase(t *testing.T) {
+	tx := migratedDB(t)
+	models.SetPIIEncryptionGate(func() bool { return true })
+	defer models.SetPIIEncryptionGate(func() bool { return false })
+	crypto.Init("pii-db-test-key")
+	defer crypto.Init("")
+
+	f := newFixture(t, tx, "piienc")
+	defs := models.FieldDefs{
+		{Key: "name", Label: "Name", Type: models.FieldText, Role: models.RoleSenderName, PII: true},
+		{Key: "salary", Label: "Salary", Type: models.FieldNumber, PII: true},
+		{Key: "dept", Label: "Dept", Type: models.FieldText},
+	}
+	m := f.message(t, tx, func(m *models.Message) {
+		m.SenderName = "Ada"
+		m.FieldsJSON = `[{"key":"name","value":"Ada"},{"key":"salary","value":"90000"},{"key":"dept","value":"sales"}]`
+		m.Data = models.SubmissionData{"name": "Ada", "salary": float64(90000), "dept": "sales"}
+		m.SealPII(defs)
+	})
+	if m.SenderName != "Ada" {
+		t.Fatalf("the caller should keep plaintext after create, got %q", m.SenderName)
+	}
+
+	var raw struct {
+		SenderName  string
+		SenderEmail string
+		FieldsJSON  string
+		Data        string
+	}
+	if err := tx.Raw("SELECT sender_name, sender_email, fields_json, data::text AS data FROM messages WHERE id = ?", m.ID).Scan(&raw).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !crypto.IsEncrypted(raw.SenderName) || strings.Contains(raw.Data, "90000") || strings.Contains(raw.FieldsJSON, `"Ada"`) {
+		t.Errorf("stored in plaintext: name %q data %s fields %s", raw.SenderName, raw.Data, raw.FieldsJSON)
+	}
+	if raw.SenderEmail != "ada@example.com" || !strings.Contains(raw.Data, `"dept": "sales"`) {
+		t.Errorf("readable values changed: email %q data %s", raw.SenderEmail, raw.Data)
+	}
+
+	got, err := repositories.NewMessageRepository(tx).FindByID(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SenderName != "Ada" || got.Data["salary"] != float64(90000) || !strings.Contains(got.FieldsJSON, `"value":"Ada"`) {
+		t.Errorf("loaded: name %q salary %v fields %s", got.SenderName, got.Data["salary"], got.FieldsJSON)
+	}
+
+	// The database cannot see inside: containment on an encrypted answer misses.
+	var hits int64
+	tx.Model(&models.Message{}).Where("id = ? AND data @> ?::jsonb", m.ID, `{"salary": 90000}`).Count(&hits)
+	if hits != 0 {
+		t.Error("an encrypted answer matched a database filter")
 	}
 }

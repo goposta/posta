@@ -1268,6 +1268,10 @@ export interface Form {
   notify_emails: string[]
   notify_mode: NotifyMode
   notify_on_flagged: boolean
+  /** Leave answers to personal-data questions out of webhook payloads. */
+  redact_pii_in_webhooks: boolean
+  /** The deployment encrypts personal-data answers at rest; they cannot be filtered or searched. */
+  pii_encrypted?: boolean
   reply_from: string
   reply_from_name: string
   retention_days: number
