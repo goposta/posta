@@ -5,6 +5,7 @@ import { formsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
 import type { Form, FormSnippet } from "../../api/types";
+import FormFields from "./FormFields.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -16,7 +17,7 @@ const saving = ref(false);
 const form = ref<Form | null>(null);
 const snippet = ref<FormSnippet | null>(null);
 const loadFailed = ref(false);
-const tab = ref<"setup" | "responses" | "spam" | "notifications" | "embed">("setup");
+const tab = ref<"questions" | "setup" | "responses" | "spam" | "notifications" | "embed">("questions");
 
 const originsText = ref("");
 // close_at is edited in the browser's local time and stored as UTC.
@@ -116,6 +117,15 @@ async function save() {
   }
 }
 
+// The builder saves only the schema; keep the rest of the page's edits.
+function onFieldsSaved(saved: Form) {
+  if (!form.value) return;
+  form.value.fields = saved.fields;
+  form.value.schema_version = saved.schema_version;
+  form.value.unknown_fields = saved.unknown_fields;
+  form.value.updated_at = saved.updated_at;
+}
+
 async function rotateKey() {
   if (!confirm("Rotate the public key? Existing embeds stop working immediately.")) return;
   saving.value = true;
@@ -146,6 +156,8 @@ function copy(text: string) {
   navigator.clipboard?.writeText(text);
   notify.success("Copied to clipboard.");
 }
+
+const hasQuestions = computed(() => (form.value?.fields || []).some((f) => !f.archived));
 
 const endpoint = computed(() => snippet.value?.endpoint || "");
 
@@ -182,7 +194,7 @@ const widgetSnippet = computed(() => {
   const fields = ["name", "email", "phone", "subject", "message"].filter(
     (f) => f === "email" || f === "message" || w.fields.includes(f),
   );
-  if (fields.join(",") !== "name,email,message") attrs.push(["data-fields", fields.join(",")]);
+  if (!hasQuestions.value && fields.join(",") !== "name,email,message") attrs.push(["data-fields", fields.join(",")]);
   if (w.title.trim()) attrs.push(["data-title", w.title.trim()]);
   if (w.description.trim()) attrs.push(["data-description", w.description.trim()]);
   if (w.button.trim()) attrs.push(["data-button", w.button.trim()]);
@@ -231,7 +243,7 @@ onMounted(load);
       <div class="card" style="margin-bottom: 20px">
         <div class="card-body" style="display: flex; gap: 8px; flex-wrap: wrap">
           <button
-            v-for="t in (['setup', 'responses', 'spam', 'notifications', 'embed'] as const)"
+            v-for="t in (['questions', 'setup', 'responses', 'spam', 'notifications', 'embed'] as const)"
             :key="t"
             class="btn"
             :class="tab === t ? 'btn-primary' : 'btn-secondary'"
@@ -241,6 +253,8 @@ onMounted(load);
           </button>
         </div>
       </div>
+
+      <FormFields v-show="tab === 'questions'" :form="form" @saved="onFieldsSaved" />
 
       <div v-show="tab === 'setup'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Setup</h2></div>
@@ -476,7 +490,11 @@ onMounted(load);
             and shows the result in place. Settings you change here later apply without editing your site.
           </p>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 16px">
-            <div class="form-group">
+            <div v-if="hasQuestions" class="form-group">
+              <label class="form-label">Fields</label>
+              <small class="muted">The widget asks this form's questions. Edit them on the Questions tab.</small>
+            </div>
+            <div v-else class="form-group">
               <label class="form-label">Fields</label>
               <label v-for="f in optionalWidgetFields" :key="f" class="checkbox-label">
                 <input v-model="widget.fields" type="checkbox" :value="f" />
@@ -565,7 +583,8 @@ onMounted(load);
         </div>
       </div>
 
-      <div class="card">
+      <!-- The Questions tab has its own save bar; this one saves the other tabs. -->
+      <div v-show="tab !== 'questions'" class="card">
         <div class="card-body">
           <button class="btn btn-primary" :disabled="saving" @click="save">
             {{ saving ? "Saving..." : "Save changes" }}

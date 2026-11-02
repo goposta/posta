@@ -33,6 +33,7 @@
       network: "Could not send. Check your connection and try again.",
       error: "Your message could not be sent. Please try again.",
       poweredBy: "Powered by",
+      previewOnly: "Preview only: nothing was sent.",
     },
     fr: {
       name: "Nom",
@@ -53,6 +54,7 @@
       network: "Envoi impossible. Vérifiez votre connexion et réessayez.",
       error: "Votre message n'a pas pu être envoyé. Veuillez réessayer.",
       poweredBy: "Propulsé par",
+      previewOnly: "Aperçu uniquement : rien n'a été envoyé.",
     },
   };
 
@@ -222,14 +224,18 @@
     });
   }
 
-  function mount(el) {
+  // mount renders a form into el. With preview, it renders that config
+  // instead of fetching /config, and submitting sends nothing: the dashboard
+  // builder uses it so its preview is the production renderer.
+  function mount(el, preview) {
     if (!el || el.__postaForm) return;
     var key = (el.getAttribute("data-posta-form") || "").trim();
-    if (!key) {
+    if (!key && !preview) {
       console.warn("[posta] data-posta-form needs the form's public key");
       return;
     }
-    el.__postaForm = true;
+    var instance = {};
+    el.__postaForm = instance;
 
     var base = apiBase(el);
     var t = STRINGS[pickLang(el)];
@@ -247,6 +253,7 @@
       wrap.setAttribute("data-theme", theme === "dark" || theme === "auto" ? theme : "light");
       var accent = el.getAttribute("data-accent") || a.accent;
       if (accent && window.CSS && CSS.supports && CSS.supports("color", accent)) wrap.style.setProperty("--pf-accent", accent);
+      else wrap.style.removeProperty("--pf-accent");
     }
     applyLook(null);
     root.appendChild(wrap);
@@ -297,7 +304,15 @@
         }
       );
     }
-    load();
+    if (preview) {
+      instance.preview = function (cfg) {
+        applyLook(cfg.appearance);
+        render(cfg, cfg.fields || []);
+      };
+      instance.preview(preview);
+    } else {
+      load();
+    }
 
     // buildField renders one field and returns how to read it, focus it and
     // show an error on it.
@@ -540,6 +555,10 @@
           missing.focus();
           return;
         }
+        if (preview) {
+          status.textContent = t.previewOnly;
+          return;
+        }
         payload[honeypot.name] = honeypot.value;
         if (nonce) payload._nonce = nonce;
 
@@ -615,7 +634,14 @@
     for (var i = 0; i < nodes.length; i++) mount(nodes[i]);
   }
 
-  window.PostaForms = { mount: mount, scan: scan, version: "1" };
+  // preview renders cfg (the /config shape, fields included) into el, and
+  // re-renders on later calls with the same element.
+  function preview(el, cfg) {
+    if (el && el.__postaForm && el.__postaForm.preview) el.__postaForm.preview(cfg || {});
+    else mount(el, cfg || {});
+  }
+
+  window.PostaForms = { mount: mount, scan: scan, preview: preview, version: "1" };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { scan(); });
   else scan();
