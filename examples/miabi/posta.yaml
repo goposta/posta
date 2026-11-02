@@ -112,8 +112,10 @@ spec:
 
           # Requests arrive through the Miabi gateway; trust its forwarded
           # client IP so rate limits and audit logs see the real address.
-          # Narrow this to your workspace network if you know its subnet.
-          POSTA_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12"
+          # 10.63.0.0/16 is the default subnet of miabi-proxy, the network the
+          # gateway shares with routed apps. Use your MIABI_SUBNET if the
+          # install set one (see /etc/miabi/miabi.yaml, networking.proxy).
+          POSTA_TRUSTED_PROXIES: "10.63.0.0/16"
 
           POSTA_EMBEDDED_WORKER: "true"
           POSTA_WORKER_CONCURRENCY: "10"
