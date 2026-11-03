@@ -43,7 +43,7 @@ type TemplateHandler struct {
 }
 type CreateTemplateRequest struct {
 	Body struct {
-		Name            string `json:"name" doc:"Identifier used to send with this template, like welcome-email: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		Name            string `json:"name" doc:"The template's name, as typed: \"Welcome Email\" is stored as the identifier welcome-email, which you send with, and \"Welcome Email\" as display_name. It cannot change later."`
 		DisplayName     string `json:"display_name" doc:"The template's label. Defaults to name."`
 		SampleData      string `json:"sample_data" default:"{}"`
 		DefaultLanguage string `json:"default_language"`
@@ -53,7 +53,7 @@ type CreateTemplateRequest struct {
 type UpdateTemplateRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name            string  `json:"name" doc:"Identifier used to send with this template. Renaming it breaks callers that send by the old name."`
+		Name            string  `json:"name" doc:"A template's name cannot change; only accepted when it is the current one."`
 		DisplayName     string  `json:"display_name"`
 		SampleData      *string `json:"sample_data" default:"{}"`
 		DefaultLanguage string  `json:"default_language"`
@@ -147,12 +147,9 @@ func (h *TemplateHandler) Update(c *okapi.Context, req *UpdateTemplateRequest) e
 		return c.AbortNotFound("template not found")
 	}
 
-	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	displayName, err := resolveRename(req.Body.Name, req.Body.DisplayName, "", tmpl.Name, "template")
 	if err != nil {
 		return c.AbortBadRequest(err.Error())
-	}
-	if name != "" {
-		tmpl.Name = name
 	}
 	if displayName != "" {
 		tmpl.DisplayName = displayName
@@ -173,9 +170,6 @@ func (h *TemplateHandler) Update(c *okapi.Context, req *UpdateTemplateRequest) e
 	tmpl.LastEditedByID = &editorID
 
 	if err := h.repo.Update(tmpl); err != nil {
-		if repositories.IsDuplicateName(err) {
-			return c.AbortConflict("a template named \"" + tmpl.Name + "\" already exists in this workspace")
-		}
 		return c.AbortInternalServerError("failed to update template")
 	}
 

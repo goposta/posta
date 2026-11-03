@@ -321,18 +321,18 @@ option::checkmark {
   box-shadow: var(--shadow-focus);
 }
 
+.form-input:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
 .form-input::placeholder,
 .form-textarea::placeholder { color: var(--text-muted); }
 
 .form-textarea {
   min-height: 100px;
   resize: vertical;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 13px;
-}
-
-/* An identifier field: a resource's name, as the API and URLs use it. */
-.form-input.mono {
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 13px;
 }

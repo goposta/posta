@@ -9,6 +9,7 @@ import { useNotificationStore } from '../../stores/notification'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useConfirm } from '../../composables/useConfirm'
 import { timezoneOptions } from '../../composables/timezones'
+import NameField from '../../components/NameField.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -59,7 +60,6 @@ const importing = ref(false)
 const importFileRef = ref<HTMLInputElement | null>(null)
 
 // Settings (workspace name/description)
-const editDisplayName = ref('')
 const editDescription = ref('')
 const saving = ref(false)
 
@@ -113,7 +113,6 @@ async function fetchWorkspace() {
   try {
     const res = await withWorkspace(() => workspaceApi.getCurrent())
     ws.value = res.data.data
-    editDisplayName.value = ws.value.display_name
     editDescription.value = ws.value.description || ''
   } catch {
     notify.error('Failed to load workspace')
@@ -298,7 +297,7 @@ function formatLimit(value: number): string {
 async function saveSettings() {
   saving.value = true
   try {
-    await withWorkspace(() => workspaceApi.update({ display_name: editDisplayName.value.trim(), description: editDescription.value.trim() }))
+    await withWorkspace(() => workspaceApi.update({ description: editDescription.value.trim() }))
     notify.success('Workspace updated')
     await wsStore.fetchWorkspaces()
   } catch (err: any) {
@@ -536,18 +535,10 @@ watch(activeTab, (value) => {
       <div v-if="activeTab === 'settings' && isAdminOrOwner" class="card">
         <div class="card-header"><span>Workspace Settings</span></div>
         <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">Display name</label>
-            <input v-model="editDisplayName" class="form-input" />
-          </div>
+          <NameField v-if="ws" :existing="ws" resource="workspace" usage="Unique on this Posta." />
           <div class="form-group">
             <label class="form-label">Description</label>
             <input v-model="editDescription" class="form-input" placeholder="Optional description" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Name</label>
-            <input :value="ws?.name" class="form-input mono" disabled />
-            <span class="form-hint">The workspace's identifier. It cannot change after creation.</span>
           </div>
           <button class="btn btn-primary" :disabled="saving" @click="saveSettings">
             {{ saving ? 'Saving...' : 'Save Changes' }}

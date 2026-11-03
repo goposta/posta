@@ -38,7 +38,6 @@ const languages = ref<Language[]>([]);
 
 const form = ref<TemplateDraft>({
   name: "",
-  display_name: "",
   sample_data: "",
   default_language: "en",
   description: "",
@@ -54,7 +53,7 @@ async function loadLanguages() {
 }
 
 function resetForm() {
-  form.value = { name: "", display_name: "", sample_data: "", default_language : languages.value.find(l => l.is_default)?.code || 'en', description: "" };
+  form.value = { name: "", sample_data: "", default_language : languages.value.find(l => l.is_default)?.code || 'en', description: "" };
   editing.value = null;
 }
 
@@ -67,7 +66,6 @@ function openEdit(template: Template) {
   editing.value = template;
   form.value = {
     name: template.name,
-    display_name: template.display_name,
     sample_data: template.sample_data || "",
     default_language: template.default_language || "en",
     description: template.description || "",
@@ -98,7 +96,7 @@ function onSearchInput() {
 }
 
 async function saveTemplate() {
-  if (!form.value.display_name.trim() || !form.value.name.trim()) return;
+  if (!form.value.name.trim()) return;
   saving.value = true;
   try {
     if (editing.value) {

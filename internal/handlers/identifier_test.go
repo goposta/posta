@@ -31,7 +31,7 @@ func TestResolveNames(t *testing.T) {
 		{"both", "contact", "Contact form", "", "contact", "Contact form", false},
 		{"display only", "", "Contact form", "", "contact-form", "Contact form", false},
 		{"name only", "contact", "", "", "contact", "contact", false},
-		{"legacy label in name", "Contact form", "", "", "contact-form", "Contact form", false},
+		{"label in name", "Contact form", "", "", "contact-form", "Contact form", false},
 		{"legacy name and slug", "Contact form", "", "contact", "contact", "Contact form", false},
 		{"slug ignored with display_name", "contact", "Contact form", "other", "contact", "Contact form", false},
 		{"bad name with display_name", "Contact form", "Contact", "", "", "", true},
@@ -51,16 +51,32 @@ func TestResolveNames(t *testing.T) {
 	}
 }
 
-func TestResolveRenames(t *testing.T) {
-	// An old client renaming the label sent it as name.
-	if name, display, err := resolveRenames("New label", "", ""); err != nil || name != "" || display != "New label" {
-		t.Fatalf("legacy label rename = (%q, %q, %v)", name, display, err)
+func TestResolveRename(t *testing.T) {
+	cases := []struct {
+		label                   string
+		name, displayName, slug string
+		wantDisplay             string
+		wantErr                 bool
+	}{
+		{"display name only", "", "New label", "", "New label", false},
+		{"current name", "contact", "New label", "", "New label", false},
+		{"nothing", "", "", "", "", false},
+		{"other name", "other", "", "", "", true},
+		{"other name with display name", "other", "New label", "", "", true},
+		{"other legacy slug", "New label", "", "other", "", true},
+		// An old client renaming the label sent it as name.
+		{"legacy label in name", "New label", "", "", "New label", false},
 	}
-	if name, display, err := resolveRenames("new-id", "", ""); err != nil || name != "new-id" || display != "" {
-		t.Fatalf("identifier rename = (%q, %q, %v)", name, display, err)
-	}
-	if _, _, err := resolveRenames("Bad Id", "Label", ""); err == nil {
-		t.Fatal("a malformed name with a display name must be refused")
+	for _, tc := range cases {
+		t.Run(tc.label, func(t *testing.T) {
+			display, err := resolveRename(tc.name, tc.displayName, tc.slug, "contact", "form")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, want error %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && display != tc.wantDisplay {
+				t.Fatalf("got %q, want %q", display, tc.wantDisplay)
+			}
+		})
 	}
 }
 

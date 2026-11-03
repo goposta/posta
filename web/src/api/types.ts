@@ -204,8 +204,12 @@ export interface TemplateInput {
   description?: string
 }
 
-/** A template being created or edited in the dashboard: both names are set. */
-export type TemplateDraft = TemplateInput & { name: string; display_name: string }
+/**
+ * A template being created or edited in the dashboard. Creating one sends the
+ * name as typed and the server derives the identifier; editing one sends its
+ * name unchanged.
+ */
+export type TemplateDraft = TemplateInput & { name: string }
 
 export interface TemplateExportLocalization {
   language: string

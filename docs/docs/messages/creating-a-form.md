@@ -14,8 +14,7 @@ curl -X POST https://posta.example.com/api/v1/workspaces/current/forms \
   -H "X-Posta-Workspace-Id: 1" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "contact",
-    "display_name": "Contact form",
+    "name": "Contact form",
     "allowed_origins": ["https://example.com", "https://www.example.com"],
     "notify_emails": ["team@example.com"],
     "reply_from": "support@example.com"
@@ -24,7 +23,7 @@ curl -X POST https://posta.example.com/api/v1/workspaces/current/forms \
 
 The response includes `public_key` — the unguessable 22-character string that appears in your embed URL.
 
-`name` identifies the form in the API: lowercase letters, digits and hyphens, unique in the workspace. `display_name` is its label. Send either; the other is derived. Before 0.18 these were `slug` and `name`; requests in the old shape are still read the old way until 0.19.
+Give the form a `name` as you would write it. Posta keeps it as the form's `display_name` and derives its identifier from it: `Contact form` is saved as `contact-form`, unique in the workspace, and the response carries both. A name cannot change once the form exists; to use another, create a new form. Before 0.18 the identifier was `slug`; requests in the old shape are still read until 0.19.
 
 ## Example forms
 

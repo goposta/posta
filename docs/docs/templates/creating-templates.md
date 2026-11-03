@@ -13,7 +13,7 @@ A template has two names:
 - **`name`**: its identifier, like `welcome-email`. It is what you send as `template` and is unique in the workspace: up to 63 lowercase letters, digits and hyphens.
 - **`display_name`**: its label in the dashboard, like `Welcome Email`.
 
-When you create a template you can send either. A missing `name` is derived from the display name, and a missing display name is the name.
+Create a template with its `name` as you would write it, `Welcome Email`: Posta keeps it as the `display_name` and derives the identifier, `welcome-email`. A name cannot change once the template exists, because callers send it; to use another, create a new template.
 
 :::caution Changed in 0.18
 Before 0.18 a template had only `name`, which was both its label and what you sent. Upgrading keeps every label as the `display_name` and gives each template a `name` derived from it: `Welcome Email` becomes `welcome-email`. Sending by the old label still works until 0.19 and logs a deprecation warning; switch to the new names. Stylesheets, forms, workspaces and OAuth providers follow the same scheme.
@@ -33,8 +33,7 @@ curl -X POST http://localhost:9000/api/v1/workspaces/current/templates \
   -H "X-Posta-Workspace-Id: 1" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "welcome",
-    "display_name": "Welcome",
+    "name": "Welcome",
     "description": "Welcome email for new users",
     "html": "<h1>Welcome, {{name}}!</h1><p>Thanks for joining.</p>",
     "text": "Welcome, {{name}}! Thanks for joining.",
@@ -78,13 +77,12 @@ PUT /api/v1/workspaces/current/templates/{id}
 
 ```json
 {
-  "display_name": "Welcome (v2)",
   "description": "Updated welcome email",
   "default_language": "en"
 }
 ```
 
-Changing `name` renames the template for sending: callers that send the old name stop finding it.
+Sending a different `name` answers `400`: a template's name cannot change.
 
 ## Delete a Template
 

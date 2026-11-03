@@ -72,7 +72,7 @@ func (h *WorkspaceHandler) SetSeeder(s workspaceSeeder) { h.seeder = s }
 
 type CreateWorkspaceRequest struct {
 	Body struct {
-		Name            string `json:"name" doc:"Identifier, like acme: lowercase letters, digits and hyphens, unique on the platform. Derived from display_name when empty."`
+		Name            string `json:"name" doc:"The workspace's name, as typed: \"Acme Corp\" is stored as the identifier acme-corp, unique on the platform, with \"Acme Corp\" as display_name. It cannot change later."`
 		DisplayName     string `json:"display_name" doc:"The workspace's label. Defaults to name."`
 		Slug            string `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Description     string `json:"description"`
@@ -88,7 +88,7 @@ type CreateWorkspaceRequest struct {
 
 type UpdateWorkspaceRequest struct {
 	Body struct {
-		Name            string `json:"name" doc:"A workspace's name cannot change; only accepted when it is the current one. Set display_name to rename it."`
+		Name            string `json:"name" doc:"A workspace's name cannot change; only accepted when it is the current one."`
 		DisplayName     string `json:"display_name"`
 		Description     string `json:"description"`
 		DefaultLanguage string `json:"default_language"`
@@ -311,12 +311,9 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 		return c.AbortNotFound("workspace not found")
 	}
 
-	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	displayName, err := resolveRename(req.Body.Name, req.Body.DisplayName, "", ws.Name, "workspace")
 	if err != nil {
 		return c.AbortBadRequest(err.Error())
-	}
-	if name != "" && name != ws.Name {
-		return c.AbortBadRequest("a workspace's name cannot change; set display_name to rename it")
 	}
 	if ws.System && displayName != "" && displayName != ws.DisplayName {
 		return c.AbortConflict("the system workspace cannot be renamed")

@@ -95,7 +95,7 @@ func NewFormHandler(
 
 type CreateFormRequest struct {
 	Body struct {
-		Name             string   `json:"name" doc:"Identifier, like contact-form: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		Name             string   `json:"name" doc:"The form's name, as typed: \"Contact form\" is stored as the identifier contact-form, with \"Contact form\" as display_name. It cannot change later."`
 		DisplayName      string   `json:"display_name" doc:"The form's label. Defaults to name."`
 		Slug             string   `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Description      string   `json:"description"`
@@ -127,7 +127,7 @@ type CreateFormRequest struct {
 type UpdateFormRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name                string            `json:"name" doc:"Identifier, like contact-form"`
+		Name                string            `json:"name" doc:"A form's name cannot change; only accepted when it is the current one."`
 		DisplayName         string            `json:"display_name"`
 		Slug                string            `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Description         string            `json:"description"`
@@ -326,18 +326,12 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	}
 
 	b := req.Body
-	name, displayName, err := resolveRenames(b.Name, b.DisplayName, b.Slug)
+	displayName, err := resolveRename(b.Name, b.DisplayName, b.Slug, form.Name, "form")
 	if err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
 	if displayName != "" {
 		form.DisplayName = displayName
-	}
-	if name != "" && name != form.Name {
-		if h.repo.NameExists(*scope.WorkspaceID, name, form.ID) {
-			return c.AbortConflict("a form named \"" + name + "\" already exists")
-		}
-		form.Name = name
 	}
 	if strings.TrimSpace(b.Description) != "" {
 		form.Description = strings.TrimSpace(b.Description)
