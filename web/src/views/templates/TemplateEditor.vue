@@ -307,7 +307,7 @@ function switchToVisualBuilder() {
           <span class="mdi mdi-arrow-left"></span> Back
         </button>
         <div class="editor-title">
-          <h2>{{ template?.name || 'Template' }}</h2>
+          <h2>{{ template?.display_name || 'Template' }}</h2>
           <div class="editor-meta">
             <span class="badge badge-info">{{ localization?.language }}</span>
             <span class="badge badge-neutral">v{{ version?.version }}</span>

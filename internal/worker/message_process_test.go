@@ -134,7 +134,7 @@ func processTask(t *testing.T) *asynq.Task {
 }
 
 func immediateForm() *models.Form {
-	return &models.Form{ID: 1, Name: "Contact", NotifyEnabled: true, NotifyMode: models.NotifyModeImmediate, NotifyOnFlagged: true}
+	return &models.Form{ID: 1, DisplayName: "Contact", NotifyEnabled: true, NotifyMode: models.NotifyModeImmediate, NotifyOnFlagged: true}
 }
 
 func TestProcessTaskReturnsNotifyErrorSoAsynqRetries(t *testing.T) {

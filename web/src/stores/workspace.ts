@@ -37,7 +37,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const currentWorkspaceIsSystem = computed(() => currentWorkspace.value?.system ?? false)
   const hasWorkspace = computed(() => ownWorkspaces.value.length > 0)
 
-  const contextLabel = computed(() => currentWorkspace.value?.name ?? 'No workspace')
+  const contextLabel = computed(() => currentWorkspace.value?.display_name ?? 'No workspace')
 
   function setWorkspace(wsId: number | null) {
     currentWorkspaceId.value = wsId

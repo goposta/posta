@@ -58,3 +58,30 @@ curl -X POST http://localhost:9000/api/v1/workspaces/current/templates/import \
 :::note
 If a template with the same name already exists, the import will fail with `409 Conflict`. Rename the template in the JSON before importing, or delete the existing template first.
 :::
+
+## Import an HTML File
+
+```
+POST /api/v1/workspaces/current/templates/import-html
+```
+
+Upload an `.html` or `.htm` file (up to 2 MB) as `multipart/form-data` under `file`. CSS in `<style>` blocks becomes a stylesheet; a `<link rel="stylesheet" href="brand.css">` attaches the workspace stylesheet named `brand` instead. Returns `201 Created` with the new template.
+
+Every other form field is optional and overrides a default:
+
+| Field | Default |
+|-------|---------|
+| `name` | Derived from `display_name` |
+| `display_name` | The filename without its extension |
+| `subject` | The document's `<title>`, or else the display name |
+| `language` | The workspace's default language |
+| `description` | `Imported from <filename>` |
+
+```bash
+curl -X POST http://localhost:9000/api/v1/workspaces/current/templates/import-html \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "X-Posta-Workspace-Id: 1" \
+  -F file=@spring-sale.html \
+  -F display_name="Spring sale" \
+  -F subject="20% off this week"
+```

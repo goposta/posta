@@ -92,7 +92,7 @@ func (s *OAuthService) GetOAuthConfig(provider *models.OAuthProvider, redirectUR
 	}
 
 	if provider.AuthURL == "" || provider.TokenURL == "" {
-		return nil, fmt.Errorf("OIDC provider %q has no issuer for auto-discovery and no explicit auth_url/token_url configured", provider.Name)
+		return nil, fmt.Errorf("OIDC provider %q has no issuer for auto-discovery and no explicit auth_url/token_url configured", provider.DisplayName)
 	}
 
 	cfg.Endpoint = oauth2.Endpoint{
@@ -119,7 +119,7 @@ func (s *OAuthService) ExchangeCode(ctx context.Context, provider *models.OAuthP
 		if idErr == nil {
 			return info, token, nil
 		}
-		fmt.Printf("[oauth] ID token parse failed for %s: %v, falling back to userinfo\n", provider.Slug, idErr)
+		fmt.Printf("[oauth] ID token parse failed for %s: %v, falling back to userinfo\n", provider.Name, idErr)
 	}
 
 	// Fall back to userinfo endpoint (use OIDC discovery for correct URL)

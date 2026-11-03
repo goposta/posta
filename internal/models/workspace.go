@@ -40,8 +40,8 @@ const (
 
 type Workspace struct {
 	ID              uint   `json:"id" gorm:"primaryKey"`
-	Name            string `json:"name" gorm:"not null"`
-	Slug            string `json:"slug" gorm:"uniqueIndex;not null"`
+	Name            string `json:"name" gorm:"uniqueIndex;not null"`
+	DisplayName     string `json:"display_name" gorm:"not null;default:''"`
 	Description     string `json:"description"`
 	OwnerID         uint   `json:"owner_id" gorm:"index;not null"`
 	PlanID          *uint  `json:"plan_id" gorm:"index"`

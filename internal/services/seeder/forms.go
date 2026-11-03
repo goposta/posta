@@ -26,8 +26,8 @@ import (
 )
 
 type formDef struct {
+	DisplayName  string
 	Name         string
-	Slug         string
 	Description  string
 	Mode         models.FormMode
 	Confirmation string
@@ -41,8 +41,8 @@ type formDef struct {
 func defaultFormDefs() []formDef {
 	return []formDef{
 		{
-			Name:         "Contact form",
-			Slug:         "contact",
+			DisplayName:  "Contact form",
+			Name:         "contact",
 			Description:  "Questions and requests from your website, answered from Messages.",
 			Mode:         models.FormModeInbox,
 			Confirmation: "Thanks for getting in touch. We'll reply by email soon.",
@@ -54,8 +54,8 @@ func defaultFormDefs() []formDef {
 			},
 		},
 		{
-			Name:         "Customer feedback",
-			Slug:         "customer-feedback",
+			DisplayName:  "Customer feedback",
+			Name:         "customer-feedback",
 			Description:  "A short survey. Its responses are summarised per question and can be exported.",
 			Mode:         models.FormModeCollect,
 			Confirmation: "Thank you, your feedback helps us improve.",
@@ -88,8 +88,8 @@ func defaultFormDefs() []formDef {
 			},
 		},
 		{
-			Name:         "Event registration",
-			Slug:         "event-registration",
+			DisplayName:  "Event registration",
+			Name:         "event-registration",
 			Description:  "A registration form over three pages, one section each.",
 			Mode:         models.FormModeCollect,
 			Confirmation: "You're registered. We'll send the details before the event.",
@@ -138,7 +138,7 @@ func (s *Seeder) seedForms(workspaceID, userID uint) {
 	for _, def := range defaultFormDefs() {
 		key, err := models.NewFormPublicKey()
 		if err != nil {
-			logger.Error("failed to generate form key", "name", def.Name, "error", err)
+			logger.Error("failed to generate form key", "name", def.DisplayName, "error", err)
 			return
 		}
 		notifyMode := models.NotifyModeImmediate
@@ -149,7 +149,7 @@ func (s *Seeder) seedForms(workspaceID, userID uint) {
 		form := &models.Form{
 			WorkspaceID:         workspacePtr(workspaceID),
 			Name:                def.Name,
-			Slug:                def.Slug,
+			DisplayName:         def.DisplayName,
 			Description:         def.Description,
 			PublicKey:           key,
 			Status:              models.FormStatusActive,
@@ -172,7 +172,7 @@ func (s *Seeder) seedForms(workspaceID, userID uint) {
 			LastEditedByID:      &userID,
 		}
 		if err := s.formRepo.Create(form); err != nil {
-			logger.Error("failed to seed form", "name", def.Name, "workspace_id", workspaceID, "error", err)
+			logger.Error("failed to seed form", "name", def.DisplayName, "workspace_id", workspaceID, "error", err)
 		}
 	}
 }

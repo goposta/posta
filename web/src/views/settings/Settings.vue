@@ -276,7 +276,7 @@ async function autoSave() {
             >
               <option v-if="savedWorkspaceId === null" :value="null" disabled>Not set</option>
               <option v-for="ws in workspaceChoices" :key="ws.id" :value="ws.id">
-                {{ ws.name }}
+                {{ ws.display_name }}
               </option>
             </select>
             <span class="form-hint">

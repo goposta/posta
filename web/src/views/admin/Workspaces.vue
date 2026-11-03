@@ -69,7 +69,7 @@ onMounted(async () => {
         <input
           v-model="search"
           class="form-input search"
-          placeholder="Search by name or slug…"
+          placeholder="Search by display name or name…"
           @input="onSearchInput"
         />
         <select v-model.number="planFilter" class="form-select plan-filter" @change="goToPage(0)">
@@ -94,8 +94,8 @@ onMounted(async () => {
           <table>
             <thead>
               <tr>
+                <th>Display name</th>
                 <th>Name</th>
-                <th>Slug</th>
                 <th>Owner</th>
                 <th>Plan</th>
                 <th>Members</th>
@@ -110,10 +110,10 @@ onMounted(async () => {
                 @click="router.push(`/admin/workspaces/${ws.id}`)"
               >
                 <td>
-                  {{ ws.name }}
+                  {{ ws.display_name }}
                   <span v-if="ws.system" class="badge badge-info" style="margin-left: 6px">system</span>
                 </td>
-                <td class="mono">{{ ws.slug }}</td>
+                <td class="mono">{{ ws.name }}</td>
                 <td class="muted-cell">{{ ws.owner_email || `#${ws.owner_id}` }}</td>
                 <td>
                   <span v-if="ws.plan_name" class="badge badge-neutral">{{ ws.plan_name }}</span>

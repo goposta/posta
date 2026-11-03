@@ -42,7 +42,7 @@ A server you add to the system workspace yourself is left alone: the provisioned
 
 A workspace is an isolated environment where team members collaborate. Resources created within a workspace are only visible to members of that workspace. Each workspace has:
 
-- A unique **name** and **slug** (a URL-friendly identifier)
+- A unique **name**, its identifier (`acme`), and a **display name**, its label (`Acme Inc`)
 - An **owner** (the creator)
 - **Members**, each with a role
 - A **default language**
@@ -147,15 +147,15 @@ Request body:
 
 ```json
 {
-  "name": "Acme Inc",
-  "slug": "acme",
+  "name": "acme",
+  "display_name": "Acme Inc",
   "description": "Marketing and transactional mail",
   "default_language": "en",
   "seed_defaults": true
 }
 ```
 
-Only `name` is required. If `slug` is omitted it is derived from the name; slugs must contain only lowercase letters, numbers, and hyphens, and must be unique. `default_language` defaults to `en`. The caller becomes the workspace **owner**.
+Send `name`, `display_name` or both. A missing `name` is derived from the display name, and a missing display name is the name. A name is up to 63 lowercase letters, digits and hyphens, unique on the platform, and cannot change after creation; `display_name` can. `default_language` defaults to `en`. The caller becomes the workspace **owner**.
 
 `seed_defaults` controls whether the new workspace starts with content: a welcome template in English, French and German, a default stylesheet, and the matching languages. It defaults to `true`, so omitting it gives you a workspace you can send from immediately. Send `false` when you intend to populate the workspace from an [export](../gdpr/data-export-import.md) or the API and do not want the starter template in the way.
 
@@ -165,7 +165,7 @@ Seeding is best effort and runs after the workspace exists, so a workspace is ne
 curl -X POST http://localhost:9000/api/v1/workspaces \
   -H "Authorization: Bearer <jwt>" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Acme Inc", "slug": "acme"}'
+  -d '{"name": "acme", "display_name": "Acme Inc"}'
 ```
 
 Response (`201`):
@@ -174,8 +174,8 @@ Response (`201`):
 {
   "data": {
     "id": 1,
-    "name": "Acme Inc",
-    "slug": "acme",
+    "name": "acme",
+    "display_name": "Acme Inc",
     "description": "",
     "owner_id": 42,
     "role": "owner",
@@ -185,7 +185,7 @@ Response (`201`):
 }
 ```
 
-Creating a workspace is subject to your plan's workspace quota; exceeding it returns `403`. Creating a duplicate slug returns `409`.
+Creating a workspace is subject to your plan's workspace quota; exceeding it returns `403`. Creating a workspace with a name that is taken returns `409`.
 
 ## Listing workspaces
 

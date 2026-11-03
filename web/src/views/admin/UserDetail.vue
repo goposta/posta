@@ -198,7 +198,7 @@ async function handleChangePlan(workspace: AdminWorkspace, planId: number | null
       const plan = plans.value.find(p => p.id === planId)
       workspace.plan_id = planId
       workspace.plan_name = plan?.name || ''
-      notification.success(`Plan updated for workspace "${workspace.name}".`)
+      notification.success(`Plan updated for workspace "${workspace.display_name}".`)
     }
   } catch {
     notification.error('Failed to update workspace plan.')
@@ -472,16 +472,16 @@ function formatDate(date: string) {
           <table v-else class="table">
             <thead>
               <tr>
+                <th>Display name</th>
                 <th>Name</th>
-                <th>Slug</th>
                 <th>Plan</th>
                 <th>Created</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="ws in workspaces" :key="ws.id">
-                <td><router-link :to="`/admin/workspaces/${ws.id}`">{{ ws.name }}</router-link></td>
-                <td><code>{{ ws.slug }}</code></td>
+                <td><router-link :to="`/admin/workspaces/${ws.id}`">{{ ws.display_name }}</router-link></td>
+                <td><code>{{ ws.name }}</code></td>
                 <td>
                   <select
                     class="form-select form-select-sm"

@@ -21,9 +21,12 @@ POST /api/v1/workspaces/current/stylesheets
 ```json
 {
   "name": "brand-styles",
+  "display_name": "Brand styles",
   "css": "h1 { color: #333; font-family: Arial, sans-serif; } .btn { background-color: #7c3aed; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; }"
 }
 ```
+
+`name` is the stylesheet's identifier (lowercase letters, digits and hyphens, unique in the workspace); imported HTML templates link stylesheets by it. `display_name` is its label. Send either; the other is derived.
 
 ## List Stylesheets
 

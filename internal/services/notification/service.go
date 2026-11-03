@@ -240,7 +240,7 @@ func (s *Service) SendToWorkspaceAdmins(workspaceID uint, subject, templateName 
 	}
 	if _, ok := data["WorkspaceName"]; !ok {
 		if ws, err := s.workspaceRepo.FindByID(workspaceID); err == nil {
-			data["WorkspaceName"] = ws.Name
+			data["WorkspaceName"] = ws.DisplayName
 		}
 	}
 

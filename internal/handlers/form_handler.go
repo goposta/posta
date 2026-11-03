@@ -39,12 +39,10 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-const metaSlug = "slug"
+const metaName = "name"
 
 const publicKeyAlphabet = models.FormPublicKeyAlphabet
 const publicKeyLength = models.FormPublicKeyLength
-
-var formSlugPattern = regexp.MustCompile(`[^a-z0-9]+`)
 
 type FormHandler struct {
 	repo *repositories.FormRepository
@@ -97,8 +95,9 @@ func NewFormHandler(
 
 type CreateFormRequest struct {
 	Body struct {
-		Name             string   `json:"name" required:"true"`
-		Slug             string   `json:"slug"`
+		Name             string   `json:"name" doc:"Identifier, like contact-form: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		DisplayName      string   `json:"display_name" doc:"The form's label. Defaults to name."`
+		Slug             string   `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Description      string   `json:"description"`
 		Mode             string   `json:"mode" enum:"inbox,collect" doc:"inbox (default): submissions are conversations to answer. collect: responses read as a table, kept out of the inbox."`
 		AllowedOrigins   []string `json:"allowed_origins"`
@@ -128,8 +127,9 @@ type CreateFormRequest struct {
 type UpdateFormRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name                string            `json:"name"`
-		Slug                string            `json:"slug"`
+		Name                string            `json:"name" doc:"Identifier, like contact-form"`
+		DisplayName         string            `json:"display_name"`
+		Slug                string            `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Description         string            `json:"description"`
 		Status              string            `json:"status" enum:"active,paused,archived"`
 		Mode                *string           `json:"mode" doc:"inbox or collect"`
@@ -198,20 +198,12 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		return c.AbortBadRequest("a workspace is required to create a form")
 	}
 
-	name := strings.TrimSpace(req.Body.Name)
-	if name == "" {
-		return c.AbortBadRequest("name is required")
+	name, displayName, err := resolveNames(req.Body.Name, req.Body.DisplayName, req.Body.Slug)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
 	}
-
-	slug := formSlug(req.Body.Slug)
-	if slug == "" {
-		slug = formSlug(name)
-	}
-	if slug == "" {
-		return c.AbortBadRequest("could not derive a slug from the name")
-	}
-	if h.repo.SlugExists(*scope.WorkspaceID, slug, 0) {
-		return c.AbortConflict("a form with that slug already exists")
+	if h.repo.NameExists(*scope.WorkspaceID, name, 0) {
+		return c.AbortConflict("a form named \"" + name + "\" already exists")
 	}
 
 	origins, err := normalizeOrigins(req.Body.AllowedOrigins)
@@ -251,7 +243,7 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 	form := &models.Form{
 		WorkspaceID:         scope.WorkspaceID,
 		Name:                name,
-		Slug:                slug,
+		DisplayName:         displayName,
 		Description:         strings.TrimSpace(req.Body.Description),
 		PublicKey:           key,
 		Status:              models.FormStatusActive,
@@ -300,8 +292,8 @@ func (h *FormHandler) Create(c *okapi.Context, req *CreateFormRequest) error {
 		return c.AbortConflict("failed to create form")
 	}
 
-	h.log(c, "form.created", fmt.Sprintf("Form %s created", form.Name), map[string]any{
-		metaFormID: form.ID, metaSlug: form.Slug,
+	h.log(c, "form.created", fmt.Sprintf("Form %s created", form.DisplayName), map[string]any{
+		metaFormID: form.ID, metaName: form.Name,
 	})
 	return created(c, form)
 }
@@ -334,18 +326,18 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	}
 
 	b := req.Body
-	if strings.TrimSpace(b.Name) != "" {
-		form.Name = strings.TrimSpace(b.Name)
+	name, displayName, err := resolveRenames(b.Name, b.DisplayName, b.Slug)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
 	}
-	if strings.TrimSpace(b.Slug) != "" {
-		slug := formSlug(b.Slug)
-		if slug == "" {
-			return c.AbortBadRequest("invalid slug")
+	if displayName != "" {
+		form.DisplayName = displayName
+	}
+	if name != "" && name != form.Name {
+		if h.repo.NameExists(*scope.WorkspaceID, name, form.ID) {
+			return c.AbortConflict("a form named \"" + name + "\" already exists")
 		}
-		if h.repo.SlugExists(*scope.WorkspaceID, slug, form.ID) {
-			return c.AbortConflict("a form with that slug already exists")
-		}
-		form.Slug = slug
+		form.Name = name
 	}
 	if strings.TrimSpace(b.Description) != "" {
 		form.Description = strings.TrimSpace(b.Description)
@@ -478,7 +470,7 @@ func (h *FormHandler) Update(c *okapi.Context, req *UpdateFormRequest) error {
 	}
 	h.invalidate(form.PublicKey)
 
-	h.log(c, "form.updated", fmt.Sprintf("Form %s updated", form.Name), map[string]any{metaFormID: form.ID})
+	h.log(c, "form.updated", fmt.Sprintf("Form %s updated", form.DisplayName), map[string]any{metaFormID: form.ID})
 	return ok(c, form)
 }
 
@@ -494,7 +486,7 @@ func (h *FormHandler) Delete(c *okapi.Context, req *FormIDRequest) error {
 		return c.AbortInternalServerError("failed to delete form")
 	}
 	h.invalidate(form.PublicKey)
-	h.log(c, "form.deleted", fmt.Sprintf("Form %s deleted", form.Name), map[string]any{metaFormID: form.ID})
+	h.log(c, "form.deleted", fmt.Sprintf("Form %s deleted", form.DisplayName), map[string]any{metaFormID: form.ID})
 	return noContent(c)
 }
 
@@ -518,7 +510,7 @@ func (h *FormHandler) RotateKey(c *okapi.Context, req *FormIDRequest) error {
 		return c.AbortInternalServerError("failed to rotate form key")
 	}
 	h.invalidate(oldKey, key)
-	h.log(c, "form.key_rotated", fmt.Sprintf("Form %s key rotated", form.Name), map[string]any{metaFormID: form.ID})
+	h.log(c, "form.key_rotated", fmt.Sprintf("Form %s key rotated", form.DisplayName), map[string]any{metaFormID: form.ID})
 	return ok(c, form)
 }
 
@@ -571,16 +563,6 @@ func (h *FormHandler) log(c *okapi.Context, action, message string, meta map[str
 		return
 	}
 	h.audit.LogCtx(c, action, message, meta)
-}
-
-func formSlug(v string) string {
-	v = strings.ToLower(strings.TrimSpace(v))
-	v = formSlugPattern.ReplaceAllString(v, "-")
-	v = strings.Trim(v, "-")
-	if len(v) > 60 {
-		v = strings.Trim(v[:60], "-")
-	}
-	return v
 }
 
 func generatePublicKey() (string, error) { return models.NewFormPublicKey() }

@@ -187,7 +187,7 @@ func (h *WorkspaceDataHandler) Export(c *okapi.Context) error {
 		PostaVersion: config.Version,
 		ExportedAt:   time.Now().UTC().Format(time.RFC3339),
 		WorkspaceSettings: ExportWorkspaceSettings{
-			Name:            ws.Name,
+			Name:            ws.DisplayName,
 			Description:     ws.Description,
 			DefaultLanguage: ws.DefaultLanguage,
 		},
@@ -218,7 +218,7 @@ func (h *WorkspaceDataHandler) Import(c *okapi.Context, req *ImportWorkspaceData
 		ws, err := h.workspaceRepo.FindByID(wsID)
 		if err == nil {
 			if data.WorkspaceSettings.Name != "" {
-				ws.Name = data.WorkspaceSettings.Name
+				ws.DisplayName = data.WorkspaceSettings.Name
 			}
 			if data.WorkspaceSettings.Description != "" {
 				ws.Description = data.WorkspaceSettings.Description

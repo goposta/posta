@@ -22,7 +22,7 @@ const directories = ref<LDAPDirectory[]>([])
 const workspaces = ref<AdminWorkspaceRow[]>([])
 const tests = ref<Record<number, LDAPTestResult | 'running'>>({})
 
-const workspaceName = computed(() => Object.fromEntries(workspaces.value.map((w) => [w.id, w.name])))
+const workspaceName = computed(() => Object.fromEntries(workspaces.value.map((w) => [w.id, w.display_name])))
 
 async function load() {
   loading.value = true
@@ -319,7 +319,7 @@ onMounted(async () => {
             </label>
             <select v-model="mappingDraft(dir.id).workspace_id" class="form-select" aria-label="Workspace">
               <option value="">No workspace</option>
-              <option v-for="w in workspaces" :key="w.id" :value="w.id">{{ w.name }}</option>
+              <option v-for="w in workspaces" :key="w.id" :value="w.id">{{ w.display_name }}</option>
             </select>
             <select
               v-model="mappingDraft(dir.id).workspace_role"

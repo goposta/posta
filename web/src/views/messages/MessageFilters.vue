@@ -123,7 +123,7 @@ async function remove(filter: MessageFilterRule) {
 
 function formName(formId: number | null | undefined) {
   if (!formId) return "All forms";
-  return forms.value.find((f) => f.id === formId)?.name || `Form ${formId}`;
+  return forms.value.find((f) => f.id === formId)?.display_name || `Form ${formId}`;
 }
 
 function actionBadgeClass(action: string) {
@@ -233,7 +233,7 @@ load();
             <label class="form-label">Applies to</label>
             <select v-model.number="draft.form_id" class="form-select">
               <option :value="0">All forms</option>
-              <option v-for="f in forms" :key="f.id" :value="f.id">{{ f.name }}</option>
+              <option v-for="f in forms" :key="f.id" :value="f.id">{{ f.display_name }}</option>
             </select>
           </div>
           <div class="form-group">

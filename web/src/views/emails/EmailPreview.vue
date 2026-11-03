@@ -118,7 +118,7 @@ async function renderPreview() {
               <label class="form-label">Template</label>
               <select v-model="selectedTemplate" class="form-select">
                 <option value="" disabled>Select a template</option>
-                <option v-for="t in templates" :key="t.id" :value="t.name">{{ t.name }}</option>
+                <option v-for="t in templates" :key="t.id" :value="t.name">{{ t.display_name }}</option>
               </select>
             </div>
             <div class="form-group">

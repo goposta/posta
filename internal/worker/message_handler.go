@@ -379,7 +379,7 @@ func (h *MessageProcessHandler) dispatch(msg *models.Message, form *models.Form,
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		MessageID:   msg.UUID,
 		FormID:      form.UUID,
-		FormName:    form.Name,
+		FormName:    form.DisplayName,
 		SenderEmail: msg.SenderEmail,
 		SenderName:  msg.SenderName,
 		SenderPhone: msg.SenderPhone,
@@ -433,9 +433,9 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form, o
 	if form.IsCollect() {
 		noun = "response"
 	}
-	subject := fmt.Sprintf("New %s on %s", noun, form.Name)
+	subject := fmt.Sprintf("New %s on %s", noun, form.DisplayName)
 	if msg.Status == models.MessageStatusFlagged {
-		subject = fmt.Sprintf("Flagged %s on %s", noun, form.Name)
+		subject = fmt.Sprintf("Flagged %s on %s", noun, form.DisplayName)
 	}
 
 	// Answers to personal-data questions stay out of email: inboxes are
@@ -446,7 +446,7 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form, o
 		phone = "" // the Phone row in Fields shows it as hidden
 	}
 	data := map[string]any{
-		"FormName":    form.Name,
+		"FormName":    form.DisplayName,
 		"Collect":     form.IsCollect(),
 		"SenderPhone": phone,
 		"Fields":      notifiableFields(msg, fields, mask),
@@ -525,8 +525,8 @@ func (h *MessageProcessHandler) addWorkspaceName(msg *models.Message, data map[s
 		return
 	}
 	if _, ok := data["WorkspaceName"]; !ok {
-		if ws, err := h.workspaceRepo.FindByID(*msg.WorkspaceID); err == nil && ws.Name != "" {
-			data["WorkspaceName"] = ws.Name
+		if ws, err := h.workspaceRepo.FindByID(*msg.WorkspaceID); err == nil && ws.DisplayName != "" {
+			data["WorkspaceName"] = ws.DisplayName
 		}
 	}
 }
@@ -636,7 +636,7 @@ func (h *MessageProcessHandler) dispatchReply(msg *models.Message, form *models.
 		MessageID:      msg.UUID,
 		ReplyID:        reply.UUID,
 		FormID:         form.UUID,
-		FormName:       form.Name,
+		FormName:       form.DisplayName,
 		Kind:           string(reply.Kind),
 		From:           reply.FromAddr,
 		To:             reply.ToAddr,
@@ -676,9 +676,9 @@ func (h *MessageProcessHandler) notifyReply(msg *models.Message, form *models.Fo
 	if h.notifier == nil || !h.notifier.IsConfigured() {
 		return nil
 	}
-	subject := fmt.Sprintf("New reply on %s", form.Name)
+	subject := fmt.Sprintf("New reply on %s", form.DisplayName)
 	data := map[string]any{
-		"FormName":       form.Name,
+		"FormName":       form.DisplayName,
 		"Reply":          true,
 		"SenderMismatch": reply.SenderMismatch,
 		"Fields": []models.MessageField{

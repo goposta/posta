@@ -32,8 +32,8 @@ const (
 type OAuthProvider struct {
 	ID             uint              `json:"id" gorm:"primaryKey"`
 	WorkspaceID    *uint             `json:"workspace_id,omitempty" gorm:"index"`
-	Name           string            `json:"name" gorm:"not null"`
-	Slug           string            `json:"slug" gorm:"uniqueIndex;not null"`
+	Name           string            `json:"name" gorm:"uniqueIndex;not null"`
+	DisplayName    string            `json:"display_name" gorm:"not null;default:''"`
 	Type           OAuthProviderType `json:"type" gorm:"not null"`
 	ClientID       string            `json:"-" gorm:"not null"`
 	ClientSecret   string            `json:"-" gorm:"not null"`

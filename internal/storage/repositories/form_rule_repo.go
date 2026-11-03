@@ -135,10 +135,10 @@ type RuleUsingTeam struct {
 func (r *FormRuleRepository) RulesUsingTeam(workspaceID, teamID uint) ([]RuleUsingTeam, error) {
 	var out []RuleUsingTeam
 	err := r.db.Table("form_rules").
-		Select("form_rules.id, form_rules.name, form_rules.enabled, form_rules.form_id, forms.name AS form_name").
+		Select("form_rules.id, form_rules.name, form_rules.enabled, form_rules.form_id, forms.display_name AS form_name").
 		Joins("JOIN forms ON forms.id = form_rules.form_id AND forms.deleted_at IS NULL").
 		Where("form_rules.workspace_id = ? AND form_rules.actions @> ?::jsonb", workspaceID, fmt.Sprintf(`[{"team_id":%d}]`, teamID)).
-		Order("LOWER(forms.name), form_rules.position").
+		Order("LOWER(forms.display_name), form_rules.position").
 		Scan(&out).Error
 	return out, err
 }

@@ -389,7 +389,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			Group:       opsGroup,
 			Tags:        []string{"Templates"},
 			Summary:     "Import HTML template",
-			Description: "Upload an .html file to create a template. CSS from <style> blocks is extracted into a separate stylesheet.",
+			Description: "Upload an .html file as multipart/form-data under \"file\" to create a template. CSS from <style> blocks is extracted into a separate stylesheet. Optional form fields: name and display_name (default: from the filename), subject (default: the document's <title>), language (default: the workspace's default language) and description.",
 			Options: []okapi.RouteOption{
 				okapi.DocResponse(201, &dto.Response[models.Template]{}),
 				okapi.DocResponse(409, &dto.ErrorResponseBody{}),

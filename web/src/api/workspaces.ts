@@ -22,7 +22,7 @@ export const workspaceApi = {
   getCurrent() {
     return api.get<ApiResponse<Workspace>>('/workspaces/current')
   },
-  update(data: { name?: string; description?: string }) {
+  update(data: { display_name?: string; description?: string }) {
     return api.put<ApiResponse<Workspace>>('/workspaces/current', data)
   },
   delete() {

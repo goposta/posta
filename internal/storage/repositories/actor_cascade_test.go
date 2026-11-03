@@ -37,7 +37,7 @@ func seedActor(t *testing.T, tx *gorm.DB, email string) uint {
 
 func seedWorkspace(t *testing.T, tx *gorm.DB, ownerID uint, slug string) uint {
 	t.Helper()
-	ws := &models.Workspace{Name: "Acme", Slug: slug, OwnerID: ownerID}
+	ws := &models.Workspace{DisplayName: "Acme", Name: slug, OwnerID: ownerID}
 	if err := tx.Create(ws).Error; err != nil {
 		t.Fatalf("create workspace: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestFormUpdateDoesNotCascadeIntoUsers(t *testing.T) {
 
 	repo := NewFormRepository(tx)
 	form := &models.Form{
-		WorkspaceID: &wsID, Name: "Contact", Slug: "contact",
+		WorkspaceID: &wsID, DisplayName: "Contact", Name: "contact",
 		PublicKey: "form-cascade-key", Status: models.FormStatusActive,
 		LastEditedByID: &userID,
 	}
@@ -74,7 +74,7 @@ func TestFormUpdateDoesNotCascadeIntoUsers(t *testing.T) {
 		t.Fatal("expected LastEditedBy to be preloaded; this test proves nothing without it")
 	}
 
-	loaded.Name = "Contact form"
+	loaded.DisplayName = "Contact form"
 	if err := repo.Update(loaded); err != nil {
 		t.Fatalf("update form must not cascade into users: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestMessageUpdateDoesNotCascadeIntoUsers(t *testing.T) {
 
 	formRepo := NewFormRepository(tx)
 	form := &models.Form{
-		WorkspaceID: &wsID, Name: "Contact", Slug: "contact",
+		WorkspaceID: &wsID, DisplayName: "Contact", Name: "contact",
 		PublicKey: "msg-cascade-key", Status: models.FormStatusActive,
 	}
 	if err := formRepo.Create(form); err != nil {

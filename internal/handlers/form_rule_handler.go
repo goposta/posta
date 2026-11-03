@@ -208,7 +208,7 @@ func (h *FormRuleHandler) Create(c *okapi.Context, req *CreateFormRuleRequest) e
 	if err := h.repo.Create(rule); err != nil {
 		return c.AbortInternalServerError("failed to create rule")
 	}
-	h.log(c, "form.rule_created", fmt.Sprintf("Rule %q created on form %s", rule.Name, form.Name), form, rule)
+	h.log(c, "form.rule_created", fmt.Sprintf("Rule %q created on form %s", rule.Name, form.DisplayName), form, rule)
 	return created(c, rule)
 }
 
@@ -236,7 +236,7 @@ func (h *FormRuleHandler) Update(c *okapi.Context, req *UpdateFormRuleRequest) e
 	if err := h.repo.Update(existing); err != nil {
 		return c.AbortInternalServerError("failed to update rule")
 	}
-	h.log(c, "form.rule_updated", fmt.Sprintf("Rule %q updated on form %s", existing.Name, form.Name), form, existing)
+	h.log(c, "form.rule_updated", fmt.Sprintf("Rule %q updated on form %s", existing.Name, form.DisplayName), form, existing)
 	return ok(c, existing)
 }
 
@@ -255,7 +255,7 @@ func (h *FormRuleHandler) Delete(c *okapi.Context, req *FormRuleIDRequest) error
 	if err := h.repo.Delete(rule.ID); err != nil {
 		return c.AbortInternalServerError("failed to delete rule")
 	}
-	h.log(c, "form.rule_deleted", fmt.Sprintf("Rule %q deleted from form %s", rule.Name, form.Name), form, rule)
+	h.log(c, "form.rule_deleted", fmt.Sprintf("Rule %q deleted from form %s", rule.Name, form.DisplayName), form, rule)
 	return noContent(c)
 }
 
@@ -274,7 +274,7 @@ func (h *FormRuleHandler) Reorder(c *okapi.Context, req *ReorderFormRulesRequest
 	if err != nil {
 		return c.AbortInternalServerError("failed to list rules")
 	}
-	h.log(c, "form.rules_reordered", fmt.Sprintf("Rules reordered on form %s", form.Name), form, nil)
+	h.log(c, "form.rules_reordered", fmt.Sprintf("Rules reordered on form %s", form.DisplayName), form, nil)
 	return ok(c, rules)
 }
 

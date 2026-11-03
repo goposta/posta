@@ -457,7 +457,7 @@ function renderPreview() {
 }
 
 watch(
-  () => [drafts.value, props.form.name, props.form.description, props.form.appearance],
+  () => [drafts.value, props.form.display_name, props.form.description, props.form.appearance],
   renderPreview,
   { deep: true },
 );
@@ -828,7 +828,7 @@ onBeforeUnmount(() => {
         The preview needs the widget script at <code>/widget/v1/posta-form.js</code>, which could not be loaded.
       </p>
       <p v-else-if="previewState === 'loading'" class="muted" style="font-size: 13px">Loading preview…</p>
-      <div ref="previewEl" :data-title="form.name" :data-description="form.description || null"></div>
+      <div ref="previewEl" :data-title="form.display_name" :data-description="form.description || null"></div>
     </aside>
   </div>
 </template>

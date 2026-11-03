@@ -498,7 +498,7 @@ func newMessageID(messageUUID, from string) string {
 }
 
 func defaultSubject(form *models.Form) string {
-	return fmt.Sprintf("New submission on %s", form.Name)
+	return fmt.Sprintf("New submission on %s", form.DisplayName)
 }
 
 func replySubject(subject string) string {

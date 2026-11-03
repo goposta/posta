@@ -326,11 +326,11 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 		known[f.Key] = true
 	}
 
-	slug := form.Slug
-	if slug == "" {
-		slug = "form"
+	base := form.Name
+	if base == "" {
+		base = "form"
 	}
-	filename := fmt.Sprintf("%s-responses-%s.%s", slug, time.Now().UTC().Format("20060102"), format)
+	filename := fmt.Sprintf("%s-responses-%s.%s", base, time.Now().UTC().Format("20060102"), format)
 	hdr := c.ResponseWriter().Header()
 	if format == formatCSV {
 		hdr.Set("Content-Type", "text/csv; charset=utf-8")
@@ -471,7 +471,7 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 				piiIncluded = piiIncluded || f.PII
 			}
 			h.audit.LogCtxScoped(c, *scope.WorkspaceID, "form.submissions_exported",
-				fmt.Sprintf("Exported %d responses of form %q as %s", rows, form.Name, strings.ToUpper(format)),
+				fmt.Sprintf("Exported %d responses of form %q as %s", rows, form.DisplayName, strings.ToUpper(format)),
 				map[string]any{"form_id": form.ID, "format": format, "rows": rows, "pii": piiIncluded, "withheld_fields": withheld, "truncated": truncated})
 		}
 	}

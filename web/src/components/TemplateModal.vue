@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { languagesApi } from '@/api/languages';
-import { Language, Template, TemplateInput } from '@/api/types';
+import { Language, Template, TemplateDraft } from '@/api/types';
+import { IDENTIFIER_HINT, toIdentifier } from '@/composables/identifier';
 import { useModalSafeClose } from '@/composables/useModalSafeClose';
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 
 interface Props {
-  form: TemplateInput
+  form: TemplateDraft
   isVisible?: boolean
   saving?: boolean 
   editing?: Template | null
@@ -38,6 +39,16 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 onMounted(() => {
   loadLanguages();
 });
+
+// A new template's name follows its display name until edited by hand; an
+// existing one keeps its name, which callers send.
+const nameEdited = ref(false)
+watch(() => props.isVisible, (visible) => {
+  if (visible) nameEdited.value = !!props.editing
+})
+function syncName() {
+  if (!nameEdited.value) props.form.name = toIdentifier(props.form.display_name)
+}
 </script>
 
 <template>
@@ -49,8 +60,17 @@ onMounted(() => {
 
       <div class="modal-body">
         <div class="form-group">
+          <label class="form-label">Display name</label>
+          <input v-model="form.display_name" class="form-input" placeholder="e.g. Welcome Email" @input="syncName" />
+        </div>
+        <div class="form-group">
           <label class="form-label">Name</label>
-          <input v-model="form.name" class="form-input" placeholder="e.g. Welcome Email" />
+          <input v-model="form.name" class="form-input mono" placeholder="welcome-email" :title="IDENTIFIER_HINT"
+            @input="nameEdited = true" />
+          <span v-if="editing && form.name !== editing.name" class="form-hint form-hint-warning">
+            Callers that send with <code>{{ editing.name }}</code> stop finding this template.
+          </span>
+          <span v-else class="form-hint">What you send as <code>template</code> in the API. {{ IDENTIFIER_HINT }}</span>
         </div>
         <div class="form-group">
           <label class="form-label">Description</label>
@@ -75,7 +95,7 @@ onMounted(() => {
 
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="emit('close')">Cancel</button>
-        <button class="btn btn-primary" :disabled="saving || !form.name.trim()" @click="emit('save')">
+        <button class="btn btn-primary" :disabled="saving || !form.display_name.trim() || !form.name.trim()" @click="emit('save')">
           {{ saving ? "Saving..." : editing ? "Update" : "Create" }}
         </button>
       </div>

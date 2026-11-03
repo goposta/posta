@@ -26,6 +26,7 @@ type StyleSheet struct {
 	UserID      uint       `json:"user_id" gorm:"index;not null"`
 	WorkspaceID *uint      `json:"workspace_id,omitempty" gorm:"index"`
 	Name        string     `json:"name" gorm:"not null"`
+	DisplayName string     `json:"display_name" gorm:"not null;default:''"`
 	CSS         string     `json:"css"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at,omitempty"`

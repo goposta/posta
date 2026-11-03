@@ -155,7 +155,7 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 
 		workspaceName := ""
 		if ws, err := j.workspaceRepo.FindByID(*form.WorkspaceID); err == nil {
-			workspaceName = ws.Name
+			workspaceName = ws.DisplayName
 		}
 		noun := "message(s)"
 		if form.IsCollect() {
@@ -167,7 +167,7 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 			items := groups[target]
 			data := map[string]any{
 				"Period":   label,
-				"FormName": form.Name,
+				"FormName": form.DisplayName,
 				"Collect":  form.IsCollect(),
 				"Total":    len(items),
 				"Items":    items,
@@ -179,7 +179,7 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 			if workspaceName != "" {
 				data["WorkspaceName"] = workspaceName
 			}
-			subject := fmt.Sprintf("%s digest: %d new %s on %s", label, len(items), noun, form.Name)
+			subject := fmt.Sprintf("%s digest: %d new %s on %s", label, len(items), noun, form.DisplayName)
 			if err := j.send(form, target, subject, data); err != nil {
 				logger.Error("message-digest: failed to send", "form_id", form.ID, "error", err)
 				failed = true

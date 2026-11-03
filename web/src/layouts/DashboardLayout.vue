@@ -545,7 +545,7 @@ function getIcon(name: string): string {
           <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
             <div class="ws-switcher-current">
               <div v-if="isAdminConsole" class="ws-avatar ws-avatar-admin" v-html="getIcon('shield-admin')"></div>
-              <div v-else class="ws-avatar">{{ wsStore.currentWorkspace?.name?.charAt(0)?.toUpperCase() || 'P' }}</div>
+              <div v-else class="ws-avatar">{{ wsStore.currentWorkspace?.display_name?.charAt(0)?.toUpperCase() || 'P' }}</div>
               <span v-if="!sidebarCollapsed" class="ws-switcher-name">
                 {{ isAdminConsole ? 'Platform' : wsStore.contextLabel }}
                 <span v-if="isAdminConsole" class="ws-admin-badge">Admin</span>
@@ -559,8 +559,8 @@ function getIcon(name: string): string {
           <div v-if="wsSwitcherOpen" class="ws-switcher-dropdown">
             <div v-for="ws in wsStore.workspaces" :key="ws.id" class="ws-switcher-option"
               :class="{ active: !isAdminConsole && wsStore.currentWorkspaceId === ws.id }" @click="switchContext(ws.id)">
-              <div class="ws-avatar-sm">{{ ws.name.charAt(0).toUpperCase() }}</div>
-              <span>{{ ws.name }}</span>
+              <div class="ws-avatar-sm">{{ ws.display_name.charAt(0).toUpperCase() }}</div>
+              <span>{{ ws.display_name }}</span>
               <span class="ws-role-badge" :class="{ 'ws-role-badge--system': ws.system }">{{ ws.system ? 'system' : ws.role }}</span>
             </div>
             <div class="ws-switcher-divider"></div>
@@ -808,7 +808,7 @@ function getIcon(name: string): string {
             <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
               <span v-if="isAdminConsole" class="ws-avatar ws-avatar-admin" v-html="getIcon('shield-admin')"></span>
               <span v-else class="ws-avatar">
-                {{ wsStore.currentWorkspace?.name?.charAt(0)?.toUpperCase() || 'P' }}
+                {{ wsStore.currentWorkspace?.display_name?.charAt(0)?.toUpperCase() || 'P' }}
               </span>
               <span class="ws-name">
                 {{ isAdminConsole ? 'Platform' : wsStore.contextLabel }}
@@ -826,9 +826,9 @@ function getIcon(name: string): string {
               <div v-for="ws in wsStore.workspaces" :key="ws.id" class="ws-option"
                 :class="{ active: !isAdminConsole && wsStore.currentWorkspaceId === ws.id }"
                 @click="switchContext(ws.id); mobileOpen = false">
-                <span class="ws-avatar">{{ ws.name?.charAt(0)?.toUpperCase() }}</span>
+                <span class="ws-avatar">{{ ws.display_name?.charAt(0)?.toUpperCase() }}</span>
                 <div style="display: flex; flex-direction: column;">
-                  <span>{{ ws.name }}</span>
+                  <span>{{ ws.display_name }}</span>
                   <small style="font-size: 0.75rem; opacity: 0.7;">{{ ws.system ? 'system' : ws.role }}</small>
                 </div>
               </div>

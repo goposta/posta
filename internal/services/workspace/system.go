@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	SystemSlug        = "system"
-	SystemName        = "Posta System"
+	SystemName        = "system"
+	SystemDisplayName = "Posta System"
 	SystemDescription = "Built-in workspace for platform-managed resources. Managed by platform administrators."
 )
 
@@ -71,14 +71,14 @@ func EnsureSystem(db *gorm.DB, smtp config.SystemSMTPConfig) (*models.Workspace,
 		return nil, fmt.Errorf("resolve system workspace owner: %w", err)
 	}
 
-	slug, err := availableSlug(db, SystemSlug)
+	name, err := availableName(db, SystemName)
 	if err != nil {
 		return nil, err
 	}
 
 	ws := &models.Workspace{
-		Name:        SystemName,
-		Slug:        slug,
+		DisplayName: SystemDisplayName,
+		Name:        name,
 		Description: SystemDescription,
 		OwnerID:     owner.ID,
 		System:      true,
@@ -120,7 +120,7 @@ func EnsureSystem(db *gorm.DB, smtp config.SystemSMTPConfig) (*models.Workspace,
 		return nil, err
 	}
 
-	logger.Info("platform system workspace ready", "workspace_id", ws.ID, "slug", ws.Slug, "owner_id", owner.ID)
+	logger.Info("platform system workspace ready", "workspace_id", ws.ID, "name", ws.Name, "owner_id", owner.ID)
 	return ws, nil
 }
 
@@ -161,20 +161,20 @@ func SyncMembers(db *gorm.DB) error {
 		Delete(&models.WorkspaceMember{}).Error
 }
 
-// IsReservedSlug reports whether slug is claimable only by the system workspace.
-func IsReservedSlug(slug string) bool { return slug == SystemSlug }
+// IsReservedName reports whether name is claimable only by the system workspace.
+func IsReservedName(name string) bool { return name == SystemName }
 
-func availableSlug(db *gorm.DB, base string) (string, error) {
-	slug := base
+func availableName(db *gorm.DB, base string) (string, error) {
+	name := base
 	for i := 2; i < 100; i++ {
 		var count int64
-		if err := db.Model(&models.Workspace{}).Where("slug = ?", slug).Count(&count).Error; err != nil {
+		if err := db.Model(&models.Workspace{}).Where("name = ?", name).Count(&count).Error; err != nil {
 			return "", err
 		}
 		if count == 0 {
-			return slug, nil
+			return name, nil
 		}
-		slug = fmt.Sprintf("%s-%d", base, i)
+		name = fmt.Sprintf("%s-%d", base, i)
 	}
-	return "", fmt.Errorf("could not find an available slug for %q", base)
+	return "", fmt.Errorf("could not find an available name for %q", base)
 }

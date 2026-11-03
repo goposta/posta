@@ -31,8 +31,8 @@ function workspaceParam(): string {
 }
 
 export interface FormPayload {
+  display_name?: string
   name?: string
-  slug?: string
   description?: string
   status?: string
   mode?: FormMode

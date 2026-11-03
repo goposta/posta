@@ -1222,7 +1222,8 @@ func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uin
 // findTemplate looks up the template ref names, or the deprecated templateID
 // when ref is empty. A ref is matched by name in the workspace first; one that
 // is all digits and matches no name is then looked up as an ID, so a template
-// named "2024" still wins over the template whose ID is 2024.
+// named "2024" still wins over the template whose ID is 2024. Until 0.19 a ref
+// matching nothing else is tried as a display name, with a warning.
 func (s *Service) findTemplate(userID uint, workspaceID *uint, templateID *uint, ref TemplateRef) (*models.Template, error) {
 	if ref == "" {
 		if templateID != nil && *templateID != 0 {
@@ -1238,6 +1239,14 @@ func (s *Service) findTemplate(userID uint, workspaceID *uint, templateID *uint,
 	}
 	if id, ok := ref.ID(); ok {
 		if tmpl, err := s.findTemplateByID(userID, workspaceID, id); err == nil {
+			return tmpl, nil
+		}
+	}
+	if workspaceID != nil {
+		// Before 0.18 a template's name was its label, and callers sent that.
+		if tmpl, err := s.templateRepo.FindByWorkspaceDisplayName(*workspaceID, ref.String()); err == nil {
+			logger.Warn("template sent by its display name, which is deprecated: send its name instead",
+				"display_name", ref.String(), "name", tmpl.Name, "workspace_id", *workspaceID)
 			return tmpl, nil
 		}
 	}
@@ -1269,7 +1278,7 @@ func (s *Service) findTemplateByID(userID uint, workspaceID *uint, id uint) (*mo
 // and renders it with the given data.
 func (s *Service) resolveAndRender(tmpl *models.Template, language string, data map[string]any) (*RenderedTemplate, error) {
 	if tmpl.ActiveVersionID == nil {
-		return nil, fmt.Errorf("template %q has no active version", tmpl.Name)
+		return nil, fmt.Errorf("template %q has no active version", tmpl.DisplayName)
 	}
 
 	v, err := s.versionRepo.FindByID(*tmpl.ActiveVersionID)
@@ -1279,7 +1288,7 @@ func (s *Service) resolveAndRender(tmpl *models.Template, language string, data 
 
 	l := s.resolveLocalization(v.ID, language, tmpl.DefaultLanguage)
 	if l == nil {
-		return nil, fmt.Errorf("no localization found for template %q", tmpl.Name)
+		return nil, fmt.Errorf("no localization found for template %q", tmpl.DisplayName)
 	}
 
 	var css string

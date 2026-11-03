@@ -30,8 +30,8 @@ async function toggleHostedForms() {
   const ok = await confirm({
     title: enable ? "Turn hosted form pages back on?" : "Take hosted form pages offline?",
     message: enable
-      ? `The share links of "${ws.name}" forms work again.`
-      : `Every share link of "${ws.name}" forms answers "not found" at once, and forms can no longer be loaded or submitted from this Posta's domain. Forms embedded on the workspace's own websites, its submissions and its data are not affected. Use this when hosted forms are abused, for example for phishing.`,
+      ? `The share links of "${ws.display_name}" forms work again.`
+      : `Every share link of "${ws.display_name}" forms answers "not found" at once, and forms can no longer be loaded or submitted from this Posta's domain. Forms embedded on the workspace's own websites, its submissions and its data are not affected. Use this when hosted forms are abused, for example for phishing.`,
     confirmText: enable ? "Turn back on" : "Take offline",
     variant: enable ? "info" : "danger",
   });
@@ -81,7 +81,7 @@ async function changePlan(event: Event) {
     await plansApi.assignToWorkspace(ws.id, planId);
     ws.plan_id = planId;
     ws.plan_name = plans.value.find((p) => p.id === planId)?.name || "";
-    notify.success(`Plan updated for workspace "${ws.name}"`);
+    notify.success(`Plan updated for workspace "${ws.display_name}"`);
   } catch (e: any) {
     notify.error(apiMessage(e, "Failed to update the workspace plan"));
     (event.target as HTMLSelectElement).value = String(ws.plan_id ?? "");
@@ -129,13 +129,13 @@ onMounted(load);
     <div class="page-header">
       <div>
         <h1>
-          {{ workspace?.name || "Workspace" }}
+          {{ workspace?.display_name || "Workspace" }}
           <span v-if="workspace?.system" class="badge badge-info" style="margin-left: 8px; vertical-align: middle">
             system
           </span>
         </h1>
         <p v-if="workspace" class="page-subtitle">
-          <code>{{ workspace.slug }}</code> · created {{ formatDate(workspace.created_at) }}
+          <code>{{ workspace.name }}</code> · created {{ formatDate(workspace.created_at) }}
         </p>
       </div>
       <div class="header-actions">

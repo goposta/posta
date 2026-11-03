@@ -17,7 +17,7 @@ const stylesheetId = defineModel<number | null>("stylesheetId", { default: null 
         <label class="form-label" for="version-stylesheet">Stylesheet</label>
         <select id="version-stylesheet" v-model="stylesheetId" class="form-select">
           <option :value="null">No stylesheet</option>
-          <option v-for="ss in stylesheets" :key="ss.id" :value="ss.id">{{ ss.name }}</option>
+          <option v-for="ss in stylesheets" :key="ss.id" :value="ss.id">{{ ss.display_name }}</option>
         </select>
         <span class="form-hint">
           Its CSS is inlined into every send from this version. Each version carries its own, so a

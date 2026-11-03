@@ -543,10 +543,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 
 	// Auto-seed Google provider if configured
 	if cfg.GoogleOAuthClientID != "" {
-		if _, err := oauthProviderRepo.FindBySlug("google"); err != nil {
+		if _, err := oauthProviderRepo.FindByName("google"); err != nil {
 			_ = oauthProviderRepo.Create(&models.OAuthProvider{
-				Name:         "Google",
-				Slug:         "google",
+				DisplayName:  "Google",
+				Name:         "google",
 				Type:         models.OAuthProviderGoogle,
 				ClientID:     cfg.GoogleOAuthClientID,
 				ClientSecret: cfg.GoogleOAuthClientSecret,

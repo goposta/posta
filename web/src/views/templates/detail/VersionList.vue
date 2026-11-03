@@ -37,7 +37,7 @@ function formatDate(value: string) {
       <div v-if="canEdit" class="new-version">
         <select v-model="newStylesheetId" class="form-select select-sm" aria-label="Stylesheet for the new version">
           <option :value="null">No stylesheet</option>
-          <option v-for="ss in stylesheets" :key="ss.id" :value="ss.id">{{ ss.name }}</option>
+          <option v-for="ss in stylesheets" :key="ss.id" :value="ss.id">{{ ss.display_name }}</option>
         </select>
         <button class="btn btn-primary btn-sm" :disabled="creating" @click="emit('create', newStylesheetId)">
           {{ creating ? "Creating…" : "New version" }}
@@ -79,7 +79,7 @@ function formatDate(value: string) {
               <span v-if="selectedId === v.id" class="viewing">Showing content below</span>
             </td>
             <td>
-              <span v-if="v.stylesheet" class="badge badge-neutral">{{ v.stylesheet.name }}</span>
+              <span v-if="v.stylesheet" class="badge badge-neutral">{{ v.stylesheet.display_name }}</span>
               <span v-else class="muted">&mdash;</span>
             </td>
             <td>{{ v.localizations?.length || 0 }}</td>

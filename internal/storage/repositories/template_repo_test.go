@@ -41,7 +41,7 @@ func templateDB(t *testing.T) *gorm.DB {
 func seedTemplateWorkspace(t *testing.T, tx *gorm.DB, slug string) (uint, uint) {
 	t.Helper()
 	userID := createUser(t, tx, slug+"@test.local")
-	ws := &models.Workspace{Name: "Acme", Slug: slug, OwnerID: userID}
+	ws := &models.Workspace{DisplayName: "Acme", Name: slug, OwnerID: userID}
 	if err := tx.Create(ws).Error; err != nil {
 		t.Fatalf("workspace: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestFindByScopePreloadsActiveVersion(t *testing.T) {
 	userID, wsID := seedTemplateWorkspace(t, tx, "tmpl-preload")
 	repo := &TemplateRepository{db: tx}
 
-	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Welcome", DefaultLanguage: "en"}
+	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "welcome", DefaultLanguage: "en"}
 	if err := repo.CreateWithVersions(tmpl, []ImportVersion{
 		{SampleData: "{}"},
 		{SampleData: "{}", IsActive: true},
@@ -93,7 +93,7 @@ func TestCreateWithVersionsIsAtomic(t *testing.T) {
 
 	// Two localizations for the same language violate idx_version_language, so
 	// the second version fails after the template and first version are written.
-	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Broken", DefaultLanguage: "en"}
+	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "broken", DefaultLanguage: "en"}
 	err := repo.CreateWithVersions(tmpl, []ImportVersion{
 		{Localizations: []ImportLocalization{
 			{Language: "en", SubjectTemplate: "Hi"},
@@ -133,7 +133,7 @@ func TestCreateAlwaysActivatesAVersion(t *testing.T) {
 	repo := &TemplateRepository{db: tx}
 
 	// No version is marked active, as an older export would be.
-	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Fallback", DefaultLanguage: "en"}
+	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "fallback", DefaultLanguage: "en"}
 	if err := repo.CreateWithVersions(tmpl, []ImportVersion{{SampleData: "{}"}, {SampleData: "{}"}}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestImportedVersionsAreNumberedInOrder(t *testing.T) {
 	userID, wsID := seedTemplateWorkspace(t, tx, "tmpl-order")
 	repo := &TemplateRepository{db: tx}
 
-	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Ordered", DefaultLanguage: "en"}
+	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "ordered", DefaultLanguage: "en"}
 	if err := repo.CreateWithVersions(tmpl, []ImportVersion{{}, {}, {IsActive: true}}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestBuilderJSONSurvivesCreate(t *testing.T) {
 	repo := &TemplateRepository{db: tx}
 
 	const doc = `{"pages":[{"component":"hero"}]}`
-	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Designed", DefaultLanguage: "en"}
+	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "designed", DefaultLanguage: "en"}
 	if err := repo.CreateWithVersions(tmpl, []ImportVersion{{
 		IsActive: true,
 		Localizations: []ImportLocalization{
@@ -223,7 +223,7 @@ func TestDuplicateNameIsDetectable(t *testing.T) {
 	userID, wsID := seedTemplateWorkspace(t, tx, "tmpl-dupe")
 	repo := &TemplateRepository{db: tx}
 
-	first := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Welcome", DefaultLanguage: "en"}
+	first := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "welcome", DefaultLanguage: "en"}
 	if err := repo.CreateWithVersions(first, []ImportVersion{{IsActive: true}}); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestDuplicateNameIsDetectable(t *testing.T) {
 		t.Skipf("cannot create the unique index: %v", err)
 	}
 
-	second := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Welcome", DefaultLanguage: "en"}
+	second := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "welcome", DefaultLanguage: "en"}
 	err := repo.CreateWithVersions(second, []ImportVersion{{IsActive: true}})
 	if err == nil {
 		t.Fatal("expected the duplicate name to be rejected")
@@ -256,7 +256,7 @@ func TestLanguagesForActiveVersions(t *testing.T) {
 	userID, wsID := seedTemplateWorkspace(t, tx, "tmpl-langs")
 	repo := &TemplateRepository{db: tx}
 
-	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Multi", DefaultLanguage: "en"}
+	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "multi", DefaultLanguage: "en"}
 	if err := repo.CreateWithVersions(tmpl, []ImportVersion{
 		{Localizations: []ImportLocalization{{Language: "ja", SubjectTemplate: "old"}}},
 		{IsActive: true, Localizations: []ImportLocalization{
@@ -267,7 +267,7 @@ func TestLanguagesForActiveVersions(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	empty := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "Empty", DefaultLanguage: "en"}
+	empty := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "empty", DefaultLanguage: "en"}
 	if err := repo.CreateWithVersions(empty, []ImportVersion{{IsActive: true}}); err != nil {
 		t.Fatalf("create empty: %v", err)
 	}

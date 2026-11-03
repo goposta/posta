@@ -268,11 +268,11 @@ func (h *AdminDomainHandler) workspaceNames(domains []models.Domain) map[uint]st
 		return out
 	}
 	var rows []models.Workspace
-	if err := h.db.Select("id", "name").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+	if err := h.db.Select("id", "display_name").Where("id IN ?", ids).Find(&rows).Error; err != nil {
 		return out
 	}
 	for i := range rows {
-		out[rows[i].ID] = rows[i].Name
+		out[rows[i].ID] = rows[i].DisplayName
 	}
 	return out
 }
@@ -282,10 +282,10 @@ func (h *AdminDomainHandler) workspaceName(id *uint) string {
 		return ""
 	}
 	var ws models.Workspace
-	if err := h.db.Select("id", "name").First(&ws, *id).Error; err != nil {
+	if err := h.db.Select("id", "display_name").First(&ws, *id).Error; err != nil {
 		return ""
 	}
-	return ws.Name
+	return ws.DisplayName
 }
 
 func (h *AdminDomainHandler) ownerEmails(domains []models.Domain) map[uint]string {

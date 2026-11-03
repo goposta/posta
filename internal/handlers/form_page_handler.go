@@ -114,7 +114,7 @@ func (h *FormIngestHandler) HostedPage(c *okapi.Context) error {
 	}
 
 	data := hostedPageData{
-		Title:       form.Name,
+		Title:       form.DisplayName,
 		Description: form.Description,
 		Key:         form.PublicKey,
 		Theme:       form.Appearance.Theme,

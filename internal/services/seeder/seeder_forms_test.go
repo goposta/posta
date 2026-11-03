@@ -44,11 +44,11 @@ func TestDefaultFormsAreValid(t *testing.T) {
 	slugs := map[string]bool{}
 	var sawCollect, sawSections bool
 	for _, def := range defs {
-		t.Run(def.Slug, func(t *testing.T) {
-			if slugs[def.Slug] {
-				t.Fatalf("slug %q is used twice", def.Slug)
+		t.Run(def.Name, func(t *testing.T) {
+			if slugs[def.Name] {
+				t.Fatalf("slug %q is used twice", def.Name)
 			}
-			slugs[def.Slug] = true
+			slugs[def.Name] = true
 
 			fields := append(models.FieldDefs{}, def.Fields...)
 			if err := messages.CheckSchema(fields, nil, models.DefaultHoneypotField); err != nil {
@@ -102,7 +102,7 @@ func TestSeedWorkspaceDefaultsCreatesForms(t *testing.T) {
 	if err := tx.Create(user).Error; err != nil {
 		t.Skipf("skipping: cannot create user: %v", err)
 	}
-	ws := &models.Workspace{Name: "seed test", Slug: fmt.Sprintf("seed-%d", suffix), OwnerID: user.ID}
+	ws := &models.Workspace{DisplayName: "seed test", Name: fmt.Sprintf("seed-%d", suffix), OwnerID: user.ID}
 	if err := tx.Create(ws).Error; err != nil {
 		t.Fatalf("create workspace: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestSeedWorkspaceDefaultsCreatesForms(t *testing.T) {
 		}
 		for _, f := range forms {
 			if len(f.PublicKey) != models.FormPublicKeyLength || len(f.Fields) == 0 || f.Status != models.FormStatusActive {
-				t.Fatalf("run %d: form %q seeded incompletely: %+v", run, f.Slug, f)
+				t.Fatalf("run %d: form %q seeded incompletely: %+v", run, f.Name, f)
 			}
 		}
 	}

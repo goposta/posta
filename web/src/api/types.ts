@@ -183,6 +183,7 @@ export interface Template {
   id: number
   user_id: number
   name: string
+  display_name: string
   default_language: string
   active_version_id?: number | null
   description: string
@@ -196,11 +197,15 @@ export interface Template {
 }
 
 export interface TemplateInput {
-  name: string
+  name?: string
+  display_name?: string
   sample_data?: string
   default_language?: string
   description?: string
 }
+
+/** A template being created or edited in the dashboard: both names are set. */
+export type TemplateDraft = TemplateInput & { name: string; display_name: string }
 
 export interface TemplateExportLocalization {
   language: string
@@ -320,13 +325,15 @@ export interface StyleSheet {
   id: number
   user_id: number
   name: string
+  display_name: string
   css: string
   created_at: string
   updated_at?: string
 }
 
 export interface StyleSheetInput {
-  name: string
+  name?: string
+  display_name?: string
   css: string
 }
 
@@ -444,8 +451,8 @@ export interface AdminDomainDetail extends AdminDomainRow {
 
 export interface AdminWorkspaceRow {
   id: number
+  display_name: string
   name: string
-  slug: string
   system: boolean
   owner_id: number
   owner_name: string
@@ -967,8 +974,8 @@ export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer'
 
 export interface Workspace {
   id: number
+  display_name: string
   name: string
-  slug: string
   description: string
   owner_id: number
   role: WorkspaceRole
@@ -993,8 +1000,8 @@ export interface WorkspaceSettings {
 }
 
 export interface WorkspaceInput {
-  name: string
-  slug?: string
+  display_name?: string
+  name?: string
   description?: string
   /** Starter templates, stylesheet and languages. Omitted means true. */
   seed_defaults?: boolean
@@ -1028,8 +1035,8 @@ export interface InviteMemberInput {
 // OAuth
 export interface OAuthProviderInfo {
   id: number
-  slug: string
   name: string
+  display_name: string
   type: 'google' | 'oidc'
 }
 
@@ -1044,8 +1051,8 @@ export interface OAuthLinkedAccount {
 
 export interface OAuthProviderAdmin {
   id: number
+  display_name: string
   name: string
-  slug: string
   type: string
   issuer: string
   scopes: string
@@ -1057,8 +1064,8 @@ export interface OAuthProviderAdmin {
 }
 
 export interface OAuthProviderInput {
+  display_name?: string
   name: string
-  slug: string
   type: string
   client_id: string
   client_secret: string
@@ -1073,8 +1080,8 @@ export interface OAuthProviderInput {
 }
 
 export interface SSODiscovery {
-  slug: string
   name: string
+  display_name: string
   type: string
 }
 
@@ -1197,8 +1204,8 @@ export interface Plan {
 
 export interface AdminWorkspace {
   id: number
+  display_name: string
   name: string
-  slug: string
   owner_id: number
   plan_id: number | null
   plan_name: string
@@ -1247,8 +1254,8 @@ export interface Form {
   id: number
   uuid: string
   workspace_id?: number | null
+  display_name: string
   name: string
-  slug: string
   description: string
   public_key: string
   status: FormStatus

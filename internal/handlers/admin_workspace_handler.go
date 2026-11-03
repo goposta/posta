@@ -42,8 +42,8 @@ func NewAdminWorkspaceHandler(db *gorm.DB, repo *repositories.WorkspaceRepositor
 // AdminWorkspaceRow is one line of the platform-wide workspace table.
 type AdminWorkspaceRow struct {
 	ID          uint   `json:"id"`
+	DisplayName string `json:"display_name"`
 	Name        string `json:"name"`
-	Slug        string `json:"slug"`
 	System      bool   `json:"system"`
 	OwnerID     uint   `json:"owner_id"`
 	OwnerName   string `json:"owner_name"`
@@ -95,7 +95,7 @@ type AdminWorkspaceDetail struct {
 type AdminListWorkspacesRequest struct {
 	Page   int    `query:"page" default:"0"`
 	Size   int    `query:"size" default:"20"`
-	Search string `query:"search" doc:"Match part of the workspace name or slug"`
+	Search string `query:"search" doc:"Match part of the workspace name or display name"`
 	Owner  int    `query:"owner" doc:"Restrict to workspaces owned by this user id"`
 	Plan   int    `query:"plan" doc:"Restrict to workspaces assigned this plan id"`
 }
@@ -128,9 +128,9 @@ func (h *AdminWorkspaceHandler) SetHostedForms(c *okapi.Context, req *AdminSetHo
 		}
 		ws.HostedFormsDisabled = disabled
 		if h.audit != nil {
-			action, message := "workspace.hosted_forms_enabled", "Hosted form pages turned back on: "+ws.Name
+			action, message := "workspace.hosted_forms_enabled", "Hosted form pages turned back on: "+ws.DisplayName
 			if disabled {
-				action, message = "workspace.hosted_forms_disabled", "Hosted form pages taken offline: "+ws.Name
+				action, message = "workspace.hosted_forms_disabled", "Hosted form pages taken offline: "+ws.DisplayName
 			}
 			h.audit.LogCtxScoped(c, ws.ID, action, message, map[string]any{"workspace_id": ws.ID})
 		}
@@ -210,8 +210,8 @@ func (h *AdminWorkspaceHandler) Get(c *okapi.Context, req *AdminWorkspaceIDReque
 func (h *AdminWorkspaceHandler) row(ws *models.Workspace, owners map[uint]models.User, plans map[uint]string, members map[uint]int64) AdminWorkspaceRow {
 	row := AdminWorkspaceRow{
 		ID:          ws.ID,
+		DisplayName: ws.DisplayName,
 		Name:        ws.Name,
-		Slug:        ws.Slug,
 		System:      ws.System,
 		OwnerID:     ws.OwnerID,
 		OwnerName:   owners[ws.OwnerID].Name,

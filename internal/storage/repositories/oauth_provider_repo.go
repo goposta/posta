@@ -53,9 +53,9 @@ func (r *OAuthProviderRepository) FindByID(id uint) (*models.OAuthProvider, erro
 	return &p, nil
 }
 
-func (r *OAuthProviderRepository) FindBySlug(slug string) (*models.OAuthProvider, error) {
+func (r *OAuthProviderRepository) FindByName(name string) (*models.OAuthProvider, error) {
 	var p models.OAuthProvider
-	if err := r.db.Where("slug = ? AND enabled = true", slug).First(&p).Error; err != nil {
+	if err := r.db.Where("name = ? AND enabled = true", name).First(&p).Error; err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -65,7 +65,7 @@ func (r *OAuthProviderRepository) FindBySlug(slug string) (*models.OAuthProvider
 func (r *OAuthProviderRepository) FindEnabled() ([]models.OAuthProvider, error) {
 	var providers []models.OAuthProvider
 	if err := r.db.Where("enabled = true AND hidden = false AND workspace_id IS NULL").
-		Order("name ASC").Find(&providers).Error; err != nil {
+		Order("display_name ASC").Find(&providers).Error; err != nil {
 		return nil, err
 	}
 	return providers, nil
@@ -75,7 +75,7 @@ func (r *OAuthProviderRepository) FindEnabled() ([]models.OAuthProvider, error) 
 func (r *OAuthProviderRepository) FindEnabledForWorkspace(wsID uint) ([]models.OAuthProvider, error) {
 	var providers []models.OAuthProvider
 	if err := r.db.Where("enabled = true AND hidden = false AND (workspace_id IS NULL OR workspace_id = ?)", wsID).
-		Order("name ASC").Find(&providers).Error; err != nil {
+		Order("display_name ASC").Find(&providers).Error; err != nil {
 		return nil, err
 	}
 	return providers, nil

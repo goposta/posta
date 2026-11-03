@@ -63,9 +63,9 @@ func (r *WorkspaceRepository) FindByID(id uint) (*models.Workspace, error) {
 	return &ws, nil
 }
 
-func (r *WorkspaceRepository) FindBySlug(slug string) (*models.Workspace, error) {
+func (r *WorkspaceRepository) FindByName(name string) (*models.Workspace, error) {
 	var ws models.Workspace
-	if err := r.db.Where("slug = ?", slug).First(&ws).Error; err != nil {
+	if err := r.db.Where("name = ?", name).First(&ws).Error; err != nil {
 		return nil, err
 	}
 	return &ws, nil
@@ -98,7 +98,7 @@ func (r *WorkspaceRepository) FindAllFiltered(f AdminWorkspaceFilter, limit, off
 	apply := func(q *gorm.DB) *gorm.DB {
 		if s := strings.TrimSpace(f.Search); s != "" {
 			like := "%" + strings.ToLower(s) + "%"
-			q = q.Where("LOWER(name) LIKE ? OR LOWER(slug) LIKE ?", like, like)
+			q = q.Where("LOWER(display_name) LIKE ? OR LOWER(name) LIKE ?", like, like)
 		}
 		if f.OwnerID != nil {
 			q = q.Where("owner_id = ?", *f.OwnerID)
@@ -145,10 +145,10 @@ func (r *WorkspaceRepository) FindSystem() (*models.Workspace, error) {
 	return &ws, nil
 }
 
-// SlugExists reports whether slug is taken by a workspace other than excludeID.
-func (r *WorkspaceRepository) SlugExists(slug string, excludeID uint) bool {
+// NameExists reports whether name is taken by a workspace other than excludeID.
+func (r *WorkspaceRepository) NameExists(name string, excludeID uint) bool {
 	var count int64
-	q := r.db.Model(&models.Workspace{}).Where("slug = ?", slug)
+	q := r.db.Model(&models.Workspace{}).Where("name = ?", name)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -285,11 +285,11 @@ func (r *WorkspaceRepository) DeleteInvitation(id uint) error {
 }
 
 // CreateDefaultWorkspace creates a default workspace for a user during registration.
-func (r *WorkspaceRepository) CreateDefaultWorkspace(userID uint, name, slug string) (*models.Workspace, error) {
+func (r *WorkspaceRepository) CreateDefaultWorkspace(userID uint, displayName, name string) (*models.Workspace, error) {
 	ws := &models.Workspace{
-		Name:    name,
-		Slug:    slug,
-		OwnerID: userID,
+		Name:        name,
+		DisplayName: displayName,
+		OwnerID:     userID,
 	}
 	if err := r.db.Create(ws).Error; err != nil {
 		return nil, err

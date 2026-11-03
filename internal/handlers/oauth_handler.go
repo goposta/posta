@@ -94,10 +94,10 @@ func NewOAuthHandler(
 }
 
 type OAuthProviderInfo struct {
-	ID   uint   `json:"id"`
-	Slug string `json:"slug"`
-	Name string `json:"name"`
-	Type string `json:"type"`
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Type        string `json:"type"`
 }
 
 type OAuthLinkedAccount struct {
@@ -120,9 +120,9 @@ type DiscoverSSORequest struct {
 }
 
 type DiscoverSSOResponse struct {
-	Slug string `json:"slug"`
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Type        string `json:"type"`
 }
 
 // ListProviders returns enabled OAuth providers for the login page
@@ -135,10 +135,10 @@ func (h *OAuthHandler) ListProviders(c *okapi.Context) error {
 	var result []OAuthProviderInfo
 	for _, p := range providers {
 		result = append(result, OAuthProviderInfo{
-			ID:   p.ID,
-			Slug: p.Slug,
-			Name: p.Name,
-			Type: string(p.Type),
+			ID:          p.ID,
+			Name:        p.Name,
+			DisplayName: p.DisplayName,
+			Type:        string(p.Type),
 		})
 	}
 
@@ -163,16 +163,16 @@ func (h *OAuthHandler) DiscoverSSO(c *okapi.Context, req *DiscoverSSORequest) er
 	}
 
 	return ok(c, DiscoverSSOResponse{
-		Slug: provider.Slug,
-		Name: provider.Name,
-		Type: string(provider.Type),
+		Name:        provider.Name,
+		DisplayName: provider.DisplayName,
+		Type:        string(provider.Type),
 	})
 }
 
 // Authorize redirects the user to the OAuth provider's authorization page.
 func (h *OAuthHandler) Authorize(c *okapi.Context) error {
-	providerSlug := c.Param("provider")
-	provider, err := h.providerRepo.FindBySlug(providerSlug)
+	providerName := c.Param("provider")
+	provider, err := h.providerRepo.FindByName(providerName)
 	if err != nil {
 		return c.AbortNotFound("OAuth provider not found")
 	}
@@ -186,12 +186,12 @@ func (h *OAuthHandler) Authorize(c *okapi.Context) error {
 
 	// Store state in Redis with 10-minute TTL
 	stateData, _ := json.Marshal(map[string]string{
-		"provider_slug": provider.Slug,
+		"provider_slug": provider.Name,
 		"created_at":    time.Now().UTC().Format(time.RFC3339),
 	})
 	h.redisClient.Set(c.Request().Context(), "oauth:state:"+state, string(stateData), 10*time.Minute)
 
-	redirectURI := fmt.Sprintf("%s/api/v1/auth/oauth/%s/callback", h.callbackBase, provider.Slug)
+	redirectURI := fmt.Sprintf("%s/api/v1/auth/oauth/%s/callback", h.callbackBase, provider.Name)
 	oauthCfg, err := h.oauthService.GetOAuthConfig(provider, redirectURI)
 	if err != nil {
 		return c.AbortBadRequest("OAuth provider misconfigured: " + err.Error())
@@ -204,7 +204,7 @@ func (h *OAuthHandler) Authorize(c *okapi.Context) error {
 
 // Callback handles the OAuth provider's redirect with authorization code.
 func (h *OAuthHandler) Callback(c *okapi.Context) error {
-	providerSlug := c.Param("provider")
+	providerName := c.Param("provider")
 	code := c.Query("code")
 	state := c.Query("state")
 	oauthError := c.Query("error")
@@ -232,28 +232,28 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 
 	// Verify state matches provider
 	var stateData map[string]string
-	if err := json.Unmarshal([]byte(stateVal.Val()), &stateData); err != nil || stateData["provider_slug"] != providerSlug {
+	if err := json.Unmarshal([]byte(stateVal.Val()), &stateData); err != nil || stateData["provider_slug"] != providerName {
 		return redirect("state_mismatch")
 	}
 
-	provider, err := h.providerRepo.FindBySlug(providerSlug)
+	provider, err := h.providerRepo.FindByName(providerName)
 	if err != nil {
 		return redirect("provider_not_found")
 	}
 
-	redirectURI := fmt.Sprintf("%s/api/v1/auth/oauth/%s/callback", h.callbackBase, provider.Slug)
+	redirectURI := fmt.Sprintf("%s/api/v1/auth/oauth/%s/callback", h.callbackBase, provider.Name)
 
 	// Exchange code for tokens + user info
 	userInfo, token, err := h.oauthService.ExchangeCode(ctx, provider, code, redirectURI)
 	if err != nil {
-		logger.Error("OAuth exchange failed for provider %s: %v", provider.Slug, err)
+		logger.Error("OAuth exchange failed for provider %s: %v", provider.Name, err)
 		return redirect("exchange_failed")
 	}
 
 	// Find or create user
 	user, isNew, err := h.oauthService.FindOrCreateUser(provider, userInfo, token)
 	if err != nil {
-		logger.Error("OAuth account resolution failed for provider %s: %v", provider.Slug, err)
+		logger.Error("OAuth account resolution failed for provider %s: %v", provider.Name, err)
 		return redirect("account_error")
 	}
 
@@ -282,7 +282,7 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 			action = "user.oauth_registered"
 		}
 		h.bus.PublishSimple(models.EventCategoryUser, action, &user.ID, user.Email, c.RealIP(),
-			fmt.Sprintf("User %q authenticated via %s", user.Email, provider.Name), nil)
+			fmt.Sprintf("User %q authenticated via %s", user.Email, provider.DisplayName), nil)
 	}
 
 	// Update last login
@@ -312,7 +312,7 @@ func (h *OAuthHandler) ListLinkedAccounts(c *okapi.Context) error {
 		result = append(result, OAuthLinkedAccount{
 			ID:           a.ID,
 			ProviderID:   a.ProviderID,
-			ProviderName: a.Provider.Name,
+			ProviderName: a.Provider.DisplayName,
 			ProviderType: string(a.Provider.Type),
 			Email:        a.Email,
 			CreatedAt:    a.CreatedAt.Format(time.RFC3339),

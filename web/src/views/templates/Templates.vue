@@ -6,7 +6,7 @@ import { languagesApi } from "../../api/languages";
 import type {
   Template,
   TemplateListItem,
-  TemplateInput,
+  TemplateDraft,
   TemplateExport,
   Language,
   Pageable,
@@ -36,8 +36,9 @@ const saving = ref(false);
 
 const languages = ref<Language[]>([]);
 
-const form = ref<TemplateInput>({
+const form = ref<TemplateDraft>({
   name: "",
+  display_name: "",
   sample_data: "",
   default_language: "en",
   description: "",
@@ -53,7 +54,7 @@ async function loadLanguages() {
 }
 
 function resetForm() {
-  form.value = { name: "", sample_data: "", default_language : languages.value.find(l => l.is_default)?.code || 'en', description: "" };
+  form.value = { name: "", display_name: "", sample_data: "", default_language : languages.value.find(l => l.is_default)?.code || 'en', description: "" };
   editing.value = null;
 }
 
@@ -66,6 +67,7 @@ function openEdit(template: Template) {
   editing.value = template;
   form.value = {
     name: template.name,
+    display_name: template.display_name,
     sample_data: template.sample_data || "",
     default_language: template.default_language || "en",
     description: template.description || "",
@@ -96,7 +98,7 @@ function onSearchInput() {
 }
 
 async function saveTemplate() {
-  if (!form.value.name.trim()) return;
+  if (!form.value.display_name.trim() || !form.value.name.trim()) return;
   saving.value = true;
   try {
     if (editing.value) {
@@ -120,7 +122,7 @@ async function saveTemplate() {
 async function deleteTemplate(template: Template) {
   const confirmed = await confirm({
     title: "Delete Template",
-    message: `Are you sure you want to delete "${template.name}"? This action cannot be undone.`,
+    message: `Are you sure you want to delete "${template.display_name}"? This action cannot be undone.`,
     confirmText: "Delete",
     variant: "danger",
   });
@@ -278,7 +280,7 @@ onMounted(() => {
                   "
                 >
                   <td>
-                    <div>{{ tmpl.name }}</div>
+                    <div>{{ tmpl.display_name }} <code class="tmpl-name">{{ tmpl.name }}</code></div>
                     <div v-if="tmpl.description" class="text-muted text-sm">
                       {{ tmpl.description }}
                     </div>
@@ -367,6 +369,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.tmpl-name {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .langs {
   display: flex;
   gap: 4px;
