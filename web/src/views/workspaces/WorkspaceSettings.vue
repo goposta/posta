@@ -59,7 +59,7 @@ const importing = ref(false)
 const importFileRef = ref<HTMLInputElement | null>(null)
 
 // Settings (workspace name/description)
-const editName = ref('')
+const editDisplayName = ref('')
 const editDescription = ref('')
 const saving = ref(false)
 
@@ -113,7 +113,7 @@ async function fetchWorkspace() {
   try {
     const res = await withWorkspace(() => workspaceApi.getCurrent())
     ws.value = res.data.data
-    editName.value = ws.value.name
+    editDisplayName.value = ws.value.display_name
     editDescription.value = ws.value.description || ''
   } catch {
     notify.error('Failed to load workspace')
@@ -298,7 +298,7 @@ function formatLimit(value: number): string {
 async function saveSettings() {
   saving.value = true
   try {
-    await withWorkspace(() => workspaceApi.update({ name: editName.value.trim(), description: editDescription.value.trim() }))
+    await withWorkspace(() => workspaceApi.update({ display_name: editDisplayName.value.trim(), description: editDescription.value.trim() }))
     notify.success('Workspace updated')
     await wsStore.fetchWorkspaces()
   } catch (err: any) {
@@ -330,7 +330,7 @@ async function exportWorkspaceData() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `posta-workspace-export-${ws.value?.slug || wsId}-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `posta-workspace-export-${ws.value?.name || wsId}-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
     notify.success('Workspace data exported successfully')
@@ -393,9 +393,9 @@ watch(activeTab, (value) => {
   <div>
     <div class="page-header">
       <div>
-        <h1>{{ ws?.name || 'Workspace' }} — Settings</h1>
-        <p v-if="ws?.slug" style="color: var(--text-muted); font-size: 13px; margin-top: 2px;">
-          <code>{{ ws.slug }}</code>
+        <h1>{{ ws?.display_name || 'Workspace' }} — Settings</h1>
+        <p v-if="ws?.name" style="color: var(--text-muted); font-size: 13px; margin-top: 2px;">
+          <code>{{ ws.name }}</code>
         </p>
       </div>
       <div style="display: flex; gap: 8px;">
@@ -537,17 +537,17 @@ watch(activeTab, (value) => {
         <div class="card-header"><span>Workspace Settings</span></div>
         <div class="card-body">
           <div class="form-group">
-            <label class="form-label">Name</label>
-            <input v-model="editName" class="form-input" />
+            <label class="form-label">Display name</label>
+            <input v-model="editDisplayName" class="form-input" />
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
             <input v-model="editDescription" class="form-input" placeholder="Optional description" />
           </div>
           <div class="form-group">
-            <label class="form-label">Slug</label>
-            <input :value="ws?.slug" class="form-input" disabled />
-            <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Slug cannot be changed after creation.</small>
+            <label class="form-label">Name</label>
+            <input :value="ws?.name" class="form-input mono" disabled />
+            <span class="form-hint">The workspace's identifier. It cannot change after creation.</span>
           </div>
           <button class="btn btn-primary" :disabled="saving" @click="saveSettings">
             {{ saving ? 'Saving...' : 'Save Changes' }}
@@ -733,7 +733,7 @@ watch(activeTab, (value) => {
                 <label class="form-label">OAuth Provider</label>
                 <select v-model.number="ssoForm.provider_id" class="form-select" required>
                   <option :value="0" disabled>Select a provider</option>
-                  <option v-for="p in ssoProviders" :key="p.slug" :value="p.id">{{ p.name }} ({{ p.type }})</option>
+                  <option v-for="p in ssoProviders" :key="p.name" :value="p.id">{{ p.display_name }} ({{ p.type }})</option>
                 </select>
               </div>
 

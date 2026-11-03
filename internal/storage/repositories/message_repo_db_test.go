@@ -77,11 +77,11 @@ func newFixture(t *testing.T, tx *gorm.DB, tag string) fixture {
 	if err := tx.Create(user).Error; err != nil {
 		t.Fatalf("user: %v", err)
 	}
-	ws := &models.Workspace{Name: tag, Slug: tag + fmt.Sprint(time.Now().UnixNano()), OwnerID: user.ID}
+	ws := &models.Workspace{DisplayName: tag, Name: tag + fmt.Sprint(time.Now().UnixNano()), OwnerID: user.ID}
 	if err := tx.Create(ws).Error; err != nil {
 		t.Fatalf("workspace: %v", err)
 	}
-	form := &models.Form{WorkspaceID: &ws.ID, Name: tag, Slug: tag, PublicKey: tag + fmt.Sprint(time.Now().UnixNano())}
+	form := &models.Form{WorkspaceID: &ws.ID, DisplayName: tag, Name: tag, PublicKey: tag + fmt.Sprint(time.Now().UnixNano())}
 	if err := tx.Create(form).Error; err != nil {
 		t.Fatalf("form: %v", err)
 	}

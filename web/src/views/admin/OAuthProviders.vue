@@ -6,6 +6,7 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useLicenseStore } from '../../stores/license'
 import { ENTERPRISE_URL } from '../../api/license'
+import { IDENTIFIER_HINT, toIdentifier } from '../../composables/identifier'
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -20,8 +21,15 @@ const loading = ref(true)
 
 const showCreateModal = ref(false)
 const creating = ref(false)
+const emptyForm = () => ({
+  display_name: '', name: '', type: 'oidc',
+  client_id: '', client_secret: '', issuer: '',
+  auth_url: '', token_url: '', userinfo_url: '',
+  scopes: 'openid email profile',
+  auto_register: true, hidden: false, allowed_domains: '',
+})
 const form = ref({
-  name: '', slug: '', type: 'oidc',
+  display_name: '', name: '', type: 'oidc',
   client_id: '', client_secret: '', issuer: '',
   auth_url: '', token_url: '', userinfo_url: '',
   scopes: 'openid email profile',
@@ -33,7 +41,7 @@ const showEditModal = ref(false)
 const editing = ref(false)
 const editingProvider = ref<OAuthProviderAdmin | null>(null)
 const editForm = ref({
-  name: '', client_id: '', client_secret: '', issuer: '',
+  display_name: '', client_id: '', client_secret: '', issuer: '',
   auth_url: '', token_url: '', userinfo_url: '',
   scopes: '', auto_register: true, hidden: false, allowed_domains: '',
 })
@@ -50,18 +58,21 @@ async function fetchProviders() {
   }
 }
 
-function autoSlug() {
-  form.value.slug = form.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+// The name follows the display name until it is edited by hand.
+const nameEdited = ref(false)
+function syncName() {
+  if (!nameEdited.value) form.value.name = toIdentifier(form.value.display_name)
 }
 
 async function createProvider() {
-  if (!form.value.name || !form.value.slug || !form.value.client_id || !form.value.client_secret) return
+  if (!form.value.display_name || !form.value.name || !form.value.client_id || !form.value.client_secret) return
   creating.value = true
   try {
     await oauthApi.adminCreate(form.value)
     notify.success('Provider created')
     showCreateModal.value = false
-    form.value = { name: '', slug: '', type: 'oidc', client_id: '', client_secret: '', issuer: '', auth_url: '', token_url: '', userinfo_url: '', scopes: 'openid email profile', auto_register: true, hidden: false, allowed_domains: '' }
+    form.value = emptyForm()
+    nameEdited.value = false
     await fetchProviders()
   } catch (err: any) {
     notify.error(err.response?.data?.error?.message || 'Failed to create provider')
@@ -73,7 +84,7 @@ async function createProvider() {
 function openEdit(p: OAuthProviderAdmin) {
   editingProvider.value = p
   editForm.value = {
-    name: p.name,
+    display_name: p.display_name,
     client_id: '',
     client_secret: '',
     issuer: p.issuer || '',
@@ -93,7 +104,7 @@ async function updateProvider() {
   editing.value = true
   try {
     const data: Record<string, any> = {}
-    if (editForm.value.name) data.name = editForm.value.name
+    if (editForm.value.display_name) data.display_name = editForm.value.display_name
     if (editForm.value.client_id) data.client_id = editForm.value.client_id
     if (editForm.value.client_secret) data.client_secret = editForm.value.client_secret
     if (editForm.value.issuer) data.issuer = editForm.value.issuer
@@ -123,7 +134,7 @@ async function toggleEnabled(p: OAuthProviderAdmin) {
 }
 
 async function deleteProvider(p: OAuthProviderAdmin) {
-  const ok = await confirm({ title: 'Delete Provider', message: `Delete "${p.name}"? Users won't be able to sign in with this provider.`, confirmText: 'Delete', variant: 'danger' })
+  const ok = await confirm({ title: 'Delete Provider', message: `Delete "${p.display_name}"? Users won't be able to sign in with this provider.`, confirmText: 'Delete', variant: 'danger' })
   if (!ok) return
   try {
     await oauthApi.adminDelete(p.id)
@@ -180,8 +191,8 @@ onMounted(() => {
         <table>
           <thead>
             <tr>
+              <th>Display name</th>
               <th>Name</th>
-              <th>Slug</th>
               <th>Type</th>
               <th>Status</th>
               <th>Visibility</th>
@@ -192,8 +203,8 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-for="p in providers" :key="p.id">
-              <td style="font-weight: 500;">{{ p.name }}</td>
-              <td><code>{{ p.slug }}</code></td>
+              <td style="font-weight: 500;">{{ p.display_name }}</td>
+              <td><code>{{ p.name }}</code></td>
               <td><span class="badge badge-neutral">{{ p.type }}</span></td>
               <td><span class="badge" :class="p.enabled ? 'badge-primary' : 'badge-neutral'">{{ p.enabled ? 'enabled' : 'disabled' }}</span></td>
               <td><span class="badge" :class="p.hidden ? 'badge-neutral' : 'badge-primary'">{{ p.hidden ? 'hidden' : 'visible' }}</span></td>
@@ -222,12 +233,15 @@ onMounted(() => {
           <div class="modal-body">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
               <div class="form-group">
-                <label class="form-label">Name</label>
-                <input v-model="form.name" class="form-input" placeholder="Google" required @input="autoSlug" />
+                <label class="form-label">Display name</label>
+                <input v-model="form.display_name" class="form-input" placeholder="Google" required @input="syncName" />
+                <span class="form-hint">Shown on the sign-in button.</span>
               </div>
               <div class="form-group">
-                <label class="form-label">Slug</label>
-                <input v-model="form.slug" class="form-input" placeholder="google" required />
+                <label class="form-label">Name</label>
+                <input v-model="form.name" class="form-input mono" placeholder="google" required pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  :title="IDENTIFIER_HINT" @input="nameEdited = true" />
+                <span class="form-hint">In the sign-in URLs. It cannot change later.</span>
               </div>
             </div>
             <div class="form-group">
@@ -285,12 +299,13 @@ onMounted(() => {
     <!-- Edit Modal -->
     <div v-if="showEditModal && editingProvider" class="modal-overlay" @click.self="showEditModal = false">
       <div class="modal" style="max-width: 560px;">
-        <div class="modal-header"><h3>Edit {{ editingProvider.name }}</h3></div>
+        <div class="modal-header"><h3>Edit {{ editingProvider.display_name }}</h3></div>
         <form @submit.prevent="updateProvider">
           <div class="modal-body">
             <div class="form-group">
-              <label class="form-label">Name</label>
-              <input v-model="editForm.name" class="form-input" required />
+              <label class="form-label">Display name</label>
+              <input v-model="editForm.display_name" class="form-input" required />
+              <span class="form-hint">Its name, <code>{{ editingProvider.name }}</code>, is in the sign-in URLs and stays the same.</span>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
               <div class="form-group">

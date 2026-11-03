@@ -8,7 +8,7 @@ import type {
   Language,
   StyleSheet,
   Template,
-  TemplateInput,
+  TemplateDraft,
   TemplateLocalization,
   TemplateLocalizationInput,
   TemplatePreview,
@@ -83,8 +83,9 @@ const savingVersionStylesheet = ref(false);
 
 const savingTemplate = ref(false);
 const showTemplateEditModal = ref(false);
-const templateForm = ref<TemplateInput>({
+const templateForm = ref<TemplateDraft>({
   name: "",
+  display_name: "",
   sample_data: "",
   default_language: "en",
   description: "",
@@ -377,6 +378,7 @@ function openEditTemplate() {
   if (!template.value) return;
   templateForm.value = {
     name: template.value.name,
+    display_name: template.value.display_name,
     sample_data: template.value.sample_data || "",
     default_language: template.value.default_language || "en",
     description: template.value.description || "",
@@ -385,7 +387,7 @@ function openEditTemplate() {
 }
 
 async function saveTemplate() {
-  if (!template.value || !templateForm.value.name.trim()) return;
+  if (!template.value || !templateForm.value.display_name.trim() || !templateForm.value.name.trim()) return;
   savingTemplate.value = true;
   try {
     await templatesApi.update(template.value.id, templateForm.value);
@@ -416,11 +418,11 @@ onMounted(loadAll);
   <div>
     <div class="page-header">
       <div>
-        <h1>{{ template?.name || "Template" }}</h1>
+        <h1>{{ template?.display_name || "Template" }}</h1>
         <p class="crumb">
           <RouterLink to="/templates">Templates</RouterLink>
           <span aria-hidden="true"> / </span>
-          <span>{{ template?.name || "…" }}</span>
+          <span>{{ template?.display_name || "…" }}</span>
         </p>
       </div>
       <div class="header-actions">

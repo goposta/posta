@@ -371,7 +371,7 @@ onBeforeUnmount(() => {
                 <td style="font-weight: 600">Form</td>
                 <td>
                   <router-link v-if="message.form" :to="`/forms/${message.form.id}`">
-                    {{ message.form.name }}
+                    {{ message.form.display_name }}
                   </router-link>
                   <span v-else>-</span>
                 </td>

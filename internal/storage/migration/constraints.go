@@ -104,7 +104,8 @@ func runConstraints(db *gorm.DB) {
 	END $$`)
 
 	db.Exec(`DO $$ BEGIN
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_form_slug ON forms (workspace_id, slug) WHERE workspace_id IS NOT NULL AND deleted_at IS NULL;
+		DROP INDEX IF EXISTS idx_workspace_form_slug;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_form_name ON forms (workspace_id, name) WHERE workspace_id IS NOT NULL AND deleted_at IS NULL;
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 

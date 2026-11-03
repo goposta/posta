@@ -39,11 +39,11 @@ func TestDefaultTemplatesRender(t *testing.T) {
 	renderer := email.NewTemplateRenderer() // defaults to missingkey=error
 
 	for _, def := range defs {
-		t.Run(def.Name, func(t *testing.T) {
+		t.Run(def.DisplayName, func(t *testing.T) {
 			for _, lang := range seedLanguages {
 				subject, ok := def.Subjects[lang]
 				if !ok || strings.TrimSpace(subject) == "" {
-					t.Fatalf("%s/%s: missing subject", def.Name, lang)
+					t.Fatalf("%s/%s: missing subject", def.DisplayName, lang)
 				}
 
 				// WithSystemVars injects the reserved posta_* variables (as
@@ -57,22 +57,22 @@ func TestDefaultTemplatesRender(t *testing.T) {
 					CSS:             defaultCSS,
 				}, data)
 				if err != nil {
-					t.Fatalf("%s/%s: render failed: %v", def.Name, lang, err)
+					t.Fatalf("%s/%s: render failed: %v", def.DisplayName, lang, err)
 				}
 
 				if strings.TrimSpace(out.Subject) == "" {
-					t.Errorf("%s/%s: empty subject", def.Name, lang)
+					t.Errorf("%s/%s: empty subject", def.DisplayName, lang)
 				}
 				if strings.TrimSpace(out.HTML) == "" {
-					t.Errorf("%s/%s: empty HTML", def.Name, lang)
+					t.Errorf("%s/%s: empty HTML", def.DisplayName, lang)
 				}
 				if strings.TrimSpace(out.Text) == "" {
-					t.Errorf("%s/%s: empty text", def.Name, lang)
+					t.Errorf("%s/%s: empty text", def.DisplayName, lang)
 				}
 				// Every seeded template links the hosted web view, so a reserved
 				// system sentinel must survive into the rendered HTML.
 				if !email.HasSystemSentinels(out.HTML) {
-					t.Errorf("%s/%s: expected a posta_* system link in rendered HTML", def.Name, lang)
+					t.Errorf("%s/%s: expected a posta_* system link in rendered HTML", def.DisplayName, lang)
 				}
 			}
 		})

@@ -360,9 +360,9 @@ func (h *PlanHandler) AssignToWorkspace(c *okapi.Context, req *AssignWorkspacePl
 	}
 
 	h.audit.Log(userID, c.GetString("email"), c.RealIP(), "plan.assigned",
-		fmt.Sprintf("Plan '%s' assigned to workspace '%s'", plan.Name, ws.Name), nil)
+		fmt.Sprintf("Plan '%s' assigned to workspace '%s'", plan.Name, ws.DisplayName), nil)
 
-	return ok(c, dto.MessageData{Message: fmt.Sprintf("plan '%s' assigned to workspace '%s'", plan.Name, ws.Name)})
+	return ok(c, dto.MessageData{Message: fmt.Sprintf("plan '%s' assigned to workspace '%s'", plan.Name, ws.DisplayName)})
 }
 
 // GetWorkspacePlan returns the effective plan for a workspace.

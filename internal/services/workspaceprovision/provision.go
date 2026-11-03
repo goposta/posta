@@ -153,10 +153,10 @@ func (s *Service) provision(tx *gorm.DB, userID uint) (uint, error) {
 	}
 
 	ws := &models.Workspace{
-		Name:    workspaceName(user.Name),
-		Slug:    workspaceSlug(user.ID),
-		OwnerID: user.ID,
-		PlanID:  planID,
+		DisplayName: workspaceDisplayName(user.Name),
+		Name:        workspaceName(user.ID),
+		OwnerID:     user.ID,
+		PlanID:      planID,
 	}
 	if err := tx.Create(ws).Error; err != nil {
 		return 0, fmt.Errorf("create workspace: %w", err)
@@ -239,9 +239,9 @@ func (s *Service) copySettings(tx *gorm.DB, userID, workspaceID uint, requireVer
 	return nil
 }
 
-// workspaceName labels a user's first workspace after them, so a switcher with
+// workspaceDisplayName labels a user's first workspace after them, so a switcher with
 // several entries reads as names rather than as "Workspace 1, Workspace 2".
-func workspaceName(userName string) string {
+func workspaceDisplayName(userName string) string {
 	first := strings.TrimSpace(userName)
 	if idx := strings.IndexAny(first, " \t"); idx > 0 {
 		first = first[:idx]
@@ -252,7 +252,7 @@ func workspaceName(userName string) string {
 	return first + "'s workspace"
 }
 
-// workspaceSlug derives a stable, unique slug for a user's first workspace.
-func workspaceSlug(userID uint) string {
+// workspaceName derives a stable, unique name for a user's first workspace.
+func workspaceName(userID uint) string {
 	return fmt.Sprintf("workspace-%d", userID)
 }

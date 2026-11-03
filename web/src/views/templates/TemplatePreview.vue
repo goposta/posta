@@ -77,7 +77,7 @@ async function loadTemplate(id: number) {
       return
     }
 
-    search.value = template.value.name
+    search.value = template.value.display_name
 
     if (template.value.sample_data) sampleData.value = template.value.sample_data
 
@@ -183,7 +183,7 @@ function formatDate(dateStr: string): string {
           :class="{ active: t.id === template?.id }"
           @mousedown.prevent="selectTemplate(t)"
         >
-          <span class="template-search-name">{{ t.name }}</span>
+          <span class="template-search-name">{{ t.display_name }}</span>
           <span v-if="t.description" class="template-search-desc">{{ t.description }}</span>
         </button>
       </div>
@@ -203,7 +203,7 @@ function formatDate(dateStr: string): string {
       <!-- Template Info -->
       <div class="card" style="margin-bottom: 24px;">
         <div class="card-header">
-          <h2>{{ template.name }}</h2>
+          <h2>{{ template.display_name }}</h2>
           <div class="flex gap-2">
             <span v-if="localization" class="badge badge-success">{{ localization.language }}</span>
             <span v-if="version" class="badge badge-neutral">v{{ version.version }}</span>
@@ -222,7 +222,7 @@ function formatDate(dateStr: string): string {
               </tr>
               <tr v-if="version?.stylesheet">
                 <td class="info-label">Stylesheet</td>
-                <td><span class="badge badge-neutral">{{ version.stylesheet.name }}</span></td>
+                <td><span class="badge badge-neutral">{{ version.stylesheet.display_name }}</span></td>
               </tr>
               <tr>
                 <td class="info-label">Created</td>
@@ -325,7 +325,7 @@ function formatDate(dateStr: string): string {
             <pre class="code-block">{{ localization.text_template }}</pre>
           </div>
           <div v-if="version?.stylesheet" style="margin-bottom: 16px;">
-            <div class="source-label">Stylesheet: {{ version.stylesheet.name }}</div>
+            <div class="source-label">Stylesheet: {{ version.stylesheet.display_name }}</div>
             <pre class="code-block">{{ version.stylesheet.css }}</pre>
           </div>
           <div v-if="!localization.html_template && !localization.text_template" class="text-muted text-sm">

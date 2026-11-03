@@ -155,9 +155,9 @@ onMounted(async () => {
   <div>
     <div class="page-header">
       <div>
-        <h1>{{ ws?.name || 'Workspace' }} — Members</h1>
-        <p v-if="ws?.slug" style="color: var(--text-muted); font-size: 13px; margin-top: 2px;">
-          <code>{{ ws.slug }}</code>
+        <h1>{{ ws?.display_name || 'Workspace' }} — Members</h1>
+        <p v-if="ws?.name" style="color: var(--text-muted); font-size: 13px; margin-top: 2px;">
+          <code>{{ ws.name }}</code>
         </p>
       </div>
       <div style="display: flex; gap: 8px;">

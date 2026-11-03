@@ -279,7 +279,7 @@ func (h *LDAPAdminHandler) apply(c *okapi.Context, cfg *models.LDAPConfig, b LDA
 
 // uniqueName derives the directory's handle from its display name.
 func (h *LDAPAdminHandler) uniqueName(displayName string) string {
-	base := slugify(displayName)
+	base := models.ToIdentifier(displayName)
 	if base == "" {
 		base = "directory"
 	}

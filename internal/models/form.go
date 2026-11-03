@@ -86,7 +86,7 @@ type Form struct {
 	UUID        string     `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
 	WorkspaceID *uint      `json:"workspace_id,omitempty" gorm:"index;not null"`
 	Name        string     `json:"name" gorm:"not null"`
-	Slug        string     `json:"slug" gorm:"not null"`
+	DisplayName string     `json:"display_name" gorm:"not null;default:''"`
 	Description string     `json:"description"`
 	PublicKey   string     `json:"public_key" gorm:"uniqueIndex;not null"`
 	Status      FormStatus `json:"status" gorm:"type:varchar(20);default:'active';index;not null"`

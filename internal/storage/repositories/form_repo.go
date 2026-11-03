@@ -93,9 +93,9 @@ func (r *FormRepository) Delete(id uint) error {
 	return r.db.Delete(&models.Form{}, id).Error
 }
 
-func (r *FormRepository) SlugExists(workspaceID uint, slug string, excludeID uint) bool {
+func (r *FormRepository) NameExists(workspaceID uint, name string, excludeID uint) bool {
 	var count int64
-	q := r.db.Model(&models.Form{}).Where("workspace_id = ? AND slug = ?", workspaceID, slug)
+	q := r.db.Model(&models.Form{}).Where("workspace_id = ? AND name = ?", workspaceID, name)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}

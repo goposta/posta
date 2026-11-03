@@ -54,7 +54,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 			Handler:     okapi.H(r.h.oauth.DiscoverSSO),
 			Group:       oauthPublic,
 			Summary:     "Discover SSO provider by email",
-			Description: "Returns the OAuth provider slug whose allowed domains match the given email's domain. Used for email-first SSO login.",
+			Description: "Returns the name of the OAuth provider whose allowed domains match the given email's domain. Used for email-first SSO login.",
 			Request:     &handlers.DiscoverSSORequest{},
 			Response:    &dto.Response[handlers.DiscoverSSOResponse]{},
 		},
@@ -66,7 +66,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 			Summary:     "Initiate OAuth flow",
 			Description: "Redirects to the OAuth provider's authorization page",
 			Options: []okapi.RouteOption{
-				okapi.DocPathParam("provider", "string", "Provider slug"),
+				okapi.DocPathParam("provider", "string", "Provider name"),
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 			Summary:     "OAuth callback",
 			Description: "Handles the OAuth provider's redirect after authorization",
 			Options: []okapi.RouteOption{
-				okapi.DocPathParam("provider", "string", "Provider slug"),
+				okapi.DocPathParam("provider", "string", "Provider name"),
 				okapi.DocHide(),
 			},
 		},

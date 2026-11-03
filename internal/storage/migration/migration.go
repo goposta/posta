@@ -29,6 +29,9 @@ import (
 
 // Run executes all schema migrations and adds FK constraints.
 func Run(db *gorm.DB) error {
+	if err := renameIdentifiers(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Plan{},

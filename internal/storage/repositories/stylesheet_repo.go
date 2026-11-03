@@ -22,6 +22,7 @@ package repositories
 import (
 	"github.com/goposta/posta/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type StyleSheetRepository struct {
@@ -90,9 +91,14 @@ func (r *StyleSheetRepository) FindByIDInScope(scope ResourceScope, id uint) (*m
 	return &ss, nil
 }
 
+// FindByNameInScope finds a stylesheet by name or, for exports and HTML
+// files made before 0.18, when a stylesheet's name was its label, by
+// display name.
 func (r *StyleSheetRepository) FindByNameInScope(scope ResourceScope, name string) (*models.StyleSheet, error) {
 	var ss models.StyleSheet
-	if err := ApplyScope(r.db, scope).Where("name = ?", name).First(&ss).Error; err != nil {
+	if err := ApplyScope(r.db, scope).Where("name = ? OR display_name = ?", name, name).
+		Order(clause.OrderBy{Expression: clause.Expr{SQL: "name = ? DESC, id", Vars: []any{name}}}).
+		First(&ss).Error; err != nil {
 		return nil, err
 	}
 	return &ss, nil

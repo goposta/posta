@@ -29,8 +29,9 @@ import (
 const exportLimit = 10000
 
 type ExportStyleSheet struct {
-	Name string `json:"name"`
-	CSS  string `json:"css,omitempty"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	CSS         string `json:"css,omitempty"`
 }
 
 type ExportLanguage struct {
@@ -156,6 +157,7 @@ func exportTemplates(
 
 		result = append(result, TemplateExport{
 			Name:            tmpl.Name,
+			DisplayName:     tmpl.DisplayName,
 			Description:     tmpl.Description,
 			DefaultLanguage: tmpl.DefaultLanguage,
 			SampleData:      tmpl.SampleData,
@@ -169,7 +171,7 @@ func exportVersionStyleSheet(ss *models.StyleSheet, includeCSS bool) *ExportStyl
 	if ss == nil {
 		return nil
 	}
-	es := &ExportStyleSheet{Name: ss.Name}
+	es := &ExportStyleSheet{Name: ss.Name, DisplayName: ss.DisplayName}
 	if includeCSS {
 		es.CSS = ss.CSS
 	}
@@ -177,10 +179,11 @@ func exportVersionStyleSheet(ss *models.StyleSheet, includeCSS bool) *ExportStyl
 }
 
 func findOrCreateStyleSheet(es *ExportStyleSheet, scope repositories.ResourceScope, repo *repositories.StyleSheetRepository) *uint {
-	if es == nil || es.Name == "" {
+	if es == nil || (es.Name == "" && es.DisplayName == "") {
 		return nil
 	}
-	if existing, err := repo.FindByNameInScope(scope, es.Name); err == nil && existing != nil {
+	name, displayName := importNames(es.Name, es.DisplayName, "stylesheet")
+	if existing, err := repo.FindByNameInScope(scope, name); err == nil && existing != nil {
 		return &existing.ID
 	}
 	if es.CSS == "" {
@@ -189,7 +192,8 @@ func findOrCreateStyleSheet(es *ExportStyleSheet, scope repositories.ResourceSco
 	ss := &models.StyleSheet{
 		UserID:      scope.UserID,
 		WorkspaceID: scope.WorkspaceID,
-		Name:        es.Name,
+		Name:        name,
+		DisplayName: displayName,
 		CSS:         es.CSS,
 	}
 	if err := repo.Create(ss); err != nil {
@@ -201,7 +205,7 @@ func findOrCreateStyleSheet(es *ExportStyleSheet, scope repositories.ResourceSco
 func exportStylesheets(stylesheets []models.StyleSheet) []ExportStyleSheet {
 	result := make([]ExportStyleSheet, 0, len(stylesheets))
 	for _, ss := range stylesheets {
-		result = append(result, ExportStyleSheet{Name: ss.Name, CSS: ss.CSS})
+		result = append(result, ExportStyleSheet{Name: ss.Name, DisplayName: ss.DisplayName, CSS: ss.CSS})
 	}
 	return result
 }
@@ -316,9 +320,10 @@ func importTemplates(
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	var count int
 	for _, tmplData := range data {
-		if tmplData.Name == "" {
+		if tmplData.Name == "" && tmplData.DisplayName == "" {
 			continue
 		}
+		name, displayName := importNames(tmplData.Name, tmplData.DisplayName, "template")
 
 		defaultLang := tmplData.DefaultLanguage
 		if defaultLang == "" {
@@ -328,7 +333,8 @@ func importTemplates(
 		tmpl := &models.Template{
 			UserID:          userID,
 			WorkspaceID:     workspaceID,
-			Name:            tmplData.Name,
+			Name:            name,
+			DisplayName:     displayName,
 			DefaultLanguage: defaultLang,
 			Description:     tmplData.Description,
 			SampleData:      tmplData.SampleData,
@@ -404,12 +410,13 @@ func importLanguages(data []ExportLanguage, userID uint, workspaceID *uint, repo
 func importStylesheets(data []ExportStyleSheet, userID uint, workspaceID *uint, repo *repositories.StyleSheetRepository) int {
 	var count int
 	for _, ss := range data {
-		if ss.Name == "" {
+		if ss.Name == "" && ss.DisplayName == "" {
 			continue
 		}
+		name, displayName := importNames(ss.Name, ss.DisplayName, "stylesheet")
 		if err := repo.Create(&models.StyleSheet{
 			UserID: userID, WorkspaceID: workspaceID,
-			Name: ss.Name, CSS: ss.CSS,
+			Name: name, DisplayName: displayName, CSS: ss.CSS,
 		}); err != nil {
 			continue
 		}

@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -73,8 +72,9 @@ func (h *WorkspaceHandler) SetSeeder(s workspaceSeeder) { h.seeder = s }
 
 type CreateWorkspaceRequest struct {
 	Body struct {
-		Name            string `json:"name" required:"true" minLength:"1"`
-		Slug            string `json:"slug"`
+		Name            string `json:"name" doc:"Identifier, like acme: lowercase letters, digits and hyphens, unique on the platform. Derived from display_name when empty."`
+		DisplayName     string `json:"display_name" doc:"The workspace's label. Defaults to name."`
+		Slug            string `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Description     string `json:"description"`
 		DefaultLanguage string `json:"default_language"`
 		// SeedDefaults fills the new workspace with starter templates, a
@@ -88,7 +88,8 @@ type CreateWorkspaceRequest struct {
 
 type UpdateWorkspaceRequest struct {
 	Body struct {
-		Name            string `json:"name"`
+		Name            string `json:"name" doc:"A workspace's name cannot change; only accepted when it is the current one. Set display_name to rename it."`
+		DisplayName     string `json:"display_name"`
 		Description     string `json:"description"`
 		DefaultLanguage string `json:"default_language"`
 	} `json:"body"`
@@ -126,8 +127,8 @@ type DeclineInvitationRequest struct {
 
 type WorkspaceResponse struct {
 	ID          uint   `json:"id"`
+	DisplayName string `json:"display_name"`
 	Name        string `json:"name"`
-	Slug        string `json:"slug"`
 	Description string `json:"description"`
 	OwnerID     uint   `json:"owner_id"`
 	Role        string `json:"role"`
@@ -167,22 +168,15 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		}
 	}
 
-	slug := req.Body.Slug
-	if slug == "" {
-		slug = slugify(req.Body.Name)
+	name, displayName, err := resolveNames(req.Body.Name, req.Body.DisplayName, req.Body.Slug)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
 	}
-
-	// Validate slug format
-	if !isValidSlug(slug) {
-		return c.AbortBadRequest("slug must contain only lowercase letters, numbers, and hyphens")
+	if workspace.IsReservedName(name) {
+		return c.AbortConflict("the name \"" + name + "\" is reserved by the platform")
 	}
-	if workspace.IsReservedSlug(slug) {
-		return c.AbortConflict("that slug is reserved by the platform")
-	}
-
-	// Check slug uniqueness
-	if _, err := h.workspaceRepo.FindBySlug(slug); err == nil {
-		return c.AbortConflict("workspace slug already exists")
+	if _, err := h.workspaceRepo.FindByName(name); err == nil {
+		return c.AbortConflict("a workspace named \"" + name + "\" already exists")
 	}
 
 	defaultLang := strings.TrimSpace(req.Body.DefaultLanguage)
@@ -191,8 +185,8 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 	}
 
 	ws := &models.Workspace{
-		Name:            strings.TrimSpace(req.Body.Name),
-		Slug:            slug,
+		Name:            name,
+		DisplayName:     displayName,
 		Description:     req.Body.Description,
 		DefaultLanguage: defaultLang,
 		OwnerID:         uint(userID),
@@ -220,14 +214,14 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		h.seeder.SeedWorkspaceDefaults(ws.ID, uint(userID), h.ownerName(uint(userID)))
 	}
 
-	h.logAudit(c, ws.ID, "workspace.created", "Workspace created: "+ws.Name, map[string]any{
-		metaSlug: ws.Slug, "seeded": seeded,
+	h.logAudit(c, ws.ID, "workspace.created", "Workspace created: "+ws.DisplayName, map[string]any{
+		metaName: ws.Name, "seeded": seeded,
 	})
 
 	return created(c, WorkspaceResponse{
 		ID:          ws.ID,
+		DisplayName: ws.DisplayName,
 		Name:        ws.Name,
-		Slug:        ws.Slug,
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        string(models.WorkspaceRoleOwner),
@@ -274,8 +268,8 @@ func (h *WorkspaceHandler) List(c *okapi.Context) error {
 		}
 		result = append(result, WorkspaceResponse{
 			ID:          ws.ID,
+			DisplayName: ws.DisplayName,
 			Name:        ws.Name,
-			Slug:        ws.Slug,
 			Description: ws.Description,
 			OwnerID:     ws.OwnerID,
 			Role:        role,
@@ -299,8 +293,8 @@ func (h *WorkspaceHandler) Get(c *okapi.Context) error {
 
 	return ok(c, WorkspaceResponse{
 		ID:          ws.ID,
+		DisplayName: ws.DisplayName,
 		Name:        ws.Name,
-		Slug:        ws.Slug,
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        role,
@@ -317,11 +311,18 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 		return c.AbortNotFound("workspace not found")
 	}
 
-	if ws.System && req.Body.Name != "" && strings.TrimSpace(req.Body.Name) != ws.Name {
+	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	if name != "" && name != ws.Name {
+		return c.AbortBadRequest("a workspace's name cannot change; set display_name to rename it")
+	}
+	if ws.System && displayName != "" && displayName != ws.DisplayName {
 		return c.AbortConflict("the system workspace cannot be renamed")
 	}
-	if req.Body.Name != "" {
-		ws.Name = strings.TrimSpace(req.Body.Name)
+	if displayName != "" {
+		ws.DisplayName = displayName
 	}
 	if req.Body.Description != "" {
 		ws.Description = req.Body.Description
@@ -335,14 +336,14 @@ func (h *WorkspaceHandler) Update(c *okapi.Context, req *UpdateWorkspaceRequest)
 		return c.AbortInternalServerError("failed to update workspace")
 	}
 
-	h.logAudit(c, ws.ID, "workspace.updated", "Workspace updated: "+ws.Name, nil)
+	h.logAudit(c, ws.ID, "workspace.updated", "Workspace updated: "+ws.DisplayName, nil)
 
 	role := c.GetString("workspace_role")
 
 	return ok(c, WorkspaceResponse{
 		ID:          ws.ID,
+		DisplayName: ws.DisplayName,
 		Name:        ws.Name,
-		Slug:        ws.Slug,
 		Description: ws.Description,
 		OwnerID:     ws.OwnerID,
 		Role:        role,
@@ -370,7 +371,7 @@ func (h *WorkspaceHandler) Delete(c *okapi.Context) error {
 		return c.AbortInternalServerError("failed to delete workspace")
 	}
 
-	h.logAudit(c, ws.ID, "workspace.deleted", "Workspace deleted: "+ws.Name, map[string]any{metaSlug: ws.Slug})
+	h.logAudit(c, ws.ID, "workspace.deleted", "Workspace deleted: "+ws.DisplayName, map[string]any{metaName: ws.Name})
 
 	return noContent(c)
 }
@@ -432,7 +433,7 @@ func (h *WorkspaceHandler) UpdateMemberRole(c *okapi.Context, req *UpdateMemberR
 		wsName := ""
 		changerName := "An administrator"
 		if ws != nil {
-			wsName = ws.Name
+			wsName = ws.DisplayName
 		}
 		if changer != nil {
 			changerName = changer.Name
@@ -525,7 +526,7 @@ func (h *WorkspaceHandler) InviteMember(c *okapi.Context, req *InviteMemberReque
 		wsName := ""
 		inviterName := "A team member"
 		if ws != nil {
-			wsName = ws.Name
+			wsName = ws.DisplayName
 		}
 		if inviter != nil {
 			inviterName = inviter.Name
@@ -627,7 +628,7 @@ func (h *WorkspaceHandler) MyInvitations(c *okapi.Context) error {
 		result = append(result, InvitationResponse{
 			ID:          inv.ID,
 			WorkspaceID: inv.WorkspaceID,
-			Workspace:   inv.Workspace.Name,
+			Workspace:   inv.Workspace.DisplayName,
 			Email:       inv.Email,
 			Role:        string(inv.Role),
 			Status:      string(inv.Status),
@@ -685,11 +686,11 @@ func (h *WorkspaceHandler) AcceptInvitation(c *okapi.Context, req *AcceptInvitat
 	inv.Status = models.InvitationStatusAccepted
 	_ = h.workspaceRepo.UpdateInvitation(inv)
 
-	h.logAudit(c, inv.WorkspaceID, "member.joined", "Joined workspace "+inv.Workspace.Name,
+	h.logAudit(c, inv.WorkspaceID, "member.joined", "Joined workspace "+inv.Workspace.DisplayName,
 		map[string]any{"role": string(inv.Role)})
 
 	return ok(c, okapi.M{
-		"message":      fmt.Sprintf("joined workspace %q", inv.Workspace.Name),
+		"message":      fmt.Sprintf("joined workspace %q", inv.Workspace.DisplayName),
 		"workspace_id": inv.WorkspaceID,
 	})
 }
@@ -748,11 +749,11 @@ func (h *WorkspaceHandler) AcceptInvitationByID(c *okapi.Context, req *AcceptInv
 	inv.Status = models.InvitationStatusAccepted
 	_ = h.workspaceRepo.UpdateInvitation(inv)
 
-	h.logAudit(c, inv.WorkspaceID, "member.joined", "Joined workspace "+inv.Workspace.Name,
+	h.logAudit(c, inv.WorkspaceID, "member.joined", "Joined workspace "+inv.Workspace.DisplayName,
 		map[string]any{"role": string(inv.Role)})
 
 	return ok(c, okapi.M{
-		"message":      fmt.Sprintf("joined workspace %q", inv.Workspace.Name),
+		"message":      fmt.Sprintf("joined workspace %q", inv.Workspace.DisplayName),
 		"workspace_id": inv.WorkspaceID,
 	})
 }
@@ -799,23 +800,6 @@ func (h *WorkspaceHandler) DeclineInvitation(c *okapi.Context, req *DeclineInvit
 	_ = h.workspaceRepo.UpdateInvitation(inv)
 
 	return ok(c, okapi.M{"message": "invitation declined"})
-}
-
-var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-
-func isValidSlug(s string) bool {
-	return slugRegex.MatchString(s)
-}
-
-func slugify(name string) string {
-	s := strings.ToLower(strings.TrimSpace(name))
-	s = regexp.MustCompile(`[^a-z0-9\s-]`).ReplaceAllString(s, "")
-	s = regexp.MustCompile(`[\s]+`).ReplaceAllString(s, "-")
-	s = strings.Trim(s, "-")
-	if s == "" {
-		s = "workspace"
-	}
-	return s
 }
 
 func generateToken() (string, error) {

@@ -65,7 +65,7 @@ func New(
 var seedLanguages = []string{"en", "fr", "de"}
 
 type templateDef struct {
-	Name        string
+	DisplayName string
 	Description string
 	Base        string // template file base name, e.g. "welcome"
 	SampleData  okapi.M
@@ -85,13 +85,14 @@ func (s *Seeder) seedTemplate(workspaceID, userID uint, ssID uint, def templateD
 	tmpl := &models.Template{
 		UserID:          userID,
 		WorkspaceID:     workspacePtr(workspaceID),
-		Name:            def.Name,
+		Name:            models.ToIdentifier(def.DisplayName),
+		DisplayName:     def.DisplayName,
 		DefaultLanguage: seedLanguages[0],
 		Description:     def.Description,
 		SampleData:      sampleData,
 	}
 	if err := s.templateRepo.Create(tmpl); err != nil {
-		logger.Error("failed to seed template", "name", def.Name, "user_id", userID, "error", err)
+		logger.Error("failed to seed template", "name", def.DisplayName, "user_id", userID, "error", err)
 		return
 	}
 
@@ -102,7 +103,7 @@ func (s *Seeder) seedTemplate(workspaceID, userID uint, ssID uint, def templateD
 		SampleData:   sampleData,
 	}
 	if err := s.versionRepo.Create(v); err != nil {
-		logger.Error("failed to seed template version", "name", def.Name, "user_id", userID, "error", err)
+		logger.Error("failed to seed template version", "name", def.DisplayName, "user_id", userID, "error", err)
 		return
 	}
 
@@ -115,14 +116,14 @@ func (s *Seeder) seedTemplate(workspaceID, userID uint, ssID uint, def templateD
 			TextTemplate:    textTmpl(def.Base, lang),
 		}
 		if err := s.localizationRepo.Create(loc); err != nil {
-			logger.Error("failed to seed localization", "name", def.Name, "lang", lang, "user_id", userID, "error", err)
+			logger.Error("failed to seed localization", "name", def.DisplayName, "lang", lang, "user_id", userID, "error", err)
 		}
 	}
 
 	vID := v.ID
 	tmpl.ActiveVersionID = &vID
 	if err := s.templateRepo.Update(tmpl); err != nil {
-		logger.Error("failed to activate template version", "name", def.Name, "user_id", userID, "error", err)
+		logger.Error("failed to activate template version", "name", def.DisplayName, "user_id", userID, "error", err)
 	}
 }
 
@@ -161,6 +162,7 @@ func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string
 		UserID:      userID,
 		WorkspaceID: wsID,
 		Name:        "default",
+		DisplayName: "Default",
 		CSS:         defaultCSS,
 	}
 	if err := s.stylesheetRepo.Create(ss); err != nil {
@@ -207,7 +209,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 	return []templateDef{
 		// 1. Welcome
 		{
-			Name:        "Welcome Email",
+			DisplayName: "Welcome Email",
 			Description: "Welcome email introducing Posta and its features",
 			SampleData: okapi.M{
 				"name":    userName,
@@ -247,7 +249,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 		},
 		// 2. Password Reset
 		{
-			Name:        "Password Reset",
+			DisplayName: "Password Reset",
 			Description: "Transactional email for password reset requests",
 			SampleData: okapi.M{
 				"name":      userName,
@@ -265,7 +267,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 		},
 		// 3. Order Confirmation
 		{
-			Name:        "Order Confirmation",
+			DisplayName: "Order Confirmation",
 			Description: "Order confirmation email with item details and total",
 			SampleData: okapi.M{
 				"name":        userName,
@@ -288,7 +290,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 		},
 		// 4. Newsletter
 		{
-			Name:        "Monthly Newsletter",
+			DisplayName: "Monthly Newsletter",
 			Description: "Monthly newsletter with articles and unsubscribe link",
 			SampleData: okapi.M{
 				"name":    userName,
@@ -323,7 +325,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 		},
 		// 5. Email Verification
 		{
-			Name:        "Email Verification",
+			DisplayName: "Email Verification",
 			Description: "Confirm a new account's email address with a link and code",
 			SampleData: okapi.M{
 				"name":       userName,
@@ -342,7 +344,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 		},
 		// 6. Sign-in Code (OTP)
 		{
-			Name:        "Sign-in Code",
+			DisplayName: "Sign-in Code",
 			Description: "One-time passcode / magic-link login email",
 			SampleData: okapi.M{
 				"name":      userName,
@@ -361,7 +363,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 		},
 		// 7. Invoice / Receipt
 		{
-			Name:        "Invoice Receipt",
+			DisplayName: "Invoice Receipt",
 			Description: "Payment receipt with line items, subtotal, tax, and total",
 			SampleData: okapi.M{
 				"name":          userName,
@@ -387,7 +389,7 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 		},
 		// 8. Team Invitation
 		{
-			Name:        "Team Invitation",
+			DisplayName: "Team Invitation",
 			Description: "Invite a user to a workspace with an accept link and role",
 			SampleData: okapi.M{
 				"name":          userName,

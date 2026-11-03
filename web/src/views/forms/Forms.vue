@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { IDENTIFIER_HINT, toIdentifier } from "../../composables/identifier";
 import { useRouter } from "vue-router";
 import { formsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
@@ -16,7 +17,10 @@ const forms = ref<Form[]>([]);
 
 const showCreate = ref(false);
 const creating = ref(false);
+const newDisplayName = ref("");
 const newName = ref("");
+// The name follows the display name until it is edited by hand.
+const nameEdited = ref(false);
 const newOrigins = ref("");
 const newNotify = ref("");
 const newMode = ref<FormMode>("inbox");
@@ -39,8 +43,14 @@ const { pageable, goToPage } = usePagination(async (page) => {
   }
 });
 
+function syncName() {
+  if (!nameEdited.value) newName.value = toIdentifier(newDisplayName.value);
+}
+
 function openCreate() {
+  newDisplayName.value = "";
   newName.value = "";
+  nameEdited.value = false;
   newOrigins.value = "";
   newNotify.value = "";
   newMode.value = "inbox";
@@ -48,11 +58,12 @@ function openCreate() {
 }
 
 async function createForm() {
-  if (!newName.value.trim()) return;
+  if (!newDisplayName.value.trim()) return;
   creating.value = true;
   try {
     const res = await formsApi.create({
-      name: newName.value.trim(),
+      display_name: newDisplayName.value.trim(),
+      name: newName.value.trim() || undefined,
       mode: newMode.value,
       allowed_origins: splitList(newOrigins.value),
       notify_emails: splitList(newNotify.value),
@@ -142,7 +153,7 @@ function formatDate(date: string | null | undefined) {
                 style="cursor: pointer"
                 @click="router.push(`/forms/${form.id}`)"
               >
-                <td>{{ form.name }}</td>
+                <td>{{ form.display_name }}</td>
                 <td><code style="font-size: 12px">{{ form.public_key }}</code></td>
                 <td><span :class="statusBadgeClass(form.status)">{{ form.status }}</span></td>
                 <td>{{ form.mode === "collect" ? "Responses" : "Messages" }}</td>
@@ -164,8 +175,14 @@ function formatDate(date: string | null | undefined) {
         </div>
         <div class="modal-body">
           <div class="form-group">
+            <label class="form-label">Display name</label>
+            <input v-model="newDisplayName" class="form-input" placeholder="Contact form" @input="syncName" />
+          </div>
+          <div class="form-group">
             <label class="form-label">Name</label>
-            <input v-model="newName" class="form-input" placeholder="Contact form" />
+            <input v-model="newName" class="form-input mono" placeholder="contact-form" :title="IDENTIFIER_HINT"
+              @input="nameEdited = true" />
+            <span class="form-hint">Identifies the form in the API. {{ IDENTIFIER_HINT }}</span>
           </div>
           <div class="form-group">
             <label class="form-label">Submissions are</label>
@@ -201,7 +218,7 @@ function formatDate(date: string | null | undefined) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="showCreate = false">Cancel</button>
-          <button class="btn btn-primary" :disabled="creating || !newName.trim()" @click="createForm">
+          <button class="btn btn-primary" :disabled="creating || !newDisplayName.trim()" @click="createForm">
             {{ creating ? "Creating..." : "Create form" }}
           </button>
         </div>

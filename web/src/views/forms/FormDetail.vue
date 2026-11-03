@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { IDENTIFIER_HINT } from "../../composables/identifier";
 import { useRoute, useRouter } from "vue-router";
 import { formsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
@@ -112,6 +113,7 @@ async function save() {
   saving.value = true;
   try {
     const res = await formsApi.update(id, {
+      display_name: form.value.display_name,
       name: form.value.name,
       description: form.value.description,
       status: form.value.status,
@@ -254,7 +256,7 @@ onMounted(load);
 <template>
   <div>
     <div class="page-header">
-      <h1>{{ form?.name || "Form" }}</h1>
+      <h1>{{ form?.display_name || "Form" }}</h1>
       <div style="display: flex; gap: 8px">
         <router-link
           v-if="form && form.mode !== 'collect'"
@@ -307,9 +309,16 @@ onMounted(load);
       <div v-show="tab === 'setup'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Setup</h2></div>
         <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">Name</label>
-            <input v-model="form.name" class="form-input" />
+          <div class="name-row">
+            <div class="form-group">
+              <label class="form-label">Display name</label>
+              <input v-model="form.display_name" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" class="form-input mono" pattern="[a-z0-9]+(-[a-z0-9]+)*" :title="IDENTIFIER_HINT" />
+              <span class="form-hint">Identifies the form in the API. The embed and share links use its key, so they keep working if it changes.</span>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
@@ -701,6 +710,12 @@ onMounted(load);
 </template>
 
 <style scoped>
+.name-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 16px;
+}
+
 .mode-choice {
   border: 0;
   padding: 0;

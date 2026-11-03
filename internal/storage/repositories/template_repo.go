@@ -101,7 +101,7 @@ func (r *TemplateRepository) FindByScope(scope ResourceScope, search string, lim
 	filter := func(q *gorm.DB) *gorm.DB {
 		q = ApplyScope(q, scope)
 		if search != "" {
-			q = q.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+			q = q.Where("name ILIKE ? OR display_name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%")
 		}
 		return q
 	}
@@ -120,6 +120,17 @@ func (r *TemplateRepository) FindByScope(scope ResourceScope, search string, lim
 		return nil, 0, err
 	}
 	return items, total, nil
+}
+
+// FindByWorkspaceDisplayName finds a template by its label, for callers that
+// still send what a template's name was before 0.18. The oldest one wins
+// when two share a label.
+func (r *TemplateRepository) FindByWorkspaceDisplayName(workspaceID uint, displayName string) (*models.Template, error) {
+	var tmpl models.Template
+	if err := r.db.Where("workspace_id = ? AND display_name = ?", workspaceID, displayName).Order("id").First(&tmpl).Error; err != nil {
+		return nil, err
+	}
+	return &tmpl, nil
 }
 
 func (r *TemplateRepository) FindByWorkspaceName(workspaceID uint, name string) (*models.Template, error) {

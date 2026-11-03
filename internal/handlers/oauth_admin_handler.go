@@ -20,7 +20,6 @@
 package handlers
 
 import (
-	"strings"
 	"time"
 
 	"github.com/goposta/posta/internal/enterprise"
@@ -48,8 +47,9 @@ func NewOAuthAdminHandler(providerRepo *repositories.OAuthProviderRepository, ss
 
 type CreateOAuthProviderRequest struct {
 	Body struct {
-		Name           string `json:"name" required:"true"`
-		Slug           string `json:"slug" required:"true"`
+		Name           string `json:"name" doc:"Identifier used in the sign-in URLs, like google: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		DisplayName    string `json:"display_name" doc:"Shown on the sign-in button. Defaults to name."`
+		Slug           string `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Type           string `json:"type" required:"true"`
 		ClientID       string `json:"client_id" required:"true"`
 		ClientSecret   string `json:"client_secret" required:"true"`
@@ -67,7 +67,8 @@ type CreateOAuthProviderRequest struct {
 type UpdateOAuthProviderRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name           string `json:"name"`
+		Name           string `json:"name" doc:"A provider's name is in its sign-in URLs and cannot change; only accepted when it is the current one."`
+		DisplayName    string `json:"display_name"`
 		ClientID       string `json:"client_id"`
 		ClientSecret   string `json:"client_secret"`
 		Issuer         string `json:"issuer"`
@@ -88,8 +89,8 @@ type DeleteOAuthProviderRequest struct {
 
 type OAuthProviderResponse struct {
 	ID             uint   `json:"id"`
+	DisplayName    string `json:"display_name"`
 	Name           string `json:"name"`
-	Slug           string `json:"slug"`
 	Type           string `json:"type"`
 	Issuer         string `json:"issuer"`
 	Scopes         string `json:"scopes"`
@@ -133,15 +134,18 @@ func (h *OAuthAdminHandler) CreateProvider(c *okapi.Context, req *CreateOAuthPro
 			return licenseAbort(c, err)
 		}
 	}
-	slug := strings.ToLower(strings.TrimSpace(req.Body.Slug))
+	name, displayName, err := resolveNames(req.Body.Name, req.Body.DisplayName, req.Body.Slug)
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
 	providerType := models.OAuthProviderType(req.Body.Type)
 	if providerType != models.OAuthProviderGoogle && providerType != models.OAuthProviderOIDC {
 		return c.AbortBadRequest("type must be 'google' or 'oidc'")
 	}
 
 	provider := &models.OAuthProvider{
-		Name:           strings.TrimSpace(req.Body.Name),
-		Slug:           slug,
+		Name:           name,
+		DisplayName:    displayName,
 		Type:           providerType,
 		ClientID:       req.Body.ClientID,
 		ClientSecret:   req.Body.ClientSecret,
@@ -165,7 +169,7 @@ func (h *OAuthAdminHandler) CreateProvider(c *okapi.Context, req *CreateOAuthPro
 	}
 
 	if err := h.providerRepo.Create(provider); err != nil {
-		return c.AbortConflict("provider slug already exists")
+		return c.AbortConflict("a provider named \"" + name + "\" already exists")
 	}
 
 	return created(c, toProviderResponse(provider))
@@ -190,8 +194,15 @@ func (h *OAuthAdminHandler) UpdateProvider(c *okapi.Context, req *UpdateOAuthPro
 		return c.AbortNotFound("provider not found")
 	}
 
-	if req.Body.Name != "" {
-		provider.Name = req.Body.Name
+	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	if name != "" && name != provider.Name {
+		return c.AbortBadRequest("a provider's name is in its sign-in URLs and cannot change; set display_name to rename it")
+	}
+	if displayName != "" {
+		provider.DisplayName = displayName
 	}
 	if req.Body.ClientID != "" {
 		provider.ClientID = req.Body.ClientID
@@ -255,7 +266,7 @@ func (h *OAuthAdminHandler) GetWorkspaceSSO(c *okapi.Context) error {
 
 	return ok(c, WorkspaceSSOResponse{
 		ProviderID:     config.ProviderID,
-		ProviderName:   config.Provider.Name,
+		ProviderName:   config.Provider.DisplayName,
 		EnforceSSO:     config.EnforceSSO,
 		AutoProvision:  config.AutoProvision,
 		AllowedDomains: config.AllowedDomains,
@@ -299,8 +310,8 @@ func (h *OAuthAdminHandler) DeleteWorkspaceSSO(c *okapi.Context) error {
 func toProviderResponse(p *models.OAuthProvider) OAuthProviderResponse {
 	return OAuthProviderResponse{
 		ID:             p.ID,
+		DisplayName:    p.DisplayName,
 		Name:           p.Name,
-		Slug:           p.Slug,
 		Type:           string(p.Type),
 		Issuer:         p.Issuer,
 		Scopes:         p.Scopes,

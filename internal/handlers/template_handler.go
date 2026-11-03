@@ -43,7 +43,8 @@ type TemplateHandler struct {
 }
 type CreateTemplateRequest struct {
 	Body struct {
-		Name            string `json:"name" required:"true"`
+		Name            string `json:"name" doc:"Identifier used to send with this template, like welcome-email: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		DisplayName     string `json:"display_name" doc:"The template's label. Defaults to name."`
 		SampleData      string `json:"sample_data" default:"{}"`
 		DefaultLanguage string `json:"default_language"`
 		Description     string `json:"description"`
@@ -52,7 +53,8 @@ type CreateTemplateRequest struct {
 type UpdateTemplateRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name            string  `json:"name"`
+		Name            string  `json:"name" doc:"Identifier used to send with this template. Renaming it breaks callers that send by the old name."`
+		DisplayName     string  `json:"display_name"`
 		SampleData      *string `json:"sample_data" default:"{}"`
 		DefaultLanguage string  `json:"default_language"`
 		Description     *string `json:"description"`
@@ -108,17 +110,22 @@ func (h *TemplateHandler) Create(c *okapi.Context, req *CreateTemplateRequest) e
 		}
 	}
 
+	name, displayName, err := resolveNames(req.Body.Name, req.Body.DisplayName, "")
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
 	tmpl := &models.Template{
 		UserID:          scope.UserID,
 		WorkspaceID:     scope.WorkspaceID,
-		Name:            req.Body.Name,
+		Name:            name,
+		DisplayName:     displayName,
 		DefaultLanguage: defaultLang,
 		Description:     req.Body.Description,
 		SampleData:      req.Body.SampleData,
 		LastEditedByID:  &scope.UserID,
 	}
 
-	err := h.repo.CreateWithVersions(tmpl, []repositories.ImportVersion{
+	err = h.repo.CreateWithVersions(tmpl, []repositories.ImportVersion{
 		{SampleData: req.Body.SampleData, IsActive: true},
 	})
 	if repositories.IsDuplicateName(err) {
@@ -140,8 +147,15 @@ func (h *TemplateHandler) Update(c *okapi.Context, req *UpdateTemplateRequest) e
 		return c.AbortNotFound("template not found")
 	}
 
-	if req.Body.Name != "" {
-		tmpl.Name = req.Body.Name
+	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	if name != "" {
+		tmpl.Name = name
+	}
+	if displayName != "" {
+		tmpl.DisplayName = displayName
 	}
 	if req.Body.SampleData != nil {
 		tmpl.SampleData = *req.Body.SampleData
@@ -314,6 +328,7 @@ type TemplateExport struct {
 	PostaVersion    string          `json:"posta_version,omitempty"`
 	ExportedAt      string          `json:"exported_at,omitempty"`
 	Name            string          `json:"name"`
+	DisplayName     string          `json:"display_name,omitempty"`
 	Description     string          `json:"description"`
 	DefaultLanguage string          `json:"default_language"`
 	SampleData      string          `json:"sample_data"`
@@ -367,6 +382,7 @@ func (h *TemplateHandler) Export(c *okapi.Context, req *ExportTemplateRequest) e
 		PostaVersion:    config.Version,
 		ExportedAt:      time.Now().UTC().Format(time.RFC3339),
 		Name:            tmpl.Name,
+		DisplayName:     tmpl.DisplayName,
 		Description:     tmpl.Description,
 		DefaultLanguage: tmpl.DefaultLanguage,
 		SampleData:      tmpl.SampleData,
@@ -383,9 +399,10 @@ func (h *TemplateHandler) Import(c *okapi.Context, req *ImportTemplateRequest) e
 	scope := getScope(c)
 	data := req.Body
 
-	if data.Name == "" {
+	if data.Name == "" && data.DisplayName == "" {
 		return c.AbortBadRequest("template name is required")
 	}
+	name, displayName := importNames(data.Name, data.DisplayName, "template")
 
 	defaultLang := data.DefaultLanguage
 	if defaultLang == "" {
@@ -399,7 +416,8 @@ func (h *TemplateHandler) Import(c *okapi.Context, req *ImportTemplateRequest) e
 	tmpl := &models.Template{
 		UserID:          scope.UserID,
 		WorkspaceID:     scope.WorkspaceID,
-		Name:            data.Name,
+		Name:            name,
+		DisplayName:     displayName,
 		DefaultLanguage: defaultLang,
 		Description:     data.Description,
 		SampleData:      data.SampleData,
@@ -477,28 +495,51 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 		return c.AbortBadRequest("file is empty")
 	}
 
-	// Derive the template name from the filename, keeping its capitalisation:
-	// the lowercased copy is only there to match the extension.
-	name := filename[:len(filename)-len(filepath.Ext(filename))]
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return c.AbortBadRequest("could not derive template name from filename")
+	// Optional form fields override what is otherwise derived from the
+	// filename and the document: name, display_name, description, subject
+	// and language.
+	form := func(key string) string { return strings.TrimSpace(c.Request().FormValue(key)) }
+
+	// Without a name or display name, the template is named after the
+	// filename, keeping its capitalisation: the lowercased copy is only
+	// there to match the extension.
+	name := form("display_name")
+	if name == "" && form("name") == "" {
+		name = strings.TrimSpace(filename[:len(filename)-len(filepath.Ext(filename))])
+		if name == "" || models.ToIdentifier(name) == "" {
+			return c.AbortBadRequest("could not derive template name from filename")
+		}
 	}
+	identifier, displayName, err := resolveNames(form("name"), name, "")
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	name = displayName
 
 	// Extract CSS and HTML body, plus any <link rel="stylesheet"> references
 	css, body := extractStyleAndBody(htmlContent)
 	linkNames := extractStyleSheetLinks(htmlContent)
 
 	// Try to extract a subject from <title>
-	subject := extractTitle(htmlContent)
+	subject := form("subject")
+	if subject == "" {
+		subject = extractTitle(htmlContent)
+	}
 	if subject == "" {
 		subject = name
 	}
 
 	// Resolve default language from scope
-	defaultLang := "en"
-	if defLang, err := h.languageRepo.FindDefault(scope); err == nil {
-		defaultLang = defLang.Code
+	defaultLang := form("language")
+	if defaultLang == "" {
+		defaultLang = "en"
+		if defLang, err := h.languageRepo.FindDefault(scope); err == nil {
+			defaultLang = defLang.Code
+		}
+	}
+	description := form("description")
+	if description == "" {
+		description = fmt.Sprintf("Imported from %s", filename)
 	}
 
 	stylesheetID := h.resolveImportedStyleSheet(scope, name, css, linkNames)
@@ -506,9 +547,10 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 	tmpl := &models.Template{
 		UserID:          scope.UserID,
 		WorkspaceID:     scope.WorkspaceID,
-		Name:            name,
+		Name:            identifier,
+		DisplayName:     displayName,
 		DefaultLanguage: defaultLang,
-		Description:     fmt.Sprintf("Imported from %s", filename),
+		Description:     description,
 		SampleData:      "{}",
 		LastEditedByID:  &scope.UserID,
 	}
@@ -524,7 +566,7 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 		}},
 	}})
 	if repositories.IsDuplicateName(err) {
-		return c.AbortConflict("a template named \"" + name + "\" already exists in this workspace")
+		return c.AbortConflict("a template named \"" + tmpl.Name + "\" already exists in this workspace")
 	}
 	if err != nil {
 		return c.AbortInternalServerError("failed to import template")
@@ -551,17 +593,19 @@ func (h *TemplateHandler) resolveImportedStyleSheet(scope repositories.ResourceS
 	}
 
 	if strings.TrimSpace(inlineCSS) != "" {
-		return findOrCreateStyleSheet(&ExportStyleSheet{Name: baseName + "-styles", CSS: inlineCSS}, scope, h.stylesheetRepo)
+		return findOrCreateStyleSheet(&ExportStyleSheet{Name: models.ToIdentifier(baseName) + "-styles", DisplayName: baseName + " styles", CSS: inlineCSS}, scope, h.stylesheetRepo)
 	}
 
 	return nil
 }
 
 func (h *TemplateHandler) createStyleSheet(scope repositories.ResourceScope, name, css string) *uint {
+	id, displayName := importNames(name, "", "stylesheet")
 	ss := &models.StyleSheet{
 		UserID:      scope.UserID,
 		WorkspaceID: scope.WorkspaceID,
-		Name:        name,
+		Name:        id,
+		DisplayName: displayName,
 		CSS:         css,
 	}
 	if err := h.stylesheetRepo.Create(ss); err != nil {

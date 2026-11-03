@@ -33,7 +33,7 @@ const unlinkingAccount = ref<number | null>(null)
 
 const availableProviders = computed(() => {
   const linkedNames = new Set(linkedAccounts.value.map(a => a.provider_name))
-  return oauthProviders.value.filter(p => !linkedNames.has(p.name))
+  return oauthProviders.value.filter(p => !linkedNames.has(p.display_name))
 })
 
 function formatLimit(val: number): string {
@@ -114,8 +114,8 @@ async function unlinkOAuthAccount(account: OAuthLinkedAccount) {
   }
 }
 
-function linkOAuthProvider(slug: string) {
-  window.location.href = `/api/v1/auth/oauth/${slug}/authorize`
+function linkOAuthProvider(provider: string) {
+  window.location.href = `/api/v1/auth/oauth/${provider}/authorize`
 }
 
 // Password
@@ -557,11 +557,11 @@ onMounted(() => { loadSessions() })
               <div style="display: flex; gap: 8px; flex-wrap: wrap">
                 <button
                   v-for="provider in availableProviders"
-                  :key="provider.slug"
+                  :key="provider.name"
                   class="btn btn-secondary"
-                  @click="linkOAuthProvider(provider.slug)"
+                  @click="linkOAuthProvider(provider.name)"
                 >
-                  Link {{ provider.name }}
+                  Link {{ provider.display_name }}
                 </button>
               </div>
             </div>

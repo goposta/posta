@@ -26,12 +26,12 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-func TestWorkspaceSlugIsStableAndUnique(t *testing.T) {
-	if got := workspaceSlug(42); got != "workspace-42" {
-		t.Fatalf("workspaceSlug(42) = %q, want %q", got, "workspace-42")
+func TestWorkspaceNameIsStableAndUnique(t *testing.T) {
+	if got := workspaceName(42); got != "workspace-42" {
+		t.Fatalf("workspaceName(42) = %q, want %q", got, "workspace-42")
 	}
-	if workspaceSlug(1) == workspaceSlug(2) {
-		t.Fatal("workspaceSlug must differ per user")
+	if workspaceName(1) == workspaceName(2) {
+		t.Fatal("workspaceName must differ per user")
 	}
 }
 
@@ -44,8 +44,8 @@ func TestWorkspaceName(t *testing.T) {
 		"   ":           "My workspace",
 	}
 	for in, want := range cases {
-		if got := workspaceName(in); got != want {
-			t.Fatalf("workspaceName(%q) = %q, want %q", in, got, want)
+		if got := workspaceDisplayName(in); got != want {
+			t.Fatalf("workspaceDisplayName(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

@@ -221,7 +221,7 @@ function formatDate(date: string | null | undefined) {
             <label class="form-label">Form</label>
             <select v-model.number="formId" class="form-select" @change="applyFilters">
               <option :value="0">All forms</option>
-              <option v-for="f in forms" :key="f.id" :value="f.id">{{ f.name }}</option>
+              <option v-for="f in forms" :key="f.id" :value="f.id">{{ f.display_name }}</option>
             </select>
           </div>
 
@@ -306,7 +306,7 @@ function formatDate(date: string | null | undefined) {
         <p v-if="!formId && collectForms.length" class="collect-note">
           Responses to
           <template v-for="(f, i) in collectForms.slice(0, 3)" :key="f.id">
-            <router-link :to="`/forms/${f.id}?tab=responses`">{{ f.name }}</router-link
+            <router-link :to="`/forms/${f.id}?tab=responses`">{{ f.display_name }}</router-link
             >{{ i < Math.min(collectForms.length, 3) - 1 ? ", " : "" }}
           </template>
           <template v-if="collectForms.length > 3"> and {{ collectForms.length - 3 }} more</template>
@@ -365,7 +365,7 @@ function formatDate(date: string | null | undefined) {
                     </span>
                   </td>
                   <td>
-                    {{ message.form?.name || "-" }}
+                    {{ message.form?.display_name || "-" }}
                     <div v-if="message.team || message.assigned_to" class="route-line">
                       {{ [message.team?.name, message.assigned_to?.name].filter(Boolean).join(" · ") }}
                     </div>

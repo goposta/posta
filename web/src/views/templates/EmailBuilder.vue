@@ -199,7 +199,7 @@ onBeforeUnmount(() => {
           <span class="mdi mdi-arrow-left"></span> Back
         </button>
         <div class="builder-title">
-          <h2>{{ template?.name || 'Template' }}</h2>
+          <h2>{{ template?.display_name || 'Template' }}</h2>
           <div class="builder-meta">
             <span class="badge badge-accent">Visual Builder</span>
             <span class="badge badge-info">{{ localization?.language }}</span>

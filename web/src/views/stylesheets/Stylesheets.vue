@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { IDENTIFIER_HINT, toIdentifier } from '../../composables/identifier'
 import { stylesheetsApi } from '../../api/stylesheets'
 import type { StyleSheet, StyleSheetInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
@@ -21,13 +22,22 @@ const showModal = ref(false)
 const editing = ref<StyleSheet | null>(null)
   const saving = ref(false)
 
-  const form = ref<StyleSheetInput>({
+  const form = ref<Required<StyleSheetInput>>({
   name: '',
+  display_name: '',
   css: '',
 })
+// A new stylesheet's name follows its display name until edited by hand;
+// an existing one keeps its name.
+const nameEdited = ref(false)
+
+function syncName() {
+  if (!nameEdited.value) form.value.name = toIdentifier(form.value.display_name)
+}
 
 function resetForm() {
-  form.value = { name: '', css: '' }
+  form.value = { name: '', display_name: '', css: '' }
+  nameEdited.value = false
   editing.value = null
 }
 
@@ -40,8 +50,10 @@ function openEdit(sheet: StyleSheet) {
   editing.value = sheet
   form.value = {
     name: sheet.name,
+    display_name: sheet.display_name,
     css: sheet.css,
   }
+  nameEdited.value = true
   showModal.value = true
 }
 
@@ -64,7 +76,7 @@ const { pageable, goToPage } = usePagination(async (page) => {
 
 
 async function saveStylesheet() {
-  if (!form.value.name.trim()) return
+  if (!form.value.display_name.trim() || !form.value.name.trim()) return
   saving.value = true
   try {
     if (editing.value) {
@@ -76,8 +88,8 @@ async function saveStylesheet() {
     }
     closeModal()
     await goToPage(pageable.value.current_page)
-  } catch {
-    notify.error(editing.value ? 'Failed to update stylesheet' : 'Failed to create stylesheet')
+  } catch (e: any) {
+    notify.error(e?.response?.data?.error?.message || (editing.value ? 'Failed to update stylesheet' : 'Failed to create stylesheet'))
   } finally {
     saving.value = false
   }
@@ -86,7 +98,7 @@ async function saveStylesheet() {
 async function deleteStylesheet(sheet: StyleSheet) {
   const confirmed = await confirm({
     title: 'Delete Stylesheet',
-    message: `Are you sure you want to delete "${sheet.name}"? Templates using this stylesheet will lose their styling.`,
+    message: `Are you sure you want to delete "${sheet.display_name}"? Templates using this stylesheet will lose their styling.`,
     confirmText: 'Delete',
     variant: 'danger',
   })
@@ -133,6 +145,7 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
           <table>
             <thead>
               <tr>
+                <th>Display name</th>
                 <th>Name</th>
                 <th>Created</th>
                 <th>Updated</th>
@@ -141,7 +154,8 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
             </thead>
             <tbody>
               <tr v-for="sheet in stylesheets" :key="sheet.id">
-                <td>{{ sheet.name }}</td>
+                <td>{{ sheet.display_name }}</td>
+                <td><code>{{ sheet.name }}</code></td>
                 <td>{{ formatDate(sheet.created_at) }}</td>
                 <td>
                   <span v-if="sheet.updated_at">{{ formatDate(sheet.updated_at) }}</span>
@@ -172,8 +186,14 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
         </div>
         <div class="modal-body">
           <div class="form-group">
+            <label class="form-label">Display name</label>
+            <input v-model="form.display_name" class="form-input" placeholder="e.g. Brand Styles" @input="syncName" />
+          </div>
+          <div class="form-group">
             <label class="form-label">Name</label>
-            <input v-model="form.name" class="form-input" placeholder="e.g. Brand Styles" />
+            <input v-model="form.name" class="form-input mono" placeholder="brand-styles" :title="IDENTIFIER_HINT"
+              @input="nameEdited = true" />
+            <span class="form-hint">Imported HTML templates link stylesheets by this name. {{ IDENTIFIER_HINT }}</span>
           </div>
           <div class="form-group">
             <label class="form-label">CSS</label>
@@ -185,7 +205,7 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
           <button class="btn btn-secondary" @click="closeModal">Cancel</button>
           <button
             class="btn btn-primary"
-            :disabled="saving || !form.name.trim()"
+            :disabled="saving || !form.display_name.trim() || !form.name.trim()"
             @click="saveStylesheet"
           >
             {{ saving ? 'Saving...' : (editing ? 'Update' : 'Create') }}

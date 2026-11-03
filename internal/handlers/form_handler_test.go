@@ -26,7 +26,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-func TestFormSlug(t *testing.T) {
+func TestToIdentifier(t *testing.T) {
 	cases := map[string]string{
 		"Contact Form":           "contact-form",
 		"  Support!!  ":          "support",
@@ -34,11 +34,11 @@ func TestFormSlug(t *testing.T) {
 		"already-a-slug":         "already-a-slug",
 		"!!!":                    "",
 		"":                       "",
-		strings.Repeat("a", 100): strings.Repeat("a", 60),
+		strings.Repeat("a", 100): strings.Repeat("a", models.MaxIdentifierLength),
 	}
 	for in, want := range cases {
-		if got := formSlug(in); got != want {
-			t.Fatalf("formSlug(%q) = %q, want %q", in, got, want)
+		if got := models.ToIdentifier(in); got != want {
+			t.Fatalf("models.ToIdentifier(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -133,7 +133,7 @@ func TestIsHTTPURL(t *testing.T) {
 }
 
 func TestBuildHTMLSnippetIncludesHoneypot(t *testing.T) {
-	form := &models.Form{Name: "Contact", HoneypotField: "_trap"}
+	form := &models.Form{DisplayName: "Contact", HoneypotField: "_trap"}
 	snippet := buildHTMLSnippet("https://posta.test/api/v1/f/abc", form)
 	if !strings.Contains(snippet, `name="_trap"`) {
 		t.Fatalf("snippet is missing the honeypot field:\n%s", snippet)

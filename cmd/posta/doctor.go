@@ -120,7 +120,7 @@ func runDoctorWorkspaces() error {
 	fmt.Println(strings.Repeat("-", 60))
 	if blocked {
 		fmt.Println("NOT SAFE TO UPGRADE — resolve the blocking rows above first.")
-		fmt.Printf("Reserved system slug: %q\n", workspacesvc.SystemSlug)
+		fmt.Printf("Reserved system workspace name: %q\n", workspacesvc.SystemName)
 		os.Exit(1)
 	}
 	fmt.Println("Safe to upgrade.")

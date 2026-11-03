@@ -21,13 +21,13 @@ package workspace
 
 import "testing"
 
-func TestIsReservedSlug(t *testing.T) {
-	if !IsReservedSlug(SystemSlug) {
-		t.Fatalf("IsReservedSlug(%q) = false, want true", SystemSlug)
+func TestIsReservedName(t *testing.T) {
+	if !IsReservedName(SystemName) {
+		t.Fatalf("IsReservedName(%q) = false, want true", SystemName)
 	}
 	for _, slug := range []string{"acme", "system-2", "systems", "", "System"} {
-		if IsReservedSlug(slug) {
-			t.Fatalf("IsReservedSlug(%q) = true, want false", slug)
+		if IsReservedName(slug) {
+			t.Fatalf("IsReservedName(%q) = true, want false", slug)
 		}
 	}
 }

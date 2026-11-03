@@ -402,7 +402,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Handler:     okapi.H(r.h.adminWorkspace.List),
 			Group:       adminGroup,
 			Summary:     "List all workspaces",
-			Description: "Platform-wide workspace list with owner, plan and member count, filterable by name/slug, owner, and plan.",
+			Description: "Platform-wide workspace list with owner, plan and member count, filterable by name or display name, owner, and plan.",
 			Request:     &handlers.AdminListWorkspacesRequest{},
 			Response:    &dto.PageableResponse[handlers.AdminWorkspaceRow]{},
 		},

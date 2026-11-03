@@ -507,14 +507,14 @@ func (h *AdminHandler) UserMetrics(c *okapi.Context, req *AdminGetUserRequest) e
 
 // AdminWorkspace is a workspace with its plan name for admin views.
 type AdminWorkspace struct {
-	ID        uint      `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	OwnerID   uint      `json:"owner_id"`
-	PlanID    *uint     `json:"plan_id"`
-	PlanName  string    `json:"plan_name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          uint      `json:"id"`
+	DisplayName string    `json:"display_name"`
+	Name        string    `json:"name"`
+	OwnerID     uint      `json:"owner_id"`
+	PlanID      *uint     `json:"plan_id"`
+	PlanName    string    `json:"plan_name"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // UserWorkspaces returns workspaces for a specific user (admin only).
@@ -549,13 +549,13 @@ func (h *AdminHandler) UserWorkspaces(c *okapi.Context, req *AdminGetUserRequest
 	result := make([]AdminWorkspace, len(workspaces))
 	for i, ws := range workspaces {
 		result[i] = AdminWorkspace{
-			ID:        ws.ID,
-			Name:      ws.Name,
-			Slug:      ws.Slug,
-			OwnerID:   ws.OwnerID,
-			PlanID:    ws.PlanID,
-			CreatedAt: ws.CreatedAt,
-			UpdatedAt: ws.UpdatedAt,
+			ID:          ws.ID,
+			DisplayName: ws.DisplayName,
+			Name:        ws.Name,
+			OwnerID:     ws.OwnerID,
+			PlanID:      ws.PlanID,
+			CreatedAt:   ws.CreatedAt,
+			UpdatedAt:   ws.UpdatedAt,
 		}
 		if ws.PlanID != nil {
 			result[i].PlanName = planNames[*ws.PlanID]

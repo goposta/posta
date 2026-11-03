@@ -37,7 +37,7 @@ func TestTemplateAttribution(t *testing.T) {
 	editor := createUser(t, tx, "editor@attr.test")
 	repo := &TemplateRepository{db: tx}
 
-	tmpl := &models.Template{UserID: creator, Name: "Attr", LastEditedByID: &creator}
+	tmpl := &models.Template{UserID: creator, Name: "attr", LastEditedByID: &creator}
 	if err := repo.Create(tmpl); err != nil {
 		t.Fatalf("create template: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestTemplateAttribution(t *testing.T) {
 		t.Fatalf("LastEditedBy = %+v, want id %d", got.LastEditedBy, editor)
 	}
 
-	got.Name = "Attr Renamed"
+	got.DisplayName = "Attr Renamed"
 	if err := repo.Update(got); err != nil {
 		t.Fatalf("update preloaded template: %v", err)
 	}
@@ -79,8 +79,8 @@ func TestTemplateAttribution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find by id after update: %v", err)
 	}
-	if reloaded.Name != "Attr Renamed" {
-		t.Errorf("Name = %q, want %q", reloaded.Name, "Attr Renamed")
+	if reloaded.DisplayName != "Attr Renamed" {
+		t.Errorf("Name = %q, want %q", reloaded.DisplayName, "Attr Renamed")
 	}
 	if reloaded.LastEditedBy == nil || reloaded.LastEditedBy.ID != editor {
 		t.Errorf("LastEditedBy after update = %+v, want id %d", reloaded.LastEditedBy, editor)

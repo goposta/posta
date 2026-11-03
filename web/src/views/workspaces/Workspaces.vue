@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { IDENTIFIER_HINT, toIdentifier } from '../../composables/identifier'
 import { useRouter, useRoute } from 'vue-router'
 import { workspaceApi } from '../../api/workspaces'
 import type { Workspace, WorkspaceInvitation } from '../../api/types'
@@ -16,8 +17,10 @@ const invitations = ref<WorkspaceInvitation[]>([])
 const loading = ref(true)
 
 const showCreateModal = ref(false)
+const newDisplayName = ref('')
 const newName = ref('')
-const newSlug = ref('')
+// The name follows the display name until it is edited by hand.
+const nameEdited = ref(false)
 const newDescription = ref('')
 // On by default: an empty workspace has nothing to send and nothing to look at.
 const newSeedDefaults = ref(true)
@@ -39,27 +42,25 @@ async function fetchData() {
   }
 }
 
-function autoSlug() {
-  newSlug.value = newName.value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+function syncName() {
+  if (!nameEdited.value) newName.value = toIdentifier(newDisplayName.value)
 }
 
 async function createWorkspace() {
-  if (!newName.value.trim() || !newSlug.value.trim()) return
+  if (!newDisplayName.value.trim() || !newName.value.trim()) return
   creating.value = true
   try {
     await workspaceApi.create({
+      display_name: newDisplayName.value.trim(),
       name: newName.value.trim(),
-      slug: newSlug.value.trim(),
       description: newDescription.value.trim(),
       seed_defaults: newSeedDefaults.value,
     })
     notify.success('Workspace created')
     showCreateModal.value = false
+    newDisplayName.value = ''
     newName.value = ''
-    newSlug.value = ''
+    nameEdited.value = false
     newDescription.value = ''
     newSeedDefaults.value = true
     await fetchData()
@@ -175,8 +176,8 @@ if (route.query.create !== undefined) {
             <table>
               <thead>
                 <tr>
+                  <th>Display name</th>
                   <th>Name</th>
-                  <th>Slug</th>
                   <th>Your Role</th>
                   <th>Created</th>
                   <th>Actions</th>
@@ -184,8 +185,8 @@ if (route.query.create !== undefined) {
               </thead>
               <tbody>
                 <tr v-for="ws in workspaces" :key="ws.id">
-                  <td style="font-weight: 500;">{{ ws.name }}</td>
-                  <td><code>{{ ws.slug }}</code></td>
+                  <td style="font-weight: 500;">{{ ws.display_name }}</td>
+                  <td><code>{{ ws.name }}</code></td>
                   <td>
                     <span class="badge" :class="roleBadgeClass(ws.role)">{{ ws.role }}</span>
                   </td>
@@ -224,27 +225,27 @@ if (route.query.create !== undefined) {
         <form @submit.prevent="createWorkspace">
           <div class="modal-body">
             <div class="form-group">
-              <label class="form-label">Name</label>
+              <label class="form-label">Display name</label>
               <input
-                v-model="newName"
+                v-model="newDisplayName"
                 class="form-input"
                 placeholder="My Team"
                 required
-                @input="autoSlug"
+                @input="syncName"
               />
             </div>
             <div class="form-group">
-              <label class="form-label">Slug</label>
+              <label class="form-label">Name</label>
               <input
-                v-model="newSlug"
-                class="form-input"
+                v-model="newName"
+                class="form-input mono"
                 placeholder="my-team"
                 pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                :title="IDENTIFIER_HINT"
                 required
+                @input="nameEdited = true"
               />
-              <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">
-                URL-friendly identifier. Lowercase letters, numbers, and hyphens only.
-              </small>
+              <span class="form-hint">Unique on this Posta. {{ IDENTIFIER_HINT }} It cannot change later.</span>
             </div>
             <div class="form-group">
               <label class="form-label">Description (optional)</label>
@@ -268,7 +269,7 @@ if (route.query.create !== undefined) {
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" @click="showCreateModal = false">Cancel</button>
-            <button type="submit" class="btn btn-primary" :disabled="creating || !newName.trim() || !newSlug.trim()">
+            <button type="submit" class="btn btn-primary" :disabled="creating || !newDisplayName.trim() || !newName.trim()">
               {{ creating ? 'Creating...' : 'Create' }}
             </button>
           </div>

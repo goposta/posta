@@ -32,15 +32,17 @@ type StyleSheetHandler struct {
 }
 type CreateStyleSheetRequest struct {
 	Body struct {
-		Name string `json:"name" required:"true"`
-		CSS  string `json:"css"`
+		Name        string `json:"name" doc:"Identifier, like brand: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		DisplayName string `json:"display_name" doc:"The stylesheet's label. Defaults to name."`
+		CSS         string `json:"css"`
 	} `json:"body"`
 }
 type UpdateStyleSheetRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name string `json:"name"`
-		CSS  string `json:"css"`
+		Name        string `json:"name"`
+		DisplayName string `json:"display_name"`
+		CSS         string `json:"css"`
 	} `json:"body"`
 }
 type DeleteStyleSheetRequest struct {
@@ -57,15 +59,20 @@ func (h *StyleSheetHandler) Create(c *okapi.Context, req *CreateStyleSheetReques
 	}
 	scope := getScope(c)
 
+	name, displayName, err := resolveNames(req.Body.Name, req.Body.DisplayName, "")
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
 	ss := &models.StyleSheet{
 		UserID:      scope.UserID,
 		WorkspaceID: scope.WorkspaceID,
-		Name:        req.Body.Name,
+		Name:        name,
+		DisplayName: displayName,
 		CSS:         req.Body.CSS,
 	}
 
 	if err := h.repo.Create(ss); err != nil {
-		return c.AbortConflict("stylesheet name already exists")
+		return c.AbortConflict("a stylesheet named \"" + name + "\" already exists")
 	}
 
 	return created(c, ss)
@@ -80,8 +87,15 @@ func (h *StyleSheetHandler) Update(c *okapi.Context, req *UpdateStyleSheetReques
 		return c.AbortNotFound("stylesheet not found")
 	}
 
-	if req.Body.Name != "" {
-		ss.Name = req.Body.Name
+	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	if err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	if name != "" {
+		ss.Name = name
+	}
+	if displayName != "" {
+		ss.DisplayName = displayName
 	}
 	if req.Body.CSS != "" {
 		ss.CSS = req.Body.CSS
@@ -91,6 +105,9 @@ func (h *StyleSheetHandler) Update(c *okapi.Context, req *UpdateStyleSheetReques
 	ss.UpdatedAt = &now
 
 	if err := h.repo.Update(ss); err != nil {
+		if repositories.IsDuplicateName(err) {
+			return c.AbortConflict("a stylesheet named \"" + ss.Name + "\" already exists")
+		}
 		return c.AbortInternalServerError("failed to update stylesheet")
 	}
 
