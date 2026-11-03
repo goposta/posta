@@ -38,6 +38,7 @@ type Seeder struct {
 	versionRepo      *repositories.TemplateVersionRepository
 	localizationRepo *repositories.TemplateLocalizationRepository
 	languageRepo     *repositories.LanguageRepository
+	formRepo         *repositories.FormRepository
 }
 
 func New(
@@ -46,6 +47,7 @@ func New(
 	versionRepo *repositories.TemplateVersionRepository,
 	localizationRepo *repositories.TemplateLocalizationRepository,
 	languageRepo *repositories.LanguageRepository,
+	formRepo *repositories.FormRepository,
 ) *Seeder {
 	return &Seeder{
 		templateRepo:     templateRepo,
@@ -53,6 +55,7 @@ func New(
 		versionRepo:      versionRepo,
 		localizationRepo: localizationRepo,
 		languageRepo:     languageRepo,
+		formRepo:         formRepo,
 	}
 }
 
@@ -191,7 +194,9 @@ func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string
 		}
 	}
 
-	logger.Info("seeded default stylesheet, templates, versions, localizations, and languages",
+	s.seedForms(workspaceID, userID)
+
+	logger.Info("seeded default stylesheet, templates, versions, localizations, languages, and forms",
 		"user_id", userID, "workspace_id", workspaceID)
 }
 

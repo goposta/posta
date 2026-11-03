@@ -5,23 +5,14 @@ import { auditApi } from '../../api/audit'
 import type { Event } from '../../api/types'
 import Pagination from '../../components/Pagination.vue'
 import { usePagination } from '@/composables/usePagination'
-import { ENTERPRISE_URL } from '../../api/license'
-import { useAuthStore } from '../../stores/auth'
-import { useLicenseStore } from '../../stores/license'
 
 const router = useRouter()
 const events = ref<Event[]>([])
 const loading = ref(true)
-const license = useLicenseStore()
-const auth = useAuthStore()
-
-// Posta Community shows the last week; the full history needs Enterprise.
-const COMMUNITY_AUDIT_DAYS = 7
 
 const { pageable, goToPage } = usePagination(async (page) => {
   loading.value = true
   try {
-    await license.load()
     const res = await auditApi.list(page, pageable.value.size)
     events.value = res.data.data
     pageable.value = res.data.pageable
@@ -51,19 +42,6 @@ function openDetail(event: Event) {
     <div class="page-header">
       <h1>Audit Log</h1>
     </div>
-
-    <div v-if="license.ready && !license.licensed" class="app-banner app-banner--info audit-window" role="status">
-      <div class="app-banner-content">
-        <p class="app-banner-text">
-          Posta Community shows the last {{ COMMUNITY_AUDIT_DAYS }} days of activity. The full history, kept for as
-          long as your retention policy allows, comes with <span class="ee-badge">Enterprise</span>.
-          <router-link v-if="auth.isAdmin" to="/admin/license">Install a license</router-link>
-          <template v-if="auth.isAdmin"> · </template>
-          <a :href="ENTERPRISE_URL" target="_blank" rel="noopener noreferrer">About Posta Enterprise</a>
-        </p>
-      </div>
-    </div>
-
 
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
@@ -106,10 +84,6 @@ function openDetail(event: Event) {
 </template>
 
 <style scoped>
-.audit-window {
-  margin-bottom: 16px;
-}
-
 .clickable-row {
   cursor: pointer;
 }

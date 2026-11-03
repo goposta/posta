@@ -107,11 +107,6 @@ async function loadLicenseWarnings() {
   }
 }
 
-/** The "EE" marker on an Enterprise nav entry, while no license is installed. */
-function showEnterpriseBadge(item: NavItem) {
-  return !!item.enterprise && license.ready && !license.licensed
-}
-
 async function dismissUpdate() {
   const version = update.value?.latest_version
   if (!version) return
@@ -164,8 +159,6 @@ interface NavItem {
   workspaceSubpath?: string
   /** Additional route path prefixes that should keep this item highlighted (grouped tab pages). */
   matchPaths?: string[]
-  /** A Posta Enterprise feature: marked "EE" while no license is installed. */
-  enterprise?: boolean
   /** Nested items shown indented under this entry. */
   children?: NavItem[]
 }
@@ -219,7 +212,7 @@ const workspaceNavSections: NavSection[] = [
         icon: 'message-square',
         children: [
           { name: 'Forms', path: '/forms', icon: 'edit-3' },
-          { name: 'Teams', path: '/teams', icon: 'users', enterprise: true },
+          { name: 'Teams', path: '/teams', icon: 'users' },
           { name: 'Spam Filters', path: '/message-filters', icon: 'shield' },
         ],
       },
@@ -296,7 +289,7 @@ const adminNavSections: NavSection[] = [
     items: [
       { name: 'Users', path: '/admin/users', icon: 'users' },
       { name: 'OAuth Providers', path: '/admin/oauth', icon: 'shield' },
-      { name: 'LDAP Directories', path: '/admin/ldap', icon: 'server', enterprise: true },
+      { name: 'LDAP Directories', path: '/admin/ldap', icon: 'server' },
     ],
   },
   {
@@ -305,7 +298,7 @@ const adminNavSections: NavSection[] = [
     items: [
       { name: 'Workspaces', path: '/admin/workspaces', icon: 'briefcase' },
       { name: 'Plans', path: '/admin/plans', icon: 'layers' },
-      { name: 'Announcements', path: '/admin/announcements', icon: 'bell', enterprise: true },
+      { name: 'Announcements', path: '/admin/announcements', icon: 'bell' },
     ],
   },
   {
@@ -618,15 +611,11 @@ function getIcon(name: string): string {
                   :title="sidebarCollapsed ? item.name : ''" :to="itemTo(item)">
                   <span class="nav-icon" v-html="getIcon(item.icon)"></span>
                   <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
-                  <span v-if="!sidebarCollapsed && showEnterpriseBadge(item)" class="ee-badge nav-ee"
-                    title="Posta Enterprise">EE</span>
                 </router-link>
                 <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
                   :class="{ active: isItemActive(child) }" :title="sidebarCollapsed ? child.name : ''" :to="child.path">
                   <span class="nav-icon" v-html="getIcon(child.icon)"></span>
                   <span v-if="!sidebarCollapsed" class="nav-label">{{ child.name }}</span>
-                  <span v-if="!sidebarCollapsed && showEnterpriseBadge(child)" class="ee-badge nav-ee"
-                    title="Posta Enterprise">EE</span>
                 </router-link>
               </template>
             </div>
@@ -891,13 +880,11 @@ function getIcon(name: string): string {
                   @click="mobileOpen = false" :to="itemTo(item)">
                   <span class="nav-icon" v-html="getIcon(item.icon)"></span>
                   <span class="nav-label">{{ item.name }}</span>
-                  <span v-if="showEnterpriseBadge(item)" class="ee-badge nav-ee" title="Posta Enterprise">EE</span>
                 </router-link>
                 <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
                   :class="{ active: isItemActive(child) }" @click="mobileOpen = false" :to="child.path">
                   <span class="nav-icon" v-html="getIcon(child.icon)"></span>
                   <span class="nav-label">{{ child.name }}</span>
-                  <span v-if="showEnterpriseBadge(child)" class="ee-badge nav-ee" title="Posta Enterprise">EE</span>
                 </router-link>
               </template>
             </div>
@@ -1127,10 +1114,6 @@ function getIcon(name: string): string {
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
-}
-
-.nav-ee {
-  margin-left: auto;
 }
 
 /* Banners above the page (new release, license) keep clear of its heading. */

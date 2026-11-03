@@ -116,7 +116,7 @@ func runServer(cli *okapicli.CLI) {
 				logger.Error("failed to ensure the system workspace", "error", err)
 			} else {
 
-				seedWorkspace(res.db, ws.ID, ws.OwnerID)
+				seedWorkspace(res.db, cfg, ws.ID, ws.OwnerID)
 				if err := workspacesvc.SyncMembers(res.db); err != nil {
 					logger.Error("failed to sync system workspace members", "error", err)
 				}
@@ -259,22 +259,28 @@ func checkDefaultPlan(db *gorm.DB, cfg *config.Config) {
 
 // newSeeder builds the default-content seeder. Cheap to construct: it holds
 // repositories and no state, so callers make one rather than threading it.
-func newSeeder(db *gorm.DB) *seeder.Seeder {
+func newSeeder(db *gorm.DB, cfg *config.Config) *seeder.Seeder {
+	// Example forms only where forms exist.
+	var formRepo *repositories.FormRepository
+	if cfg.MessagesEnabled {
+		formRepo = repositories.NewFormRepository(db)
+	}
 	return seeder.New(
 		repositories.NewTemplateRepository(db),
 		repositories.NewStyleSheetRepository(db),
 		repositories.NewTemplateVersionRepository(db),
 		repositories.NewTemplateLocalizationRepository(db),
 		repositories.NewLanguageRepository(db),
+		formRepo,
 	)
 }
 
-func seedWorkspace(db *gorm.DB, workspaceID, ownerID uint) {
+func seedWorkspace(db *gorm.DB, cfg *config.Config, workspaceID, ownerID uint) {
 	ownerName := ""
 	if owner, err := repositories.NewUserRepository(db).FindByID(ownerID); err == nil && owner != nil {
 		ownerName = owner.Name
 	}
-	newSeeder(db).SeedWorkspaceDefaults(workspaceID, ownerID, ownerName)
+	newSeeder(db, cfg).SeedWorkspaceDefaults(workspaceID, ownerID, ownerName)
 }
 
 func seedDefaults(db *gorm.DB, cfg *config.Config) {
@@ -283,7 +289,7 @@ func seedDefaults(db *gorm.DB, cfg *config.Config) {
 	if err != nil || admin == nil {
 		return
 	}
-	s := newSeeder(db)
+	s := newSeeder(db, cfg)
 	migrator := workspaceprovision.New(cfg.PlanEnforcement)
 	migrator.SetSeeder(s)
 	if _, err := migrator.EnsureWorkspace(db, admin.ID); err != nil {
