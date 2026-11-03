@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { auditApi } from '../../api/audit'
 import type { Event } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
+import EnterpriseLock from '../../components/EnterpriseLock.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,14 +12,17 @@ const notify = useNotificationStore()
 
 const loading = ref(true)
 const event = ref<Event | null>(null)
+// Posta Community answers 402 for audit events older than its window.
+const beyondWindow = ref(false)
 
 onMounted(async () => {
   try {
     const id = Number(route.params.id)
     const res = await auditApi.get(id)
     event.value = res.data.data
-  } catch {
-    notify.error('Failed to load audit event')
+  } catch (e) {
+    if ((e as { response?: { status?: number } }).response?.status === 402) beyondWindow.value = true
+    else notify.error('Failed to load audit event')
   } finally {
     loading.value = false
   }
@@ -53,6 +57,12 @@ const prettyMetadata = computed(() => {
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
     </div>
+
+    <EnterpriseLock
+      v-else-if="beyondWindow"
+      feature="Audit Log history"
+      description="Posta Community shows the last 7 days of workspace activity. This event is older; the full history comes with Posta Enterprise."
+    />
 
     <div v-else-if="!event" class="card">
       <div class="empty-state">

@@ -5,6 +5,8 @@ import type { Announcement, NotificationSeverity } from "../../api/inbox";
 import { useNotificationStore } from "../../stores/notification";
 import { useConfirm } from "../../composables/useConfirm";
 import { apiMessage } from "../../composables/apiError";
+import EnterpriseLock from "../../components/EnterpriseLock.vue";
+import { useLicenseStore } from "../../stores/license";
 
 const notify = useNotificationStore();
 const { confirm } = useConfirm();
@@ -81,7 +83,12 @@ function formatDate(iso?: string | null) {
   return iso ? new Date(iso).toLocaleString() : "—";
 }
 
-onMounted(load);
+const license = useLicenseStore();
+
+onMounted(async () => {
+  await license.load();
+  if (license.licensed) await load();
+});
 </script>
 
 <template>
@@ -96,7 +103,11 @@ onMounted(load);
       </div>
     </div>
 
-    <div class="card" style="margin-bottom: 20px">
+    <EnterpriseLock
+      feature="Announcements"
+      description="Put a notice in every user's in-app inbox, such as planned maintenance or a breaking upgrade. Warning and critical notices also appear on the workspace dashboard."
+    >
+    <div v-if="license.mutable" class="card" style="margin-bottom: 20px">
       <div class="card-header"><h2>New announcement</h2></div>
       <div class="card-body">
         <div class="form-group">
@@ -168,6 +179,7 @@ onMounted(load);
         </tbody>
       </table>
     </div>
+    </EnterpriseLock>
   </div>
 </template>
 

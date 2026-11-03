@@ -12,6 +12,14 @@ Posta maintains two separate audit trails depending on what you need to audit.
 
 The workspace audit log records operational activity scoped to a workspace: API key creation/revocation, template changes, SMTP server changes, webhook changes, and similar configuration actions. Requires the `admin` or `owner` workspace role.
 
+:::info Posta Enterprise
+Posta Community shows the last **7 days** of the workspace audit log; an older event
+answers `402`. The full history, and workspace audit events in the admin **Events** list,
+need a [Posta Enterprise](https://goposta.dev/enterprise) license. Posta records the events
+in every edition, so installing a license shows the history from before it. The personal
+security log below is part of Posta Community in full.
+:::
+
 ```
 GET /api/v1/workspaces/current/audit-log?page=1&size=20
 ```

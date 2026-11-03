@@ -305,7 +305,7 @@ const adminNavSections: NavSection[] = [
     items: [
       { name: 'Workspaces', path: '/admin/workspaces', icon: 'briefcase' },
       { name: 'Plans', path: '/admin/plans', icon: 'layers' },
-      { name: 'Announcements', path: '/admin/announcements', icon: 'bell' },
+      { name: 'Announcements', path: '/admin/announcements', icon: 'bell', enterprise: true },
     ],
   },
   {

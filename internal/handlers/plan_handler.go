@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
 	planpkg "github.com/goposta/posta/internal/services/plan"
@@ -39,7 +40,15 @@ type PlanHandler struct {
 	userRepo      *repositories.UserRepository
 	planService   *planpkg.Service
 	audit         *audit.Logger
+	edition       enterprise.EE
 }
+
+// CommunityPlans is how many plans Posta Community configures. More need a
+// Posta Enterprise license.
+const CommunityPlans = 3
+
+// SetEdition gates plans beyond the Community allowance on the license.
+func (h *PlanHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 
 func NewPlanHandler(
 	planRepo *repositories.PlanRepository,
@@ -117,6 +126,21 @@ type WorkspacePlanRequest struct {
 
 // Create creates a new plan.
 func (h *PlanHandler) Create(c *okapi.Context, req *CreatePlanRequest) error {
+	// Installations that already have more plans keep them; only adding one
+	// beyond the allowance needs a license.
+	n, err := h.planRepo.Count()
+	if err != nil {
+		return c.AbortInternalServerError("failed to count plans")
+	}
+	if n >= CommunityPlans {
+		edition := h.edition
+		if edition == nil {
+			edition = enterprise.Community()
+		}
+		if err := edition.RequireMutable(); err != nil {
+			return licenseAbort(c, err)
+		}
+	}
 	userID := uint(c.GetInt("user_id"))
 
 	plan := &models.Plan{

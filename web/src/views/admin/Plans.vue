@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { plansApi } from '../../api/plans'
 import type { Plan, PlanInput, Pageable } from '../../api/types'
@@ -8,15 +8,24 @@ import { useConfirm } from '../../composables/useConfirm'
 import { useModalSafeClose } from '../../composables/useModalSafeClose'
 import { usePagination } from '@/composables/usePagination'
 import Pagination from '@/components/Pagination.vue'
+import { useLicenseStore } from '../../stores/license'
+import { ENTERPRISE_URL } from '../../api/license'
 
 
 const router = useRouter()
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
+const license = useLicenseStore()
 
 const plans = ref<Plan[]>([])
 const loading = ref(true)
 const currentPage = ref(0)
+
+// Posta Community configures three plans; more need Enterprise. A search
+// filters the page total, so the unfiltered count is kept apart.
+const COMMUNITY_PLANS = 3
+const planTotal = ref(0)
+const atCommunityLimit = computed(() => !license.mutable && planTotal.value >= COMMUNITY_PLANS)
 
 const showModal = ref(false)
 const editing = ref<Plan | null>(null)
@@ -48,6 +57,7 @@ const { pageable, goToPage } = usePagination(async (page) => {
     const res = await plansApi.list(page, pageable.value.size, search.value)
     plans.value = res.data.data
     pageable.value = res.data.pageable
+    if (!search.value) planTotal.value = res.data.pageable.total_elements
   } catch (e) {
     console.error('Failed to load plans', e)
   } finally {
@@ -60,6 +70,8 @@ function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => goToPage(0), 300)
 }
+
+onMounted(() => license.load())
 
 function openCreate() {
   editing.value = null
@@ -151,7 +163,24 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
         <h1>Plans</h1>
         <p class="page-description">Manage usage plans and packages. Plans control rate limits, resource quotas, and retention policies for workspaces.</p>
       </div>
-      <button class="btn btn-primary" @click="openCreate">Create Plan</button>
+      <button
+        class="btn btn-primary"
+        :disabled="atCommunityLimit"
+        :title="atCommunityLimit ? 'More than three plans need Posta Enterprise' : undefined"
+        @click="openCreate"
+      >
+        Create Plan
+      </button>
+    </div>
+
+    <div v-if="atCommunityLimit" class="app-banner app-banner--info plan-limit" role="status">
+      <div class="app-banner-content">
+        <p class="app-banner-text">
+          Posta Community manages up to three plans. More plans come with <span class="ee-badge">Enterprise</span>.
+          <router-link to="/admin/license">Install a license</router-link> ·
+          <a :href="ENTERPRISE_URL" target="_blank" rel="noopener noreferrer">About Posta Enterprise</a>
+        </p>
+      </div>
     </div>
 
     <div class="card">
@@ -330,3 +359,9 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.plan-limit {
+  margin-bottom: 16px;
+}
+</style>

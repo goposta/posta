@@ -8,6 +8,12 @@ description: Configure plans with rate limits and resource quotas
 
 Plans define resource limits and rate quotas for workspaces. Administrators can create plans with different tiers and assign them to workspaces.
 
+:::info Posta Enterprise
+Posta Community manages up to **three** plans, active or not. Creating a fourth needs a
+[Posta Enterprise](https://goposta.dev/enterprise) license; installations that already
+have more keep them, and can still edit, assign and delete them.
+:::
+
 :::tip
 For the full request/response schema, see the interactive API Reference at `/docs` on your Posta instance.
 :::

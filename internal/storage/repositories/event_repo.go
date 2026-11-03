@@ -47,7 +47,14 @@ func (r *EventRepository) FindByID(id uint) (*models.Event, error) {
 	return &event, nil
 }
 
-func (r *EventRepository) FindAll(search string, limit, offset int) ([]models.Event, int64, error) {
+// withoutWorkspaceAudit leaves out the workspace audit trails, which Posta
+// Community records but does not show platform-wide.
+func withoutWorkspaceAudit(q *gorm.DB) *gorm.DB {
+	return q.Where("NOT (category = ? AND workspace_id IS NOT NULL)", models.EventCategoryAudit)
+}
+
+// FindAll lists events; hideWorkspaceAudit leaves out workspace audit trails.
+func (r *EventRepository) FindAll(search string, hideWorkspaceAudit bool, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
 
@@ -57,6 +64,10 @@ func (r *EventRepository) FindAll(search string, limit, offset int) ([]models.Ev
 		like := "%" + search + "%"
 		countQ = countQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
 		findQ = findQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
+	}
+	if hideWorkspaceAudit {
+		countQ = withoutWorkspaceAudit(countQ)
+		findQ = withoutWorkspaceAudit(findQ)
 	}
 
 	countQ.Count(&total)
@@ -84,7 +95,9 @@ func (r *EventRepository) FindPersonalByActorAndCategory(actorID uint, category 
 	return events, total, nil
 }
 
-func (r *EventRepository) FindByCategory(category models.EventCategory, search string, limit, offset int) ([]models.Event, int64, error) {
+// FindByCategory lists events of a category; hideWorkspaceAudit leaves out
+// workspace audit trails.
+func (r *EventRepository) FindByCategory(category models.EventCategory, search string, hideWorkspaceAudit bool, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
 
@@ -94,6 +107,10 @@ func (r *EventRepository) FindByCategory(category models.EventCategory, search s
 		like := "%" + search + "%"
 		countQ = countQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
 		findQ = findQ.Where("type ILIKE ? OR message ILIKE ? OR actor_name ILIKE ?", like, like, like)
+	}
+	if hideWorkspaceAudit {
+		countQ = withoutWorkspaceAudit(countQ)
+		findQ = withoutWorkspaceAudit(findQ)
 	}
 
 	countQ.Count(&total)
@@ -122,14 +139,19 @@ func (r *EventRepository) FindByWorkspaceID(workspaceID uint, limit, offset int)
 	return events, total, nil
 }
 
-// FindByWorkspaceAndCategory returns paginated events for a workspace filtered by category.
-func (r *EventRepository) FindByWorkspaceAndCategory(workspaceID uint, category models.EventCategory, limit, offset int) ([]models.Event, int64, error) {
+// FindByWorkspaceAndCategory returns paginated events for a workspace filtered
+// by category, created at or after since (all of them when since is zero).
+func (r *EventRepository) FindByWorkspaceAndCategory(workspaceID uint, category models.EventCategory, since time.Time, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
 
-	r.db.Model(&models.Event{}).Where("workspace_id = ? AND category = ?", workspaceID, category).Count(&total)
+	q := r.db.Model(&models.Event{}).Where("workspace_id = ? AND category = ?", workspaceID, category)
+	if !since.IsZero() {
+		q = q.Where("created_at >= ?", since)
+	}
+	q.Count(&total)
 
-	if err := r.db.Where("workspace_id = ? AND category = ?", workspaceID, category).
+	if err := q.
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&events).Error; err != nil {
