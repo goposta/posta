@@ -36,6 +36,7 @@ const (
 	pathWebhooks      = "/webhooks"
 	pathWorkspaces    = "/workspaces"
 
+	pathByID                  = "/{id:int}"
 	pathAnnouncementByID      = "/announcements/{id:int}"
 	pathCampaignByID          = "/campaigns/{id:int}"
 	pathDomainByID            = "/domains/{id:int}"

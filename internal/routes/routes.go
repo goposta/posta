@@ -33,6 +33,7 @@ import (
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/auth"
 	"github.com/goposta/posta/internal/services/cache"
+	"github.com/goposta/posta/internal/services/directory"
 	"github.com/goposta/posta/internal/services/email"
 	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/eventbus"
@@ -147,6 +148,7 @@ type routerHandlers struct {
 	team             *handlers.TeamHandler
 	formIngest       *handlers.FormIngestHandler
 	license          *handlers.LicenseHandler
+	ldapAdmin        *handlers.LDAPAdminHandler
 }
 
 func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, edition enterprise.EE, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) *email.Service {
@@ -380,6 +382,11 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	)
 	r.h.oauth.SetMigrator(db, migrator)
 	r.h.oauthAdmin = handlers.NewOAuthAdminHandler(oauthProviderRepo, ssoRepo)
+	r.h.oauthAdmin.SetEdition(edition)
+
+	ldapRepo := repositories.NewLDAPRepository(db)
+	r.h.ldapAdmin = handlers.NewLDAPAdminHandler(ldapRepo, workspaceRepo, edition, auditLogger)
+	r.h.user.SetDirectory(directory.NewService(edition, userRepo, workspaceRepo, ldapRepo))
 
 	// Subscribers
 	subscriberRepo := repositories.NewSubscriberRepository(db)
@@ -610,6 +617,7 @@ func (r *Router) registerRoutes() {
 	r.app.Register(r.adminSSERoutes()...)
 	r.app.Register(r.adminRoutes()...)
 	r.app.Register(r.licenseRoutes()...)
+	r.app.Register(r.ldapRoutes()...)
 
 	// Documentation-only OpenAPI webhooks (events Posta POSTs to subscribers).
 	r.registerWebhookDocs()

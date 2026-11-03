@@ -61,3 +61,6 @@ func (s State) Install(context.Context, string, string) (enterprise.Status, erro
 }
 
 func (s State) Remove(context.Context) error { return nil }
+
+// LDAP is nil: tests that need a directory fake one.
+func (s State) LDAP() enterprise.LDAPAuthenticator { return nil }

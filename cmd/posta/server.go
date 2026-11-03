@@ -232,11 +232,16 @@ func newEdition(db *gorm.DB, cfg *config.Config) enterprise.EE {
 	if err != nil {
 		logger.Error("failed to create the install id", "error", err)
 	}
+	ldapRepo := repositories.NewLDAPRepository(db)
 	edition := enterprise.New(db, enterprise.Options{
 		License:     cfg.License,
 		LicenseFile: cfg.LicenseFile,
 		InstanceURL: cfg.AppWebURL,
 		InstallID:   installID,
+		LDAPDirectories: func(_ context.Context) ([]models.LDAPConfig, error) {
+			return ldapRepo.Enabled()
+		},
+		Decrypt: crypto.Decrypt,
 	})
 	models.SetPIIEncryptionGate(edition.Licensed)
 	return edition

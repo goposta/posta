@@ -20,6 +20,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/clientinfo"
+	"github.com/goposta/posta/internal/services/directory"
 	"github.com/goposta/posta/internal/services/emailverify"
 	"github.com/goposta/posta/internal/services/eventbus"
 	"github.com/goposta/posta/internal/services/notification"
@@ -58,6 +60,7 @@ type UserHandler struct {
 	passwordReset *passwordreset.Service
 	db            *gorm.DB
 	migrator      *workspaceprovision.Service
+	directory     *directory.Service
 }
 
 func NewUserHandler(repo *repositories.UserRepository, jwtSecret string, seeder *seeder.Seeder, bus *eventbus.EventBus) *UserHandler {
@@ -82,6 +85,9 @@ func (h *UserHandler) ensurePersonalWorkspace(userID uint) {
 		logger.Error("failed to provision personal workspace", "user_id", userID, "err", err)
 	}
 }
+
+// SetDirectory lets sign-in fall back to LDAP / Active Directory.
+func (h *UserHandler) SetDirectory(d *directory.Service) { h.directory = d }
 
 func (h *UserHandler) SetSessionRepo(repo *repositories.SessionRepository) {
 	h.sessionRepo = repo
@@ -467,14 +473,29 @@ func (h *UserHandler) publishLoginFailed(actorID *uint, email, ip, reason string
 
 func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 	user, err := h.repo.FindByEmail(req.Body.Email)
-	if err != nil {
-		h.publishLoginFailed(nil, req.Body.Email, c.RealIP(), "unknown_email")
-		return c.AbortUnauthorized("invalid credentials")
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Body.Password)); err != nil {
-		h.publishLoginFailed(&user.ID, user.Email, c.RealIP(), "bad_password")
-		return c.AbortUnauthorized("invalid credentials")
+	localOK := err == nil && user.AuthMethod != models.AuthMethodLDAP &&
+		bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Body.Password)) == nil
+	if !localOK {
+		// Only after the local check fails, so local accounts and the
+		// bootstrap admin keep working when the directory is down.
+		dirUser, dirErr := h.directory.Login(c.Request().Context(), req.Body.Email, req.Body.Password)
+		switch {
+		case dirUser != nil:
+			user = dirUser
+		case errors.Is(dirErr, directory.ErrAccountDisabled):
+			h.publishLoginFailed(nil, req.Body.Email, c.RealIP(), "inactive")
+			return c.AbortForbidden("account is disabled")
+		case user == nil:
+			reason := "unknown_email"
+			if dirErr != nil {
+				reason = "directory_refused"
+			}
+			h.publishLoginFailed(nil, req.Body.Email, c.RealIP(), reason)
+			return c.AbortUnauthorized("invalid credentials")
+		default:
+			h.publishLoginFailed(&user.ID, user.Email, c.RealIP(), "bad_password")
+			return c.AbortUnauthorized("invalid credentials")
+		}
 	}
 
 	if !user.Active {

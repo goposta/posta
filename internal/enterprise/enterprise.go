@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	eldap "github.com/goposta/posta/internal/enterprise/ldap"
 	"github.com/goposta/posta/internal/enterprise/license"
 	"github.com/goposta/posta/internal/models"
 	"github.com/jkaninda/logger"
@@ -40,7 +41,7 @@ const reloadEvery = time.Minute
 // New returns the license-verifying EE. It loads the stored license, or
 // installs the one given in opts when none is stored.
 func New(db *gorm.DB, opts Options) EE {
-	e := &impl{db: db, opts: opts}
+	e := &impl{db: db, opts: opts, ldap: eldap.New(opts.LDAPDirectories, opts.Decrypt)}
 	if ring, err := license.ParseKeyring(embeddedKeyring); err != nil || ring.Product != Product {
 		logger.Warn("enterprise: this build has no license keyring; running as Community")
 	} else {
@@ -62,6 +63,7 @@ type impl struct {
 	db   *gorm.DB
 	ring *license.Keyring
 	opts Options
+	ldap *eldap.Provider
 
 	mu       sync.RWMutex
 	loaded   loadedLicense
@@ -236,7 +238,36 @@ func (e *impl) Status() Status {
 	return s
 }
 
-func (e *impl) Licensed() bool        { return e.Status().Licensed() }
+func (e *impl) Licensed() bool { return e.Status().Licensed() }
+
+// LDAP is on while licensed, degraded included: an expired license freezes
+// settings but never locks people out.
+func (e *impl) LDAP() LDAPAuthenticator {
+	if !e.Licensed() {
+		return nil
+	}
+	return ldapAdapter{e.ldap}
+}
+
+// ldapAdapter maps the ldap package's types, which do not import this
+// package, onto LDAPAuthenticator.
+type ldapAdapter struct{ p *eldap.Provider }
+
+func (a ldapAdapter) Authenticate(ctx context.Context, email, password string) (LDAPIdentity, error) {
+	id, err := a.p.Authenticate(ctx, email, password)
+	if errors.Is(err, eldap.ErrNoMatch) {
+		return LDAPIdentity{}, ErrLDAPNoMatch
+	}
+	if err != nil {
+		return LDAPIdentity{}, err
+	}
+	return LDAPIdentity{Email: id.Email, Name: id.Name, Groups: id.Groups, Directory: id.Directory}, nil
+}
+
+func (a ldapAdapter) TestConnection(_ context.Context, cfg *models.LDAPConfig) LDAPTestResult {
+	r := a.p.TestConnection(cfg)
+	return LDAPTestResult{OK: r.OK, Message: r.Message, Error: r.Error}
+}
 func (e *impl) Mutable() bool         { return e.Status().Mutable() }
 func (e *impl) Require() error        { return gate(e.Status()) }
 func (e *impl) RequireMutable() error { return gateMutable(e.Status()) }

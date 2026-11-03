@@ -126,6 +126,7 @@ const routes = [
       { path: 'admin/jobs', name: 'admin-jobs', component: () => import('../views/admin/Jobs.vue'), meta: { admin: true, title: 'Admin · Jobs' } },
       { path: 'admin/oauth', name: 'admin-oauth', component: () => import('../views/admin/OAuthProviders.vue'), meta: { admin: true, title: 'Admin · OAuth Providers' } },
       { path: 'admin/settings', name: 'admin-settings', component: () => import('../views/admin/Settings.vue'), meta: { admin: true, title: 'Admin · Settings' } },
+      { path: 'admin/ldap', name: 'admin-ldap', component: () => import('../views/admin/LdapDirectories.vue'), meta: { admin: true, title: 'Admin · LDAP Directories' } },
       { path: 'admin/license', name: 'admin-license', component: () => import('../views/admin/License.vue'), meta: { admin: true, title: 'Admin · License' } },
     ],
   },

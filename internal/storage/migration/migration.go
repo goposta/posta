@@ -85,6 +85,8 @@ func Run(db *gorm.DB) error {
 		&models.UpgradeStep{},
 		&models.UpdateStatus{},
 		&models.License{},
+		&models.LDAPConfig{},
+		&models.LDAPGroupMapping{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}

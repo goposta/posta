@@ -147,7 +147,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/{id:int}",
+			Path:     pathByID,
 			Handler:  okapi.H(r.h.oauthAdmin.UpdateProvider),
 			Group:    oauthAdmin,
 			Summary:  "Update OAuth provider",
@@ -159,7 +159,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/{id:int}",
+			Path:    pathByID,
 			Handler: okapi.H(r.h.oauthAdmin.DeleteProvider),
 			Group:   oauthAdmin,
 			Summary: "Delete OAuth provider",

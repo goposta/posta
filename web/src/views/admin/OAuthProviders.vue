@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { oauthApi } from '../../api/oauth'
 import type { OAuthProviderAdmin } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
+import { useLicenseStore } from '../../stores/license'
+import { ENTERPRISE_URL } from '../../api/license'
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
+const license = useLicenseStore()
+
+// Posta Community configures one OAuth provider; more need Enterprise.
+const COMMUNITY_PROVIDERS = 1
+const atCommunityLimit = computed(() => !license.mutable && providers.value.length >= COMMUNITY_PROVIDERS)
 
 const providers = ref<OAuthProviderAdmin[]>([])
 const loading = ref(true)
@@ -131,14 +138,35 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-onMounted(fetchProviders)
+onMounted(() => {
+  license.load()
+  fetchProviders()
+})
 </script>
 
 <template>
   <div>
     <div class="page-header">
       <h1>OAuth Providers</h1>
-      <button class="btn btn-primary" @click="showCreateModal = true">Add Provider</button>
+      <button
+        class="btn btn-primary"
+        :disabled="atCommunityLimit"
+        :title="atCommunityLimit ? 'More than one provider needs Posta Enterprise' : undefined"
+        @click="showCreateModal = true"
+      >
+        Add Provider
+      </button>
+    </div>
+
+    <div v-if="!loading && atCommunityLimit" class="app-banner app-banner--info oauth-limit" role="status">
+      <div class="app-banner-content">
+        <p class="app-banner-text">
+          Posta Community signs in through one OAuth provider. Several providers, and LDAP / Active Directory,
+          come with <span class="ee-badge">Enterprise</span>.
+          <router-link to="/admin/license">Install a license</router-link> ·
+          <a :href="ENTERPRISE_URL" target="_blank" rel="noopener noreferrer">About Posta Enterprise</a>
+        </p>
+      </div>
     </div>
 
     <div v-if="loading" class="loading-page"><div class="spinner"></div></div>
@@ -309,3 +337,9 @@ onMounted(fetchProviders)
     </div>
   </div>
 </template>
+
+<style scoped>
+.oauth-limit {
+  margin-bottom: 16px;
+}
+</style>

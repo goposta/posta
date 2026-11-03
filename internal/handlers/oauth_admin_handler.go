@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
@@ -31,7 +32,15 @@ import (
 type OAuthAdminHandler struct {
 	providerRepo *repositories.OAuthProviderRepository
 	ssoRepo      *repositories.WorkspaceSSORepository
+	edition      enterprise.EE
 }
+
+// CommunityOAuthProviders is how many OAuth providers Posta Community
+// configures. More need a Posta Enterprise license.
+const CommunityOAuthProviders = 1
+
+// SetEdition gates providers beyond the Community allowance on the license.
+func (h *OAuthAdminHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 
 func NewOAuthAdminHandler(providerRepo *repositories.OAuthProviderRepository, ssoRepo *repositories.WorkspaceSSORepository) *OAuthAdminHandler {
 	return &OAuthAdminHandler{providerRepo: providerRepo, ssoRepo: ssoRepo}
@@ -109,6 +118,21 @@ type WorkspaceSSOResponse struct {
 }
 
 func (h *OAuthAdminHandler) CreateProvider(c *okapi.Context, req *CreateOAuthProviderRequest) error {
+	// Installations that already have several providers keep them; only
+	// adding one beyond the allowance needs a license.
+	n, err := h.providerRepo.Count()
+	if err != nil {
+		return c.AbortInternalServerError("failed to count providers")
+	}
+	if n >= CommunityOAuthProviders {
+		edition := h.edition
+		if edition == nil {
+			edition = enterprise.Community()
+		}
+		if err := edition.RequireMutable(); err != nil {
+			return licenseAbort(c, err)
+		}
+	}
 	slug := strings.ToLower(strings.TrimSpace(req.Body.Slug))
 	providerType := models.OAuthProviderType(req.Body.Type)
 	if providerType != models.OAuthProviderGoogle && providerType != models.OAuthProviderOIDC {

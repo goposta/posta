@@ -296,6 +296,7 @@ const adminNavSections: NavSection[] = [
     items: [
       { name: 'Users', path: '/admin/users', icon: 'users' },
       { name: 'OAuth Providers', path: '/admin/oauth', icon: 'shield' },
+      { name: 'LDAP Directories', path: '/admin/ldap', icon: 'server', enterprise: true },
     ],
   },
   {
