@@ -20,6 +20,8 @@
 package models
 
 import (
+	"crypto/rand"
+	"math/big"
 	"time"
 
 	"github.com/lib/pq"
@@ -52,6 +54,26 @@ const (
 	FormModeInbox   FormMode = "inbox"
 	FormModeCollect FormMode = "collect"
 )
+
+const (
+	FormPublicKeyAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	FormPublicKeyLength   = 22
+)
+
+// NewFormPublicKey returns a random key that identifies a form to the
+// browsers that submit it.
+func NewFormPublicKey() (string, error) {
+	out := make([]byte, FormPublicKeyLength)
+	max := big.NewInt(int64(len(FormPublicKeyAlphabet)))
+	for i := range out {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		out[i] = FormPublicKeyAlphabet[n.Int64()]
+	}
+	return string(out), nil
+}
 
 const (
 	DefaultHoneypotField = "_gotcha"

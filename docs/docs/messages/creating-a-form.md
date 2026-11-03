@@ -23,6 +23,18 @@ curl -X POST https://posta.example.com/api/v1/workspaces/current/forms \
 
 The response includes `public_key` — the unguessable 22-character string that appears in your embed URL.
 
+## Example forms
+
+Every new workspace starts with three example forms you can use as they are, edit or delete:
+
+| Form | Mode | Shows |
+| --- | --- | --- |
+| **Contact form** | Inbox | Name, email, subject and message, mapped to the message's sender, subject and body, so each submission is a conversation to reply to. |
+| **Customer feedback** | Collect | A survey with a rating, a 0–10 scale, single and multiple choice and free text, summarised per question under **Responses**. |
+| **Event registration** | Collect | A form over three pages, one per section. |
+
+They are active, so unless hosted pages are turned off for the workspace, the link under **Share & embed** works straight away. Workspaces that existed before an upgrade are not given them.
+
 :::note
 Form configuration endpoints require the `admin` API-key scope, not `write`. A form row holds notification recipients and the reply sender, so a content-level key has no business changing it. Reading and replying to messages needs only `read`/`write`.
 :::

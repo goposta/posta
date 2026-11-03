@@ -232,7 +232,12 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	})
 
 	// Handlers
-	userSeeder := seeder.New(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo)
+	// Example forms only where forms exist.
+	var seedFormRepo *repositories.FormRepository
+	if cfg.MessagesEnabled {
+		seedFormRepo = repositories.NewFormRepository(db)
+	}
+	userSeeder := seeder.New(templateRepo, stylesheetRepo, versionRepo, localizationRepo, languageRepo, seedFormRepo)
 
 	migrator := workspaceprovision.New(cfg.PlanEnforcement)
 	migrator.SetSeeder(userSeeder)

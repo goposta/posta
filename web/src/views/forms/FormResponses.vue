@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { formSubmissionsApi, messagesApi } from "../../api/messages";
 import { apiMessage } from "../../composables/apiError";
 import { useNotificationStore } from "../../stores/notification";
@@ -20,21 +21,48 @@ import type {
 
 const props = defineProps<{ form: Form; shareUrl?: string }>();
 const notify = useNotificationStore();
+const route = useRoute();
+const router = useRouter();
 
-const view = ref<"summary" | "table">("summary");
+// The view, page and filters live in the query, so a refresh or a shared
+// link shows the same responses. Field filters stay in the page.
+function queryString(key: string): string {
+  const v = route.query[key];
+  return typeof v === "string" ? v : "";
+}
+
+const view = ref<"summary" | "table">(queryString("view") === "table" ? "table" : "summary");
 const loading = ref(false);
 const summary = ref<SubmissionSummary | null>(null);
 const rows = ref<Message[]>([]);
 const pageable = ref<Pageable | null>(null);
-const page = ref(0);
+// ?page is 1-based, as elsewhere in the app.
+const page = ref(Math.max(0, (Number(queryString("page")) || 1) - 1));
 
-const status = ref("");
-const search = ref("");
-const after = ref("");
-const before = ref("");
+const status = ref(queryString("status"));
+const search = ref(queryString("q"));
+const after = ref(queryString("after"));
+const before = ref(queryString("before"));
 const fieldFilters = ref<SubmissionFieldFilter[]>([]);
-const tag = ref("");
-const priority = ref("");
+const tag = ref(queryString("tag"));
+const priority = ref(queryString("priority"));
+
+function syncQuery() {
+  const next: Record<string, string> = {
+    view: view.value === "table" ? "table" : "",
+    page: page.value > 0 ? String(page.value + 1) : "",
+    status: status.value,
+    q: search.value.trim(),
+    after: after.value,
+    before: before.value,
+    tag: tag.value,
+    priority: priority.value,
+  };
+  const query: Record<string, string> = { tab: "responses" };
+  for (const [k, v] of Object.entries(next)) if (v) query[k] = v;
+  router.replace({ query });
+}
+watch(view, syncQuery);
 const knownTags = ref<string[]>([]);
 
 // Archived and hidden questions can still be filtered on: old answers keep them.
@@ -68,6 +96,7 @@ function query(): SubmissionQuery {
 
 async function load() {
   loading.value = true;
+  syncQuery();
   try {
     const q = query();
     const [sumRes, listRes] = await Promise.all([

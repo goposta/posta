@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { formsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
@@ -31,9 +31,28 @@ const TABS = [
   { key: "embed", label: "Share & embed" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
-// ?tab=responses opens a tab directly (digest emails and the inbox link here).
-const queryTab = TABS.find((t) => t.key === route.query.tab)?.key;
+// ?tab=responses opens a tab directly (digest emails and the inbox link here),
+// and the open tab is kept there so a refresh or a shared link lands on it.
+function tabFromQuery(value: unknown): Tab | undefined {
+  return TABS.find((t) => t.key === value)?.key;
+}
+const queryTab = tabFromQuery(route.query.tab);
 const tab = ref<Tab>(queryTab ?? "questions");
+watch(
+  () => route.query.tab,
+  (value) => {
+    const t = tabFromQuery(value);
+    if (t) tab.value = t;
+  },
+);
+
+// A tab's own query (the Responses view, page and filters) does not carry
+// over to another tab.
+function selectTab(t: Tab) {
+  if (t === tab.value) return;
+  tab.value = t;
+  router.replace({ query: { tab: t } });
+}
 
 const originsText = ref("");
 // close_at is edited in the browser's local time and stored as UTC.
@@ -267,7 +286,7 @@ onMounted(load);
             :key="t.key"
             class="btn"
             :class="tab === t.key ? 'btn-primary' : 'btn-secondary'"
-            @click="tab = t.key"
+            @click="selectTab(t.key)"
           >
             {{ t.label }}
           </button>

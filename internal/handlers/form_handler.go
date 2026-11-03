@@ -20,12 +20,10 @@
 package handlers
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"html"
 	"maps"
-	"math/big"
 	"net/mail"
 	"net/url"
 	"regexp"
@@ -43,8 +41,8 @@ import (
 
 const metaSlug = "slug"
 
-const publicKeyAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-const publicKeyLength = 22
+const publicKeyAlphabet = models.FormPublicKeyAlphabet
+const publicKeyLength = models.FormPublicKeyLength
 
 var formSlugPattern = regexp.MustCompile(`[^a-z0-9]+`)
 
@@ -585,18 +583,7 @@ func formSlug(v string) string {
 	return v
 }
 
-func generatePublicKey() (string, error) {
-	out := make([]byte, publicKeyLength)
-	max := big.NewInt(int64(len(publicKeyAlphabet)))
-	for i := range out {
-		n, err := rand.Int(rand.Reader, max)
-		if err != nil {
-			return "", err
-		}
-		out[i] = publicKeyAlphabet[n.Int64()]
-	}
-	return string(out), nil
-}
+func generatePublicKey() (string, error) { return models.NewFormPublicKey() }
 
 func normalizeOrigins(in []string) ([]string, error) {
 	out := make([]string, 0, len(in))
