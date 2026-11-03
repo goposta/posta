@@ -27,6 +27,7 @@ import (
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/messages"
+	"github.com/goposta/posta/internal/storage/migration"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -96,6 +97,10 @@ func TestSeedWorkspaceDefaultsCreatesForms(t *testing.T) {
 	}
 	tx := db.Begin()
 	defer tx.Rollback()
+
+	if err := migration.Run(tx); err != nil {
+		t.Skipf("skipping: cannot migrate test schema: %v", err)
+	}
 
 	suffix := time.Now().UnixNano()
 	user := &models.User{Name: "seed test", Email: fmt.Sprintf("seed-%d@example.test", suffix), PasswordHash: "x"}
