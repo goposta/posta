@@ -323,6 +323,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 
 	// Plans
 	r.h.plan = handlers.NewPlanHandler(planRepo, workspaceRepo, userRepo, planService, auditLogger)
+	r.h.plan.SetEdition(edition)
+	r.h.event.SetEdition(edition)
 	r.h.admin.SetWorkspaceRepo(workspaceRepo, planRepo)
 	r.h.workspace.SetSeeder(userSeeder)
 	r.h.workspace.SetPlanService(planService)

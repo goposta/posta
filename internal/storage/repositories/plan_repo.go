@@ -32,6 +32,13 @@ func NewPlanRepository(db *gorm.DB) *PlanRepository {
 	return &PlanRepository{db: db}
 }
 
+// Count counts the configured plans, active or not.
+func (r *PlanRepository) Count() (int64, error) {
+	var n int64
+	err := r.db.Model(&models.Plan{}).Count(&n).Error
+	return n, err
+}
+
 func (r *PlanRepository) Create(plan *models.Plan) error {
 	return r.db.Create(plan).Error
 }
