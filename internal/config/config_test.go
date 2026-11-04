@@ -157,3 +157,21 @@ func TestAllowedCORSOrigins(t *testing.T) {
 		})
 	}
 }
+
+// Form links and inbound attachment links use POSTA_API_URL when the API has
+// its own host, and POSTA_WEB_URL otherwise, as the configuration docs say.
+func TestPublicAPIURL(t *testing.T) {
+	cases := []struct {
+		api, web, want string
+	}{
+		{"https://api.example.com/", "https://posta.example.com", "https://api.example.com"},
+		{"", "https://posta.example.com/", "https://posta.example.com"},
+		{"", "", ""},
+	}
+	for _, tc := range cases {
+		c := &Config{ApiBaseURL: tc.api, AppWebURL: tc.web}
+		if got := c.PublicAPIURL(); got != tc.want {
+			t.Errorf("api=%q web=%q: got %q, want %q", tc.api, tc.web, got, tc.want)
+		}
+	}
+}

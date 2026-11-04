@@ -82,12 +82,27 @@ function syncResponseFields(f: Form) {
 }
 const notifyText = ref("");
 
+function withOrigin(s: FormSnippet): FormSnippet {
+  if (!s.endpoint.startsWith("/")) return s;
+  const origin = window.location.origin;
+  const abs = (u: string) => (u.startsWith("/") ? origin + u : u);
+  const endpoint = abs(s.endpoint);
+  return {
+    ...s,
+    endpoint,
+    share_url: abs(s.share_url),
+    html: s.html.split(s.endpoint).join(endpoint),
+    fetch: s.fetch.split(s.endpoint).join(endpoint),
+    widget: s.widget.replace('src="/', `src="${origin}/`),
+  };
+}
+
 async function load() {
   loading.value = true;
   try {
     const [formRes, snippetRes] = await Promise.all([formsApi.get(id), formsApi.snippet(id)]);
     form.value = formRes.data.data;
-    snippet.value = snippetRes.data.data;
+    snippet.value = withOrigin(snippetRes.data.data);
     originsText.value = (formRes.data.data.allowed_origins || []).join(", ");
     syncResponseFields(formRes.data.data);
     notifyText.value = (formRes.data.data.notify_emails || []).join(", ");
@@ -172,7 +187,7 @@ async function rotateKey() {
     const res = await formsApi.rotateKey(id);
     form.value = res.data.data;
     const snippetRes = await formsApi.snippet(id);
-    snippet.value = snippetRes.data.data;
+    snippet.value = withOrigin(snippetRes.data.data);
     notify.success("Public key rotated. Update your embed code.");
   } catch (e: any) {
     notify.error(apiMessage(e, "Failed to rotate key"));
