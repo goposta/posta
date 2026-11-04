@@ -91,7 +91,7 @@ func TestDialerBlocksResolvedAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	_, port, _ := net.SplitHostPort(ln.Addr().String())
 
 	_, err = Policy{}.Dialer(2*time.Second).Dial("tcp", net.JoinHostPort("localhost", port))
@@ -102,7 +102,7 @@ func TestDialerBlocksResolvedAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("allowed dial: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 func TestFromEnv(t *testing.T) {
@@ -137,7 +137,7 @@ func TestDescribeHidesAddresses(t *testing.T) {
 		t.Fatal(err)
 	}
 	addr := ln.Addr().String()
-	ln.Close() // now nothing listens: connection refused
+	_ = ln.Close() // now nothing listens: connection refused
 
 	_, err = Policy{AllowPrivate: true}.Dialer(2*time.Second).Dial("tcp", addr)
 	if err == nil {
