@@ -77,6 +77,7 @@ type serverResources struct {
 
 func runServer(cli *okapicli.CLI) {
 	cfg := config.New()
+	email.SetWorkspaceSMTPNetwork(cfg.SMTPNetwork)
 	app := cli.Okapi()
 	if err := cfg.Initialize(app); err != nil {
 		logger.Fatal("Failed to initialize Posta", "error", err)
@@ -739,5 +740,6 @@ func webhookConfig(cfg *config.Config) webhook.Config {
 		MaxRetries: cfg.WebhookMaxRetries,
 		Timeout:    time.Duration(cfg.WebhookTimeoutSecs) * time.Second,
 		ProxyURL:   cfg.WebhookProxyURL,
+		Network:    cfg.WebhookNetwork,
 	}
 }

@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	errorhandlers "github.com/goposta/posta/internal/error_handlers"
+	"github.com/goposta/posta/internal/netguard"
 	"github.com/goposta/posta/internal/storage"
 	"github.com/hibiken/asynq"
 	goutils "github.com/jkaninda/go-utils"
@@ -114,6 +115,14 @@ type Config struct {
 	WebhookMaxRetries  int
 	WebhookTimeoutSecs int
 	WebhookProxyURL    string
+	// WebhookNetwork decides which addresses webhook URLs may reach: by
+	// default not private or reserved ones (POSTA_WEBHOOK_ALLOW_PRIVATE_NETWORKS,
+	// POSTA_WEBHOOK_ALLOWED_NETWORKS).
+	WebhookNetwork netguard.Policy
+	// SMTPNetwork does the same for workspace SMTP servers, which may reach
+	// private addresses by default, a relay on the same host being common
+	// (POSTA_SMTP_ALLOW_PRIVATE_NETWORKS, POSTA_SMTP_ALLOWED_NETWORKS).
+	SMTPNetwork netguard.Policy
 
 	// OAuth settings
 	GoogleOAuthClientID     string
@@ -328,6 +337,8 @@ func New() *Config {
 		WebhookMaxRetries:  goutils.EnvInt("POSTA_WEBHOOK_MAX_RETRIES", 3),
 		WebhookTimeoutSecs: goutils.EnvInt("POSTA_WEBHOOK_TIMEOUT_SECS", 10),
 		WebhookProxyURL:    goutils.Env("POSTA_WEBHOOK_PROXY_URL", ""),
+		WebhookNetwork:     networkPolicy("POSTA_WEBHOOK", false),
+		SMTPNetwork:        networkPolicy("POSTA_SMTP", true),
 
 		GoogleOAuthClientID:     goutils.Env("POSTA_GOOGLE_OAUTH_CLIENT_ID", ""),
 		GoogleOAuthClientSecret: goutils.Env("POSTA_GOOGLE_OAUTH_CLIENT_SECRET", ""),
@@ -531,6 +542,18 @@ func (c *Config) InitWorker() error {
 	c.WarnInsecureWorkerConfig()
 	return c.validateWorker()
 }
+
+// networkPolicy reads a netguard policy from the environment, stopping on an
+// allowed network that does not parse rather than running with a policy
+// other than the one configured.
+func networkPolicy(prefix string, allowPrivate bool) netguard.Policy {
+	p, err := netguard.FromEnv(prefix, allowPrivate)
+	if err != nil {
+		logger.Fatal("invalid network setting", "error", err)
+	}
+	return p
+}
+
 func (c *Config) initLogger() *logger.Logger {
 	if c.DevMode {
 		return logger.New(logger.WithDebugLevel())

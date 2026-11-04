@@ -44,6 +44,7 @@ import (
 
 func runWorker() error {
 	cfg := config.New()
+	email.SetWorkspaceSMTPNetwork(cfg.SMTPNetwork)
 	if err := cfg.InitWorker(); err != nil {
 		logger.Fatal("worker configuration is not usable", "error", err)
 	}

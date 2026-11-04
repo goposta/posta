@@ -35,9 +35,11 @@ import (
 	"time"
 
 	"github.com/jkaninda/logger"
+	"golang.org/x/net/http/httpproxy"
 	"golang.org/x/net/proxy"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/netguard"
 	"github.com/goposta/posta/internal/storage/repositories"
 )
 
@@ -55,12 +57,17 @@ type Config struct {
 	// hiding the server's IP address from webhook endpoints.
 	// Supports http://, https://, and socks5:// schemes.
 	ProxyURL string
+	// Network decides which addresses webhooks may reach. The zero value
+	// blocks private and reserved addresses.
+	Network netguard.Policy
 }
 
 type Dispatcher struct {
 	repo              *repositories.WebhookRepository
 	deliveryRepo      *repositories.WebhookDeliveryRepository
 	client            *http.Client
+	network           netguard.Policy
+	proxied           bool // a proxy dials the target, so the dialer cannot check it
 	maxRetries        int
 	onDeliverySuccess func()
 	onDeliveryFailed  func()
@@ -68,13 +75,67 @@ type Dispatcher struct {
 }
 
 func NewDispatcher(repo *repositories.WebhookRepository) *Dispatcher {
-	return &Dispatcher{
+	d := &Dispatcher{
 		repo:       repo,
 		maxRetries: defaultMaxRetries,
 		client: &http.Client{
 			Timeout: defaultTimeout,
+			// A webhook URL is checked where it points; a redirect could
+			// send the request somewhere else, so it is not followed.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}
+	d.client.Transport = d.guardedTransport()
+	return d
+}
+
+// guardedTransport dials only the addresses the network policy allows. It
+// checks each address as it connects, so neither a hostname resolving to a
+// private address nor a DNS answer that changed since the webhook was saved
+// gets through.
+//
+// A proxy set in HTTP_PROXY or HTTPS_PROXY is still used, as Go's default
+// transport would: the connection to it is allowed wherever it is, and the
+// target, which only the proxy dials, is checked by name instead.
+func (d *Dispatcher) guardedTransport() *http.Transport {
+	env := httpproxy.FromEnvironment()
+	proxyFor := env.ProxyFunc()
+	proxies := map[string]bool{}
+	for _, raw := range []string{env.HTTPProxy, env.HTTPSProxy} {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			port := u.Port()
+			if port == "" {
+				port = map[string]string{"https": "443"}[u.Scheme]
+				if port == "" {
+					port = "80"
+				}
+			}
+			proxies[net.JoinHostPort(u.Hostname(), port)] = true
+		}
+	}
+
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy = func(req *http.Request) (*url.URL, error) {
+		u, err := proxyFor(req.URL)
+		if u != nil && err == nil {
+			if cerr := d.network.CheckURL(req.Context(), req.URL.String()); cerr != nil {
+				return nil, fmt.Errorf("%w: %v", netguard.ErrBlocked, cerr)
+			}
+		}
+		return u, err
+	}
+	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if proxies[addr] {
+			return (&net.Dialer{Timeout: 30 * time.Second}).DialContext(ctx, network, addr)
+		}
+		return d.network.DialContext(ctx, network, addr)
+	}
+	return t
+}
+
+// Network returns the policy webhook URLs are checked against.
+func (d *Dispatcher) Network() netguard.Policy {
+	return d.network
 }
 
 // SetConfig applies configurable settings to the dispatcher.
@@ -85,6 +146,8 @@ func (d *Dispatcher) SetConfig(cfg Config) {
 	if cfg.Timeout > 0 {
 		d.client.Timeout = cfg.Timeout
 	}
+	d.network = cfg.Network
+	d.client.Transport = d.guardedTransport()
 	if cfg.ProxyURL != "" {
 		transport, err := proxyTransport(cfg.ProxyURL)
 		if err != nil {
@@ -92,6 +155,7 @@ func (d *Dispatcher) SetConfig(cfg Config) {
 			return
 		}
 		d.client.Transport = transport
+		d.proxied = true
 		logger.Info("webhook proxy configured", "proxy", cfg.ProxyURL)
 	}
 }
@@ -300,7 +364,7 @@ func (d *Dispatcher) deliverWithRetry(userID uint, wh models.Webhook, body []byt
 		statusCode, err := d.doRequest(wh.URL, wh.Secret, body)
 		lastStatus = statusCode
 
-		if err == nil && statusCode < 400 {
+		if err == nil && statusCode < 300 {
 			d.recordDelivery(userID, wh.ID, wh.WorkspaceID, event, models.WebhookDeliverySuccess, statusCode, "", attempt)
 			if d.onDeliverySuccess != nil {
 				d.onDeliverySuccess()
@@ -313,8 +377,14 @@ func (d *Dispatcher) deliverWithRetry(userID uint, wh models.Webhook, body []byt
 		}
 
 		if err != nil {
-			lastErr = err.Error()
+			// The delivery log is read by workspace members: it says what went
+			// wrong, not which address or port answered. The server log keeps
+			// the full error.
+			lastErr = netguard.Describe(err)
 			logger.Warn("webhook delivery failed", "url", wh.URL, "attempt", attempt, "error", err)
+		} else if statusCode < 400 {
+			lastErr = fmt.Sprintf("HTTP %d: redirects are not followed", statusCode)
+			logger.Warn("webhook redirected", "url", wh.URL, "attempt", attempt, "status", statusCode)
 		} else {
 			lastErr = fmt.Sprintf("HTTP %d", statusCode)
 			logger.Warn("webhook returned error status", "url", wh.URL, "attempt", attempt, "status", statusCode)
@@ -344,6 +414,13 @@ func signPayload(secret string, body []byte) string {
 
 // doRequest sends a single HTTP POST to the webhook URL with an HMAC signature.
 func (d *Dispatcher) doRequest(url string, secret string, body []byte) (int, error) {
+	// Through a proxy the dialer only reaches the proxy, so the target's
+	// host is checked here instead.
+	if d.proxied {
+		if err := d.network.CheckURL(context.Background(), url); err != nil {
+			return 0, fmt.Errorf("%w: %v", netguard.ErrBlocked, err)
+		}
+	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %w", err)
@@ -380,20 +457,4 @@ func (d *Dispatcher) recordDelivery(userID, webhookID uint, workspaceID *uint, e
 	if err := d.deliveryRepo.Create(delivery); err != nil {
 		logger.Error("failed to record webhook delivery", "error", err)
 	}
-}
-
-// Validate ensures the webhook URL is reachable.
-func (d *Dispatcher) Validate(url string) error {
-	req, err := http.NewRequest(http.MethodHead, url, nil)
-	if err != nil {
-		return fmt.Errorf("invalid webhook URL: %w", err)
-	}
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("webhook URL unreachable: %w", err)
-	}
-	_ = resp.Body.Close()
-
-	return nil
 }

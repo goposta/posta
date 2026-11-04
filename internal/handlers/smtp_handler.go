@@ -157,7 +157,7 @@ func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
 	server.ValidatedAt = &now
 	if err := h.sender.TestConnection(server); err != nil {
 		server.Status = models.SMTPStatusInvalid
-		server.ValidationError = err.Error()
+		server.ValidationError = email.DescribeSMTPError(err)
 	} else {
 		server.Status = models.SMTPStatusEnabled
 		server.ValidationError = ""
@@ -235,7 +235,7 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 			server.ValidatedAt = &now
 			if err := h.sender.TestConnection(server); err != nil {
 				server.Status = models.SMTPStatusInvalid
-				server.ValidationError = err.Error()
+				server.ValidationError = email.DescribeSMTPError(err)
 			} else {
 				server.Status = models.SMTPStatusEnabled
 				server.ValidationError = ""
@@ -247,7 +247,7 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 		server.ValidatedAt = &now
 		if err := h.sender.TestConnection(server); err != nil {
 			server.Status = models.SMTPStatusInvalid
-			server.ValidationError = err.Error()
+			server.ValidationError = email.DescribeSMTPError(err)
 		} else {
 			server.Status = models.SMTPStatusEnabled
 			server.ValidationError = ""
@@ -309,10 +309,12 @@ func (h *SMTPHandler) Test(c *okapi.Context, req *TestSMTPRequest) error {
 	now := time.Now()
 	if err := h.sender.TestConnection(server); err != nil {
 		// Update validation state on test failure
-		_ = h.repo.SetStatus(server.ID, models.SMTPStatusInvalid, err.Error())
+		// Workspace members read this: the reason, not the network details.
+		reason := email.DescribeSMTPError(err)
+		_ = h.repo.SetStatus(server.ID, models.SMTPStatusInvalid, reason)
 		return ok(c, okapi.M{
 			"success":      false,
-			"message":      err.Error(),
+			"message":      reason,
 			"status":       models.SMTPStatusInvalid,
 			"validated_at": now,
 		})

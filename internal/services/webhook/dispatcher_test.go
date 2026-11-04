@@ -24,13 +24,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/netguard"
 )
 
 func TestSignPayload(t *testing.T) {
@@ -147,7 +151,7 @@ func TestDispatcher_SignatureHeader(t *testing.T) {
 		Secret: secret,
 	}
 
-	d := NewDispatcher(nil)
+	d := localDispatcher()
 	body := []byte(`{"event":"email.sent","email_id":"abc","timestamp":"2026-01-01T00:00:00Z"}`)
 
 	statusCode, err := d.doRequest(wh.URL, wh.Secret, body)
@@ -174,7 +178,7 @@ func TestDispatcher_NoSignatureWhenNoSecret(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewDispatcher(nil)
+	d := localDispatcher()
 	_, err := d.doRequest(srv.URL, "", []byte(`{}`))
 	if err != nil {
 		t.Fatalf("doRequest error: %v", err)
@@ -197,7 +201,7 @@ func TestDispatcher_RetryOnFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewDispatcher(nil)
+	d := localDispatcher()
 	d.maxRetries = 3
 
 	wh := models.Webhook{
@@ -232,5 +236,72 @@ func TestDispatcher_SetConfig(t *testing.T) {
 	}
 	if d.client.Timeout != 30*time.Second {
 		t.Errorf("after SetConfig timeout = %v, want 30s", d.client.Timeout)
+	}
+}
+
+// localDispatcher may reach the loopback test servers these tests start.
+func localDispatcher() *Dispatcher {
+	d := NewDispatcher(nil)
+	d.SetConfig(Config{Network: netguard.Policy{AllowPrivate: true}})
+	return d
+}
+
+// By default a webhook cannot reach the server's own network, and the reason
+// recorded for the workspace does not name the address it tried.
+func TestDispatcher_BlocksPrivateByDefault(t *testing.T) {
+	var hit atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit.Store(true) }))
+	defer srv.Close()
+
+	d := NewDispatcher(nil)
+	for _, target := range []string{srv.URL, "http://169.254.169.254/latest/meta-data/", "http://[::1]:9/", "http://0.0.0.0:6379/"} {
+		_, err := d.doRequest(target, "", []byte("{}"))
+		if !errors.Is(err, netguard.ErrBlocked) {
+			t.Errorf("%s: want ErrBlocked, got %v", target, err)
+			continue
+		}
+		reason := netguard.Describe(err)
+		if strings.ContainsAny(reason, "0123456789") {
+			t.Errorf("%s: reason leaks the address: %q", target, reason)
+		}
+	}
+	if hit.Load() {
+		t.Error("the loopback server was reached")
+	}
+}
+
+// A redirect is not followed: a public URL cannot send the request into the
+// internal network, and a 3xx is not a successful delivery.
+func TestDispatcher_DoesNotFollowRedirects(t *testing.T) {
+	var internalHit atomic.Bool
+	internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { internalHit.Store(true) }))
+	defer internal.Close()
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, internal.URL, http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+
+	d := localDispatcher()
+	status, err := d.doRequest(redirector.URL, "", []byte("{}"))
+	if err != nil || status != http.StatusTemporaryRedirect {
+		t.Fatalf("status %d, err %v", status, err)
+	}
+	if internalHit.Load() {
+		t.Error("the redirect was followed")
+	}
+}
+
+// An allowed network is reachable while the rest stays blocked.
+func TestDispatcher_AllowedNetworks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+
+	d := NewDispatcher(nil)
+	d.SetConfig(Config{Network: netguard.Policy{Allowed: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}}})
+	if status, err := d.doRequest(srv.URL, "", []byte("{}")); err != nil || status != http.StatusOK {
+		t.Errorf("allowed network: status %d, err %v", status, err)
+	}
+	if _, err := d.doRequest("http://10.255.255.1:9/", "", []byte("{}")); !errors.Is(err, netguard.ErrBlocked) {
+		t.Errorf("other private network: want ErrBlocked, got %v", err)
 	}
 }

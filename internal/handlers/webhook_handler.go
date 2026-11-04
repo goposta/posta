@@ -24,14 +24,16 @@ import (
 	"encoding/hex"
 
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/netguard"
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
 
 type WebhookHandler struct {
-	repo  *repositories.WebhookRepository
-	audit *audit.Logger
+	repo    *repositories.WebhookRepository
+	audit   *audit.Logger
+	network netguard.Policy
 }
 type CreateWebhookRequest struct {
 	Body struct {
@@ -45,8 +47,10 @@ type DeleteWebhookRequest struct {
 	ID int `param:"id"`
 }
 
-func NewWebhookHandler(repo *repositories.WebhookRepository, audit *audit.Logger) *WebhookHandler {
-	return &WebhookHandler{repo: repo, audit: audit}
+// NewWebhookHandler takes the policy deliveries are sent under, so a URL that
+// could never be delivered to is refused when it is saved.
+func NewWebhookHandler(repo *repositories.WebhookRepository, audit *audit.Logger, network netguard.Policy) *WebhookHandler {
+	return &WebhookHandler{repo: repo, audit: audit, network: network}
 }
 
 func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) error {
@@ -54,6 +58,12 @@ func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) err
 		return c.AbortForbidden("Insufficient workspace permissions", err)
 	}
 	scope := getScope(c)
+
+	// Deliveries are checked again as they connect; this gives the error at
+	// once instead of a failed delivery later.
+	if err := h.network.CheckURL(c.Request().Context(), req.Body.URL); err != nil {
+		return c.AbortBadRequest("webhook URL not allowed: " + err.Error())
+	}
 
 	// Generate a random signing secret for HMAC webhook signatures
 	secretBytes := make([]byte, 32)
