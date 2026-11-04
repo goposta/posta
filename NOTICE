@@ -2,11 +2,21 @@ Posta
 Copyright 2026 Jonas Kaninda
 
 This product includes software developed by Jonas Kaninda and the Posta
-contributors. The full list of contributors is recorded in the project's
-Git history.
+contributors (https://github.com/goposta/posta).
 
-Posta is licensed under the GNU Affero General Public License, version 3
-or (at your option) any later version. The full text is distributed with
-this software in the LICENSE file, and is also available at:
+Licensed under the GNU Affero General Public License, version 3 or (at your
+option) any later version (AGPL-3.0-or-later); you may not use this software
+except in compliance with the License. A copy of the License is included in the
+LICENSE file and is available at https://www.gnu.org/licenses/agpl-3.0.html.
 
-    https://www.gnu.org/licenses/agpl-3.0.html
+A commercial license is available for uses that do not fit the AGPL; see
+LICENSING.md.
+
+The Posta Enterprise Edition — the source under internal/enterprise/, and any
+other file carrying the Posta Enterprise License header
+(SPDX-License-Identifier: LicenseRef-Posta-Enterprise) — is NOT licensed under
+the AGPL. It is proprietary and governed by a separate commercial license; see
+internal/enterprise/LICENSE.md and LICENSING.md.
+
+The Posta client SDKs,  and the Helm chart are separate projects,
+licensed under the Apache License, Version 2.0 (Apache-2.0).

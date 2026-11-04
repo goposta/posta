@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 title: Managed Posta
 description: Deploy your own Posta from the Miabi Marketplace, without writing Docker Compose
 ---
@@ -34,4 +34,6 @@ Same REST API, same dashboard, same [SDKs](/docs/sdks/overview), same [configura
 
 ## Prefer to wire it up yourself?
 
-Deploy it anywhere Docker or a Go binary runs — see [Installation](./installation) for the Docker Compose examples and build-from-source instructions.
+To stay on Miabi but choose every piece yourself, deploy from a manifest or set it up by hand in the console: see [Deploy on Miabi](./miabi).
+
+Or deploy it anywhere Docker or a Go binary runs — see [Installation](./installation) for the Docker Compose examples and build-from-source instructions.
