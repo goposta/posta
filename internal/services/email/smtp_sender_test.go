@@ -23,13 +23,18 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/netguard"
 )
 
 func TestSmtpReply(t *testing.T) {
@@ -254,5 +259,58 @@ func TestBuildMessageGeneratesUniqueMessageIDsAndBoundaries(t *testing.T) {
 		if strings.HasPrefix(bd, "posta-boundary-abc123") {
 			t.Fatalf("boundary %q is the old fixed value", bd)
 		}
+	}
+}
+
+// A workspace member reads the SMTP test result: a server's reply is shown,
+// but a network failure is reduced to its cause, without addresses or ports.
+func TestDescribeSMTPError(t *testing.T) {
+	reply := fmt.Errorf("SMTP auth failed: %w", &textproto.Error{Code: 535, Msg: "5.7.8 Authentication failed"})
+	if got := DescribeSMTPError(reply); got != "SMTP auth failed: 535 5.7.8 Authentication failed" {
+		t.Errorf("reply: %q", got)
+	}
+
+	dial := fmt.Errorf("SMTP dial failed: %w", &net.OpError{Op: "dial", Net: "tcp",
+		Addr: &net.TCPAddr{IP: net.ParseIP("10.0.3.7"), Port: 6379}, Err: syscall.ECONNREFUSED})
+	if got := DescribeSMTPError(dial); got != "SMTP dial failed: the connection was refused" {
+		t.Errorf("dial: %q", got)
+	}
+}
+
+// With the workspace policy blocking private addresses, a workspace server on
+// loopback is refused, while the operator's system server is not.
+func TestWorkspaceSMTPNetwork(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = c.Write([]byte("220 test ESMTP\r\n"))
+			_ = c.Close()
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	SetWorkspaceSMTPNetwork(netguard.Policy{})
+	t.Cleanup(func() { SetWorkspaceSMTPNetwork(netguard.Policy{AllowPrivate: true}) })
+
+	ws := uint(1)
+	err = NewSMTPSender().TestConnection(&models.SMTPServer{WorkspaceID: &ws, Host: "127.0.0.1", Port: port})
+	if !errors.Is(err, netguard.ErrBlocked) {
+		t.Fatalf("workspace server: want ErrBlocked, got %v", err)
+	}
+	if got := DescribeSMTPError(err); strings.ContainsAny(got, "0123456789") {
+		t.Errorf("reason leaks the address: %q", got)
+	}
+
+	err = NewSMTPSender().TestConnection(&models.SMTPServer{WorkspaceID: &ws, IsSystem: true, Host: "127.0.0.1", Port: port})
+	if errors.Is(err, netguard.ErrBlocked) {
+		t.Errorf("system server blocked: %v", err)
 	}
 }

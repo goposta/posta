@@ -91,6 +91,19 @@ New-user registration is toggled at runtime from **Admin → Settings** (the `re
 | `POSTA_WEBHOOK_MAX_RETRIES` | `3` | Maximum webhook delivery retries |
 | `POSTA_WEBHOOK_TIMEOUT_SECS` | `10` | Webhook HTTP request timeout (seconds) |
 | `POSTA_WEBHOOK_PROXY_URL` | — | Optional HTTP/HTTPS/SOCKS5 proxy for outbound webhook delivery |
+| `POSTA_WEBHOOK_ALLOW_PRIVATE_NETWORKS` | `false` | Let webhooks reach private and reserved addresses: loopback, `10/8`, `172.16/12`, `192.168/16`, link-local (including cloud metadata at `169.254.169.254`) and their IPv6 counterparts. Off by default, so a workspace member cannot use webhooks to reach your internal network |
+| `POSTA_WEBHOOK_ALLOWED_NETWORKS` | — | Comma-separated networks or addresses webhooks may reach although they are private, e.g. `10.0.5.0/24,192.168.1.20` for an internal automation service |
+
+Webhook URLs are checked when they are saved and again on each connection, after DNS resolution, so a hostname that resolves to an internal address is refused too. Redirects are not followed: a `3xx` answer counts as a failed delivery. Failed deliveries record the reason (refused, timed out, blocked…) without the address or port.
+
+## Workspace SMTP servers
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTA_SMTP_ALLOW_PRIVATE_NETWORKS` | `true` | Let SMTP servers that workspace members add reach private and reserved addresses. On by default, since a relay on the same host or network is common. Set it to `false` to keep workspace SMTP servers on the public internet; the system SMTP server and platform servers are never restricted |
+| `POSTA_SMTP_ALLOWED_NETWORKS` | — | With the above off, comma-separated networks or addresses workspace SMTP servers may still reach |
+
+A failed connection test shows the SMTP server's reply when it answered, and only the cause (refused, timed out…) when it did not.
 
 ## Delivery
 

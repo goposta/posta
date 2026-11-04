@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"mime"
 	"mime/quotedprintable"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -38,6 +39,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/netguard"
 )
 
 // SendError carries structured information about an SMTP failure so callers can
@@ -70,6 +72,62 @@ func smtpReply(err error) (int, string) {
 
 type SMTPSender struct{}
 
+// workspaceNetwork decides which addresses a workspace's own SMTP servers may
+// reach. Private ones are allowed unless the operator says otherwise, since a
+// relay on the same host or network is a common setup.
+var workspaceNetwork = netguard.Policy{AllowPrivate: true}
+
+// SetWorkspaceSMTPNetwork sets the policy for workspace SMTP servers. Called
+// once at startup, before any mail is sent.
+func SetWorkspaceSMTPNetwork(p netguard.Policy) {
+	workspaceNetwork = p
+}
+
+// dialerFor returns the dialer for a server: guarded for one a workspace
+// member configured, plain for the operator's system server and for
+// platform servers, which admins configure.
+func dialerFor(server *models.SMTPServer) *net.Dialer {
+	if server.WorkspaceID != nil && !server.IsSystem {
+		return workspaceNetwork.Dialer(0)
+	}
+	return &net.Dialer{}
+}
+
+// dialSMTP connects in plain text and starts an SMTP session.
+func dialSMTP(d *net.Dialer, addr, host string) (*smtp.Client, error) {
+	conn, err := d.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return client, nil
+}
+
+// DescribeSMTPError turns a connection or SMTP failure into a message fit to
+// show a workspace member. A reply from the SMTP server, such as a refused
+// login, is kept; a network error is reduced to what went wrong, without the
+// addresses and ports that would map the server's network.
+func DescribeSMTPError(err error) string {
+	if err == nil {
+		return ""
+	}
+	stage := err.Error()
+	if i := strings.Index(stage, ":"); i > 0 {
+		stage = stage[:i]
+	} else {
+		stage = "SMTP connection failed"
+	}
+	var reply *textproto.Error
+	if errors.As(err, &reply) {
+		return fmt.Sprintf("%s: %d %s", stage, reply.Code, reply.Msg)
+	}
+	return stage + ": " + netguard.Describe(err)
+}
+
 func NewSMTPSender() *SMTPSender {
 	return &SMTPSender{}
 }
@@ -79,13 +137,14 @@ func NewSMTPSender() *SMTPSender {
 func (s *SMTPSender) TestConnection(server *models.SMTPServer) error {
 	addr := fmt.Sprintf("%s:%d", server.Host, server.Port)
 	tlsConfig := &tls.Config{ServerName: server.Host}
+	dialer := dialerFor(server)
 
 	var client *smtp.Client
 	var err error
 
 	switch server.Encryption {
 	case models.EncryptionSSL:
-		conn, dialErr := tls.Dial("tcp", addr, tlsConfig)
+		conn, dialErr := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 		if dialErr != nil {
 			return fmt.Errorf("SSL dial failed: %w", dialErr)
 		}
@@ -96,7 +155,7 @@ func (s *SMTPSender) TestConnection(server *models.SMTPServer) error {
 		}
 
 	case models.EncryptionSTARTTLS:
-		client, err = smtp.Dial(addr)
+		client, err = dialSMTP(dialer, addr, server.Host)
 		if err != nil {
 			return fmt.Errorf("SMTP dial failed: %w", err)
 		}
@@ -106,7 +165,7 @@ func (s *SMTPSender) TestConnection(server *models.SMTPServer) error {
 		}
 
 	default: // none
-		client, err = smtp.Dial(addr)
+		client, err = dialSMTP(dialer, addr, server.Host)
 		if err != nil {
 			return fmt.Errorf("SMTP dial failed: %w", err)
 		}
@@ -181,11 +240,11 @@ func (s *SMTPSender) Send(server *models.SMTPServer, from string, to []string, s
 
 	switch server.Encryption {
 	case models.EncryptionSSL:
-		return sendWithImplicitTLS(addr, auth, server.Host, envelopeFrom, to, msg)
+		return sendWithImplicitTLS(dialerFor(server), addr, auth, server.Host, envelopeFrom, to, msg)
 	case models.EncryptionSTARTTLS:
-		return sendWithSTARTTLS(addr, auth, server.Host, envelopeFrom, to, msg)
+		return sendWithSTARTTLS(dialerFor(server), addr, auth, server.Host, envelopeFrom, to, msg)
 	default:
-		return sendPlain(addr, auth, server.Host, envelopeFrom, to, msg)
+		return sendPlain(dialerFor(server), addr, auth, server.Host, envelopeFrom, to, msg)
 	}
 }
 
@@ -200,10 +259,10 @@ func envelopeAddress(from string) string {
 	return addr.Address
 }
 
-func sendWithImplicitTLS(addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
+func sendWithImplicitTLS(dialer *net.Dialer, addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
 	tlsConfig := &tls.Config{ServerName: host}
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("SSL dial failed: %w", err)
 	}
@@ -217,8 +276,8 @@ func sendWithImplicitTLS(addr string, auth smtp.Auth, host string, from string, 
 	return sendViaClient(client, auth, from, to, msg)
 }
 
-func sendWithSTARTTLS(addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
-	client, err := smtp.Dial(addr)
+func sendWithSTARTTLS(dialer *net.Dialer, addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
+	client, err := dialSMTP(dialer, addr, host)
 	if err != nil {
 		return fmt.Errorf("SMTP dial failed: %w", err)
 	}
@@ -232,8 +291,8 @@ func sendWithSTARTTLS(addr string, auth smtp.Auth, host string, from string, to 
 	return sendViaClient(client, auth, from, to, msg)
 }
 
-func sendPlain(addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
-	client, err := smtp.Dial(addr)
+func sendPlain(dialer *net.Dialer, addr string, auth smtp.Auth, host string, from string, to []string, msg []byte) error {
+	client, err := dialSMTP(dialer, addr, host)
 	if err != nil {
 		return fmt.Errorf("SMTP dial failed, host: %s, error: %w", host, err)
 	}

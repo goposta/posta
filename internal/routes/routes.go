@@ -199,6 +199,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	dispatcher.SetConfig(webhook.Config{
 		MaxRetries: cfg.WebhookMaxRetries,
 		Timeout:    time.Duration(cfg.WebhookTimeoutSecs) * time.Second,
+		ProxyURL:   cfg.WebhookProxyURL,
+		Network:    cfg.WebhookNetwork,
 	})
 	dispatcher.OnDeliverySuccess(func() { metrics.IncrementWebhookDelivery("success") })
 	dispatcher.OnDeliveryFailed(func() { metrics.IncrementWebhookDelivery("failed") })
@@ -296,7 +298,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			language:         handlers.NewLanguageHandler(languageRepo),
 			stylesheet:       handlers.NewStyleSheetHandler(stylesheetRepo),
 			smtp:             handlers.NewSMTPHandler(smtpRepo, domainRepo, auditLogger),
-			webhook:          handlers.NewWebhookHandler(webhookRepo, auditLogger),
+			webhook:          handlers.NewWebhookHandler(webhookRepo, auditLogger, cfg.WebhookNetwork),
 			webhookDelivery:  handlers.NewWebhookDeliveryHandler(webhookDeliveryRepo),
 			dashboard:        handlers.NewDashboardHandler(db, statsCache, webhookDeliveryRepo),
 			domain:           handlers.NewDomainHandler(domainRepo),
