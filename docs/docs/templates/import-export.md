@@ -71,9 +71,8 @@ Every other form field is optional and overrides a default:
 
 | Field | Default |
 |-------|---------|
-| `name` | Derived from `display_name` |
-| `display_name` | The filename without its extension |
-| `subject` | The document's `<title>`, or else the display name |
+| `name` | The filename without its extension. The identifier is derived from it |
+| `subject` | The document's `<title>`, or else the name |
 | `language` | The workspace's default language |
 | `description` | `Imported from <filename>` |
 
@@ -82,6 +81,6 @@ curl -X POST http://localhost:9000/api/v1/workspaces/current/templates/import-ht
   -H "Authorization: Bearer <jwt-token>" \
   -H "X-Posta-Workspace-Id: 1" \
   -F file=@spring-sale.html \
-  -F display_name="Spring sale" \
+  -F name="Spring sale" \
   -F subject="20% off this week"
 ```

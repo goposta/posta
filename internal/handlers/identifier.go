@@ -28,36 +28,36 @@ import (
 
 // Workspaces, forms, OAuth providers, templates and stylesheets share one
 // naming scheme: name is the identifier the API and URLs use, like
-// "contact-form"; display_name is the label people read.
+// "contact-form"; display_name is the label people read. People create a
+// resource by typing only its name, as a label ("Contact form"): the
+// identifier is derived from it. A name never changes once the resource
+// exists; using another one means creating a new resource.
 
-// legacyNames reads a request made before 0.18, when name was the label:
-// with a slug and no display_name, the slug is the identifier; with no
-// display_name and a name that is not an identifier, that name is the
-// label. Deprecated, until 0.19.
+// legacyNames reads a request made before 0.18, when name was the label and
+// slug the identifier: with a slug and no display_name, the slug is the
+// identifier and name the label. Deprecated, until 0.19.
 func legacyNames(name, displayName, legacySlug string) (string, string) {
 	name, displayName, legacySlug = strings.TrimSpace(name), strings.TrimSpace(displayName), strings.TrimSpace(legacySlug)
-	switch {
-	case displayName != "":
-		return name, displayName
-	case legacySlug != "":
+	if displayName == "" && legacySlug != "" {
 		return legacySlug, name
-	case name != "" && models.CheckIdentifier(name) != nil:
-		return "", name
 	}
 	return name, displayName
 }
 
 // resolveNames settles the name and display name of a resource being
-// created. A missing name is derived from the display name, and a missing
-// display name is the name. legacySlug is the slug field of requests made
-// before the rename, read by legacyNames.
+// created. A name given alone may be a label, as people type it: it becomes
+// the display name and the identifier is derived from it. A missing display
+// name is the name. legacySlug is read by legacyNames.
 func resolveNames(name, displayName, legacySlug string) (string, string, error) {
 	name, displayName = legacyNames(name, displayName, legacySlug)
+	if displayName == "" && models.CheckIdentifier(name) != nil {
+		name, displayName = "", name
+	}
 	if name == "" {
 		name = models.ToIdentifier(displayName)
 	}
 	if name == "" {
-		return "", "", fmt.Errorf("name or display_name is required")
+		return "", "", fmt.Errorf("name is required")
 	}
 	if err := models.CheckIdentifier(name); err != nil {
 		return "", "", err
@@ -68,17 +68,20 @@ func resolveNames(name, displayName, legacySlug string) (string, string, error) 
 	return name, displayName, nil
 }
 
-// resolveRenames settles the name and display name an update asks for;
-// an empty result leaves that value as it is. legacySlug is read by
-// legacyNames.
-func resolveRenames(name, displayName, legacySlug string) (string, string, error) {
+// resolveRename settles the display name an update of resource asks for,
+// whose name is current; an empty result leaves it as it is. Sending the
+// current name is fine, any other is refused. Before 0.18 the label was
+// sent as name: a name that is not an identifier, sent without a display
+// name, is read as the label (deprecated, until 0.19).
+func resolveRename(name, displayName, legacySlug, current, resource string) (string, error) {
 	name, displayName = legacyNames(name, displayName, legacySlug)
-	if name != "" {
-		if err := models.CheckIdentifier(name); err != nil {
-			return "", "", err
-		}
+	if displayName == "" && name != "" && models.CheckIdentifier(name) != nil {
+		name, displayName = "", name
 	}
-	return name, displayName, nil
+	if name != "" && name != current {
+		return "", fmt.Errorf("a %s's name cannot change; create a new %s to use another name", resource, resource)
+	}
+	return displayName, nil
 }
 
 // importNames settles the names of a resource read from an export or a
@@ -86,6 +89,9 @@ func resolveRenames(name, displayName, legacySlug string) (string, string, error
 // it is derived from the display name, or fallback.
 func importNames(name, displayName, fallback string) (string, string) {
 	name, displayName = legacyNames(name, displayName, "")
+	if displayName == "" && models.CheckIdentifier(name) != nil {
+		displayName = name
+	}
 	if name == "" || models.CheckIdentifier(name) != nil {
 		name = models.ToIdentifier(firstNonEmpty(name, displayName))
 	}

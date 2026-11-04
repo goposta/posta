@@ -35,10 +35,7 @@ type EventHandler struct {
 	edition enterprise.EE
 }
 
-// CommunityAuditDays is how far back Posta Community shows a workspace audit
-// log. Its full history, and workspace audit events in the platform-wide
-// event list, need a Posta Enterprise license. Every edition records them.
-const CommunityAuditDays = 7
+const CommunityAuditWindow = 24 * time.Hour
 
 // SetEdition decides how much of the workspace audit trail is shown.
 func (h *EventHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
@@ -49,7 +46,7 @@ func (h *EventHandler) licensed() bool {
 
 // communityAuditSince is the oldest audit event Posta Community shows.
 func communityAuditSince() time.Time {
-	return time.Now().AddDate(0, 0, -CommunityAuditDays)
+	return time.Now().Add(-CommunityAuditWindow)
 }
 
 // isWorkspaceAudit reports whether e is part of a workspace audit trail.

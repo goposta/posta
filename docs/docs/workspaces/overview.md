@@ -12,9 +12,9 @@ Workspaces provide multi-tenant isolation within Posta. Every resource — templ
 
 ### Personal space
 
-A workspace is provisioned for you when you sign up, named after you and owned by you. It is an ordinary workspace in every respect: rename it, invite people to it, or delete it once you have another. There is no separate "personal" workspace type.
+A workspace is provisioned for you when you sign up, named after you and owned by you. It is an ordinary workspace in every respect: invite people to it, or delete it once you have another. There is no separate "personal" workspace type.
 
-One workspace is special. The **system workspace** is created on first boot, owned by the first administrator, and holds platform-managed resources. It is flagged `system: true`, admits only platform administrators, and cannot be renamed or deleted.
+One workspace is special. The **system workspace** is created on first boot, owned by the first administrator, and holds platform-managed resources. It is flagged `system: true`, admits only platform administrators, and cannot be deleted.
 
 ### The system workspace
 
@@ -147,15 +147,14 @@ Request body:
 
 ```json
 {
-  "name": "acme",
-  "display_name": "Acme Inc",
+  "name": "Acme Inc",
   "description": "Marketing and transactional mail",
   "default_language": "en",
   "seed_defaults": true
 }
 ```
 
-Send `name`, `display_name` or both. A missing `name` is derived from the display name, and a missing display name is the name. A name is up to 63 lowercase letters, digits and hyphens, unique on the platform, and cannot change after creation; `display_name` can. `default_language` defaults to `en`. The caller becomes the workspace **owner**.
+Give the workspace a `name` as you would write it. Posta keeps it as the `display_name` and derives the identifier from it: `Acme Inc` is saved as `acme-inc`, up to 63 lowercase letters, digits and hyphens, unique on the platform. A name cannot change after creation; to use another, create a new workspace. `default_language` defaults to `en`. The caller becomes the workspace **owner**.
 
 `seed_defaults` controls whether the new workspace starts with content: a welcome template in English, French and German, a default stylesheet, and the matching languages. It defaults to `true`, so omitting it gives you a workspace you can send from immediately. Send `false` when you intend to populate the workspace from an [export](../gdpr/data-export-import.md) or the API and do not want the starter template in the way.
 
@@ -165,7 +164,7 @@ Seeding is best effort and runs after the workspace exists, so a workspace is ne
 curl -X POST http://localhost:9000/api/v1/workspaces \
   -H "Authorization: Bearer <jwt>" \
   -H "Content-Type: application/json" \
-  -d '{"name": "acme", "display_name": "Acme Inc"}'
+  -d '{"name": "Acme Inc"}'
 ```
 
 Response (`201`):
@@ -174,7 +173,7 @@ Response (`201`):
 {
   "data": {
     "id": 1,
-    "name": "acme",
+    "name": "acme-inc",
     "display_name": "Acme Inc",
     "description": "",
     "owner_id": 42,
@@ -217,7 +216,7 @@ DELETE /api/v1/workspaces/current
 
 Two workspaces refuse deletion:
 
-- The **system workspace** returns `409`. It is the built-in platform workspace, created on first boot, owned by the first administrator, and holds platform-managed resources. It cannot be renamed either, and only platform administrators are members.
+- The **system workspace** returns `409`. It is the built-in platform workspace, created on first boot, owned by the first administrator, and holds platform-managed resources. Only platform administrators are members.
 - Your **last remaining workspace** returns `400`. Everything in Posta belongs to a workspace, so deleting the only one you belong to would leave you with nowhere to work. Create another first.
 
 ```bash

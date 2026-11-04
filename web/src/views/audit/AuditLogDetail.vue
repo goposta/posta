@@ -61,7 +61,7 @@ const prettyMetadata = computed(() => {
     <EnterpriseLock
       v-else-if="beyondWindow"
       feature="Audit Log history"
-      description="Posta Community shows the last 7 days of workspace activity. This event is older; the full history comes with Posta Enterprise."
+      description="Posta Community shows the last 24 hours of workspace activity. This event is older; the full history comes with Posta Enterprise."
     />
 
     <div v-else-if="!event" class="card">

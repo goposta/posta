@@ -8,15 +8,16 @@ const props = defineProps<{
   languages: string[];
 }>();
 
-const copied = ref(false);
+// Which value was just copied: "name" or "id".
+const copied = ref<string | null>(null);
 
-async function copyId() {
+async function copy(what: "name" | "id") {
   try {
-    await navigator.clipboard.writeText(String(props.template.id));
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 2000);
+    await navigator.clipboard.writeText(what === "name" ? props.template.name : String(props.template.id));
+    copied.value = what;
+    setTimeout(() => (copied.value = null), 2000);
   } catch {
-    // Clipboard access can be denied; the id is selectable either way.
+    // Clipboard access can be denied; the value is selectable either way.
   }
 }
 
@@ -33,11 +34,21 @@ function formatDate(value?: string | null) {
   <div class="summary">
     <div class="facts">
       <div class="fact">
+        <span class="k">Name</span>
+        <span class="v">
+          <code class="id" title="What you send as template in the API">{{ template.name }}</code>
+          <button class="copy" type="button" :title="copied === 'name' ? 'Copied' : 'Copy template name'" @click="copy('name')">
+            {{ copied === "name" ? "Copied" : "Copy" }}
+          </button>
+        </span>
+      </div>
+
+      <div class="fact">
         <span class="k">ID</span>
         <span class="v">
           <code class="id">{{ template.id }}</code>
-          <button class="copy" type="button" :title="copied ? 'Copied' : 'Copy template ID'" @click="copyId">
-            {{ copied ? "Copied" : "Copy" }}
+          <button class="copy" type="button" :title="copied === 'id' ? 'Copied' : 'Copy template ID'" @click="copy('id')">
+            {{ copied === "id" ? "Copied" : "Copy" }}
           </button>
         </span>
       </div>
@@ -127,6 +138,10 @@ function formatDate(value?: string | null) {
 }
 
 .id {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: "JetBrains Mono", "Fira Code", monospace;
   font-size: 12px;
   padding: 2px 8px;

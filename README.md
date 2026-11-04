@@ -348,7 +348,7 @@ Running locally with the default port, that is [http://localhost:9000/docs](http
 
 # Dashboard
 
-Posta includes a web dashboard for managing templates, SMTP servers, domains, contacts, API keys, and analytics.
+Posta includes a web dashboard for managing templates, SMTP servers, domains, contacts, forms, API keys, and analytics.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/dashboard.png" alt="Posta Dashboard" width="900"/>
@@ -358,6 +358,30 @@ Posta includes a web dashboard for managing templates, SMTP servers, domains, co
 
 <p align="center">
   <img src="https://raw.githubusercontent.com//goposta/posta/main/docs/static/img/screenshots/analytics.png" alt="Email Analytics" width="900"/>
+</p>
+
+### Form Messages
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/messages.png" alt="Form messages inbox" width="900"/>
+</p>
+
+### Form Widget
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/form-widget.png" alt="A contact form widget embedded on a website" width="900"/>
+</p>
+
+### Shared Form Link
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/form-share.png" alt="A survey opened from its share link" width="900"/>
+</p>
+
+### Form Responses
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/form-responses.png" alt="Form responses summary" width="900"/>
 </p>
 
 ### Template Detail

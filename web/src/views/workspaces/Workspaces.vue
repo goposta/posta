@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { IDENTIFIER_HINT, toIdentifier } from '../../composables/identifier'
+import NameField from '../../components/NameField.vue'
 import { useRouter, useRoute } from 'vue-router'
 import { workspaceApi } from '../../api/workspaces'
 import type { Workspace, WorkspaceInvitation } from '../../api/types'
@@ -17,10 +17,7 @@ const invitations = ref<WorkspaceInvitation[]>([])
 const loading = ref(true)
 
 const showCreateModal = ref(false)
-const newDisplayName = ref('')
 const newName = ref('')
-// The name follows the display name until it is edited by hand.
-const nameEdited = ref(false)
 const newDescription = ref('')
 // On by default: an empty workspace has nothing to send and nothing to look at.
 const newSeedDefaults = ref(true)
@@ -42,25 +39,18 @@ async function fetchData() {
   }
 }
 
-function syncName() {
-  if (!nameEdited.value) newName.value = toIdentifier(newDisplayName.value)
-}
-
 async function createWorkspace() {
-  if (!newDisplayName.value.trim() || !newName.value.trim()) return
+  if (!newName.value.trim()) return
   creating.value = true
   try {
     await workspaceApi.create({
-      display_name: newDisplayName.value.trim(),
       name: newName.value.trim(),
       description: newDescription.value.trim(),
       seed_defaults: newSeedDefaults.value,
     })
     notify.success('Workspace created')
     showCreateModal.value = false
-    newDisplayName.value = ''
     newName.value = ''
-    nameEdited.value = false
     newDescription.value = ''
     newSeedDefaults.value = true
     await fetchData()
@@ -224,29 +214,8 @@ if (route.query.create !== undefined) {
         </div>
         <form @submit.prevent="createWorkspace">
           <div class="modal-body">
-            <div class="form-group">
-              <label class="form-label">Display name</label>
-              <input
-                v-model="newDisplayName"
-                class="form-input"
-                placeholder="My Team"
-                required
-                @input="syncName"
-              />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Name</label>
-              <input
-                v-model="newName"
-                class="form-input mono"
-                placeholder="my-team"
-                pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                :title="IDENTIFIER_HINT"
-                required
-                @input="nameEdited = true"
-              />
-              <span class="form-hint">Unique on this Posta. {{ IDENTIFIER_HINT }} It cannot change later.</span>
-            </div>
+            <NameField v-model="newName" resource="workspace" usage="Unique on this Posta." placeholder="e.g. My Team"
+              autofocus />
             <div class="form-group">
               <label class="form-label">Description (optional)</label>
               <input
@@ -269,7 +238,7 @@ if (route.query.create !== undefined) {
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" @click="showCreateModal = false">Cancel</button>
-            <button type="submit" class="btn btn-primary" :disabled="creating || !newDisplayName.trim() || !newName.trim()">
+            <button type="submit" class="btn btn-primary" :disabled="creating || !newName.trim()">
               {{ creating ? 'Creating...' : 'Create' }}
             </button>
           </div>

@@ -6,7 +6,7 @@ import { useNotificationStore } from '../../stores/notification'
 import { useConfirm } from '../../composables/useConfirm'
 import { useLicenseStore } from '../../stores/license'
 import { ENTERPRISE_URL } from '../../api/license'
-import { IDENTIFIER_HINT, toIdentifier } from '../../composables/identifier'
+import NameField from '../../components/NameField.vue'
 
 const notify = useNotificationStore()
 const { confirm } = useConfirm()
@@ -22,26 +22,20 @@ const loading = ref(true)
 const showCreateModal = ref(false)
 const creating = ref(false)
 const emptyForm = () => ({
-  display_name: '', name: '', type: 'oidc',
+  name: '', type: 'oidc',
   client_id: '', client_secret: '', issuer: '',
   auth_url: '', token_url: '', userinfo_url: '',
   scopes: 'openid email profile',
   auto_register: true, hidden: false, allowed_domains: '',
 })
-const form = ref({
-  display_name: '', name: '', type: 'oidc',
-  client_id: '', client_secret: '', issuer: '',
-  auth_url: '', token_url: '', userinfo_url: '',
-  scopes: 'openid email profile',
-  auto_register: true, hidden: false, allowed_domains: '',
-})
+const form = ref(emptyForm())
 
 // Edit modal
 const showEditModal = ref(false)
 const editing = ref(false)
 const editingProvider = ref<OAuthProviderAdmin | null>(null)
 const editForm = ref({
-  display_name: '', client_id: '', client_secret: '', issuer: '',
+  client_id: '', client_secret: '', issuer: '',
   auth_url: '', token_url: '', userinfo_url: '',
   scopes: '', auto_register: true, hidden: false, allowed_domains: '',
 })
@@ -58,21 +52,14 @@ async function fetchProviders() {
   }
 }
 
-// The name follows the display name until it is edited by hand.
-const nameEdited = ref(false)
-function syncName() {
-  if (!nameEdited.value) form.value.name = toIdentifier(form.value.display_name)
-}
-
 async function createProvider() {
-  if (!form.value.display_name || !form.value.name || !form.value.client_id || !form.value.client_secret) return
+  if (!form.value.name.trim() || !form.value.client_id || !form.value.client_secret) return
   creating.value = true
   try {
     await oauthApi.adminCreate(form.value)
     notify.success('Provider created')
     showCreateModal.value = false
     form.value = emptyForm()
-    nameEdited.value = false
     await fetchProviders()
   } catch (err: any) {
     notify.error(err.response?.data?.error?.message || 'Failed to create provider')
@@ -84,7 +71,6 @@ async function createProvider() {
 function openEdit(p: OAuthProviderAdmin) {
   editingProvider.value = p
   editForm.value = {
-    display_name: p.display_name,
     client_id: '',
     client_secret: '',
     issuer: p.issuer || '',
@@ -104,7 +90,6 @@ async function updateProvider() {
   editing.value = true
   try {
     const data: Record<string, any> = {}
-    if (editForm.value.display_name) data.display_name = editForm.value.display_name
     if (editForm.value.client_id) data.client_id = editForm.value.client_id
     if (editForm.value.client_secret) data.client_secret = editForm.value.client_secret
     if (editForm.value.issuer) data.issuer = editForm.value.issuer
@@ -231,19 +216,8 @@ onMounted(() => {
         <div class="modal-header"><h3>Add OAuth Provider</h3></div>
         <form @submit.prevent="createProvider">
           <div class="modal-body">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-              <div class="form-group">
-                <label class="form-label">Display name</label>
-                <input v-model="form.display_name" class="form-input" placeholder="Google" required @input="syncName" />
-                <span class="form-hint">Shown on the sign-in button.</span>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Name</label>
-                <input v-model="form.name" class="form-input mono" placeholder="google" required pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                  :title="IDENTIFIER_HINT" @input="nameEdited = true" />
-                <span class="form-hint">In the sign-in URLs. It cannot change later.</span>
-              </div>
-            </div>
+            <NameField v-model="form.name" resource="provider" usage="Shown on the sign-in button, and in its URLs."
+              placeholder="e.g. Google" autofocus />
             <div class="form-group">
               <label class="form-label">Type</label>
               <select v-model="form.type" class="form-select">
@@ -302,11 +276,7 @@ onMounted(() => {
         <div class="modal-header"><h3>Edit {{ editingProvider.display_name }}</h3></div>
         <form @submit.prevent="updateProvider">
           <div class="modal-body">
-            <div class="form-group">
-              <label class="form-label">Display name</label>
-              <input v-model="editForm.display_name" class="form-input" required />
-              <span class="form-hint">Its name, <code>{{ editingProvider.name }}</code>, is in the sign-in URLs and stays the same.</span>
-            </div>
+            <NameField :existing="editingProvider" resource="provider" usage="Shown on the sign-in button, and in its URLs." />
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
               <div class="form-group">
                 <label class="form-label">Client ID</label>

@@ -36,8 +36,7 @@ POST /api/v1/admin/oauth/providers
 
 ```json
 {
-  "name": "google",
-  "display_name": "Google",
+  "name": "Google",
   "type": "google",
   "client_id": "your-google-client-id",
   "client_secret": "your-google-client-secret",
@@ -50,8 +49,7 @@ POST /api/v1/admin/oauth/providers
 
 ```json
 {
-  "name": "keycloak",
-  "display_name": "Keycloak",
+  "name": "Keycloak",
   "type": "oidc",
   "client_id": "posta",
   "client_secret": "your-client-secret",
@@ -68,8 +66,7 @@ POST /api/v1/admin/oauth/providers
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `name` | No | from `display_name` | Identifier in the sign-in URLs (`/auth/oauth/{name}/authorize`): lowercase letters, digits and hyphens, unique. Cannot change later. |
-| `display_name` | No | `name` | Shown on the sign-in button. One of `name` and `display_name` is required. |
+| `name` | Yes | — | The provider's name, as shown on the sign-in button. Its identifier in the sign-in URLs (`/auth/oauth/{name}/authorize`) is derived from it: `Google` becomes `google`. Unique, and cannot change later. |
 | `type` | Yes | — | `google` or `oidc` |
 | `client_id` | Yes | — | OAuth client ID |
 | `client_secret` | Yes | — | OAuth client secret |

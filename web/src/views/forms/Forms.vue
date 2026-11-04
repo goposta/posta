@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { IDENTIFIER_HINT, toIdentifier } from "../../composables/identifier";
+import NameField from "../../components/NameField.vue";
 import { useRouter } from "vue-router";
 import { formsApi } from "../../api/messages";
 import { useNotificationStore } from "../../stores/notification";
@@ -17,10 +17,7 @@ const forms = ref<Form[]>([]);
 
 const showCreate = ref(false);
 const creating = ref(false);
-const newDisplayName = ref("");
 const newName = ref("");
-// The name follows the display name until it is edited by hand.
-const nameEdited = ref(false);
 const newOrigins = ref("");
 const newNotify = ref("");
 const newMode = ref<FormMode>("inbox");
@@ -43,14 +40,8 @@ const { pageable, goToPage } = usePagination(async (page) => {
   }
 });
 
-function syncName() {
-  if (!nameEdited.value) newName.value = toIdentifier(newDisplayName.value);
-}
-
 function openCreate() {
-  newDisplayName.value = "";
   newName.value = "";
-  nameEdited.value = false;
   newOrigins.value = "";
   newNotify.value = "";
   newMode.value = "inbox";
@@ -58,12 +49,11 @@ function openCreate() {
 }
 
 async function createForm() {
-  if (!newDisplayName.value.trim()) return;
+  if (!newName.value.trim()) return;
   creating.value = true;
   try {
     const res = await formsApi.create({
-      display_name: newDisplayName.value.trim(),
-      name: newName.value.trim() || undefined,
+      name: newName.value.trim(),
       mode: newMode.value,
       allowed_origins: splitList(newOrigins.value),
       notify_emails: splitList(newNotify.value),
@@ -174,16 +164,8 @@ function formatDate(date: string | null | undefined) {
           <h3>New form</h3>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">Display name</label>
-            <input v-model="newDisplayName" class="form-input" placeholder="Contact form" @input="syncName" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Name</label>
-            <input v-model="newName" class="form-input mono" placeholder="contact-form" :title="IDENTIFIER_HINT"
-              @input="nameEdited = true" />
-            <span class="form-hint">Identifies the form in the API. {{ IDENTIFIER_HINT }}</span>
-          </div>
+          <NameField v-model="newName" resource="form" usage="Identifies the form in the API."
+            placeholder="e.g. Contact form" autofocus />
           <div class="form-group">
             <label class="form-label">Submissions are</label>
             <select v-model="newMode" class="form-select">
@@ -218,7 +200,7 @@ function formatDate(date: string | null | undefined) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="showCreate = false">Cancel</button>
-          <button class="btn btn-primary" :disabled="creating || !newDisplayName.trim()" @click="createForm">
+          <button class="btn btn-primary" :disabled="creating || !newName.trim()" @click="createForm">
             {{ creating ? "Creating..." : "Create form" }}
           </button>
         </div>

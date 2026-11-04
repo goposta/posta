@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { languagesApi } from '@/api/languages';
 import { Language, Template, TemplateDraft } from '@/api/types';
-import { IDENTIFIER_HINT, toIdentifier } from '@/composables/identifier';
+import NameField from '@/components/NameField.vue';
 import { useModalSafeClose } from '@/composables/useModalSafeClose';
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, ref } from 'vue';
 
 interface Props {
   form: TemplateDraft
@@ -11,7 +11,7 @@ interface Props {
   saving?: boolean 
   editing?: Template | null
 }
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   isVisible: false,
   saving: false,
   editing: null
@@ -39,16 +39,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
 onMounted(() => {
   loadLanguages();
 });
-
-// A new template's name follows its display name until edited by hand; an
-// existing one keeps its name, which callers send.
-const nameEdited = ref(false)
-watch(() => props.isVisible, (visible) => {
-  if (visible) nameEdited.value = !!props.editing
-})
-function syncName() {
-  if (!nameEdited.value) props.form.name = toIdentifier(props.form.display_name)
-}
 </script>
 
 <template>
@@ -59,19 +49,8 @@ function syncName() {
       </div>
 
       <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Display name</label>
-          <input v-model="form.display_name" class="form-input" placeholder="e.g. Welcome Email" @input="syncName" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Name</label>
-          <input v-model="form.name" class="form-input mono" placeholder="welcome-email" :title="IDENTIFIER_HINT"
-            @input="nameEdited = true" />
-          <span v-if="editing && form.name !== editing.name" class="form-hint form-hint-warning">
-            Callers that send with <code>{{ editing.name }}</code> stop finding this template.
-          </span>
-          <span v-else class="form-hint">What you send as <code>template</code> in the API. {{ IDENTIFIER_HINT }}</span>
-        </div>
+        <NameField v-model="form.name" :existing="editing" resource="template"
+          usage="Send it as template in the API." placeholder="e.g. Welcome Email" autofocus />
         <div class="form-group">
           <label class="form-label">Description</label>
           <input v-model="form.description" class="form-input" placeholder="e.g. Sent after user registration" />
@@ -95,7 +74,7 @@ function syncName() {
 
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="emit('close')">Cancel</button>
-        <button class="btn btn-primary" :disabled="saving || !form.display_name.trim() || !form.name.trim()" @click="emit('save')">
+        <button class="btn btn-primary" :disabled="saving || !form.name.trim()" @click="emit('save')">
           {{ saving ? "Saving..." : editing ? "Update" : "Create" }}
         </button>
       </div>

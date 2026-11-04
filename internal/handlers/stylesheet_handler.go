@@ -32,7 +32,7 @@ type StyleSheetHandler struct {
 }
 type CreateStyleSheetRequest struct {
 	Body struct {
-		Name        string `json:"name" doc:"Identifier, like brand: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		Name        string `json:"name" doc:"The stylesheet's name, as typed: \"Brand Styles\" is stored as the identifier brand-styles, with \"Brand Styles\" as display_name. It cannot change later."`
 		DisplayName string `json:"display_name" doc:"The stylesheet's label. Defaults to name."`
 		CSS         string `json:"css"`
 	} `json:"body"`
@@ -87,12 +87,9 @@ func (h *StyleSheetHandler) Update(c *okapi.Context, req *UpdateStyleSheetReques
 		return c.AbortNotFound("stylesheet not found")
 	}
 
-	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	displayName, err := resolveRename(req.Body.Name, req.Body.DisplayName, "", ss.Name, "stylesheet")
 	if err != nil {
 		return c.AbortBadRequest(err.Error())
-	}
-	if name != "" {
-		ss.Name = name
 	}
 	if displayName != "" {
 		ss.DisplayName = displayName
@@ -105,9 +102,6 @@ func (h *StyleSheetHandler) Update(c *okapi.Context, req *UpdateStyleSheetReques
 	ss.UpdatedAt = &now
 
 	if err := h.repo.Update(ss); err != nil {
-		if repositories.IsDuplicateName(err) {
-			return c.AbortConflict("a stylesheet named \"" + ss.Name + "\" already exists")
-		}
 		return c.AbortInternalServerError("failed to update stylesheet")
 	}
 

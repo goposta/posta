@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { IDENTIFIER_HINT, toIdentifier } from '../../composables/identifier'
+import NameField from '../../components/NameField.vue'
 import { stylesheetsApi } from '../../api/stylesheets'
 import type { StyleSheet, StyleSheetInput, Pageable } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
@@ -22,22 +22,15 @@ const showModal = ref(false)
 const editing = ref<StyleSheet | null>(null)
   const saving = ref(false)
 
-  const form = ref<Required<StyleSheetInput>>({
+// Creating a stylesheet sends its name as typed; editing one sends its name
+// unchanged.
+const form = ref<Required<Omit<StyleSheetInput, 'display_name'>>>({
   name: '',
-  display_name: '',
   css: '',
 })
-// A new stylesheet's name follows its display name until edited by hand;
-// an existing one keeps its name.
-const nameEdited = ref(false)
-
-function syncName() {
-  if (!nameEdited.value) form.value.name = toIdentifier(form.value.display_name)
-}
 
 function resetForm() {
-  form.value = { name: '', display_name: '', css: '' }
-  nameEdited.value = false
+  form.value = { name: '', css: '' }
   editing.value = null
 }
 
@@ -50,10 +43,8 @@ function openEdit(sheet: StyleSheet) {
   editing.value = sheet
   form.value = {
     name: sheet.name,
-    display_name: sheet.display_name,
     css: sheet.css,
   }
-  nameEdited.value = true
   showModal.value = true
 }
 
@@ -76,7 +67,7 @@ const { pageable, goToPage } = usePagination(async (page) => {
 
 
 async function saveStylesheet() {
-  if (!form.value.display_name.trim() || !form.value.name.trim()) return
+  if (!form.value.name.trim()) return
   saving.value = true
   try {
     if (editing.value) {
@@ -185,16 +176,8 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
           <h3>{{ editing ? 'Edit Stylesheet' : 'Create Stylesheet' }}</h3>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">Display name</label>
-            <input v-model="form.display_name" class="form-input" placeholder="e.g. Brand Styles" @input="syncName" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Name</label>
-            <input v-model="form.name" class="form-input mono" placeholder="brand-styles" :title="IDENTIFIER_HINT"
-              @input="nameEdited = true" />
-            <span class="form-hint">Imported HTML templates link stylesheets by this name. {{ IDENTIFIER_HINT }}</span>
-          </div>
+          <NameField v-model="form.name" :existing="editing" resource="stylesheet"
+            usage="Imported HTML templates link stylesheets by it." placeholder="e.g. Brand Styles" autofocus />
           <div class="form-group">
             <label class="form-label">CSS</label>
             <textarea v-model="form.css" class="form-textarea css-editor" rows="12" placeholder="body { font-family: sans-serif; }"></textarea>
@@ -205,7 +188,7 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
           <button class="btn btn-secondary" @click="closeModal">Cancel</button>
           <button
             class="btn btn-primary"
-            :disabled="saving || !form.display_name.trim() || !form.name.trim()"
+            :disabled="saving || !form.name.trim()"
             @click="saveStylesheet"
           >
             {{ saving ? 'Saving...' : (editing ? 'Update' : 'Create') }}

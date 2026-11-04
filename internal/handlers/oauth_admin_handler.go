@@ -47,7 +47,7 @@ func NewOAuthAdminHandler(providerRepo *repositories.OAuthProviderRepository, ss
 
 type CreateOAuthProviderRequest struct {
 	Body struct {
-		Name           string `json:"name" doc:"Identifier used in the sign-in URLs, like google: lowercase letters, digits and hyphens. Derived from display_name when empty."`
+		Name           string `json:"name" doc:"The provider's name, as typed: \"Google\" is stored as the identifier google, used in the sign-in URLs, and \"Google\" as display_name. It cannot change later."`
 		DisplayName    string `json:"display_name" doc:"Shown on the sign-in button. Defaults to name."`
 		Slug           string `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Type           string `json:"type" required:"true"`
@@ -194,12 +194,9 @@ func (h *OAuthAdminHandler) UpdateProvider(c *okapi.Context, req *UpdateOAuthPro
 		return c.AbortNotFound("provider not found")
 	}
 
-	name, displayName, err := resolveRenames(req.Body.Name, req.Body.DisplayName, "")
+	displayName, err := resolveRename(req.Body.Name, req.Body.DisplayName, "", provider.Name, "provider")
 	if err != nil {
 		return c.AbortBadRequest(err.Error())
-	}
-	if name != "" && name != provider.Name {
-		return c.AbortBadRequest("a provider's name is in its sign-in URLs and cannot change; set display_name to rename it")
 	}
 	if displayName != "" {
 		provider.DisplayName = displayName
