@@ -499,7 +499,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			metrics.IncrementMessageReceived(string(status))
 		})
 
-		r.h.form = handlers.NewFormHandler(formRepo, messageRepo, domainRepo, auditLogger, cfg.ApiBaseURL)
+		r.h.form = handlers.NewFormHandler(formRepo, messageRepo, domainRepo, auditLogger, cfg.PublicAPIURL())
 		r.h.form.SetKeyCache(messageSvc)
 		r.h.form.SetEdition(edition)
 		r.h.message = handlers.NewMessageHandler(messageRepo, formRepo, messageFilterRepo, messageSvc, auditLogger)

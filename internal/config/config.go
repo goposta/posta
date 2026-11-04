@@ -543,6 +543,17 @@ func (c *Config) InitWorker() error {
 	return c.validateWorker()
 }
 
+// PublicAPIURL is the base of the URLs Posta gives out for its public API:
+// form endpoints, share pages, the widget script, inbound attachment links.
+// POSTA_API_URL when the API has its own host, otherwise POSTA_WEB_URL, which
+// serves the API too. Empty only when neither is set.
+func (c *Config) PublicAPIURL() string {
+	if c.ApiBaseURL != "" {
+		return strings.TrimSuffix(c.ApiBaseURL, "/")
+	}
+	return strings.TrimSuffix(c.AppWebURL, "/")
+}
+
 // networkPolicy reads a netguard policy from the environment, stopping on an
 // allowed network that does not parse rather than running with a policy
 // other than the one configured.

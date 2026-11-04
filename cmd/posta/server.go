@@ -551,7 +551,7 @@ func startEmbeddedWorker(db *gorm.DB,
 		inboundHandler := worker.NewInboundProcessHandler(
 			repositories.NewInboundEmailRepository(db),
 			newWebhookDispatcher(db, cfg),
-			cfg.ApiBaseURL,
+			cfg.PublicAPIURL(),
 			[]byte(cfg.JWTSecret),
 		)
 		inboundHandler.OnForwarded(metrics.IncrementInboundForwarded)
