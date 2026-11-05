@@ -9,6 +9,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/introduction',
         'getting-started/managed-posta',
+        'getting-started/miabi',
         'getting-started/installation',
         'getting-started/configuration',
         'getting-started/quickstart',
@@ -127,7 +128,9 @@ const sidebars: SidebarsConfig = {
       items: [
         'messages/overview',
         'messages/creating-a-form',
+        'messages/sharing-a-form',
         'messages/embedding',
+        'messages/fields-and-validation',
         'messages/spam-filtering',
         'messages/replying',
       ],
@@ -161,6 +164,7 @@ const sidebars: SidebarsConfig = {
         'admin/shared-servers',
         'admin/scheduled-jobs',
         'admin/oauth-providers',
+        'admin/ldap-directories',
         'admin/plans',
       ],
     },
