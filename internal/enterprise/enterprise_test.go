@@ -31,8 +31,7 @@ import (
 
 const testKID = "posta-202611-test"
 
-// testTx opens the test database and returns a transaction rolled back after
-// the test, so the license table of a shared database is never touched.
+// Rolled back after the test, so a shared database's license table is never touched.
 func testTx(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_DSN")
@@ -54,8 +53,7 @@ func testTx(t *testing.T) *gorm.DB {
 	return tx
 }
 
-// withKeyring builds this test's keyring into the package, as -ldflags
-// would, and returns the private key licenses are signed with.
+// withKeyring sets this test's keyring into the package as -ldflags would and returns the signing key.
 func withKeyring(t *testing.T) ed25519.PrivateKey {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)

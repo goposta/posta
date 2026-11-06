@@ -164,7 +164,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/forms/{id:int}/rotate-key",
+			Path:        "/forms/{id}/rotate-key",
 			Handler:     okapi.H(r.h.form.RotateKey),
 			Group:       opsGroup,
 			Summary:     "Rotate a form public key",
@@ -176,7 +176,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/forms/{id:int}/snippet",
+			Path:        "/forms/{id}/snippet",
 			Handler:     okapi.H(r.h.form.Snippet),
 			Group:       opsGroup,
 			Summary:     "Get embed code for a form",
@@ -378,7 +378,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/messages/{id}/attachments/{idx:int}",
+			Path:    "/messages/{id}/attachments/{idx}",
 			Handler: okapi.H(r.h.message.DownloadAttachment),
 			Group:   opsGroup,
 			Summary: "Download a message attachment",
@@ -415,7 +415,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/message-filters/{id:int}",
+			Path:     "/message-filters/{id}",
 			Handler:  okapi.H(r.h.messageFilter.Update),
 			Group:    opsGroup,
 			Summary:  "Update a spam filter",
@@ -427,7 +427,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/message-filters/{id:int}",
+			Path:    "/message-filters/{id}",
 			Handler: okapi.H(r.h.messageFilter.Delete),
 			Group:   opsGroup,
 			Summary: "Delete a spam filter",
@@ -446,11 +446,10 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.TestMessageFilterResponse]{},
 		},
 
-		// Routing rules: form configuration, so admin scope like /forms. Rules
-		// and teams are Posta Enterprise features (402 without a license).
+		// Routing rules are form configuration, so admin scope like /forms; rules and teams need an EE license (402).
 		{
 			Method:      http.MethodGet,
-			Path:        "/forms/{id:int}/rules",
+			Path:        "/forms/{id}/rules",
 			Handler:     okapi.H(r.h.formRule.List),
 			Group:       opsGroup,
 			Middlewares: r.licensed(),
@@ -460,7 +459,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/forms/{id:int}/rules",
+			Path:        "/forms/{id}/rules",
 			Handler:     okapi.H(r.h.formRule.Create),
 			Group:       opsGroup,
 			Middlewares: r.licensedToChange(),
@@ -475,7 +474,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPut,
-			Path:        "/forms/{id:int}/rules/order",
+			Path:        "/forms/{id}/rules/order",
 			Handler:     okapi.H(r.h.formRule.Reorder),
 			Group:       opsGroup,
 			Middlewares: r.licensedToChange(),
@@ -486,7 +485,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/forms/{id:int}/rules/test",
+			Path:        "/forms/{id}/rules/test",
 			Handler:     okapi.H(r.h.formRule.Test),
 			Group:       opsGroup,
 			Middlewares: r.licensed(),
@@ -498,7 +497,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPut,
-			Path:        "/forms/{id:int}/rules/{rule_id:int}",
+			Path:        "/forms/{id}/rules/{rule_id}",
 			Handler:     okapi.H(r.h.formRule.Update),
 			Group:       opsGroup,
 			Middlewares: r.licensedToChange(),
@@ -512,7 +511,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/forms/{id:int}/rules/{rule_id:int}",
+			Path:        "/forms/{id}/rules/{rule_id}",
 			Handler:     okapi.H(r.h.formRule.Delete),
 			Group:       opsGroup,
 			Middlewares: r.licensedToChange(),
@@ -523,7 +522,7 @@ func (r *Router) messageWorkspaceRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// Teams: tenant administration (admin scope), listed for every member.
+		// Teams are tenant administration (admin scope) but listed for every member.
 		{
 			Method:      http.MethodGet,
 			Path:        "/teams",

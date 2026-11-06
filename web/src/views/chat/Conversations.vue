@@ -19,9 +19,7 @@ const notify = useNotificationStore();
 const wsStore = useWorkspaceStore();
 const { confirm } = useConfirm();
 
-// A message the agent sent that the server has not confirmed yet. It has no
-// sequence number until then, and is matched to the stored copy by its
-// client_msg_id, whichever of the POST answer and the stream arrives first.
+// An unconfirmed sent message has no seq yet; it is matched to the stored copy by client_msg_id, whichever of POST answer or stream arrives first.
 type ThreadMessage = ChatMessage & { pending?: boolean; failed?: boolean };
 
 const TABS = [
@@ -55,8 +53,6 @@ const canEdit = computed(() => wsStore.canEdit);
 const canErase = computed(() => wsStore.isWorkspaceAdmin);
 const myId = computed(() => auth.user?.id ?? 0);
 
-// Live details of the open thread: the visitor's typing indicator, and the
-// newest agent message the visitor has seen.
 const visitorTyping = ref(false);
 let typingTimer: ReturnType<typeof setTimeout> | null = null;
 const seenSeq = computed(() => {
@@ -147,8 +143,6 @@ watch(widgetId, () => loadList());
 function open(c: ChatConversation) {
   router.push({ path: `/chat/${c.uuid}`, query: route.query });
 }
-
-// --- The thread -----------------------------------------------------------
 
 function sortMessages() {
   messages.value.sort((a, b) => {
@@ -251,8 +245,6 @@ async function loadConversation(uuid: string) {
   loadWidgetAttachments();
 }
 
-// --- Visitor context, ban -------------------------------------------------
-
 const visitorCtx = ref<ChatVisitorContext | null>(null);
 const ctxVisitor = computed(() => visitorCtx.value?.visitor ?? conversation.value?.visitor ?? null);
 const attributeEntries = computed(() => Object.entries(ctxVisitor.value?.attributes ?? {}));
@@ -321,10 +313,7 @@ async function unban() {
   }
 }
 
-// --- Attachments ----------------------------------------------------------
-
-// Whether the conversation's widget takes files: true, false, or null when
-// unknown (then the button shows and the server's answer decides).
+// null when unknown: the button shows and the server's answer decides.
 const widgetAttachments = ref<boolean | null>(null);
 const attachmentCache = new Map<number, boolean>();
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -387,8 +376,6 @@ async function onFile(e: Event) {
     notify.error(apiMessage(err, "File not sent"));
   }
 }
-
-// --- Canned replies -------------------------------------------------------
 
 const snippets = ref<ChatSnippet[]>([]);
 const composerEl = ref<HTMLTextAreaElement | null>(null);
@@ -454,8 +441,6 @@ async function refreshConversation() {
   }
 }
 
-// --- Read receipts and typing ---------------------------------------------
-
 let readSent = { uuid: "", seq: 0 };
 /** Tells the visitor how far the agents have read, while the thread is in view. */
 function markRead() {
@@ -491,8 +476,7 @@ function stopVisitorTyping() {
   typingTimer = null;
 }
 
-// While the visitor is away, whether a reply goes by email changes with time
-// (two minutes after they leave), so the banner is refreshed now and then.
+// Whether a reply goes by email changes two minutes after the visitor leaves, so the banner is refreshed now and then.
 let awayTimer: ReturnType<typeof setInterval> | null = null;
 watch(
   () => conversation.value?.uuid && !conversation.value.visitor_live,
@@ -522,8 +506,6 @@ async function loadOlder() {
 }
 
 watch(selectedId, (uuid) => loadConversation(uuid));
-
-// --- Sending --------------------------------------------------------------
 
 function newClientId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -596,8 +578,6 @@ function onComposerKey(e: KeyboardEvent) {
   }
 }
 
-// --- Actions --------------------------------------------------------------
-
 function applyConversation(updated: ChatConversation) {
   conversation.value = updated;
   const i = conversations.value.findIndex((c) => c.uuid === updated.uuid);
@@ -634,8 +614,6 @@ async function setState(state: ChatState) {
     notify.error(apiMessage(e, "Failed to update conversation"));
   }
 }
-
-// --- Live events ----------------------------------------------------------
 
 function onEvent(ev: ChatStreamEvent) {
   if (ev.type === "reconnected") {
@@ -736,8 +714,6 @@ onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer);
 });
 
-// --- Display --------------------------------------------------------------
-
 type Segment = { text: string; href?: string };
 const LINK = /\b(?:https?:\/\/|mailto:)[^\s<>"']+/gi;
 
@@ -817,7 +793,6 @@ function stateBadge(state: string): string {
     </div>
 
     <div v-else class="chat-layout" :class="{ 'has-selection': !!selectedId }">
-      <!-- Conversation list -->
       <section class="card chat-list">
         <div class="chat-tabs">
           <button v-for="t in TABS" :key="t.key" class="chat-tab" :class="{ active: tab === t.key }"
@@ -857,7 +832,6 @@ function stateBadge(state: string): string {
         <button v-if="hasMore" class="btn btn-secondary load-more" @click="loadList(true)">Load more</button>
       </section>
 
-      <!-- Thread -->
       <section class="card chat-thread">
         <div v-if="!selectedId" class="empty-state">
           <h3>Select a conversation</h3>
@@ -944,7 +918,6 @@ function stateBadge(state: string): string {
         </template>
       </section>
 
-      <!-- Visitor -->
       <aside v-if="conversation && selectedId" class="card chat-visitor">
         <div class="card-header"><h2>Visitor</h2></div>
         <div class="card-body">

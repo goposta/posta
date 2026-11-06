@@ -31,7 +31,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ServerHandler handles admin management of shared SMTP servers.
 type ServerHandler struct {
 	repo   *repositories.ServerRepository
 	sender *email.SMTPSender
@@ -105,7 +104,6 @@ func (h *ServerHandler) Create(c *okapi.Context, req *CreateServerRequest) error
 		SecurityMode:   securityMode,
 	}
 
-	// Validate SMTP connection before saving
 	now := time.Now()
 	server.ValidatedAt = &now
 	smtpTest := server.ToSMTPServer()
@@ -198,14 +196,12 @@ func (h *ServerHandler) Update(c *okapi.Context, req *UpdateServerRequest) error
 		server.SecurityMode = models.ServerSecurityModePermissive
 	}
 
-	// Handle status changes
 	if req.Body.Status != "" {
 		switch req.Body.Status {
 		case models.SMTPStatusDisabled:
 			server.Status = models.SMTPStatusDisabled
 			server.ValidationError = ""
 		case models.SMTPStatusEnabled:
-			// Re-validate before enabling
 			now := time.Now()
 			server.ValidatedAt = &now
 			if err := h.sender.TestConnection(server.ToSMTPServer()); err != nil {
@@ -217,7 +213,6 @@ func (h *ServerHandler) Update(c *okapi.Context, req *UpdateServerRequest) error
 			}
 		}
 	} else if connectionChanged {
-		// Connection fields changed — re-validate automatically
 		now := time.Now()
 		server.ValidatedAt = &now
 		if err := h.sender.TestConnection(server.ToSMTPServer()); err != nil {
@@ -263,7 +258,6 @@ func (h *ServerHandler) Enable(c *okapi.Context, req *ServerIDRequest) error {
 		return c.AbortNotFound("server not found")
 	}
 
-	// Re-validate before enabling
 	now := time.Now()
 	if err := h.sender.TestConnection(server.ToSMTPServer()); err != nil {
 		_ = h.repo.SetStatus(server.ID, models.SMTPStatusInvalid, err.Error())

@@ -29,9 +29,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// oauthRoutes returns route definitions for OAuth authentication.
 func (r *Router) oauthRoutes() []okapi.RouteDefinition {
-	// Public OAuth routes (no auth required)
 	oauthPublic := r.v1.Group("/auth/oauth").WithTagInfo(okapi.GroupTag{
 		Name:        tagOAuth,
 		Description: descOAuth,
@@ -83,7 +81,6 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 		},
 	}...)
 
-	// Authenticated OAuth routes (linked accounts)
 	oauthUser := r.v1.Group("/users/me/oauth", r.mw.jwtOnly).WithTagInfo(okapi.GroupTag{
 		Name:        tagOAuth,
 		Description: descOAuth,
@@ -101,7 +98,7 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/{provider_id:int}",
+			Path:    "/{provider_id}",
 			Handler: okapi.H(r.h.oauth.UnlinkAccount),
 			Group:   oauthUser,
 			Summary: "Unlink OAuth account",
@@ -112,7 +109,6 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 		},
 	}...)
 
-	// Admin OAuth provider management
 	oauthAdmin := r.v1.Group("/admin/oauth/providers", r.mw.jwtAdminAuth.Middleware).WithTagInfo(
 		okapi.GroupTag{
 			Name:        tagAdmin,
@@ -170,7 +166,6 @@ func (r *Router) oauthRoutes() []okapi.RouteDefinition {
 		},
 	}...)
 
-	// Workspace SSO config
 	wsSSO := r.v1.Group("/workspaces/current/sso", r.mw.auth, r.mw.workspace).WithTagInfo(
 		okapi.GroupTag{
 			Name:        tagWorkspaces,

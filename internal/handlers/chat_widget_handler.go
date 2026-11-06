@@ -36,7 +36,6 @@ import (
 
 const metaChatWidgetID = "chat_widget_id"
 
-// ChatWidgetHandler manages a workspace's chat widgets.
 type ChatWidgetHandler struct {
 	edition         enterprise.EE
 	quota           QuotaChecker
@@ -60,13 +59,10 @@ func NewChatWidgetHandler(repo *repositories.ChatRepository, auditLogger *audit.
 	}
 }
 
-// SetEdition gates the Enterprise widget settings (auto-assign). Without it
-// they are refused, as in Community.
+// SetEdition gates auto-assign; without it the settings are refused, as in Community.
 func (h *ChatWidgetHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 
-// requireAutoAssign refuses a change to the auto-assign settings without a
-// license that still allows changes. Sending the stored values is fine, so a
-// client that saves the whole widget keeps working.
+// requireAutoAssign accepts unchanged values so a client that saves the whole widget keeps working.
 func (h *ChatWidgetHandler) requireAutoAssign(w *models.ChatWidget, s chatWidgetSettings) error {
 	changed := (s.AutoAssign != nil && *s.AutoAssign != w.AutoAssign) ||
 		(s.MaxOpenPerAgent != nil && *s.MaxOpenPerAgent != w.MaxOpenPerAgent)
@@ -85,8 +81,7 @@ func (h *ChatWidgetHandler) SetQuota(q QuotaChecker, db *gorm.DB) { h.quota, h.d
 // SetDomains enables the verified-domain check on reply_from.
 func (h *ChatWidgetHandler) SetDomains(d *repositories.DomainRepository) { h.domains = d }
 
-// chatWidgetSettings are the settings shared by create and update; nil leaves
-// a setting as it is.
+// chatWidgetSettings is shared by create and update; nil leaves a setting as it is.
 type chatWidgetSettings struct {
 	AllowedOrigins *[]string `json:"allowed_origins" doc:"Origins allowed to load the widget, e.g. https://example.com. Empty allows any."`
 	StrictOrigin   *bool     `json:"strict_origin" doc:"Refuse requests without an Origin header. On by default: the widget only runs in browsers."`
@@ -335,9 +330,7 @@ func (h *ChatWidgetHandler) RotateKey(c *okapi.Context, req *ChatWidgetIDRequest
 	return ok(c, w)
 }
 
-// RotateIdentitySecret issues a new identity secret and returns it once.
-// Identities signed with the old one stop verifying; those visitors carry on
-// anonymously.
+// RotateIdentitySecret returns the new secret once; visitors signed with the old one carry on anonymously.
 func (h *ChatWidgetHandler) RotateIdentitySecret(c *okapi.Context, req *ChatWidgetIDRequest) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)

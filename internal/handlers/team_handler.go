@@ -31,8 +31,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// TeamHandler manages a workspace's teams. Any member can list them (the
-// inbox filters by team); changing them is tenant administration.
+// Any member can list teams (the inbox filters by team); changing them is tenant administration.
 type TeamHandler struct {
 	repo          *repositories.TeamRepository
 	ruleRepo      *repositories.FormRuleRepository
@@ -63,7 +62,6 @@ type TeamIDRequest struct {
 	ID int `param:"id"`
 }
 
-// TeamMemberView is a team member with their workspace account.
 type TeamMemberView struct {
 	UserID uint                 `json:"user_id"`
 	Name   string               `json:"name"`
@@ -71,8 +69,6 @@ type TeamMemberView struct {
 	Role   models.WorkspaceRole `json:"role"`
 }
 
-// TeamDetail is a team with its members, the rules that route to it, and how
-// many submissions it holds.
 type TeamDetail struct {
 	ID           uint                         `json:"id"`
 	UUID         string                       `json:"uuid"`
@@ -85,8 +81,7 @@ type TeamDetail struct {
 	Messages     int64                        `json:"messages" doc:"All submissions routed to the team"`
 }
 
-// requireManage allows workspace owners and admins: teams decide who is
-// sent submissions.
+// requireManage allows workspace owners and admins only: teams decide who is sent submissions.
 func requireManage(c *okapi.Context) error {
 	role := workspaceRole(c)
 	if role != "" && !role.CanManageMembers() {
@@ -103,7 +98,6 @@ func (h *TeamHandler) workspace(c *okapi.Context) (uint, error) {
 	return *scope.WorkspaceID, nil
 }
 
-// apply validates a team body onto team and returns the member IDs.
 func (h *TeamHandler) apply(c *okapi.Context, workspaceID uint, team *models.Team, b TeamBody) ([]uint, error) {
 	name := strings.Join(strings.Fields(b.Name), " ")
 	if name == "" || len([]rune(name)) > 80 {
@@ -156,8 +150,7 @@ func (h *TeamHandler) List(c *okapi.Context) error {
 	return ok(c, teams)
 }
 
-// Get returns one team with its members, the rules that use it and its
-// submission counts. Any workspace member may read it.
+// Any workspace member may read a team.
 func (h *TeamHandler) Get(c *okapi.Context, req *TeamIDRequest) error {
 	ws, err := h.workspace(c)
 	if ws == 0 {
@@ -249,8 +242,7 @@ func (h *TeamHandler) Update(c *okapi.Context, req *UpdateTeamRequest) error {
 	return ok(c, saved)
 }
 
-// Delete removes a team no rule points at; a rule that did would silently
-// stop notifying anyone.
+// Delete refuses a team a rule points at: that rule would silently stop notifying anyone.
 func (h *TeamHandler) Delete(c *okapi.Context, req *TeamIDRequest) error {
 	if err := requireManage(c); err != nil {
 		return c.AbortForbidden("only workspace owners and admins can manage teams", err)

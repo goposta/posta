@@ -193,7 +193,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </div>
     </template>
 
-    <!-- Create Webhook Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
@@ -251,7 +250,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </div>
     </div>
 
-    <!-- Signing Secret Modal -->
     <div v-if="showSecretModal" class="modal-overlay">
       <div class="modal">
         <div class="modal-header">

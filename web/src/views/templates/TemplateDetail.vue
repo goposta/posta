@@ -45,8 +45,7 @@ const selectedVersion = ref<TemplateVersion | null>(null);
 
 const localizations = computed(() => selectedVersion.value?.localizations ?? []);
 
-// The languages the template actually sends: those on the active version, not
-// on whichever draft happens to be selected.
+// The languages on the active version, not on whichever draft is selected, since those are what sends.
 const activeLanguages = computed(() => {
   const active = versions.value.find((v) => v.id === template.value?.active_version_id);
   return (active?.localizations ?? []).map((l) => l.language).sort();
@@ -121,9 +120,7 @@ function selectVersion(v: TemplateVersion) {
   selectedVersion.value = v;
 }
 
-// Version objects are held in one place — the versions array — and the selection
-// points into it, so a localization change is written once and both the table
-// and the selected view reflect it.
+// Versions live only in the versions array and the selection points into it, so a localization change is written once.
 function replaceVersion(v: TemplateVersion) {
   const idx = versions.value.findIndex((x) => x.id === v.id);
   if (idx >= 0) versions.value[idx] = v;
@@ -167,8 +164,7 @@ async function saveVersionStylesheet() {
     const res = await templatesApi.updateVersion(templateId, editingVersion.value.id, {
       stylesheet_id: editVersionStylesheetId.value,
     });
-    // The update response omits localizations, so keep the ones already loaded
-    // rather than blanking the content table.
+    // The update response omits localizations, so keep the loaded ones rather than blanking the content table.
     replaceVersion({ ...res.data.data, localizations: editingVersion.value.localizations });
     showVersionStylesheetModal.value = false;
     notify.success("Stylesheet updated");

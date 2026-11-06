@@ -25,8 +25,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ChatSnippet is a canned reply: agents type "/" and its shortcut in the
-// composer to insert Body.
+// ChatSnippet is a canned reply: agents type "/" and its shortcut in the composer to insert Body.
 type ChatSnippet struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	WorkspaceID *uint          `json:"workspace_id,omitempty" gorm:"index;not null"`

@@ -18,7 +18,6 @@ const { confirm } = useConfirm()
 const lists = ref<SubscriberListItem[]>([])
 const loading = ref(true)
 
-// Create modal
 const showModal = ref(false)
 const formName = ref('')
 const formDescription = ref('')
@@ -173,7 +172,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Create Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

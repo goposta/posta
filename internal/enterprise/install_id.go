@@ -17,14 +17,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// InstallIDKey is the settings row holding the Install ID. The "app." prefix
-// keeps it out of the admin settings page.
+// The "app." prefix keeps the Install ID out of the admin settings page.
 const InstallIDKey = "app.install_id"
 
-// EnsureInstallID returns this deployment's Install ID, creating it on first
-// call. A license can be bound to it. Community has one too, so an admin can
-// copy it when buying a license. A restored copy of the database carries the
-// same Install ID; a fresh installation gets a new one.
+// Community has one too so admins can copy it when buying; a restored database keeps the same Install ID.
 func EnsureInstallID(db *gorm.DB) (string, error) {
 	row := models.Setting{Key: InstallIDKey}
 	err := db.Where(models.Setting{Key: InstallIDKey}).

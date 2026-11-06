@@ -34,9 +34,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// TestDefaultFormsAreValid checks each example form the way the API checks a
-// form it creates, and that none of them uses branching: the seed must not
-// hand Posta Community an Enterprise feature.
+// TestDefaultFormsAreValid also checks no form branches: the seed must not hand Community an Enterprise feature.
 func TestDefaultFormsAreValid(t *testing.T) {
 	defs := defaultFormDefs()
 	if len(defs) == 0 {
@@ -83,9 +81,7 @@ func TestDefaultFormsAreValid(t *testing.T) {
 	}
 }
 
-// TestSeedWorkspaceDefaultsCreatesForms seeds a new workspace, in a
-// transaction that is rolled back, and seeds it again: the example forms
-// are created once.
+// TestSeedWorkspaceDefaultsCreatesForms seeds twice in a rolled-back transaction: forms are created once.
 func TestSeedWorkspaceDefaultsCreatesForms(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_DSN")
 	if dsn == "" {

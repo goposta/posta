@@ -74,8 +74,7 @@ func (r *ServerRepository) FindAll(search string, limit, offset int) ([]models.S
 	return servers, total, nil
 }
 
-// FindEnabledByDomain returns the first enabled shared server whose allowed_domains
-// contains the given domain.
+// FindEnabledByDomain returns the first enabled shared server whose allowed_domains contains domain.
 func (r *ServerRepository) FindEnabledByDomain(domain string) (*models.Server, error) {
 	var server models.Server
 	if err := r.db.
@@ -86,17 +85,14 @@ func (r *ServerRepository) FindEnabledByDomain(domain string) (*models.Server, e
 	return &server, nil
 }
 
-// IncrementSentCount atomically increases the sent_count by 1 for the given server.
 func (r *ServerRepository) IncrementSentCount(id uint) {
 	r.db.Exec("UPDATE servers SET sent_count = sent_count + 1 WHERE id = ?", id)
 }
 
-// IncrementFailedCount atomically increases the failed_count by 1 for the given server.
 func (r *ServerRepository) IncrementFailedCount(id uint) {
 	r.db.Exec("UPDATE servers SET failed_count = failed_count + 1 WHERE id = ?", id)
 }
 
-// SetStatus updates the status, validation error, and validated_at timestamp for a server.
 func (r *ServerRepository) SetStatus(id uint, status, validationError string) error {
 	return r.db.Model(&models.Server{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":           status,

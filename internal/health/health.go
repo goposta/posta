@@ -17,12 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package health answers "can this process do its job right now?" for both the
-// server and a dedicated worker.
-//
-// It lives here rather than in either caller so the two cannot drift: an
-// operator pointing the same probe at a server pod and a worker pod should get
-// the same shape and the same meaning of "ready".
+// Package health is shared by server and worker so one probe gets the same shape and meaning of "ready".
 package health
 
 import (
@@ -34,9 +29,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// probeTimeout bounds a single dependency check. A probe that hangs is a failed
-// probe: an orchestrator is asking whether to send work here, and no answer for
-// thirty seconds is worse than a quick "no".
+// A hung probe is a failed probe: an orchestrator deciding where to send work needs a quick "no".
 const probeTimeout = 2 * time.Second
 
 const (
@@ -45,20 +38,16 @@ const (
 	StatusNotReady = "not ready"
 )
 
-// Status is the readiness payload. The field names are part of the operator
-// contract — probes and dashboards read them — so they are kept stable.
+// Status field names are an operator contract read by probes and dashboards, so keep them stable.
 type Status struct {
 	Status   string `json:"status" example:"ready"`
 	Database string `json:"database" example:"ok"`
 	Redis    string `json:"redis" example:"ok"`
 }
 
-// Ready reports whether every dependency answered.
 func (s Status) Ready() bool { return s.Status == StatusReady }
 
-// Check pings each dependency and reports what it found. A nil dependency is
-// reported as unconfigured rather than skipped: a worker with no Redis cannot
-// take a job, and saying "ready" would be a lie.
+// Check reports a nil dependency as unconfigured, not skipped: a worker with no Redis cannot take a job.
 func Check(ctx context.Context, db *gorm.DB, rdb *redis.Client) Status {
 	s := Status{Status: StatusReady, Database: StatusOK, Redis: StatusOK}
 

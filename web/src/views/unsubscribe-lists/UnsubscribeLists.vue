@@ -222,7 +222,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Create/Edit Unsubscribe List Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" style="max-width: 480px;" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

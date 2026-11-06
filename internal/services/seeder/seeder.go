@@ -59,9 +59,7 @@ func New(
 	}
 }
 
-// seedLanguages is the ordered set of languages every seeded template ships in.
-// The first entry is used as the template's default language. Each code must
-// have a matching templates/<code>/ folder and a Subjects entry per def.
+// seedLanguages: the first is the default; each needs a templates/<code>/ folder and a Subjects entry per def.
 var seedLanguages = []string{"en", "fr", "de"}
 
 type templateDef struct {
@@ -72,10 +70,7 @@ type templateDef struct {
 	Subjects    map[string]string // language code -> subject line
 }
 
-// seedTemplate creates a single template with a version and one localization
-// per seedLanguages entry, loading each localized body from the embedded files.
-// sampleBrand fills the {{ company }} and {{ product }} placeholders in the
-// seeded templates' preview data.
+// sampleBrand fills {{ company }} and {{ product }} in the seeded templates' preview data.
 const sampleBrand = "Posta"
 
 func (s *Seeder) seedTemplate(workspaceID, userID uint, ssID uint, def templateDef) {
@@ -127,8 +122,7 @@ func (s *Seeder) seedTemplate(workspaceID, userID uint, ssID uint, def templateD
 	}
 }
 
-// workspacePtr returns a pointer to workspaceID, or nil when zero (defensive:
-// seeding always runs against a real personal workspace post-migration).
+// workspacePtr returns nil for a zero ID (defensive: seeding always runs against a real workspace).
 func workspacePtr(workspaceID uint) *uint {
 	if workspaceID == 0 {
 		return nil
@@ -136,9 +130,7 @@ func workspacePtr(workspaceID uint) *uint {
 	return &workspaceID
 }
 
-// sampleRecipientName fills {{ name }} in the seeded templates' preview data
-// when the owner's name is unknown. It greets, rather than naming a person who
-// has nothing to do with the installation.
+// sampleRecipientName greets generically when the owner's name is unknown, rather than naming a stranger.
 const sampleRecipientName = "there"
 
 func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string) {
@@ -146,9 +138,7 @@ func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string
 	if userName == "" {
 		userName = sampleRecipientName
 	}
-	// Scoped to the workspace being seeded, not to the user. A user's second
-	// workspace needs its own defaults, and a re-run against an already-seeded
-	// workspace must not duplicate them.
+	// Scoped to the workspace, not the user: each workspace needs its own defaults and re-runs must not duplicate.
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: &workspaceID}
 	templates, total, err := s.templateRepo.FindByScope(scope, "", 1, 0)
 	if err != nil || total > 0 || len(templates) > 0 {
@@ -157,7 +147,6 @@ func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string
 
 	wsID := workspacePtr(workspaceID)
 
-	// Create default stylesheet
 	ss := &models.StyleSheet{
 		UserID:      userID,
 		WorkspaceID: wsID,
@@ -177,7 +166,6 @@ func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string
 		s.seedTemplate(workspaceID, userID, ss.ID, def)
 	}
 
-	// Seed default languages
 	defaultLanguages := []struct {
 		Code string
 		Name string
@@ -202,12 +190,9 @@ func (s *Seeder) SeedWorkspaceDefaults(workspaceID, userID uint, userName string
 		"user_id", userID, "workspace_id", workspaceID)
 }
 
-// defaultTemplateDefs returns the built-in templates seeded for every new user.
-// Kept as a pure function (no DB) so it can be rendered in tests to verify each
-// template parses and every referenced variable is covered by its sample data.
+// defaultTemplateDefs is pure (no DB) so tests can render each template against its sample data.
 func defaultTemplateDefs(userName string, year int, docsURL string) []templateDef {
 	return []templateDef{
-		// 1. Welcome
 		{
 			DisplayName: "Welcome Email",
 			Description: "Welcome email introducing Posta and its features",
@@ -247,7 +232,6 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 				"de": "Willkommen bei Posta, {{name}}!",
 			},
 		},
-		// 2. Password Reset
 		{
 			DisplayName: "Password Reset",
 			Description: "Transactional email for password reset requests",
@@ -265,7 +249,6 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 				"de": "Setzen Sie Ihr Passwort zurück, {{name}}",
 			},
 		},
-		// 3. Order Confirmation
 		{
 			DisplayName: "Order Confirmation",
 			Description: "Order confirmation email with item details and total",
@@ -288,7 +271,6 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 				"de": "Bestellung #{{orderNumber}} bestätigt",
 			},
 		},
-		// 4. Newsletter
 		{
 			DisplayName: "Monthly Newsletter",
 			Description: "Monthly newsletter with articles and unsubscribe link",
@@ -323,7 +305,6 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 				"de": "{{company}} — Newsletter {{month}}",
 			},
 		},
-		// 5. Email Verification
 		{
 			DisplayName: "Email Verification",
 			Description: "Confirm a new account's email address with a link and code",
@@ -342,7 +323,6 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 				"de": "Bestätigen Sie Ihre E-Mail-Adresse",
 			},
 		},
-		// 6. Sign-in Code (OTP)
 		{
 			DisplayName: "Sign-in Code",
 			Description: "One-time passcode / magic-link login email",
@@ -361,7 +341,6 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 				"de": "Ihr {{company}}-Anmeldecode",
 			},
 		},
-		// 7. Invoice / Receipt
 		{
 			DisplayName: "Invoice Receipt",
 			Description: "Payment receipt with line items, subtotal, tax, and total",
@@ -387,7 +366,6 @@ func defaultTemplateDefs(userName string, year int, docsURL string) []templateDe
 				"de": "Beleg für Rechnung {{invoiceNumber}}",
 			},
 		},
-		// 8. Team Invitation
 		{
 			DisplayName: "Team Invitation",
 			Description: "Invite a user to a workspace with an accept link and role",

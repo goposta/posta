@@ -124,8 +124,7 @@ func TestOfflineEmailEscapesAndThreads(t *testing.T) {
 		t.Fatalf("addressing = %v %q", req.To, req.Subject)
 	}
 
-	// Without an inbound domain there is no Reply-To, and the email says to
-	// come back to the chat instead.
+	// Without an inbound domain there is no Reply-To, so the email says to come back to the chat instead.
 	s.cfg.InboundDomain = ""
 	req = s.offlineEmail(conv, w, []models.ChatMessage{{Body: "hi"}})
 	if req.SystemHeaders != nil || !strings.Contains(req.Text, "Continue the conversation in the chat") {

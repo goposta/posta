@@ -1,7 +1,4 @@
-// The widget keeps one localStorage entry per widget key: the visitor token
-// and the open conversation. It sets no cookies. Storage can be missing or
-// throw (private mode, blocked site data); the widget then works for the
-// page's lifetime only.
+// Storage can be missing or throw (private mode, blocked site data); the widget then works for the page's lifetime only.
 
 export interface Saved {
   token?: string

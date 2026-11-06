@@ -38,10 +38,7 @@ type quotaChecker interface {
 	Check(ctx context.Context, quotas []ratelimit.Quota) error
 }
 
-// submissionQuotas lists the counters one submission is charged to. A
-// honeypot hit is charged to its IP only: bot traffic must not use up the
-// shared per-form, per-workspace, or per-address budget that real visitors
-// draw on, or a botnet spread across IPs could lock a form.
+// A honeypot hit is charged to its IP only, so a botnet spread across IPs cannot exhaust shared budgets.
 func (s *Service) submissionQuotas(formID, workspaceID uint, ip, email string, honeypot bool) []ratelimit.Quota {
 	var quotas []ratelimit.Quota
 	if ip != "" {

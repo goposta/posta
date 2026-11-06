@@ -2,8 +2,6 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { licenseApi, type Entitlements } from '../api/license'
 
-// Whether Posta Enterprise features are on. Enterprise entry points stay
-// visible without a license: they show a lock and say what the feature does.
 // The server enforces the license; this only decides what the page shows.
 export const useLicenseStore = defineStore('license', () => {
   const entitlements = ref<Entitlements | null>(null)

@@ -25,7 +25,6 @@ function toggle(value: string) {
   model.value = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]
 }
 
-// Close on an outside click.
 function onDocClick(e: MouseEvent) {
   if (open.value && root.value && !root.value.contains(e.target as Node)) open.value = false
 }

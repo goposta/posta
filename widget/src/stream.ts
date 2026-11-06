@@ -7,18 +7,14 @@ export interface StreamHandlers {
   // typing says an agent is writing; read says how far the agents have read.
   typing(name?: string): void
   read(seq: number): void
-  // gone is called when the conversation can no longer be read: the token
-  // was revoked or the conversation erased. The stream stops.
+  // gone fires when the token was revoked or the conversation erased; the stream stops.
   gone(): void
 }
 
 const POLL_MS = 10000
 const HIDDEN_CLOSE_MS = 5 * 60 * 1000
 
-// ConversationStream keeps a visitor up to date with one conversation. It
-// reads server-sent events through fetch, resumes from the last sequence
-// number it saw, falls back to polling when the server is at its stream
-// limit, and lets go of the connection while the tab stays hidden.
+// Resumes from the last seq seen, polls while the server is at its stream limit, and lets go of the connection while the tab is hidden.
 export class ConversationStream {
   private lastSeq: number
   private ctrl?: AbortController
@@ -47,8 +43,7 @@ export class ConversationStream {
     document.removeEventListener('visibilitychange', this.onVisibility)
   }
 
-  // seen records a sequence number the widget learned about another way,
-  // such as the response to its own send.
+  // seen records a seq learned another way, such as the response to the widget's own send.
   seen(seq: number): void {
     if (seq > this.lastSeq) this.lastSeq = seq
   }

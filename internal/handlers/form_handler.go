@@ -57,18 +57,15 @@ type FormHandler struct {
 	edition        enterprise.EE
 }
 
-// FormKeyInvalidator drops cached public-key lookups; *messages.Service
-// implements it.
+// FormKeyInvalidator drops cached public-key lookups; *messages.Service implements it.
 type FormKeyInvalidator interface {
 	InvalidateFormKey(keys ...string)
 }
 
-// SetEdition enables the Posta Enterprise parts of the form schema
-// (branching). Without it they are refused, as in Community.
+// SetEdition enables the Enterprise parts of the form schema (branching); without it they are refused.
 func (h *FormHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 
-// SetKeyCache makes form edits take effect on the public endpoint immediately
-// instead of after the lookup cache expires.
+// SetKeyCache makes form edits reach the public endpoint immediately instead of after the cache expires.
 func (h *FormHandler) SetKeyCache(c FormKeyInvalidator) { h.keyCache = c }
 
 func (h *FormHandler) invalidate(keys ...string) {
@@ -178,9 +175,7 @@ type FormSnippetResponse struct {
 	Fetch     string `json:"fetch"`
 	Widget    string `json:"widget" doc:"Website widget embed: a placeholder element and the script tag"`
 	ShareURL  string `json:"share_url" doc:"The form's hosted page, a link that works without a website"`
-	// ShareUnavailable is set when the hosted page is offline: "platform" when
-	// the instance serves no hosted pages, "workspace" when a platform admin
-	// took this workspace's pages offline.
+	// "platform" when the instance serves no hosted pages, "workspace" when an admin took this workspace's offline.
 	ShareUnavailable string `json:"share_unavailable,omitempty" enum:"platform,workspace"`
 }
 
@@ -530,8 +525,7 @@ func (h *FormHandler) checkSender(scope repositories.ResourceScope, address stri
 	return checkVerifiedSender(h.domainRepo, scope, address)
 }
 
-// checkVerifiedSender requires a reply sender on one of the workspace's
-// ownership-verified domains, so replies cannot be sent as someone else.
+// checkVerifiedSender requires an ownership-verified domain so replies cannot be sent as someone else.
 func checkVerifiedSender(domainRepo *repositories.DomainRepository, scope repositories.ResourceScope, address string) error {
 	addr, err := mail.ParseAddress(address)
 	if err != nil {
@@ -665,14 +659,7 @@ func clampInt64(v, lo, hi int64) int64 {
 	return v
 }
 
-// applySchema sets a form's schema settings from a create or update request.
-// Nil arguments leave the setting as it is. A changed schema gets the next
-// version, so each submission records which schema validated it.
-//
-// Branching is a Posta Enterprise feature. Adding or changing it needs a
-// license that allows changes; removing it, or editing a branching form
-// without touching its branches, does not. A form keeps branching for its
-// respondents whatever the license says.
+// A changed schema bumps the version; adding or changing branching needs a mutable license, keeping it never does.
 func applySchema(form *models.Form, fields *models.FieldDefs, unknownFields, errorRedirect *string, edition enterprise.EE) error {
 	if unknownFields != nil {
 		switch policy := models.UnknownFieldsPolicy(strings.TrimSpace(*unknownFields)); policy {
@@ -723,8 +710,7 @@ const maxFormMessageLength = 500
 
 var accentPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
-// responseSettings are the optional response and appearance settings of a
-// create or update request. Nil leaves a setting as it is.
+// Nil fields of responseSettings leave the setting as it is.
 type responseSettings struct {
 	confirmation, closed, closeAt *string
 	maxResponses                  *int

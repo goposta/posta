@@ -37,7 +37,6 @@ import (
 
 const contentTypeTextPlain = "text/plain"
 
-// ParsedAttachment represents a decoded attachment extracted from the MIME tree.
 type ParsedAttachment struct {
 	Filename    string
 	ContentType string
@@ -45,9 +44,7 @@ type ParsedAttachment struct {
 	Size        int64
 }
 
-// ParsedEmail is the normalized shape used throughout the inbound pipeline.
-// Both the SMTP path (via ParseRawEmail) and the webhook path (via NewParsedFromFields)
-// produce the same struct.
+// ParsedEmail is shared by the SMTP path (ParseRawEmail) and the webhook path (NewParsedFromFields).
 type ParsedEmail struct {
 	MessageID   string
 	From        string
@@ -62,7 +59,6 @@ type ParsedEmail struct {
 	Raw         []byte
 }
 
-// ParseRawEmail parses a raw RFC 5322 message into a ParsedEmail.
 func ParseRawEmail(raw []byte) (*ParsedEmail, error) {
 	msg, err := mail.ReadMessage(bytes.NewReader(raw))
 	if err != nil {
@@ -129,8 +125,6 @@ func ParseRawEmail(raw []byte) (*ParsedEmail, error) {
 	return p, nil
 }
 
-// walkMultipart recursively descends the MIME tree, collecting text/html bodies
-// and attachments.
 func walkMultipart(r io.Reader, boundary string, _ string, p *ParsedEmail) error {
 	mr := multipart.NewReader(r, boundary)
 	for {

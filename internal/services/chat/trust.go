@@ -53,18 +53,14 @@ var (
 	ErrInvalidAttributes  = errors.New("attributes must be at most 30 flat string, number or boolean values, 2 KiB in all")
 )
 
-// MaxAttachmentBytes caps one chat attachment.
 const MaxAttachmentBytes = 5 << 20
 
-// spamHitsToSpam is how many rejected later messages turn a conversation
-// into spam.
+// spamHitsToSpam is how many rejected later messages turn a conversation into spam.
 const spamHitsToSpam = 3
 
-// banTTL is how long a banned visitor's IP stays blocked.
 const banTTL = 24 * time.Hour
 
-// Identity is what PostaChat.identify() sends: the customer's user ID and
-// email, signed on the customer's server.
+// Identity is what PostaChat.identify() sends, signed on the customer's server.
 type Identity struct {
 	UserID    string `json:"user_id"`
 	Email     string `json:"email"`
@@ -72,7 +68,6 @@ type Identity struct {
 	Signature string `json:"signature" doc:"Hex HMAC-SHA256 of user_id + \".\" + email, keyed with the widget's identity secret"`
 }
 
-// SignIdentity is the signature a customer's server computes for an identity.
 func SignIdentity(secret, userID, email string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(userID + "." + strings.ToLower(strings.TrimSpace(email))))
@@ -90,9 +85,7 @@ func NewIdentitySecret() (secret, stored string, err error) {
 	return secret, stored, err
 }
 
-// VerifyIdentity reports whether id carries a valid signature for the
-// widget. A widget without a secret verifies nothing; a rotated secret makes
-// old signatures fail, and their visitors simply stay anonymous.
+// A rotated or missing secret makes signatures fail, and those visitors simply stay anonymous.
 func VerifyIdentity(w *models.ChatWidget, id *Identity) bool {
 	if id == nil || w.IdentitySecretEnc == "" || id.UserID == "" || id.Email == "" || len(id.UserID) > 128 {
 		return false
@@ -105,9 +98,7 @@ func VerifyIdentity(w *models.ChatWidget, id *Identity) bool {
 	return hmac.Equal([]byte(want), []byte(strings.ToLower(strings.TrimSpace(id.Signature))))
 }
 
-// Identify applies a verified identity to a visitor: their email becomes
-// verified, and they share history with the same customer user on other
-// devices. An invalid identity changes nothing.
+// A verified identity marks the email verified and shares history with the same customer user on other devices.
 func (s *Service) Identify(w *models.ChatWidget, v *models.ChatVisitor, id *Identity) bool {
 	if !VerifyIdentity(w, id) {
 		return false
@@ -126,9 +117,7 @@ func (s *Service) Identify(w *models.ChatWidget, v *models.ChatVisitor, id *Iden
 	return true
 }
 
-// IdentifyNew creates a visitor from a verified identity, so the same person
-// on a new device sees their history before writing. It returns the visitor
-// and its token, or nil when the identity does not verify.
+// IdentifyNew lets the same person on a new device see their history before writing; nil when it does not verify.
 func (s *Service) IdentifyNew(ctx context.Context, w *models.ChatWidget, id *Identity, ip, userAgent string) (*models.ChatVisitor, string, error) {
 	if !VerifyIdentity(w, id) {
 		return nil, "", nil
@@ -153,7 +142,6 @@ func (s *Service) IdentifyNew(ctx context.Context, w *models.ChatWidget, id *Ide
 	return v, token, nil
 }
 
-// SetAttributes replaces a visitor's custom attributes.
 func (s *Service) SetAttributes(v *models.ChatVisitor, attrs map[string]any) error {
 	clean, err := CleanAttributes(attrs)
 	if err != nil {
@@ -166,7 +154,6 @@ func (s *Service) SetAttributes(v *models.ChatVisitor, attrs map[string]any) err
 	return nil
 }
 
-// CleanAttributes keeps flat values only and enforces the size cap.
 func CleanAttributes(attrs map[string]any) (models.ChatAttributes, error) {
 	if len(attrs) > 30 {
 		return nil, ErrInvalidAttributes
@@ -198,8 +185,7 @@ func banKey(workspaceID uint, ip string) string {
 	return fmt.Sprintf("chat:ban:%d:%s", workspaceID, ip)
 }
 
-// Ban stops a visitor: their messages are accepted and thrown away, and
-// their IP cannot start a new chat in the workspace for a day.
+// Ban accepts and discards a visitor's messages, and blocks their IP from new chats in the workspace for a day.
 func (s *Service) Ban(ctx context.Context, conv *models.ChatConversation) error {
 	v, err := s.repo.FindVisitorByID(conv.VisitorID)
 	if err != nil {
@@ -219,7 +205,6 @@ func (s *Service) Ban(ctx context.Context, conv *models.ChatConversation) error 
 	return s.SetState(ctx, conv, models.ChatStateSpam)
 }
 
-// Unban lifts a ban.
 func (s *Service) Unban(ctx context.Context, conv *models.ChatConversation) error {
 	v, err := s.repo.FindVisitorByID(conv.VisitorID)
 	if err != nil {
@@ -234,7 +219,6 @@ func (s *Service) Unban(ctx context.Context, conv *models.ChatConversation) erro
 	return nil
 }
 
-// ipBanned reports whether ip is blocked in the workspace.
 func (s *Service) ipBanned(ctx context.Context, workspaceID uint, ip string) bool {
 	if s.rdb == nil || ip == "" {
 		return false
@@ -243,8 +227,7 @@ func (s *Service) ipBanned(ctx context.Context, workspaceID uint, ip string) boo
 	return err == nil && n > 0
 }
 
-// discarded is the answer to a message Posta drops without saying so: it
-// looks stored to the sender, and is not.
+// discarded looks stored to the sender but is not, so a dropped message reveals nothing.
 func discarded(body, clientMsgID string) *models.ChatMessage {
 	return &models.ChatMessage{
 		UUID: uuid.NewString(), AuthorKind: models.ChatAuthorVisitor,
@@ -252,9 +235,7 @@ func discarded(body, clientMsgID string) *models.ChatMessage {
 	}
 }
 
-// scanLater runs the light scan on a later visitor message. It reports
-// whether to drop the message, and counts the hit; the third makes the
-// conversation spam.
+// scanLater counts each hit; the third makes the conversation spam.
 func (s *Service) scanLater(ctx context.Context, w *models.ChatWidget, conv *models.ChatConversation, body string) bool {
 	verdict := s.scanner.Scan(messagescan.Input{Policy: w, WorkspaceID: *w.WorkspaceID, Body: body, Light: true})
 	if verdict.Action != messagescan.ActionReject {
@@ -269,16 +250,13 @@ func (s *Service) scanLater(ctx context.Context, w *models.ChatWidget, conv *mod
 	return true
 }
 
-// SetBlobStore enables attachments.
 func (s *Service) SetBlobStore(bs blob.Store) { s.blobs = bs }
 
-// AttachmentsEnabled reports whether the widget can take files here.
 func (s *Service) AttachmentsEnabled(w *models.ChatWidget) bool {
 	return w.AllowAttachments && s.blobs != nil
 }
 
-// allowedAttachmentTypes are sniffed from the bytes, never taken from the
-// client's claim.
+// Types are sniffed from the bytes, never taken from the client's claim.
 var allowedAttachmentTypes = map[string]string{
 	"image/png":       ".png",
 	"image/jpeg":      ".jpg",
@@ -287,7 +265,6 @@ var allowedAttachmentTypes = map[string]string{
 	"application/pdf": ".pdf",
 }
 
-// Upload is a file sent in the chat with an optional caption.
 type Upload struct {
 	Filename    string
 	Data        []byte
@@ -295,7 +272,6 @@ type Upload struct {
 	ClientMsgID string
 }
 
-// storeAttachment checks and stores a file and returns its record.
 func (s *Service) storeAttachment(ctx context.Context, w *models.ChatWidget, conv *models.ChatConversation, up Upload) (models.ChatAttachment, error) {
 	if !s.AttachmentsEnabled(w) {
 		return models.ChatAttachment{}, ErrAttachmentsOff
@@ -322,7 +298,6 @@ func (s *Service) storeAttachment(ctx context.Context, w *models.ChatWidget, con
 	return models.ChatAttachment{Filename: name, ContentType: contentType, Size: int64(len(up.Data)), Key: key}, nil
 }
 
-// PostVisitorFile adds a visitor's file to their conversation.
 func (s *Service) PostVisitorFile(ctx context.Context, w *models.ChatWidget, v *models.ChatVisitor, conv *models.ChatConversation, up Upload, ip string) (*models.ChatMessage, error) {
 	caption := CleanBody(up.Caption)
 	if len(caption) > w.MessageLimit() {
@@ -345,7 +320,6 @@ func (s *Service) PostVisitorFile(ctx context.Context, w *models.ChatWidget, v *
 	return s.appendVisitor(ctx, w, v, conv, msg, ip, "")
 }
 
-// PostAgentFile adds an agent's file to a conversation.
 func (s *Service) PostAgentFile(ctx context.Context, conv *models.ChatConversation, agent Agent, up Upload) (*models.ChatMessage, error) {
 	w, err := s.repo.FindWidgetByID(conv.WidgetID)
 	if err != nil {
@@ -366,7 +340,6 @@ func (s *Service) PostAgentFile(ctx context.Context, conv *models.ChatConversati
 	})
 }
 
-// OpenAttachment returns one of a message's files.
 func (s *Service) OpenAttachment(ctx context.Context, msg *models.ChatMessage, idx int) (io.ReadCloser, *models.ChatAttachment, error) {
 	if s.blobs == nil || idx < 0 || idx >= len(msg.Attachments) {
 		return nil, nil, ErrAttachmentsOff
@@ -379,14 +352,11 @@ func (s *Service) OpenAttachment(ctx context.Context, msg *models.ChatMessage, i
 	return r, &att, nil
 }
 
-// SetDirectory lets auto-assign see the workspace's members.
 func (s *Service) SetDirectory(ws *repositories.WorkspaceRepository) { s.workspaces = ws }
 
-// autoAssign gives a new conversation to the next online agent in turn,
-// skipping those at the widget's cap. Nobody online, nobody assigned.
+// autoAssign takes online agents in turn, skipping those at the widget's cap; nobody online, nobody assigned.
 func (s *Service) autoAssign(ctx context.Context, w *models.ChatWidget, conv *models.ChatConversation) {
-	// Auto-assign is Posta Enterprise. Without a license, chats wait to be
-	// claimed, as they do with auto-assign off.
+	// Auto-assign is Enterprise; unlicensed chats wait to be claimed, as with auto-assign off.
 	if !w.AutoAssign || s.licensed == nil || !s.licensed() || s.workspaces == nil || s.rdb == nil || conv.WorkspaceID == nil {
 		return
 	}
@@ -424,8 +394,7 @@ func (s *Service) autoAssign(ctx context.Context, w *models.ChatWidget, conv *mo
 	}
 }
 
-// Erase hard-deletes a conversation, its messages and files, and its
-// visitor when it was their last.
+// Erase also deletes the visitor when this was their last conversation.
 func (s *Service) Erase(ctx context.Context, conv *models.ChatConversation) error {
 	keys, err := s.repo.EraseConversation(conv.ID)
 	if err != nil {
@@ -435,8 +404,7 @@ func (s *Service) Erase(ctx context.Context, conv *models.ChatConversation) erro
 	return nil
 }
 
-// DeleteBlobs removes attachment files after their records are gone; a
-// failed delete is logged, never retried into a half-erased record.
+// A failed blob delete is logged, never retried into a half-erased record.
 func (s *Service) DeleteBlobs(ctx context.Context, keys []string) {
 	if s.blobs == nil {
 		return

@@ -48,17 +48,14 @@ type Nonce struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-// Nonces issues and checks the signed, single-use tokens that public
-// endpoints require before accepting a submission. A nonce is bound to one
-// public key, carries its issue time, and is remembered in Redis once used.
+// Nonces are signed, single-use, bound to one public key, and remembered in Redis once used.
 type Nonces struct {
 	key          []byte
 	redis        *redis.Client
 	replayPrefix string
 }
 
-// NewNonces returns Nonces signed with key. replayPrefix namespaces the Redis
-// keys that remember used nonces; without Redis, replays are not detected.
+// Without Redis, replays are not detected.
 func NewNonces(key []byte, rdb *redis.Client, replayPrefix string) *Nonces {
 	return &Nonces{key: key, redis: rdb, replayPrefix: replayPrefix}
 }
@@ -73,7 +70,6 @@ func (s *Service) VerifyNonce(ctx context.Context, formKey, token string, minFil
 	return s.nonces().Verify(ctx, formKey, token, minFillSeconds)
 }
 
-// Issue returns a nonce for the endpoint with the given public key.
 func (n *Nonces) Issue(_ context.Context, publicKey string) (*Nonce, error) {
 	raw := make([]byte, 12)
 	if _, err := rand.Read(raw); err != nil {
@@ -86,8 +82,7 @@ func (n *Nonces) Issue(_ context.Context, publicKey string) (*Nonce, error) {
 	return &Nonce{Value: token, ExpiresIn: int(nonceTTL.Seconds())}, nil
 }
 
-// Verify checks a nonce for publicKey: its signature, its age, that at least
-// minFillSeconds have passed since it was issued, and that it is unused.
+// Verify also requires minFillSeconds to have passed since issue, and that the nonce is unused.
 func (n *Nonces) Verify(ctx context.Context, publicKey, token string, minFillSeconds int) error {
 	parts := strings.Split(token, ".")
 	if len(parts) != 4 {

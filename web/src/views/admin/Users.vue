@@ -66,7 +66,6 @@ const { pageable, goToPage } = usePagination(async (page) => {
   }
 })
 
-// Debounce keystrokes, then reset to the first page of results.
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => goToPage(0), 300)
@@ -88,7 +87,6 @@ function formatDateShort(date: string) {
   return new Date(date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-// Up to two initials for the avatar, falling back to the email when unnamed.
 function getInitials(user: User) {
   const base = (user.name || user.email || '?').trim()
   const parts = base.split(/\s+/)
@@ -228,7 +226,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
         />
       </div>
 
-      <!-- Loading: skeleton rows preserve the table layout while data streams in. -->
       <div v-if="loading" class="card-body">
         <table class="table">
           <thead>
@@ -328,7 +325,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </div>
     </div>
 
-    <!-- Edit User Modal -->
     <div v-if="editingUser" class="modal-overlay" @mousedown="watchClickStart" 
       @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>

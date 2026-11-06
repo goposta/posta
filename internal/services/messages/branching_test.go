@@ -28,8 +28,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// An application form: individuals skip the company page, and anyone who
-// says they are not hiring ends early.
+// An application form: individuals skip the company page, and anyone not hiring ends early.
 func branchingForm() models.FieldDefs {
 	return models.FieldDefs{
 		{Key: "email", Label: "Email", Type: models.FieldEmail, Required: true},
@@ -82,8 +81,7 @@ func TestRoute(t *testing.T) {
 		t.Errorf("a form without sections reached %v", got)
 	}
 
-	// An archived section folds its questions into the page before it: "bio"
-	// joins the company page.
+	// An archived section folds its questions into the page before it: "bio" joins the company page.
 	archived := branchingForm()
 	archived[5].Archived = true
 	if got := routeKeys(archived, map[string]string{"kind": "company"}); !reflect.DeepEqual(got, []string{"bio", "company_name", "email", "kind", "notes", "utm"}) {
@@ -105,8 +103,7 @@ func TestPages(t *testing.T) {
 func TestValidateFollowsRoute(t *testing.T) {
 	form := &models.Form{Fields: branchingForm()}
 
-	// An individual never sees the required company name, and answers sent
-	// for a skipped page are not stored.
+	// An individual never sees the required company name, and answers for a skipped page are not stored.
 	got, errs := Validate(form, fieldsOf("email", "ada@example.com", "kind", "individual", "bio", "Hi", "company_name", "Acme"))
 	if errs != nil {
 		t.Fatalf("individual rejected: %+v", errs)

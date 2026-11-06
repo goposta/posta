@@ -29,7 +29,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// adminRoutes returns route definitions for admin endpoints.
 func (r *Router) adminRoutes() []okapi.RouteDefinition {
 	adminGroup := r.v1.Group("/admin", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
 		Name:        tagAdmin,
@@ -38,7 +37,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 	adminGroup.WithBearerAuth()
 
 	routes := []okapi.RouteDefinition{
-		// ==================== Users ====================
 		{
 			Method:      http.MethodPost,
 			Path:        "/users",
@@ -63,7 +61,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPut,
-			Path:        "/users/{id:int}",
+			Path:        "/users/{id}",
 			Handler:     okapi.H(r.h.admin.UpdateUser),
 			Group:       adminGroup,
 			Summary:     "Update user",
@@ -78,7 +76,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/users/{id:int}/metrics",
+			Path:        "/users/{id}/metrics",
 			Handler:     okapi.H(r.h.admin.UserMetrics),
 			Group:       adminGroup,
 			Summary:     "Get user metrics",
@@ -91,7 +89,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/users/{id:int}",
+			Path:    "/users/{id}",
 			Handler: okapi.H(r.h.admin.DeleteUser),
 			Group:   adminGroup,
 			Tags:    []string{tagAdmin},
@@ -104,7 +102,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/users/{id:int}/force",
+			Path:        "/users/{id}/force",
 			Handler:     okapi.H(r.h.admin.ForceDeleteUser),
 			Group:       adminGroup,
 			Tags:        []string{tagAdmin},
@@ -119,7 +117,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/users/{id:int}/cancel-deletion",
+			Path:        "/users/{id}/cancel-deletion",
 			Handler:     okapi.H(r.h.admin.CancelUserDeletion),
 			Group:       adminGroup,
 			Summary:     "Cancel user deletion",
@@ -132,7 +130,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/users/{id:int}/2fa",
+			Path:        "/users/{id}/2fa",
 			Handler:     okapi.H(r.h.admin.Disable2FA),
 			Group:       adminGroup,
 			Summary:     "Disable 2FA for user",
@@ -158,7 +156,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/users/{id:int}/workspaces",
+			Path:        "/users/{id}/workspaces",
 			Handler:     okapi.H(r.h.admin.UserWorkspaces),
 			Group:       adminGroup,
 			Summary:     "List user workspaces",
@@ -170,10 +168,9 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// ==================== User Plans ====================
 		{
 			Method:      http.MethodPost,
-			Path:        "/users/{id:int}/plan",
+			Path:        "/users/{id}/plan",
 			Handler:     okapi.H(r.h.plan.AssignToUser),
 			Group:       adminGroup,
 			Summary:     "Assign plan to user",
@@ -187,7 +184,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/users/{id:int}/plan",
+			Path:        "/users/{id}/plan",
 			Handler:     okapi.H(r.h.plan.GetUserPlan),
 			Group:       adminGroup,
 			Summary:     "Get user plan",
@@ -199,7 +196,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// ==================== Events ====================
 		{
 			Method:      http.MethodGet,
 			Path:        "/events",
@@ -212,7 +208,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/events/{id:int}",
+			Path:        "/events/{id}",
 			Handler:     okapi.H(r.h.event.Get),
 			Group:       adminGroup,
 			Summary:     "Get event",
@@ -221,7 +217,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[models.Event]{},
 		},
 
-		// ==================== Metrics & Analytics ====================
 		{
 			Method:      http.MethodGet,
 			Path:        "/metrics",
@@ -262,7 +257,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[handlers.ProviderBreakdownResponse]{},
 		},
 
-		// ==================== Platform Settings ====================
 		{
 			Method:   http.MethodGet,
 			Path:     pathSettings,
@@ -281,7 +275,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Response: &dto.Response[[]models.Setting]{},
 		},
 
-		// ==================== Updates ====================
 		{
 			Method:      http.MethodGet,
 			Path:        "/update",
@@ -302,7 +295,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[dto.MessageData]{},
 		},
 
-		// ==================== Announcements ====================
 		{
 			Method:      http.MethodGet,
 			Path:        pathAnnouncements,
@@ -342,7 +334,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// ==================== Domains ====================
 		{
 			Method:      http.MethodGet,
 			Path:        pathDomains,
@@ -395,7 +386,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// ==================== Workspaces ====================
 		{
 			Method:      http.MethodGet,
 			Path:        pathWorkspaces,
@@ -434,7 +424,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// ==================== Plans ====================
 		{
 			Method:      http.MethodPost,
 			Path:        "/plans",
@@ -500,7 +489,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPatch,
-			Path:        "/plans/{id:int}/default",
+			Path:        "/plans/{id}/default",
 			Handler:     okapi.H(r.h.plan.SetDefault),
 			Group:       adminGroup,
 			Summary:     "Set plan as default",
@@ -513,7 +502,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/workspaces/{id:int}/plan",
+			Path:        "/workspaces/{id}/plan",
 			Handler:     okapi.H(r.h.plan.AssignToWorkspace),
 			Group:       adminGroup,
 			Summary:     "Assign plan to workspace",
@@ -527,7 +516,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/workspaces/{id:int}/plan",
+			Path:        "/workspaces/{id}/plan",
 			Handler:     okapi.H(r.h.plan.GetWorkspacePlan),
 			Group:       adminGroup,
 			OperationId: "admin-get-workspace-plan",
@@ -540,7 +529,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// ==================== Shared SMTP Servers ====================
 		{
 			Method:      http.MethodPost,
 			Path:        "/servers",
@@ -602,7 +590,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/servers/{id:int}/enable",
+			Path:     "/servers/{id}/enable",
 			Handler:  okapi.H(r.h.server.Enable),
 			Group:    adminGroup,
 			Summary:  "Enable shared SMTP server",
@@ -614,7 +602,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/servers/{id:int}/disable",
+			Path:     "/servers/{id}/disable",
 			Handler:  okapi.H(r.h.server.Disable),
 			Group:    adminGroup,
 			Summary:  "Disable shared SMTP server",
@@ -626,7 +614,7 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/servers/{id:int}/test",
+			Path:     "/servers/{id}/test",
 			Handler:  okapi.H(r.h.server.Test),
 			Group:    adminGroup,
 			Summary:  "Test shared SMTP server connection",
@@ -638,7 +626,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 		},
 	}
 
-	// Cron jobs (only if cron manager is configured)
 	if r.h.cron != nil {
 		routes = append(routes, okapi.RouteDefinition{
 			Method:      http.MethodGet,
@@ -654,7 +641,6 @@ func (r *Router) adminRoutes() []okapi.RouteDefinition {
 	return routes
 }
 
-// adminSSERoutes returns route definitions for admin SSE (Server-Sent Events) endpoints.
 func (r *Router) adminSSERoutes() []okapi.RouteDefinition {
 	adminSSE := r.v1.Group("/admin", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
 		Name:        tagAdmin,

@@ -98,7 +98,6 @@ func (h *ContactListHandler) List(c *okapi.Context, req *ListRequest) error {
 		return c.AbortInternalServerError("failed to list contact lists")
 	}
 
-	// Add member counts
 	result := make([]ContactListWithCount, len(lists))
 	for i, l := range lists {
 		result[i] = ContactListWithCount{

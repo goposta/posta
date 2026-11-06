@@ -32,10 +32,7 @@ import (
 // channelPrefix namespaces Posta's pub/sub channels on a shared Redis.
 const channelPrefix = "posta:rt:"
 
-// redisBus fans out through Redis pub/sub. Each process holds one pub/sub
-// connection and subscribes to a Redis channel only while it has at least one
-// local subscriber for that topic, so a replica with thousands of open streams
-// on one workspace still holds a single Redis subscription for it.
+// redisBus holds one Redis subscription per topic per process, however many local streams share it.
 type redisBus struct {
 	rdb *redis.Client
 	hub *hub
@@ -45,7 +42,6 @@ type redisBus struct {
 	started bool
 }
 
-// NewRedis returns a Bus backed by Redis pub/sub.
 func NewRedis(rdb *redis.Client) Bus {
 	return &redisBus{rdb: rdb, hub: newHub()}
 }
@@ -73,8 +69,7 @@ func (b *redisBus) Subscribe(ctx context.Context, topic string) (<-chan Event, f
 	}
 }
 
-// redisSubscribe adds topic to the process-wide pub/sub connection, opening it
-// and starting the reader on first use.
+// redisSubscribe adds topic to the process-wide pub/sub connection, opening it on first use.
 func (b *redisBus) redisSubscribe(ctx context.Context, topic string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -101,8 +96,7 @@ func (b *redisBus) redisUnsubscribe(topic string) {
 	}
 }
 
-// read relays every Redis message to local subscribers. go-redis reconnects
-// and resubscribes on its own, so this loop only ends if the PubSub is closed.
+// read only ends when the PubSub is closed: go-redis reconnects and resubscribes on its own.
 func (b *redisBus) read(ps *redis.PubSub) {
 	for msg := range ps.Channel() {
 		var ev Event

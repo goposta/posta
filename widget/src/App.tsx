@@ -33,8 +33,7 @@ function size(n: number): string {
   return n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-// File shows one attachment. Images load through the visitor's token into
-// an object URL; other files download on click.
+// Images load through the visitor's token into an object URL; other files download on click.
 function File_({ api, conv, message, idx, att }: { api: Api; conv?: string; message: string; idx: number; att: Attachment }) {
   const [url, setURL] = useState<string | null>(null)
   const image = att.content_type.startsWith('image/')
@@ -156,8 +155,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
     log.current?.scrollTo({ top: log.current.scrollHeight })
   }, [messages.length, agentTyping])
 
-  // Tell the agents what the visitor has seen: the newest message, while the
-  // panel is open and the tab visible.
+  // Read receipts go out only while the panel is open and the tab visible.
   useEffect(() => {
     if (!open || !conv) return
     const mark = () => {
@@ -181,9 +179,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
     }
   }
 
-  // identify applies a signed identity. A visitor new to this browser who
-  // verifies gets a token, and with it the conversation they had on another
-  // device.
+  // A visitor new to this browser who verifies gets a token, and with it the conversation they had on another device.
   async function identify(id: Identity) {
     identity.current = id
     try {
@@ -374,8 +370,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
     }
   }
 
-  // The panel is a dialog: Escape closes it from anywhere in the widget, and
-  // Tab stays inside it.
+  // The panel is a dialog: Escape closes it from anywhere in the widget, and Tab stays inside it.
   function onWidgetKey(e: KeyboardEvent) {
     if (e.key === 'Escape' && openRef.current) {
       show(false)

@@ -18,9 +18,6 @@ const emit = defineEmits<{
   (e: "delete", l: TemplateLocalization): void;
 }>();
 
-// Which configured languages this version has no content for. Naming them turns
-// "add a language" from a guess into a decision, and makes an incomplete
-// translation visible instead of something you notice after sending.
 const missing = computed(() => {
   const have = new Set(props.localizations.map((l) => l.language));
   return props.languages.filter((l) => !have.has(l.code));

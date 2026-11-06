@@ -57,10 +57,7 @@ func runFallback(t *testing.T, resolver DefaultWorkspaceResolver) (int, string, 
 	return gotWorkspace, gotRole, rec.Code
 }
 
-// The default workspace used to be the caller's personal one, which they always
-// owned, so the fallback hard-coded owner. It can now be any workspace they
-// belong to — including one where they are a viewer — and carrying owner through
-// would grant write access on every header-less request.
+// The default workspace may be one the caller only views, so carrying owner through would grant write access.
 func TestDefaultWorkspaceFallbackUsesMembershipRole(t *testing.T) {
 	for _, role := range []models.WorkspaceRole{
 		models.WorkspaceRoleViewer,

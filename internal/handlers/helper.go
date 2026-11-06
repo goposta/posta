@@ -32,9 +32,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// planSourceGlobalSettings is returned in place of a plan when a workspace has
-// none assigned and the platform-wide settings apply. The dashboard branches on
-// this exact value.
+// planSourceGlobalSettings stands in for a missing plan; the dashboard branches on this exact value.
 const planSourceGlobalSettings = "global_settings"
 
 var errForbidden = errors.New("insufficient workspace permissions: editor role or higher required")
@@ -53,7 +51,6 @@ var botUASubstrings = []string{
 	"headlesschrome", "phantomjs", "puppeteer", "playwright",
 }
 
-// QuotaChecker verifies that creating a resource would not exceed plan limits.
 type QuotaChecker interface {
 	CheckQuota(db *gorm.DB, userID uint, workspaceID *uint, resource string) error
 	CheckWorkspaceQuota(db *gorm.DB, userID uint) error
@@ -78,8 +75,7 @@ func noContent(c *okapi.Context) error {
 	return c.NoContent()
 }
 
-// getScope extracts the ResourceScope from the request context.
-// If workspace_id is set (via middleware), targets that workspace; otherwise personal.
+// getScope targets the middleware-set workspace_id, or the personal scope when there is none.
 func getScope(c *okapi.Context) repositories.ResourceScope {
 	userID := uint(c.GetInt("user_id"))
 	scope := repositories.ResourceScope{UserID: userID}
@@ -91,18 +87,15 @@ func getScope(c *okapi.Context) repositories.ResourceScope {
 	return scope
 }
 
-// ownsResource checks whether a resource belongs to the current scope.
 func ownsResource(c *okapi.Context, resourceUserID uint, resourceWorkspaceID *uint) bool {
 	return repositories.OwnsResource(getScope(c), resourceUserID, resourceWorkspaceID)
 }
 
-// workspaceRole returns the workspace role from context, or empty string if personal mode.
 func workspaceRole(c *okapi.Context) models.WorkspaceRole {
 	return models.WorkspaceRole(c.GetString("workspace_role"))
 }
 
-// canEditInWorkspace returns true if the user can create/modify resources.
-// In personal mode, always allowed. In workspace mode, requires Editor+ role.
+// Personal mode always allows; workspace mode requires the Editor role or above.
 func canEditInWorkspace(c *okapi.Context) bool {
 	role := workspaceRole(c)
 	if role == "" {
@@ -111,7 +104,6 @@ func canEditInWorkspace(c *okapi.Context) bool {
 	return role.CanEdit()
 }
 
-// requireEdit returns errForbidden when the user lacks editor+ permission.
 func requireEdit(c *okapi.Context) error {
 	if !canEditInWorkspace(c) {
 		return errForbidden

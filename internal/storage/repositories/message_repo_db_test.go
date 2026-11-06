@@ -41,11 +41,7 @@ var (
 	migrateErr  error
 )
 
-// migratedDB opens TEST_DATABASE_DSN and runs the full migration once, so these
-// tests exercise the real schema, constraints included. Unlike testDB they
-// never fall back to a default DSN: the migration rewrites the schema, so it
-// must only run against a database that was named for it. Each test works in
-// a transaction it rolls back.
+// migratedDB never falls back to a default DSN: the migration rewrites the schema, so it needs a database named for it.
 func migratedDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_DSN")
@@ -113,9 +109,7 @@ func reload(t *testing.T, tx *gorm.DB, id uint) *models.Message {
 	return &m
 }
 
-// The bug UpdateFields fixes: the worker loaded a message, spent seconds
-// sending notification mail, then saved its stale copy over an operator's
-// assignment. Column-scoped writes must leave other columns alone.
+// A worker saving a stale copy after slow notification mail must not clobber an operator's concurrent assignment.
 func TestUpdateFieldsDoesNotClobberConcurrentChanges(t *testing.T) {
 	tx := migratedDB(t)
 	f := newFixture(t, tx, "clobber")
@@ -241,8 +235,7 @@ func TestAddInboundReplyIsIdempotentPerInboundEmail(t *testing.T) {
 	if err != nil || !created {
 		t.Fatalf("first: created=%v err=%v", created, err)
 	}
-	// The duplicate violates the unique index, which aborts a Postgres
-	// transaction; isolate it in a savepoint as a real retry would be isolated.
+	// The duplicate aborts the Postgres transaction, so isolate it in a savepoint as a real retry would be.
 	tx.SavePoint("dupe")
 	created, err = repo.AddInboundReply(reply())
 	tx.RollbackTo("dupe")

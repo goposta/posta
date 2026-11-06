@@ -9,7 +9,6 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 
-// Register workspace interceptor (injects X-Posta-Workspace-Id header)
 import './stores/workspace'
 
 app.mount('#app')

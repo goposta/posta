@@ -28,10 +28,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// CleanBody prepares a message body for storage: NFC-normalised, with NUL
-// and other control characters removed (newlines and tabs stay), and
-// surrounding whitespace trimmed. Bodies are plain text and are never
-// rendered as HTML, so nothing else is escaped here.
+// Bodies are plain text and never rendered as HTML, so only control characters are stripped, nothing escaped.
 func CleanBody(s string) string {
 	s = norm.NFC.String(s)
 	s = strings.Map(func(r rune) rune {
@@ -46,7 +43,6 @@ func CleanBody(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// CleanLine prepares a one-line value such as a visitor's name.
 func CleanLine(s string, max int) string {
 	s = strings.Join(strings.Fields(CleanBody(s)), " ")
 	if r := []rune(s); len(r) > max {
@@ -57,13 +53,11 @@ func CleanLine(s string, max int) string {
 
 var accentPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
-// ValidAccentColor reports whether c is empty or a #RRGGBB colour. The value
-// ends up in a stylesheet on the customer's page, so nothing else may pass.
+// The colour ends up in a stylesheet on the customer's page, so nothing but #RRGGBB may pass.
 func ValidAccentColor(c string) bool {
 	return c == "" || accentPattern.MatchString(c)
 }
 
-// ValidAvatarURL reports whether u is empty or an absolute https URL.
 func ValidAvatarURL(u string) bool {
 	if u == "" {
 		return true
@@ -72,8 +66,7 @@ func ValidAvatarURL(u string) bool {
 	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && len(u) <= 2000
 }
 
-// CleanPageURL keeps a page URL the visitor reported only when it is an
-// http(s) URL of reasonable length; it is shown to agents as a link.
+// CleanPageURL keeps only short http(s) URLs, since agents see the page as a link.
 func CleanPageURL(u string) string {
 	u = strings.TrimSpace(u)
 	if u == "" || len(u) > 2000 {

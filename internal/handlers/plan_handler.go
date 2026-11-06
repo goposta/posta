@@ -33,7 +33,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// PlanHandler handles admin management of plans/packages.
 type PlanHandler struct {
 	planRepo      *repositories.PlanRepository
 	workspaceRepo *repositories.WorkspaceRepository
@@ -43,8 +42,7 @@ type PlanHandler struct {
 	edition       enterprise.EE
 }
 
-// CommunityPlans is how many plans Posta Community configures. More need a
-// Posta Enterprise license.
+// CommunityPlans is the Community allowance; more plans need a Posta Enterprise license.
 const CommunityPlans = 3
 
 // SetEdition gates plans beyond the Community allowance on the license.
@@ -65,8 +63,6 @@ func NewPlanHandler(
 		audit:         audit,
 	}
 }
-
-// Request types
 
 type CreatePlanRequest struct {
 	Body struct {
@@ -130,10 +126,8 @@ type WorkspacePlanRequest struct {
 	ID int `param:"id"`
 }
 
-// Create creates a new plan.
 func (h *PlanHandler) Create(c *okapi.Context, req *CreatePlanRequest) error {
-	// Installations that already have more plans keep them; only adding one
-	// beyond the allowance needs a license.
+	// Existing plans are kept; only adding one beyond the allowance needs a license.
 	n, err := h.planRepo.Count()
 	if err != nil {
 		return c.AbortInternalServerError("failed to count plans")
@@ -200,7 +194,6 @@ func (h *PlanHandler) List(c *okapi.Context, req *ListPlansRequest) error {
 	return paginated(c, plans, total, page, size)
 }
 
-// Get returns a single plan by ID.
 func (h *PlanHandler) Get(c *okapi.Context, req *PlanIDRequest) error {
 	plan, err := h.planRepo.FindByID(uint(req.ID))
 	if err != nil {
@@ -209,7 +202,6 @@ func (h *PlanHandler) Get(c *okapi.Context, req *PlanIDRequest) error {
 	return ok(c, plan)
 }
 
-// Update modifies an existing plan.
 func (h *PlanHandler) Update(c *okapi.Context, req *UpdatePlanRequest) error {
 	userID := uint(c.GetInt("user_id"))
 
@@ -264,7 +256,6 @@ func (h *PlanHandler) Update(c *okapi.Context, req *UpdatePlanRequest) error {
 		plan.EmailLogRetentionDays = *req.Body.EmailLogRetentionDays
 	}
 
-	// Handle default flag change
 	if req.Body.IsDefault != nil && *req.Body.IsDefault && !plan.IsDefault {
 		if err := h.planRepo.ClearDefault(); err != nil {
 			return c.AbortInternalServerError("failed to clear existing default plan", err)
@@ -329,7 +320,6 @@ func (h *PlanHandler) Delete(c *okapi.Context, req *DeletePlanRequest) error {
 	return noContent(c)
 }
 
-// SetDefault sets a plan as the default, unsetting any previous default.
 func (h *PlanHandler) SetDefault(c *okapi.Context, req *PlanIDRequest) error {
 	userID := uint(c.GetInt("user_id"))
 
@@ -355,7 +345,6 @@ func (h *PlanHandler) SetDefault(c *okapi.Context, req *PlanIDRequest) error {
 	return ok(c, plan)
 }
 
-// AssignToWorkspace assigns a plan to a workspace.
 func (h *PlanHandler) AssignToWorkspace(c *okapi.Context, req *AssignWorkspacePlanRequest) error {
 	userID := uint(c.GetInt("user_id"))
 
@@ -383,7 +372,6 @@ func (h *PlanHandler) AssignToWorkspace(c *okapi.Context, req *AssignWorkspacePl
 	return ok(c, dto.MessageData{Message: fmt.Sprintf("plan '%s' assigned to workspace '%s'", plan.Name, ws.DisplayName)})
 }
 
-// GetWorkspacePlan returns the effective plan for a workspace.
 func (h *PlanHandler) GetWorkspacePlan(c *okapi.Context, req *WorkspacePlanRequest) error {
 	wsID := uint(req.ID)
 
@@ -400,7 +388,6 @@ func (h *PlanHandler) GetWorkspacePlan(c *okapi.Context, req *WorkspacePlanReque
 	return ok(c, plan)
 }
 
-// AssignUserPlanRequest is the request type for assigning a plan to a user.
 type AssignUserPlanRequest struct {
 	ID   int `param:"id"`
 	Body struct {
@@ -408,12 +395,10 @@ type AssignUserPlanRequest struct {
 	} `json:"body"`
 }
 
-// UserPlanRequest is the request type for getting a user's plan.
 type UserPlanRequest struct {
 	ID int `param:"id"`
 }
 
-// AssignToUser assigns a plan to a user.
 func (h *PlanHandler) AssignToUser(c *okapi.Context, req *AssignUserPlanRequest) error {
 	adminID := uint(c.GetInt("user_id"))
 
@@ -441,7 +426,6 @@ func (h *PlanHandler) AssignToUser(c *okapi.Context, req *AssignUserPlanRequest)
 	return ok(c, dto.MessageData{Message: fmt.Sprintf("plan '%s' assigned to user '%s'", plan.Name, user.Email)})
 }
 
-// GetUserPlan returns the effective plan for a user (admin view).
 func (h *PlanHandler) GetUserPlan(c *okapi.Context, req *UserPlanRequest) error {
 	user, err := h.userRepo.FindByID(uint(req.ID))
 	if err != nil {
@@ -456,7 +440,6 @@ func (h *PlanHandler) GetUserPlan(c *okapi.Context, req *UserPlanRequest) error 
 	return ok(c, plan)
 }
 
-// GetMyPlan returns the effective plan for the authenticated user.
 func (h *PlanHandler) GetMyPlan(c *okapi.Context) error {
 	userID := uint(c.GetInt("user_id"))
 

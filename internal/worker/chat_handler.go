@@ -57,13 +57,10 @@ type offlineSender interface {
 	SendOfflineEmail(ctx context.Context, conversationID uint, seq int64) error
 }
 
-// unansweredDebounce is the most often one conversation raises the
-// unanswered alert.
+// unansweredDebounce is the most often one conversation raises the unanswered alert.
 const unansweredDebounce = time.Hour
 
-// ChatNotifyHandler tells a workspace's owners and admins that a visitor
-// started a chat. Agents watching the dashboard already saw it live; this
-// reaches the ones who are not.
+// ChatNotifyHandler emails owners and admins about new chats, for those not watching the dashboard live.
 type ChatNotifyHandler struct {
 	repo       chatStore
 	notifier   chatNotifier
@@ -75,15 +72,12 @@ type ChatNotifyHandler struct {
 	once func(ctx context.Context, key string, ttl time.Duration) bool
 }
 
-// SetDispatcher enables chat webhooks.
 func (h *ChatNotifyHandler) SetDispatcher(d *webhook.Dispatcher) {
 	if d != nil {
 		h.dispatcher = d
 	}
 }
 
-// SetChat enables the follow-up email and presence checks, and Redis for
-// the unanswered alert's debounce.
 func (h *ChatNotifyHandler) SetChat(svc *chat.Service, rdb *redis.Client) {
 	h.presence, h.offline = svc.Presence(), svc
 	h.once = func(ctx context.Context, key string, ttl time.Duration) bool {
@@ -116,8 +110,7 @@ func (h *ChatNotifyHandler) ProcessTask(_ context.Context, t *asynq.Task) error 
 	if conv.WorkspaceID == nil || conv.Status == models.MessageStatusQuarantined || conv.State == models.ChatStateSpam {
 		return nil
 	}
-	// Agents online saw the chat arrive in the dashboard; email is for
-	// when nobody is watching.
+	// Agents online saw the chat arrive in the dashboard; email is for when nobody is watching.
 	if h.presence != nil && h.presence.AnyOnline(context.Background(), *conv.WorkspaceID) {
 		return nil
 	}
@@ -153,7 +146,6 @@ func chatNotifyData(conv *models.ChatConversation, first *models.ChatMessage, ap
 	return data
 }
 
-// ProcessOfflineEmail sends an agent's replies to a visitor who left.
 func (h *ChatNotifyHandler) ProcessOfflineEmail(ctx context.Context, t *asynq.Task) error {
 	var p ChatMessagePayload
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
@@ -165,10 +157,7 @@ func (h *ChatNotifyHandler) ProcessOfflineEmail(ctx context.Context, t *asynq.Ta
 	return h.offline.SendOfflineEmail(ctx, p.ConversationID, p.Seq)
 }
 
-// ProcessUnanswered tells the assignee, or the admins when no one is
-// assigned, that a visitor's message is still waiting. It only fires for the
-// visitor's newest message, while the conversation is open and the visitor
-// wrote last, and at most once an hour per conversation.
+// ProcessUnanswered fires only for the visitor's newest message in an open conversation, at most hourly per conversation.
 func (h *ChatNotifyHandler) ProcessUnanswered(ctx context.Context, t *asynq.Task) error {
 	var p ChatMessagePayload
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
@@ -193,8 +182,6 @@ func (h *ChatNotifyHandler) ProcessUnanswered(ctx context.Context, t *asynq.Task
 	return h.notifier.SendToWorkspaceAdmins(*conv.WorkspaceID, subject, notification.TemplateChatUnanswered, data)
 }
 
-// stillUnanswered reports whether the visitor's message seq is still the
-// newest message of an open, non-spam conversation.
 func stillUnanswered(conv *models.ChatConversation, seq int64) bool {
 	return conv.WorkspaceID != nil &&
 		conv.State == models.ChatStateOpen &&
@@ -203,8 +190,7 @@ func stillUnanswered(conv *models.ChatConversation, seq int64) bool {
 		conv.LastSeq == seq
 }
 
-// ProcessWebhook sends a chat webhook event, built from the database when
-// the task runs.
+// ProcessWebhook builds the event from the database when the task runs, not when it was queued.
 func (h *ChatNotifyHandler) ProcessWebhook(_ context.Context, t *asynq.Task) error {
 	var p ChatWebhookPayload
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {

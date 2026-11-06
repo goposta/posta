@@ -25,12 +25,10 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// Logger records audit trail events via the existing event bus.
 type Logger struct {
 	bus *eventbus.EventBus
 }
 
-// NewLogger creates an audit logger backed by the given event bus.
 func NewLogger(bus *eventbus.EventBus) *Logger {
 	return &Logger{bus: bus}
 }

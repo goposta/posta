@@ -35,15 +35,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// chatThreadPrefix is the local part of a conversation's reply address,
-// chat+<token>@<inbound domain>; forms use msg+.
+// Reply address is chat+<token>@<inbound domain>; forms use msg+.
 const chatThreadPrefix = "chat+"
 
-// SendOfflineEmail emails the agent messages a visitor who left has not seen,
-// as one email, from the widget's reply sender and as the agent who wrote
-// last. It runs as a delayed task for the agent message with sequence number
-// seq, and does nothing when a later agent message will run its own, when the
-// visitor came back, or when nothing is left to send.
+// SendOfflineEmail batches unseen agent messages into one email; it no-ops when a later message, a return, or nothing is due.
 func (s *Service) SendOfflineEmail(ctx context.Context, conversationID uint, seq int64) error {
 	if s.mailer == nil || s.users == nil {
 		return nil
@@ -77,8 +72,7 @@ func (s *Service) SendOfflineEmail(ctx context.Context, conversationID uint, seq
 	}) {
 		return nil
 	}
-	// The visitor's read receipt says what they saw in the widget; a message
-	// that arrived while the panel was closed is still news.
+	// A message that arrived while the widget panel was closed is still news, so the read receipt decides.
 	items, err := s.repo.AgentMessagesToEmail(conv.ID, max(conv.EmailedThroughSeq, conv.VisitorReadSeq))
 	if err != nil || len(items) == 0 {
 		return err
@@ -107,8 +101,7 @@ func (s *Service) SendOfflineEmail(ctx context.Context, conversationID uint, seq
 	return nil
 }
 
-// offlineEmail builds the follow-up email. Bodies are plain text, escaped
-// for the HTML part.
+// Bodies are plain text, escaped for the HTML part.
 func (s *Service) offlineEmail(conv *models.ChatConversation, w *models.ChatWidget, items []models.ChatMessage) *email.SendRequest {
 	from := w.ReplyFrom
 	if w.ReplyFromName != "" {
@@ -162,8 +155,7 @@ func (s *Service) offlineEmail(conv *models.ChatConversation, w *models.ChatWidg
 	return req
 }
 
-// continueURL is the page the visitor chatted on, with a fragment that opens
-// the chat. The same browser resumes the conversation from its stored token.
+// continueURL opens the chat on the visitor's page; the same browser resumes it from its stored token.
 func continueURL(conv *models.ChatConversation) string {
 	page := conv.StartPageURL
 	if conv.Visitor != nil && conv.Visitor.LastPageURL != "" {
@@ -178,8 +170,6 @@ func continueURL(conv *models.ChatConversation) string {
 	return page + "#posta-chat=" + conv.UUID
 }
 
-// ParseChatThreadAddress returns the token in a conversation's reply
-// address on domain.
 func ParseChatThreadAddress(addr, domain string) (string, bool) {
 	if parsed, err := mail.ParseAddress(strings.TrimSpace(addr)); err == nil {
 		addr = parsed.Address
@@ -205,9 +195,7 @@ func ParseChatThreadAddress(addr, domain string) (string, bool) {
 	return token, true
 }
 
-// RouteReply adds a visitor's emailed answer to their conversation when one
-// of the recipients is its reply address. It implements inbound.ThreadRouter
-// and reports false when no recipient is a conversation of rec's workspace.
+// RouteReply implements inbound.ThreadRouter; false means no recipient is a conversation of rec's workspace.
 func (s *Service) RouteReply(ctx context.Context, rec *models.InboundEmail, recipients []string) (bool, error) {
 	if s == nil || s.cfg.InboundDomain == "" || rec == nil {
 		return false, nil
@@ -224,8 +212,7 @@ func (s *Service) RouteReply(ctx context.Context, rec *models.InboundEmail, reci
 			}
 			return false, err
 		}
-		// A token only routes within its workspace: mail that reached
-		// workspace A's domain never writes into workspace B's chat.
+		// A token only routes within its workspace: mail to workspace A's domain never writes into workspace B's chat.
 		if rec.WorkspaceID == nil || conv.WorkspaceID == nil || *rec.WorkspaceID != *conv.WorkspaceID {
 			logger.Warn("chat: emailed reply rejected: workspace mismatch", "inbound_id", rec.UUID)
 			continue

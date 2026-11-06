@@ -38,7 +38,6 @@ const { pageable, goToPage } = usePagination(async (page) => {
   }
 })
 
-// Debounce keystrokes, then reset to the first page of results.
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => goToPage(0), 300)
@@ -53,8 +52,7 @@ function filterByCategory(cat: string) {
 
 function startStream() {
   const baseUrl = import.meta.env.VITE_API_URL || '/api/v1'
-  // EventSource cannot set an Authorization header, but it does send the
-  // HttpOnly session cookie on the handshake, which is what the server reads.
+  // EventSource cannot set an Authorization header, but it sends the HttpOnly session cookie the server reads.
   eventSource = new EventSource(`${baseUrl}/admin/events/stream`, { withCredentials: true })
   
   eventSource.onopen = () => {
@@ -73,7 +71,6 @@ function startStream() {
     }
   })
 
-  // Listen for all named event types
   const eventTypes = [
     'user.login', 'user.created', 'user.updated', 'user.deleted',
     'email.queued', 'email.batch_queued',
@@ -149,7 +146,6 @@ function timeAgo(date: string) {
       </div>
     </div>
 
-    <!-- Live Events -->
     <div v-if="liveEvents.length > 0" class="card" style="margin-bottom: 1.5rem;">
       <div class="card-header">
         <h2>Live Feed</h2>
@@ -169,7 +165,6 @@ function timeAgo(date: string) {
       </div>
     </div>
 
-    <!-- Category Filter -->
     <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
       <button class="btn btn-sm" :class="category === '' ? 'btn-primary' : 'btn-secondary'" @click="filterByCategory('')">All</button>
       <button class="btn btn-sm" :class="category === 'user' ? 'btn-primary' : 'btn-secondary'" @click="filterByCategory('user')">User</button>
@@ -177,7 +172,6 @@ function timeAgo(date: string) {
       <button class="btn btn-sm" :class="category === 'system' ? 'btn-primary' : 'btn-secondary'" @click="filterByCategory('system')">System</button>
     </div>
 
-    <!-- Historical Events -->
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
     </div>

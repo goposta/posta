@@ -32,10 +32,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// chatPublicRoutes is the API the chat widget calls from a customer's
-// website. Each path's OPTIONS route comes first: it puts the path through
-// the middleware chain, where config.ChatPreflight answers CORS preflights
-// before okapi's global CORS handler can refuse a site it does not know.
+// Each chat path's OPTIONS route comes first so config.ChatPreflight answers before okapi's global CORS handler.
 func (r *Router) chatPublicRoutes() []okapi.RouteDefinition {
 	group := r.app.Group("/api/v1/chat").WithTagInfo(okapi.GroupTag{
 		Name:        tagChat,
@@ -63,7 +60,7 @@ func (r *Router) chatPublicRoutes() []okapi.RouteDefinition {
 		preflight("/{key}/conversations/{id}/typing"),
 		preflight("/{key}/conversations/{id}/read"),
 		preflight("/{key}/conversations/{id}/attachments"),
-		preflight("/{key}/conversations/{id}/messages/{msg}/attachments/{idx:int}"),
+		preflight("/{key}/conversations/{id}/messages/{msg}/attachments/{idx}"),
 		preflight("/{key}/identify"),
 		preflight("/{key}/attributes"),
 		{
@@ -195,7 +192,7 @@ func (r *Router) chatPublicRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/{key}/conversations/{id}/messages/{msg}/attachments/{idx:int}",
+			Path:    "/{key}/conversations/{id}/messages/{msg}/attachments/{idx}",
 			Handler: okapi.H(r.h.chatVisitor.Attachment),
 			Group:   group,
 			Summary: "Download a file as a visitor",
@@ -277,7 +274,7 @@ func (r *Router) chatWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/chat-widgets/{id:int}/rotate-key",
+			Path:        "/chat-widgets/{id}/rotate-key",
 			Handler:     okapi.H(r.h.chatWidget.RotateKey),
 			Group:       opsGroup,
 			Summary:     "Rotate a chat widget's public key",
@@ -287,7 +284,7 @@ func (r *Router) chatWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/chat-widgets/{id:int}/snippet",
+			Path:     "/chat-widgets/{id}/snippet",
 			Handler:  okapi.H(r.h.chatWidget.Snippet),
 			Group:    opsGroup,
 			Summary:  "Get the embed code for a chat widget",
@@ -442,7 +439,7 @@ func (r *Router) chatWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/conversations/{id}/messages/{msg}/attachments/{idx:int}",
+			Path:    "/conversations/{id}/messages/{msg}/attachments/{idx}",
 			Handler: okapi.H(r.h.chatConversation.Attachment),
 			Group:   opsGroup,
 			Summary: "Download a file from a conversation",
@@ -481,7 +478,7 @@ func (r *Router) chatWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/chat-snippets/{id:int}",
+			Path:     "/chat-snippets/{id}",
 			Handler:  okapi.H(r.h.chatSnippet.Update),
 			Group:    opsGroup,
 			Summary:  "Update a canned reply",
@@ -490,14 +487,15 @@ func (r *Router) chatWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/chat-snippets/{id:int}",
+			Path:    "/chat-snippets/{id}",
 			Handler: okapi.H(r.h.chatSnippet.Delete),
 			Group:   opsGroup,
 			Summary: "Delete a canned reply",
+			Options: []okapi.RouteOption{okapi.DocPathParam("id", "integer", "Canned reply ID")},
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/chat-widgets/{id:int}/rotate-identity-secret",
+			Path:        "/chat-widgets/{id}/rotate-identity-secret",
 			Handler:     okapi.H(r.h.chatWidget.RotateIdentitySecret),
 			Group:       opsGroup,
 			Summary:     "Rotate a chat widget's identity secret",

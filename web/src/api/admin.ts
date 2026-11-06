@@ -8,7 +8,6 @@ import type {
 import type { Announcement, AnnouncementInput } from './inbox'
 
 export const adminApi = {
-  // ---- Announcements (platform-wide in-app notices) ----
   listAnnouncements(page = 0, size = 20) {
     return api.get<PaginatedResponse<Announcement>>('/admin/announcements', { params: { page, size } })
   },
@@ -21,7 +20,6 @@ export const adminApi = {
   listUsers(page = 0, size = 20, search = '') {
     return api.get<PaginatedResponse<User>>('/admin/users', { params: { page, size, search: search || undefined } })
   },
-  // ---- Domains (platform-wide) ----
   listDomains(page = 0, size = 20, search = '', status = '', workspace = 0) {
     return api.get<PaginatedResponse<AdminDomainRow>>('/admin/domains', {
       params: {
@@ -46,7 +44,6 @@ export const adminApi = {
     })
   },
 
-  // ---- Workspaces (platform-wide) ----
   listWorkspaces(page = 0, size = 20, search = '', plan = 0, owner = 0) {
     return api.get<PaginatedResponse<AdminWorkspaceRow>>('/admin/workspaces', {
       params: {

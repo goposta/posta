@@ -25,21 +25,15 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// HiddenValue stands in for a personal-data answer in notification emails.
-// Members read the real value on the submission page.
 const HiddenValue = "•••• (hidden, view in Posta)"
 
-// PIIMask says which of a submission's values a notification email must
-// hide: the answers to questions marked personal data, and the summary values
-// (sender email, name, phone, subject, body) those questions fill. A form
-// without a schema hides nothing.
+// PIIMask also hides the summary values (email, name, phone, subject, body) personal-data questions fill.
 type PIIMask struct {
 	keys  map[string]bool
 	roles map[models.FieldRole]bool
 }
 
-// NewPIIMask reads the mask from a form schema. Archived questions count:
-// older submissions still carry their answers.
+// Archived questions count, since older submissions still carry their answers.
 func NewPIIMask(defs models.FieldDefs) PIIMask {
 	m := PIIMask{keys: map[string]bool{}, roles: map[models.FieldRole]bool{}}
 	for _, f := range defs {
@@ -54,18 +48,13 @@ func NewPIIMask(defs models.FieldDefs) PIIMask {
 	return m
 }
 
-// Key reports whether the answer submitted under key is hidden.
 func (m PIIMask) Key(key string) bool { return m.keys[key] }
 
-// Hides reports whether the question filling role is personal data.
 func (m PIIMask) Hides(role models.FieldRole) bool { return m.roles[role] }
 
-// Empty reports whether the form has no personal-data questions.
 func (m PIIMask) Empty() bool { return len(m.keys) == 0 }
 
-// Value returns v, or HiddenValue when the question filling role is personal
-// data. An empty value stays empty, so nothing is shown as hidden that was
-// never given.
+// An empty value stays empty, so nothing is shown as hidden that was never given.
 func (m PIIMask) Value(role models.FieldRole, v string) string {
 	if v == "" || !m.roles[role] {
 		return v
@@ -73,8 +62,6 @@ func (m PIIMask) Value(role models.FieldRole, v string) string {
 	return HiddenValue
 }
 
-// Sender labels who submitted, leaving out what is hidden. It returns "" when
-// neither a name nor an email was given.
 func (m PIIMask) Sender(name, email string) string {
 	nameHidden := name != "" && m.roles[models.RoleSenderName]
 	emailHidden := email != "" && m.roles[models.RoleSenderEmail]

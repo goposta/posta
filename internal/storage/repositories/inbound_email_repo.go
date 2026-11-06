@@ -27,7 +27,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// InboundFilter captures optional list filters for inbound email queries.
 type InboundFilter struct {
 	Status string
 	Source string
@@ -112,9 +111,7 @@ func (r *InboundEmailRepository) FindByScope(scope ResourceScope, limit, offset 
 	return items, total, nil
 }
 
-// FindByMessageID returns an existing inbound email with the same Message-ID for
-// the given user. Used for idempotent ingest (MX providers may retry webhooks).
-// Returns gorm.ErrRecordNotFound when no match exists.
+// FindByMessageID backs idempotent ingest, since MX providers may retry webhooks.
 func (r *InboundEmailRepository) FindByMessageID(userID uint, messageID string) (*models.InboundEmail, error) {
 	var em models.InboundEmail
 	if err := r.db.Where("user_id = ? AND message_id = ?", userID, messageID).First(&em).Error; err != nil {
@@ -123,8 +120,7 @@ func (r *InboundEmailRepository) FindByMessageID(userID uint, messageID string) 
 	return &em, nil
 }
 
-// FindByDedupHash returns an existing inbound email with the same dedup fallback
-// hash for the given user. Used when Message-ID is absent (webhook ingest).
+// FindByDedupHash is the dedup fallback when Message-ID is absent (webhook ingest).
 func (r *InboundEmailRepository) FindByDedupHash(userID uint, hash string) (*models.InboundEmail, error) {
 	var em models.InboundEmail
 	if err := r.db.Where("user_id = ? AND dedup_hash = ?", userID, hash).First(&em).Error; err != nil {
@@ -133,8 +129,7 @@ func (r *InboundEmailRepository) FindByDedupHash(userID uint, hash string) (*mod
 	return &em, nil
 }
 
-// FindByScopeFiltered returns inbound emails matching the scope and any optional
-// filters. An empty filter field means "no filter on that column".
+// FindByScopeFiltered treats an empty filter field as no filter on that column.
 func (r *InboundEmailRepository) FindByScopeFiltered(scope ResourceScope, f InboundFilter, limit, offset int) ([]models.InboundEmail, int64, error) {
 	var items []models.InboundEmail
 	var total int64
@@ -167,12 +162,10 @@ func (r *InboundEmailRepository) FindByScopeFiltered(scope ResourceScope, f Inbo
 	return items, total, nil
 }
 
-// Delete permanently removes an inbound email record by ID.
 func (r *InboundEmailRepository) Delete(id uint) error {
 	return r.db.Delete(&models.InboundEmail{}, id).Error
 }
 
-// CountByScope returns aggregate counts per status for dashboard use.
 func (r *InboundEmailRepository) CountByScope(scope ResourceScope) (total, forwarded, failed, received int64, err error) {
 	err = ApplyScope(r.db.Model(&models.InboundEmail{}), scope).Count(&total).Error
 	if err != nil {
@@ -184,16 +177,12 @@ func (r *InboundEmailRepository) CountByScope(scope ResourceScope) (total, forwa
 	return
 }
 
-// DeleteOlderThan removes inbound email records older than the given time.
-// Returns the number of rows deleted.
 func (r *InboundEmailRepository) DeleteOlderThan(before time.Time) (int64, error) {
 	result := r.db.Where("created_at < ?", before).Delete(&models.InboundEmail{})
 	return result.RowsAffected, result.Error
 }
 
-// InboundBlobKeysOlderThan returns the attachments_json and raw_storage_key
-// values for every inbound_emails row older than the cutoff so the caller can
-// remove the underlying blob objects before the DB rows are dropped.
+// InboundBlobKeysOlderThan lets the caller remove blob objects before the rows are dropped.
 func (r *InboundEmailRepository) InboundBlobKeysOlderThan(before time.Time) (attachmentsJSON []string, rawKeys []string, err error) {
 	err = r.db.Model(&models.InboundEmail{}).
 		Where("created_at < ? AND attachments_json <> ''", before).
@@ -207,8 +196,7 @@ func (r *InboundEmailRepository) InboundBlobKeysOlderThan(before time.Time) (att
 	return attachmentsJSON, rawKeys, err
 }
 
-// ScrubBodiesOlderThan clears bodies of inbound emails older than the cutoff,
-// keeping the record. The raw .eml is scrubbed separately (see ScrubRawOlderThan).
+// ScrubBodiesOlderThan keeps the record; the raw .eml is scrubbed separately by ScrubRawOlderThan.
 func (r *InboundEmailRepository) ScrubBodiesOlderThan(before time.Time) (int64, error) {
 	result := r.db.Model(&models.InboundEmail{}).
 		Where("created_at < ? AND (html_body <> '' OR text_body <> '')", before).
@@ -216,9 +204,7 @@ func (r *InboundEmailRepository) ScrubBodiesOlderThan(before time.Time) (int64, 
 	return result.RowsAffected, result.Error
 }
 
-// ScrubRawOlderThan clears the raw .eml reference of inbound emails older than
-// the cutoff. Because the raw message holds both body and attachments, it is
-// purged at the shorter of the two content windows. The blob is deleted separately.
+// ScrubRawOlderThan runs at the shorter content window, since the raw .eml holds both body and attachments.
 func (r *InboundEmailRepository) ScrubRawOlderThan(before time.Time) (int64, error) {
 	result := r.db.Model(&models.InboundEmail{}).
 		Where("created_at < ? AND raw_storage_key <> ''", before).
@@ -226,8 +212,7 @@ func (r *InboundEmailRepository) ScrubRawOlderThan(before time.Time) (int64, err
 	return result.RowsAffected, result.Error
 }
 
-// ScrubAttachmentsOlderThan clears attachment metadata of inbound emails older
-// than the cutoff, keeping the record. Blobs are deleted separately by the caller.
+// ScrubAttachmentsOlderThan keeps the record; the caller deletes the blobs.
 func (r *InboundEmailRepository) ScrubAttachmentsOlderThan(before time.Time) (int64, error) {
 	result := r.db.Model(&models.InboundEmail{}).
 		Where("created_at < ? AND attachments_json <> ''", before).

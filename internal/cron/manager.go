@@ -29,7 +29,6 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// JobStatus holds runtime state for a registered cron job.
 type JobStatus struct {
 	Name      string     `json:"name"`
 	Schedule  string     `json:"schedule"`
@@ -39,8 +38,6 @@ type JobStatus struct {
 	NextRunAt *time.Time `json:"next_run_at"`
 }
 
-// Manager is responsible for registering cron jobs, triggering them based
-// on cron expressions, and enqueueing Asynq jobs.
 type Manager struct {
 	client   *asynq.Client
 	jobs     []CronJob
@@ -56,7 +53,6 @@ type jobState struct {
 	lastError string
 }
 
-// NewManager creates a new cron manager backed by the given Asynq client.
 func NewManager(client *asynq.Client) *Manager {
 	return &Manager{
 		client:   client,
@@ -65,7 +61,6 @@ func NewManager(client *asynq.Client) *Manager {
 	}
 }
 
-// Register adds a cron job to the manager.
 func (m *Manager) Register(job CronJob) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -73,7 +68,6 @@ func (m *Manager) Register(job CronJob) {
 	m.statuses[job.Name()] = &jobState{}
 }
 
-// Start begins running all registered cron jobs.
 func (m *Manager) Start(ctx context.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -108,7 +102,6 @@ func (m *Manager) Start(ctx context.Context) {
 	logger.Info("cron manager started", "jobs", len(m.jobs))
 }
 
-// Stop gracefully shuts down the cron scheduler.
 func (m *Manager) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -120,7 +113,6 @@ func (m *Manager) Stop() {
 	logger.Info("cron manager stopped")
 }
 
-// Jobs returns the current status of all registered cron jobs.
 func (m *Manager) Jobs() []JobStatus {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -34,7 +34,6 @@ type Store struct {
 	redis *redis.Client
 }
 
-// NewStore creates a new session store backed by Redis.
 func NewStore(client *redis.Client) *Store {
 	return &Store{redis: client}
 }
@@ -48,7 +47,6 @@ func (s *Store) MarkRevoked(ctx context.Context, jti string, expiresAt time.Time
 	s.redis.Set(ctx, revokedPrefix+jti, "1", ttl)
 }
 
-// IsRevoked checks if a JTI is in the Redis blacklist.
 func (s *Store) IsRevoked(ctx context.Context, jti string) bool {
 	val, err := s.redis.Exists(ctx, revokedPrefix+jti).Result()
 	if err != nil {
@@ -57,7 +55,6 @@ func (s *Store) IsRevoked(ctx context.Context, jti string) bool {
 	return val > 0
 }
 
-// RevokedKey returns the Redis key for a revoked session.
 func RevokedKey(jti string) string {
 	return fmt.Sprintf("%s%s", revokedPrefix, jti)
 }

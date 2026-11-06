@@ -40,12 +40,7 @@ func ConnectPostgres(dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
-// SeedAdmin creates the default admin user.
-//
-// approve, when non-nil, is consulted only once it is settled that an admin
-// will actually be created. That ordering matters: an existing deployment whose
-// admin password was changed in-app must keep starting even though the
-// configured seed password is still the shipped default.
+// SeedAdmin calls approve only once an admin will really be created, so a changed in-app password never blocks boot.
 func SeedAdmin(db *gorm.DB, email, password string, approve func() error) error {
 	var count int64
 	db.Model(&models.User{}).Count(&count)

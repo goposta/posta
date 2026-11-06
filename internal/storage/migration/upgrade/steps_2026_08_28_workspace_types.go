@@ -29,9 +29,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// applySystemWorkspace creates the built-in platform workspace. A install with
-// no administrator yet (fresh database, admin seeded later) is not an error:
-// the server calls EnsureSystem again once seeding completes.
+// applySystemWorkspace tolerates no administrator yet; the server calls EnsureSystem again once seeding completes.
 func applySystemWorkspace(tx *gorm.DB) error {
 	if err := tx.Exec(`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS system boolean NOT NULL DEFAULT false`).Error; err != nil {
 		return fmt.Errorf("add workspaces.system: %w", err)
@@ -40,9 +38,7 @@ func applySystemWorkspace(tx *gorm.DB) error {
 		return fmt.Errorf("create one_system_workspace: %w", err)
 	}
 
-	// No SMTP configuration here on purpose: this step runs before crypto.Init,
-	// so a password encrypted now would use an uninitialised key. The workspace
-	// is all this step needs; the server is provisioned at boot, after seeding.
+	// No SMTP config here: this step runs before crypto.Init, so an encrypted password would use an uninitialised key.
 	if _, err := workspace.EnsureSystem(tx, config.SystemSMTPConfig{}); err != nil {
 		if errors.Is(err, workspace.ErrNoAdmin) {
 			logger.Info("system workspace deferred: no administrator yet")
@@ -53,8 +49,7 @@ func applySystemWorkspace(tx *gorm.DB) error {
 	return nil
 }
 
-// applyPersonalToNormal turns every personal workspace into an ordinary one.
-// Nothing moves: ids, slugs, members, plans, and resources are untouched.
+// applyPersonalToNormal changes only the type: ids, slugs, members, plans and resources are untouched.
 func applyPersonalToNormal(tx *gorm.DB) error {
 	if !hasColumn(tx, "workspaces", "is_personal") {
 		return nil
@@ -69,9 +64,7 @@ func applyPersonalToNormal(tx *gorm.DB) error {
 	return tx.Exec(`DROP INDEX IF EXISTS one_personal_per_user`).Error
 }
 
-// applyDefaultWorkspace renames personal_workspace_id to default_workspace_id so
-// every user keeps landing exactly where they landed before, then repairs any
-// value that points at a workspace the user is not a member of.
+// applyDefaultWorkspace keeps users landing where they did, then repairs defaults pointing at non-member workspaces.
 func applyDefaultWorkspace(tx *gorm.DB) error {
 	switch {
 	case hasColumn(tx, "users", "default_workspace_id"):

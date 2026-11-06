@@ -32,10 +32,7 @@ func dates(points []DeliveryRatePoint) []string {
 	return out
 }
 
-// The series is built in UTC because the queries bucket in UTC. It used to use
-// time.Truncate, which rounds against the zero time: on a server west of UTC the
-// whole series shifted a day earlier and the last day of every report was
-// missing.
+// The series is built in UTC to match the queries; time.Truncate would shift it a day on a server west of UTC.
 func TestSeriesIsUTCRegardlessOfServerZone(t *testing.T) {
 	ny, err := time.LoadLocation("America/New_York")
 	if err != nil {
@@ -63,9 +60,7 @@ func TestSeriesIsUTCRegardlessOfServerZone(t *testing.T) {
 	}
 }
 
-// A row whose bucket falls outside the range used to be dropped without trace.
-// It happened whenever Postgres ran in a non-UTC timezone, and the report simply
-// under-reported with nothing to show anything was missing.
+// A row bucketed outside the range (Postgres in a non-UTC zone) must not be dropped without trace.
 func TestOutOfRangeRowsAreNotLost(t *testing.T) {
 	from := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 3, 3, 23, 59, 59, 0, time.UTC)
@@ -94,8 +89,7 @@ func TestOutOfRangeRowsAreNotLost(t *testing.T) {
 	}
 }
 
-// Quiet days have to appear as zeroes; a chart that silently omits them draws a
-// misleading trend.
+// Quiet days must appear as zeroes; a chart that omits them draws a misleading trend.
 func TestSeriesIsGapless(t *testing.T) {
 	from := time.Date(2026, 1, 30, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 2, 2, 23, 59, 59, 0, time.UTC)
@@ -149,8 +143,7 @@ func TestBounceSeriesTotalsAndFolding(t *testing.T) {
 	}
 }
 
-// Suppressed sends never reached the provider, so they must not be counted for
-// or against its delivery rate.
+// Suppressed sends never reached the provider, so they count neither for nor against its delivery rate.
 func TestProviderRateExcludesSuppressed(t *testing.T) {
 	out := buildProviderBreakdown([]providerRow{
 		{Provider: "Gmail", Status: "sent", Count: 90},
@@ -173,8 +166,7 @@ func TestProviderRateExcludesSuppressed(t *testing.T) {
 	}
 }
 
-// Map iteration is random, so equal-volume providers have to be broken by name
-// or the table reshuffles on every refresh.
+// Map iteration is random, so equal-volume providers must break ties by name or the table reshuffles.
 func TestProviderOrderIsStable(t *testing.T) {
 	rows := []providerRow{
 		{Provider: "Yahoo", Status: "sent", Count: 10},

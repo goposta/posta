@@ -22,8 +22,6 @@ const showModal = ref(false)
 const editing = ref<StyleSheet | null>(null)
   const saving = ref(false)
 
-// Creating a stylesheet sends its name as typed; editing one sends its name
-// unchanged.
 const form = ref<Required<Omit<StyleSheetInput, 'display_name'>>>({
   name: '',
   css: '',
@@ -168,7 +166,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Create/Edit Stylesheet Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" 
       @mouseup="confirmClickEnd">
       <div class="modal" style="max-width: 640px;" @mousedown.stop @mouseup.stop>

@@ -19,16 +19,14 @@
 
 package dto
 
-// This file defines documentation-only payload shapes for the webhooks Posta
-// POSTs to subscriber URLs.
+// Documentation-only payload shapes for the webhooks Posta POSTs to subscriber URLs.
 type WebhookEvent struct {
 	Event     string `json:"event"`
 	EmailID   string `json:"email_id"`
 	Timestamp string `json:"timestamp"`
 }
 
-// CampaignWebhookEvent is the payload for campaign lifecycle events
-// (campaign.started, campaign.completed).
+// CampaignWebhookEvent is the payload for campaign.started and campaign.completed.
 type CampaignWebhookEvent struct {
 	Event      string `json:"event"`
 	CampaignID uint   `json:"campaign_id"`
@@ -71,7 +69,6 @@ type InboundWebhookEvent struct {
 	ReceivedAt  string                     `json:"received_at"`
 }
 
-// InboundWebhookAttachment describes an attachment in an InboundWebhookEvent.
 type InboundWebhookAttachment struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
@@ -99,9 +96,7 @@ type MessageWebhookEvent struct {
 	ReceivedAt  string                `json:"received_at"`
 }
 
-// MessageReplyWebhookEvent is the payload for message.replied (an operator
-// answered from the dashboard) and message.reply_received (the submitter
-// answered the thread by email).
+// MessageReplyWebhookEvent is the payload for message.replied (dashboard) and message.reply_received (email).
 type MessageReplyWebhookEvent struct {
 	Event          string `json:"event"`
 	Timestamp      string `json:"timestamp"`
@@ -120,15 +115,12 @@ type MessageReplyWebhookEvent struct {
 	CreatedAt      string `json:"created_at"`
 }
 
-// MessageWebhookField is one submitted form field in a MessageWebhookEvent.
 type MessageWebhookField struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
-// ChatWebhookEvent is the payload for the chat.* events. Message is set for
-// chat.message.created, and for chat.conversation.started with the
-// visitor's first message.
+// ChatWebhookEvent is the payload for chat.* events; Message is set for message.created and conversation.started.
 type ChatWebhookEvent struct {
 	Event        string              `json:"event"`
 	Timestamp    string              `json:"timestamp"`

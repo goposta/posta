@@ -25,9 +25,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// API key scopes gate what an API-key caller may do inside the workspace the key
-// is scoped to. They never confer platform administration: /api/v1/admin/* is
-// reachable only from the admin dashboard with a user session.
+// Scopes gate API-key access inside its workspace and never confer platform administration (/api/v1/admin/*).
 const (
 	ScopeSend     = "send"     // send emails, batches, templates; subscriber-list ops
 	ScopeRead     = "read"     // read-only access to workspace resources
@@ -35,7 +33,7 @@ const (
 	ScopeWrite    = "write"    // create/update/delete workspace resources
 	ScopeAdmin    = "admin"    // administrative operations within the workspace
 	ScopeSetup    = "setup"    // reserved, not yet accepted on creation
-	ScopeAll      = "*"        // all scopes
+	ScopeAll      = "*"
 )
 
 var ValidScopes = map[string]bool{
@@ -65,8 +63,7 @@ type APIKey struct {
 	CreatedBy *ActorRef `json:"created_by,omitempty" gorm:"->;foreignKey:UserID;references:ID;constraint:false"`
 }
 
-// HasScope reports whether the key grants scope s. An empty scope set means the
-// key predates scopes and grants only `send`; "*" grants everything.
+// HasScope treats an empty scope set as a pre-scopes key granting only `send`; "*" grants everything.
 func (k *APIKey) HasScope(s string) bool {
 	if len(k.Scopes) == 0 {
 		return s == ScopeSend

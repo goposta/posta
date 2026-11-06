@@ -38,7 +38,6 @@ const (
 	CampaignStatusCancelled CampaignStatus = "cancelled"
 )
 
-// TemplateData is a JSON map for template variable substitution.
 type TemplateData map[string]interface{}
 
 func (td TemplateData) Value() (driver.Value, error) {
@@ -89,8 +88,7 @@ type Campaign struct {
 	CreatedAt         time.Time      `json:"created_at"`
 	UpdatedAt         *time.Time     `json:"updated_at,omitempty"`
 	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
-	// Snapshot captures the aggregated stats at soft-delete time so analytics
-	// for past sends survive after CampaignMessage rows are purged.
+	// Snapshot keeps aggregated stats from soft-delete time so analytics survive CampaignMessage purges.
 	Snapshot TemplateData `json:"snapshot,omitempty" gorm:"type:text"`
 	User     User         `json:"-" gorm:"foreignKey:UserID"`
 }

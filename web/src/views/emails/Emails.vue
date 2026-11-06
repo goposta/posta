@@ -48,8 +48,7 @@ function clearSearchTimeout() {
 }
 
 function applySearch() {
-  // Drop any pending debounce so an immediate apply (Enter / a quick filter)
-  // doesn't get followed by a duplicate fire.
+  // Drop a pending debounce so an immediate apply (Enter, a quick filter) isn't followed by a duplicate fire.
   clearSearchTimeout()
   router.replace({ query: { ...route.query, q: queryText.value || undefined, page: undefined } })
   load(0)
@@ -66,8 +65,7 @@ function resetSearch() {
   applySearch()
 }
 
-// Column sorting — mirrored to the URL (?sort=). Clicking a column cycles
-// ascending -> descending -> default (newest first).
+// Mirrored to the URL (?sort=); clicking a column cycles ascending, descending, then the default (newest first).
 const sortField = computed(() => sortValue.value.replace(/^-/, ''))
 const sortDesc = computed(() => sortValue.value.startsWith('-'))
 function toggleSort(field: string) {
@@ -84,7 +82,6 @@ function sortIcon(field: string) {
   return sortDesc.value ? 'mdi-arrow-down' : 'mdi-arrow-up'
 }
 
-// Surfaced quick filters — each just nudges a token in `queryText`.
 const hasAttachment = computed({
   get: () => hasFlag(queryText.value, 'has:attachment') || hasFlag(queryText.value, 'has:attachments'),
   set: (on: boolean) => {
@@ -117,7 +114,6 @@ const STATUS_OPTIONS = [
   { value: 'failed', label: 'Failed' },
   { value: 'suppressed', label: 'Suppressed' },
 ]
-// Recipient mailbox providers, as classified by the backend.
 const PROVIDER_OPTIONS = [
   'Gmail', 'Google Workspace', 'Outlook', 'Yahoo', 'Apple iCloud', 'Yandex',
   'Proton', 'Zoho', 'Fastmail', 'GMX', 'AOL', 'Other',
@@ -161,8 +157,6 @@ const LIST_CHIPS = [
   { key: 'key', title: 'API key', filter: apiKeys },
 ]
 
-// Compact summary of the structured quick-filters that are active — shown as
-// removable chips so the selection stays visible even when the panel is closed.
 const activeChips = computed(() => {
   const chips: { key: string; label: string }[] = []
   for (const c of LIST_CHIPS) {
@@ -222,8 +216,7 @@ function statusBadgeClass(status: string) {
 
 function formatDate(date: string | null) {
   if (!date) return '-'
-  // Rendered in the viewer's local timezone; the short tz label (e.g. GMT+3)
-  // keeps the time unambiguous.
+  // Rendered in the viewer's local timezone; the short tz label (e.g. GMT+3) keeps the time unambiguous.
   return new Date(date).toLocaleString(undefined, { timeZoneName: 'short' })
 }
 </script>
@@ -396,8 +389,6 @@ function formatDate(date: string | null) {
 </template>
 
 <style scoped>
-/* Reserve a fixed gutter for the attachment clip so subjects always align,
-   whether or not a row has an attachment. */
 .subject-cell {
   display: inline-flex;
   align-items: center;
@@ -412,7 +403,6 @@ function formatDate(date: string | null) {
   color: var(--text-muted, var(--text-tertiary));
 }
 
-/* Sortable column headers */
 .th-sort {
   cursor: pointer;
   user-select: none;
@@ -443,8 +433,6 @@ function formatDate(date: string | null) {
   color: var(--text-primary);
 }
 
-/* Reserve a stable width for the action column so the table doesn't shift
-   between pages/searches depending on whether a row has a Retry button. */
 .col-actions {
   width: 96px;
   text-align: right;

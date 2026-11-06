@@ -21,7 +21,6 @@ package models
 
 import "time"
 
-// WorkspaceSSOConfig controls SSO enforcement for a workspace.
 type WorkspaceSSOConfig struct {
 	ID             uint      `json:"id" gorm:"primaryKey"`
 	WorkspaceID    uint      `json:"workspace_id" gorm:"uniqueIndex;not null"`

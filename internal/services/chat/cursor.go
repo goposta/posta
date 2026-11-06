@@ -19,30 +19,22 @@
 
 package chat
 
-// Decision is what a stream does with a live event.
 type Decision int
 
 const (
-	// Deliver sends the event on.
 	Deliver Decision = iota
 	// Skip drops an event the stream already sent, from its replay.
 	Skip
-	// Refetch means events were missed: the stream must read everything
-	// after Cursor.Last from the database, which includes this event.
+	// Refetch means events were missed: read everything after Cursor.Last from the database, this event included.
 	Refetch
 )
 
-// Cursor is the newest sequence number a stream has sent. Live events reach
-// a stream through pub/sub, which drops events while a subscriber is away or
-// slow, and they can arrive before or after the database replay a stream
-// starts with. The cursor turns that into an exactly-once, in-order stream:
-// the database is the truth and pub/sub only rings the bell.
+// Cursor makes lossy, unordered pub/sub exactly-once and in order: the database is the truth, pub/sub only rings the bell.
 type Cursor struct {
 	Last int64
 }
 
-// Admit decides what to do with a live event carrying seq. Zero is an
-// ephemeral event, such as typing, which has no place in the order.
+// Admit decides a live event's fate; seq 0 is an ephemeral event, such as typing, outside the order.
 func (c *Cursor) Admit(seq int64) Decision {
 	switch {
 	case seq == 0:
@@ -57,7 +49,6 @@ func (c *Cursor) Admit(seq int64) Decision {
 	}
 }
 
-// Advance records that the stream sent seq.
 func (c *Cursor) Advance(seq int64) {
 	if seq > c.Last {
 		c.Last = seq

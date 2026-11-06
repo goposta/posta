@@ -5,8 +5,7 @@ import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
 import type { Message, MessagePriority, Team } from "../../api/types";
 
-// Tags and priority on one message. Each change saves at once and hands the
-// updated message back, so the page never holds unsaved triage.
+// Each change saves at once and hands the updated message back, so the page never holds unsaved triage.
 const props = defineProps<{ message: Message }>();
 const emit = defineEmits<{ updated: [message: Message] }>();
 

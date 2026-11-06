@@ -29,8 +29,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// A dev binary never writes app.version, so the database it created looks
-// unversioned on the next boot. That boot must not seal the registry again.
+// A dev binary never writes app.version, so its next boot must not seal the registry again.
 func TestDevBinaryRestartsOnItsOwnDatabase(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_DSN")
 	if dsn == "" {

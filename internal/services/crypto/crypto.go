@@ -38,9 +38,7 @@ var (
 	keyMu sync.RWMutex
 )
 
-// Init derives a 32-byte AES-256 key from the provided secret via SHA-256.
-// Call this once at startup. If secret is empty, encryption is disabled and
-// passwords will be stored with base64 encoding only.
+// Init derives the AES key from secret; an empty secret disables encryption and leaves passwords base64-only.
 func Init(secret string) {
 	keyMu.Lock()
 	defer keyMu.Unlock()
@@ -52,16 +50,13 @@ func Init(secret string) {
 	key = h[:]
 }
 
-// Enabled returns true if encryption is configured.
 func Enabled() bool {
 	keyMu.RLock()
 	defer keyMu.RUnlock()
 	return key != nil
 }
 
-// Encrypt encrypts plaintext with AES-256-GCM.
-// Returns "enc:" + base64(nonce||ciphertext).
-// If encryption is not configured, returns base64-encoded plaintext.
+// Encrypt returns "enc:"+base64(nonce||ciphertext), or plain base64 when encryption is not configured.
 func Encrypt(plaintext string) (string, error) {
 	keyMu.RLock()
 	k := key
@@ -78,8 +73,7 @@ func Encrypt(plaintext string) (string, error) {
 	return encryptedPrefix + base64.StdEncoding.EncodeToString(ct), nil
 }
 
-// Decrypt decrypts a stored value. If it has the "enc:" prefix, AES-256-GCM
-// decryption is used. Otherwise it is treated as base64.
+// Decrypt treats values without the "enc:" prefix as legacy base64.
 func Decrypt(stored string) (string, error) {
 	if IsEncrypted(stored) {
 		keyMu.RLock()
@@ -102,7 +96,6 @@ func Decrypt(stored string) (string, error) {
 		return string(pt), nil
 	}
 
-	// base64 fallback
 	decoded, err := base64.StdEncoding.DecodeString(stored)
 	if err != nil {
 		return stored, nil
@@ -110,12 +103,10 @@ func Decrypt(stored string) (string, error) {
 	return string(decoded), nil
 }
 
-// IsEncrypted returns true if the stored value uses the encrypted format.
 func IsEncrypted(s string) bool {
 	return strings.HasPrefix(s, encryptedPrefix)
 }
 
-// aesGCMEncrypt performs AES-256-GCM encryption, returning nonce||ciphertext.
 func aesGCMEncrypt(key, plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -132,7 +123,6 @@ func aesGCMEncrypt(key, plaintext []byte) ([]byte, error) {
 	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
-// aesGCMDecrypt performs AES-256-GCM decryption on nonce||ciphertext.
 func aesGCMDecrypt(key, data []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {

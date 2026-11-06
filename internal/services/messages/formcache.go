@@ -28,18 +28,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// Public form lookups are cached because every submission, nonce request, and
-// CORS preflight resolves a form by its public key. A status change therefore
-// takes up to formCacheTTL to apply unless the editor invalidates the key,
-// which the form handler does on every update, rotation, and delete.
+// Cached because every submission, nonce and preflight resolves the form; editors must invalidate on change.
 const (
 	formCacheTTL    = 60 * time.Second
 	formMissTTL     = 30 * time.Second
 	formCachePrefix = "form:pk:"
 )
 
-// formCacheEntry is what is stored per key. Unknown keys are cached too, so a
-// scan of random keys does not reach Postgres on every request.
+// Unknown keys are cached too, so a scan of random keys does not hit Postgres on every request.
 type formCacheEntry struct {
 	Missing bool         `json:"missing,omitempty"`
 	Form    *models.Form `json:"form,omitempty"`
@@ -52,7 +48,6 @@ type formKeyCache interface {
 	Delete(ctx context.Context, key string)
 }
 
-// FindFormByKey resolves a form from its public key, through the cache.
 func (s *Service) FindFormByKey(key string) (*models.Form, error) {
 	ctx := context.Background()
 	if s.formCache != nil && key != "" {
@@ -82,8 +77,7 @@ func (s *Service) FindFormByKey(key string) (*models.Form, error) {
 	return f, nil
 }
 
-// InvalidateFormKey drops cached lookups for the given public keys. Call it
-// with both the old and new key when a key rotates.
+// Call InvalidateFormKey with both the old and new key when a key rotates.
 func (s *Service) InvalidateFormKey(keys ...string) {
 	if s.formCache == nil {
 		return

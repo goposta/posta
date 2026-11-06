@@ -33,7 +33,7 @@ func TestAdminEventsStreamNotShadowedByParamRoute(t *testing.T) {
 	o.Get("/admin/events/stream", func(c *okapi.Context) error {
 		return c.String(http.StatusOK, "stream")
 	})
-	o.Get("/admin/events/{id:int}", func(c *okapi.Context) error {
+	o.Get("/admin/events/{id}", func(c *okapi.Context) error {
 		return c.String(http.StatusOK, "detail")
 	})
 

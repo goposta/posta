@@ -82,14 +82,12 @@ func (r *LanguageRepository) FindByUserID(userID uint, limit, offset int) ([]mod
 	return languages, total, nil
 }
 
-// ClearDefault unsets is_default for all languages in the given scope.
 func (r *LanguageRepository) ClearDefault(scope ResourceScope) error {
 	return ApplyScope(r.db.Model(&models.Language{}), scope).
 		Where("is_default = ?", true).
 		Update("is_default", false).Error
 }
 
-// FindDefault returns the default language for the given scope, or nil if none.
 func (r *LanguageRepository) FindDefault(scope ResourceScope) (*models.Language, error) {
 	var l models.Language
 	if err := ApplyScope(r.db, scope).Where("is_default = ?", true).First(&l).Error; err != nil {

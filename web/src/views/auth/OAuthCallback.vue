@@ -17,8 +17,7 @@ onMounted(async () => {
     return
   }
 
-  // The callback set an HttpOnly session cookie, so there is no token on the URL
-  // to pick up. Fetching the profile both loads it and proves the cookie is good.
+  // The callback set an HttpOnly cookie, so fetching the profile both loads it and proves the cookie is good.
   await auth.fetchUser()
   if (!auth.isAuthenticated) {
     error.value = 'Failed to load user profile'

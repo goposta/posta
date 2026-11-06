@@ -33,9 +33,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// TestChatRetentionAgainstDB runs the job on a real, already migrated
-// database. It only runs when POSTA_CHAT_TEST_DSN names one: it never falls
-// back to a default, so it cannot touch a dev database by accident.
+// Runs only when POSTA_CHAT_TEST_DSN is set, with no default, so it can never touch a dev database by accident.
 func TestChatRetentionAgainstDB(t *testing.T) {
 	dsn := os.Getenv("POSTA_CHAT_TEST_DSN")
 	if dsn == "" {

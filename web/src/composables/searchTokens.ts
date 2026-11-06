@@ -1,7 +1,4 @@
-// Lightweight helpers to read/write operator tokens inside a single search
-// string (e.g. `from:alice subject:"weekly report" has:attachment after:2026-01-01`).
-// The string stays the single source of truth — the backend does the real
-// parsing — so UI controls only nudge tokens in and out of it.
+// The search string stays the source of truth (the backend parses it); these helpers only nudge tokens in and out.
 
 function tokenize(q: string): string[] {
   const tokens: string[] = []
@@ -69,13 +66,11 @@ export function setToken(q: string, key: string, value: string): string {
   return serialize(out)
 }
 
-/** True when the exact flag token (e.g. `has:attachment`) is present. */
 export function hasFlag(q: string, flag: string): boolean {
   const f = flag.toLowerCase()
   return tokenize(q).some((t) => t.toLowerCase() === f)
 }
 
-/** Adds or removes a standalone flag token. */
 export function toggleFlag(q: string, flag: string, on: boolean): string {
   const f = flag.toLowerCase()
   const tokens = tokenize(q).filter((t) => t.toLowerCase() !== f)

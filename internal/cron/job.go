@@ -25,13 +25,11 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-// Job represents a unit of work that can be enqueued as an Asynq task.
 type Job interface {
 	Type() string
 	Payload() any
 }
 
-// EnqueueJob converts a Job into an Asynq task and enqueues it.
 func EnqueueJob(client *asynq.Client, job Job, opts ...asynq.Option) error {
 	payload, err := json.Marshal(job.Payload())
 	if err != nil {

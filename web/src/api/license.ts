@@ -8,13 +8,11 @@ export type LicenseState = 'none' | 'valid' | 'grace' | 'degraded' | 'binding_mi
 export interface Entitlements {
   edition: 'community' | 'enterprise'
   state: LicenseState
-  /** Enterprise features run. */
   licensed: boolean
   /** Their settings may change: false once a license has expired past its grace period. */
   mutable: boolean
 }
 
-/** The installed license, as a platform admin sees it. */
 export interface LicenseView {
   edition: 'community' | 'enterprise'
   state: LicenseState
@@ -41,6 +39,5 @@ export const licenseApi = {
   remove: () => api.delete<ApiResponse<LicenseView>>('/admin/license'),
 }
 
-/** Where to learn about and buy Posta Enterprise. */
 export const ENTERPRISE_URL = 'https://goposta.dev/enterprise'
 export const SALES_EMAIL = 'sales@goposta.dev'

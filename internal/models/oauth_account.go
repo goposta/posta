@@ -21,7 +21,6 @@ package models
 
 import "time"
 
-// OAuthAccount links an external OAuth identity to a local user.
 type OAuthAccount struct {
 	ID             uint       `json:"id" gorm:"primaryKey"`
 	UserID         uint       `json:"user_id" gorm:"uniqueIndex:idx_user_provider;not null"`

@@ -31,8 +31,7 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// Worker periodically retries failed emails that haven't exceeded their
-// SMTP server's max_retries limit.
+// Worker retries failed emails that haven't exceeded their SMTP server's max_retries.
 type Worker struct {
 	emailRepo  *repositories.EmailRepository
 	smtpRepo   *repositories.SMTPRepository
@@ -63,27 +62,21 @@ func NewWorker(
 	}
 }
 
-// SetEnqueuer sets an enqueuer so retries are re-enqueued to the background worker
-// instead of being sent synchronously.
+// SetEnqueuer makes retries go to the background worker instead of being sent synchronously.
 func (w *Worker) SetEnqueuer(eq email.EmailEnqueuer) {
 	w.enqueuer = eq
 }
 
-// OnSent sets a callback invoked after each successful retry.
 func (w *Worker) OnSent(fn func()) { w.onSent = fn }
 
-// OnFailed sets a callback invoked after each failed retry.
 func (w *Worker) OnFailed(fn func()) { w.onFailed = fn }
 
-// OnRetry sets a callback invoked for each retry attempt.
 func (w *Worker) OnRetry(fn func()) { w.onRetry = fn }
 
-// Start begins the retry loop in a background goroutine.
 func (w *Worker) Start(ctx context.Context) {
 	go w.run(ctx)
 }
 
-// Stop signals the worker to stop.
 func (w *Worker) Stop() {
 	w.stopOnce.Do(func() { close(w.stop) })
 }
@@ -108,7 +101,6 @@ func (w *Worker) run(ctx context.Context) {
 }
 
 func (w *Worker) processRetries() {
-	// Get all SMTP servers that have retries enabled
 	smtpServers, err := w.smtpRepo.FindAllWithRetries()
 	if err != nil {
 		logger.Error("retry worker: failed to load SMTP servers", "error", err)
@@ -138,7 +130,6 @@ func (w *Worker) retryEmail(em *models.Email, server *models.SMTPServer) {
 		w.onRetry()
 	}
 
-	// If an enqueuer is available, re-enqueue instead of sending synchronously
 	if w.enqueuer != nil {
 		em.Status = models.EmailStatusQueued
 		em.RetryCount++
@@ -154,7 +145,6 @@ func (w *Worker) retryEmail(em *models.Email, server *models.SMTPServer) {
 		return
 	}
 
-	// Synchronous fallback
 	em.RetryCount++
 
 	if err := w.sender.Send(server, em.Sender, em.Recipients, em.Subject, em.HTMLBody, em.TextBody, nil, nil, em.ListUnsubscribeURL, em.ListUnsubscribeMailto, em.ListUnsubscribePost); err != nil {

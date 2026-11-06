@@ -21,9 +21,7 @@ package models
 
 import "time"
 
-// NotificationKind separates the two things that reach a user's inbox: a health
-// alert Posta derived on its own, and an announcement a platform administrator
-// wrote and broadcast.
+// NotificationKind separates alerts Posta derives itself from announcements a platform admin broadcasts.
 type NotificationKind string
 
 const (
@@ -31,8 +29,7 @@ const (
 	NotificationKindAnnouncement NotificationKind = "announcement"
 )
 
-// NotificationSeverity ranks urgency. Only alerts carry warning/critical;
-// announcements are info unless the operator says otherwise.
+// Only alerts carry warning/critical; announcements are info unless the operator says otherwise.
 type NotificationSeverity string
 
 const (
@@ -41,7 +38,6 @@ const (
 	NotificationCritical NotificationSeverity = "critical"
 )
 
-// NotificationCategory groups items for filtering in the inbox.
 type NotificationCategory string
 
 const (
@@ -52,17 +48,11 @@ const (
 	NotificationCategoryPlatform       NotificationCategory = "platform"
 )
 
-// Notification is one item in a user's in-app inbox: the bell, the notifications
-// page, and the alert banner on the workspace dashboard all read this table.
-//
-// It is per-user rather than per-workspace because read and dismissed state
-// belong to a person, not to a team. A condition affecting a workspace fans out
-// to one row per member.
+// Per-user, not per-workspace: read/dismissed state belongs to a person, so workspace alerts fan out per member.
 type Notification struct {
 	ID     uint `json:"id" gorm:"primaryKey"`
 	UserID uint `json:"user_id" gorm:"not null;index:idx_notification_user_open,priority:1"`
-	// WorkspaceID is nil for platform-wide items, which follow the user rather
-	// than any one workspace.
+	// WorkspaceID is nil for platform-wide items, which follow the user rather than any one workspace.
 	WorkspaceID *uint                `json:"workspace_id,omitempty" gorm:"index"`
 	Kind        NotificationKind     `json:"kind" gorm:"not null;default:alert"`
 	Category    NotificationCategory `json:"category" gorm:"not null"`
@@ -73,46 +63,31 @@ type Notification struct {
 	Link       string `json:"link,omitempty"`
 	ActionText string `json:"action_text,omitempty"`
 
-	// DedupKey names the condition, not the occurrence: "domains:unverified" for a
-	// workspace's unverified domains. At most one unresolved row exists per
-	// (user, workspace, dedup_key), so a condition that persists across scans
-	// updates in place instead of filling the bell with duplicates.
+	// DedupKey names the condition, not the occurrence: one open row per (user, workspace, key) updates in place.
 	DedupKey string `json:"dedup_key" gorm:"not null;index:idx_notification_user_open,priority:2"`
 
-	// Fingerprint captures the condition's current shape — the count, the bucketed
-	// rate. It is what makes dismissal safe: a dismissal is bound to the
-	// fingerprint it was made against, so dismissing "3 domains unverified" stays
-	// dismissed at 3 and resurfaces at 4. Without it, dismissing once would
-	// silence the condition forever, including as it gets worse.
+	// Dismissal binds to the Fingerprint, so dismissing "3 unverified" resurfaces at 4 instead of silencing forever.
 	Fingerprint string `json:"-" gorm:"not null;default:''"`
 
 	ReadAt      *time.Time `json:"read_at,omitempty"`
 	DismissedAt *time.Time `json:"dismissed_at,omitempty"`
-	// ResolvedAt is set when the underlying condition clears. Resolved items stay
-	// in the inbox as history but leave the dashboard banner.
+	// Resolved items stay in the inbox as history but leave the dashboard banner.
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
 
 	CreatedAt time.Time `json:"created_at" gorm:"index"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Open reports whether the notification still describes a live condition the
-// user has not dismissed — the set the dashboard banner renders.
+// Open reports a live, undismissed condition: the set the dashboard banner renders.
 func (n *Notification) Open() bool {
 	return n.ResolvedAt == nil && n.DismissedAt == nil
 }
 
-// Announcement is a platform-wide notice written by an administrator. It is kept
-// as its own row so the operator can see what was sent, and edit or retract it,
-// independently of the per-user deliveries it produced.
+// Announcement is its own row so the operator can see, edit or retract it apart from per-user deliveries.
 type Announcement struct {
 	ID    uint   `json:"id" gorm:"primaryKey"`
 	Title string `json:"title" gorm:"not null"`
-	// Message is the notice text. It is deliberately not called Body: okapi
-	// resolves a request's body by looking for a field named Body or tagged
-	// json:"body", and it applies that rule again to the body's own fields — so
-	// a payload containing "body" binds as an empty struct rather than failing
-	// loudly. See TestRequestBodiesHaveNoBodyField.
+	// Not named Body: okapi silently binds a Body field as the request body. See TestRequestBodiesHaveNoBodyField.
 	Message    string               `json:"message"`
 	Link       string               `json:"link,omitempty"`
 	Severity   NotificationSeverity `json:"severity" gorm:"not null;default:info"`

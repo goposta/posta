@@ -53,15 +53,13 @@ type Seeder interface {
 	SeedWorkspaceDefaults(workspaceID, userID uint, userName string)
 }
 
-// Service provisions a user's first workspace, and backfills workspaces for
-// users that predate workspace scoping.
+// Service provisions a user's first workspace and backfills ones for users predating workspace scoping.
 type Service struct {
 	planEnforcement bool
 
 	seeder Seeder
 }
 
-// New constructs a provisioning service.
 func New(planEnforcement bool) *Service {
 	return &Service{planEnforcement: planEnforcement}
 }
@@ -70,8 +68,7 @@ func (s *Service) SetSeeder(seeder Seeder) {
 	s.seeder = seeder
 }
 
-// EnsureWorkspace gives userID a workspace if they have none, and returns the
-// id of the workspace they should land in. Idempotent.
+// EnsureWorkspace is idempotent and returns the workspace the user should land in.
 func (s *Service) EnsureWorkspace(db *gorm.DB, userID uint) (uint, error) {
 	var existing models.User
 	if err := db.Select("default_workspace_id", "name").First(&existing, userID).Error; err == nil &&
@@ -100,9 +97,7 @@ func (s *Service) EnsureWorkspace(db *gorm.DB, userID uint) (uint, error) {
 	return wsID, nil
 }
 
-// BackfillMissingWorkspaces gives every workspace-less user a workspace and
-// moves their legacy unscoped rows into it. Retained for installs upgrading from
-// before workspace scoping; a no-op once every user has one.
+// BackfillMissingWorkspaces moves legacy unscoped rows into new workspaces; kept for pre-scoping upgrades.
 func (s *Service) BackfillMissingWorkspaces(tx *gorm.DB) error {
 	var ids []uint
 	if err := tx.Model(&models.User{}).
@@ -141,12 +136,11 @@ func (s *Service) provision(tx *gorm.DB, userID uint) (uint, error) {
 		return 0, fmt.Errorf("load user: %w", err)
 	}
 
-	// Already has one — no-op.
 	if user.DefaultWorkspaceID != nil {
 		return *user.DefaultWorkspaceID, nil
 	}
 
-	// Resolve the plan (NULL in OSS / non-enforcing mode).
+	// The plan is NULL in OSS / non-enforcing mode.
 	planID, err := s.resolvePlanID(tx)
 	if err != nil {
 		return 0, err
@@ -162,7 +156,6 @@ func (s *Service) provision(tx *gorm.DB, userID uint) (uint, error) {
 		return 0, fmt.Errorf("create workspace: %w", err)
 	}
 
-	// Owner member row
 	member := &models.WorkspaceMember{
 		WorkspaceID: ws.ID,
 		UserID:      user.ID,
@@ -239,8 +232,7 @@ func (s *Service) copySettings(tx *gorm.DB, userID, workspaceID uint, requireVer
 	return nil
 }
 
-// workspaceDisplayName labels a user's first workspace after them, so a switcher with
-// several entries reads as names rather than as "Workspace 1, Workspace 2".
+// workspaceDisplayName names the workspace after its user so a switcher doesn't read "Workspace 1, Workspace 2".
 func workspaceDisplayName(userName string) string {
 	first := strings.TrimSpace(userName)
 	if idx := strings.IndexAny(first, " \t"); idx > 0 {

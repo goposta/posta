@@ -32,7 +32,6 @@ import (
 // expiryWarning is how long before expiry the dashboard starts warning.
 const expiryWarning = 30 * 24 * time.Hour
 
-// LicenseHandler installs and reports the Posta Enterprise license.
 type LicenseHandler struct {
 	ee        enterprise.EE
 	installID string
@@ -43,19 +42,15 @@ func NewLicenseHandler(ee enterprise.EE, installID string, auditLogger *audit.Lo
 	return &LicenseHandler{ee: ee, installID: installID, audit: auditLogger}
 }
 
-// LicenseView is the license as a platform admin sees it.
 type LicenseView struct {
 	enterprise.Status
-	// InstanceInstallID is this installation's Install ID, to give when
-	// buying a license. Status.InstallID is the one a license is bound to.
+	// Given when buying a license; Status.InstallID is the one a license is bound to.
 	InstanceInstallID string `json:"instance_install_id"`
-	// Warnings are license_grace, license_expired, nearing_expiry,
-	// binding_mismatch and unknown_signing_key.
+	// One of license_grace, license_expired, nearing_expiry, binding_mismatch, unknown_signing_key.
 	Warnings []string `json:"warnings"`
 }
 
-// Entitlements is what any signed-in user may know about the license: enough
-// for the dashboard to lock Enterprise features.
+// Entitlements is what any signed-in user may know: enough for the dashboard to lock Enterprise features.
 type Entitlements struct {
 	Edition  string `json:"edition"`
 	State    string `json:"state"`
@@ -91,12 +86,10 @@ func licenseWarnings(s enterprise.Status, now time.Time) []string {
 	return out
 }
 
-// Get returns the installed license for the platform admin page.
 func (h *LicenseHandler) Get(c *okapi.Context) error {
 	return ok(c, h.view())
 }
 
-// Entitlements tells the dashboard whether Enterprise features are on.
 func (h *LicenseHandler) Entitlements(c *okapi.Context) error {
 	s := h.ee.Status()
 	return ok(c, Entitlements{Edition: s.Edition, State: s.State, Licensed: s.Licensed(), Mutable: s.Mutable()})
@@ -149,8 +142,7 @@ func requestHost(c *okapi.Context) string {
 	return host
 }
 
-// licenseAbort answers a license gate error with its own status and code
-// (402 LICENSE_REQUIRED, …). It returns nil for any other error.
+// licenseAbort answers a license gate error with its own status and code (402 LICENSE_REQUIRED, ...), else nil.
 func licenseAbort(c *okapi.Context, err error) error {
 	var g enterprise.GateError
 	if errors.As(err, &g) {
@@ -159,7 +151,6 @@ func licenseAbort(c *okapi.Context, err error) error {
 	return nil
 }
 
-// RequireLicense refuses a route unless Enterprise features may run.
 func RequireLicense(ee enterprise.EE) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		if err := ee.Require(); err != nil {
@@ -169,9 +160,7 @@ func RequireLicense(ee enterprise.EE) okapi.Middleware {
 	}
 }
 
-// RequireLicenseToChange refuses a route unless Enterprise settings may
-// change: after RequireLicense, it also refuses once the license has expired
-// past its grace period, when Enterprise settings are read-only.
+// RequireLicenseToChange also refuses once the license expired past grace, when Enterprise settings are read-only.
 func RequireLicenseToChange(ee enterprise.EE) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		if err := ee.RequireMutable(); err != nil {

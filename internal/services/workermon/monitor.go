@@ -31,8 +31,7 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// Monitor periodically checks asynq worker connections and publishes
-// worker.connected / worker.disconnected events via the event bus.
+// Monitor polls asynq workers and publishes worker.connected / worker.disconnected events.
 type Monitor struct {
 	inspector *asynq.Inspector
 	bus       *eventbus.EventBus
@@ -43,8 +42,7 @@ type Monitor struct {
 	known map[string]workerInfo // keyed by "host:pid"
 }
 
-// OnCount sets a callback invoked with the current worker count after each poll.
-// Used to feed metrics gauges.
+// OnCount's callback feeds the metrics gauges with the worker count after each poll.
 func (m *Monitor) OnCount(fn func(int)) { m.onCount = fn }
 
 type workerInfo struct {
@@ -75,7 +73,6 @@ func (m *Monitor) run(ctx context.Context) {
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
-	// Do an initial check right away.
 	m.check()
 
 	for {

@@ -84,8 +84,7 @@ func TestCheckURL(t *testing.T) {
 	}
 }
 
-// The dialer checks the resolved address, so a name pointing at loopback is
-// refused when it connects, whatever it resolved to when it was saved.
+// The dialer checks the resolved address, so a name later pointing at loopback is refused at connect time.
 func TestDialerBlocksResolvedAddress(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -130,7 +129,6 @@ func TestFromEnv(t *testing.T) {
 	}
 }
 
-// Describe names what went wrong without the address or port.
 func TestDescribeHidesAddresses(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

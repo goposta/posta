@@ -39,26 +39,21 @@ func NewAdminWorkspaceHandler(db *gorm.DB, repo *repositories.WorkspaceRepositor
 	return &AdminWorkspaceHandler{db: db, repo: repo, audit: auditLogger}
 }
 
-// AdminWorkspaceRow is one line of the platform-wide workspace table.
 type AdminWorkspaceRow struct {
-	ID          uint   `json:"id"`
-	DisplayName string `json:"display_name"`
-	Name        string `json:"name"`
-	System      bool   `json:"system"`
-	OwnerID     uint   `json:"owner_id"`
-	OwnerName   string `json:"owner_name"`
-	OwnerEmail  string `json:"owner_email"`
-	PlanID      *uint  `json:"plan_id"`
-	PlanName    string `json:"plan_name"`
-	MemberCount int64  `json:"member_count"`
-	// HostedFormsDisabled is set when a platform admin took the workspace's
-	// hosted form pages offline.
+	ID                  uint      `json:"id"`
+	DisplayName         string    `json:"display_name"`
+	Name                string    `json:"name"`
+	System              bool      `json:"system"`
+	OwnerID             uint      `json:"owner_id"`
+	OwnerName           string    `json:"owner_name"`
+	OwnerEmail          string    `json:"owner_email"`
+	PlanID              *uint     `json:"plan_id"`
+	PlanName            string    `json:"plan_name"`
+	MemberCount         int64     `json:"member_count"`
 	HostedFormsDisabled bool      `json:"hosted_forms_disabled"`
 	CreatedAt           time.Time `json:"created_at"`
 }
 
-// AdminWorkspaceMember is a workspace member with the account details an
-// administrator needs to follow up on them.
 type AdminWorkspaceMember struct {
 	UserID   uint                 `json:"user_id"`
 	Name     string               `json:"name"`
@@ -68,7 +63,6 @@ type AdminWorkspaceMember struct {
 	JoinedAt time.Time            `json:"joined_at"`
 }
 
-// AdminWorkspaceUsage counts the resources a workspace holds.
 type AdminWorkspaceUsage struct {
 	Emails      int64 `json:"emails"`
 	Templates   int64 `json:"templates"`
@@ -81,7 +75,6 @@ type AdminWorkspaceUsage struct {
 	Webhooks    int64 `json:"webhooks"`
 }
 
-// AdminWorkspaceDetail adds membership, pending invitations and resource usage.
 type AdminWorkspaceDetail struct {
 	AdminWorkspaceRow
 	Description        string                 `json:"description"`
@@ -111,10 +104,7 @@ type AdminSetHostedFormsRequest struct {
 	} `json:"body"`
 }
 
-// SetHostedForms turns a workspace's hosted form pages (/f/{key}) on or off.
-// Off, the pages answer 404 and the widget refuses to load or submit from
-// Posta's own domain, so a phishing form stops at once. Forms embedded on the
-// workspace's own sites, its submissions and its data are untouched.
+// SetHostedForms takes /f/{key} pages and the widget on Posta's domain offline; embedded forms and data are untouched.
 func (h *AdminWorkspaceHandler) SetHostedForms(c *okapi.Context, req *AdminSetHostedFormsRequest) error {
 	ws, err := h.repo.FindByID(uint(req.ID))
 	if err != nil {
@@ -228,8 +218,7 @@ func (h *AdminWorkspaceHandler) row(ws *models.Workspace, owners map[uint]models
 	return row
 }
 
-// usage counts each resource type through its model so soft-deleted rows are
-// left out the same way the workspace's own views leave them out.
+// usage counts through each model so soft-deleted rows are left out as in the workspace's own views.
 func (h *AdminWorkspaceHandler) usage(workspaceID uint) AdminWorkspaceUsage {
 	var u AdminWorkspaceUsage
 	count := func(model any, dst *int64) {
@@ -247,7 +236,6 @@ func (h *AdminWorkspaceHandler) usage(workspaceID uint) AdminWorkspaceUsage {
 	return u
 }
 
-// owners resolves the owning accounts for a page of workspaces in one query.
 func (h *AdminWorkspaceHandler) owners(workspaces []models.Workspace) map[uint]models.User {
 	out := map[uint]models.User{}
 	if len(workspaces) == 0 {

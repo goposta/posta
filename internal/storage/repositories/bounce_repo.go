@@ -99,7 +99,6 @@ func (r *BounceRepository) CountHardBouncesByRecipient(userID uint, recipient st
 	return count, err
 }
 
-// CountByUserAndDateRange counts bounces for a user within a date range.
 func (r *BounceRepository) CountByUserAndDateRange(userID uint, from, to time.Time) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.Bounce{}).
@@ -108,7 +107,6 @@ func (r *BounceRepository) CountByUserAndDateRange(userID uint, from, to time.Ti
 	return count, err
 }
 
-// CountByWorkspaceAndDateRange counts bounces for a workspace within a date range.
 func (r *BounceRepository) CountByWorkspaceAndDateRange(workspaceID uint, from, to time.Time) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.Bounce{}).

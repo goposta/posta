@@ -93,8 +93,7 @@ const accentPicker = computed({
     if (widget.value) widget.value.accent_color = v;
   },
 });
-// The preview is drawn by the dashboard, not the widget script; its accent is
-// a custom property, validated above before it is used.
+// The preview is drawn by the dashboard, not the widget script; its accent custom property is validated above before use.
 const previewStyle = computed(() => ({
   "--chat-accent": accentValid.value && widget.value?.accent_color ? widget.value.accent_color : DEFAULT_ACCENT,
 }));
@@ -218,8 +217,6 @@ async function remove() {
     notify.error(apiMessage(e, "Failed to delete chat widget"));
   }
 }
-
-// --- Identity -------------------------------------------------------------
 
 // The secret is returned once, when generated, and never again.
 const identitySecret = ref("");

@@ -10,7 +10,6 @@ const { confirm } = useConfirm()
 const loading = ref(true)
 const settings = ref<AdminSetting[]>([])
 
-// Human-readable labels and descriptions for each setting key
 const settingMeta: Record<string, { label: string; description: string; category: string; advanced?: boolean }> = {
   registration_enabled: { label: 'User Registration', description: 'Allow new users to self-register.', category: 'General' },
   allowed_signup_domains: { label: 'Allowed Signup Domains', description: 'Restrict registration to specific email domains (comma-separated). Leave empty to allow all.', category: 'General' },
@@ -41,16 +40,11 @@ const settingMeta: Record<string, { label: string; description: string; category
 const categories = ['General', 'Security', 'Privacy', 'Limits', 'Retention']
 
 function settingsByCategory(category: string) {
-  // Only render known, documented settings. Unknown keys (e.g. the upgrade
-  // framework's internal app.* bookkeeping rows) are never editable platform
-  // settings and must not leak into the UI. Advanced keys are rendered
-  // separately inside their own collapsible block.
+  // Only known settings render: unknown keys (e.g. the upgrade framework's app.* rows) must not leak into the UI.
   return settings.value.filter(s => settingMeta[s.key]?.category === category && !settingMeta[s.key]?.advanced)
 }
 
-// Granular content-retention fields live under a spoiler beneath Email Log
-// Retention. It stays open whenever any content window differs from the record
-// window, so an active split is always visible.
+// The content-retention spoiler stays open whenever a content window differs from the record window, so an active split is visible.
 const advancedRetentionKeys = ['email_body_retention_days', 'email_attachment_retention_days']
 const contentRetentionOpen = ref(false)
 
@@ -66,10 +60,7 @@ const advancedRetentionSettings = computed(() =>
 )
 const retentionSplit = computed(() => {
   const base = parseInt(currentValue('retention_days'), 10)
-  // A real split means a content window purges content *before* the record is
-  // deleted: a positive value shorter than the record window — or any positive
-  // value when records are kept forever (base <= 0). A value of 0 ("purge with
-  // the record") or one >= the record window (clamped) has no distinct effect.
+  // A real split is a positive content window shorter than the record window, or any positive one when records are kept forever.
   return advancedRetentionSettings.value.some(s => {
     const v = parseInt(currentValue(s.key), 10)
     return v > 0 && (isNaN(base) || base <= 0 || v < base)
@@ -108,7 +99,6 @@ onMounted(async () => {
   }
 })
 
-// Persist a single setting if its working value differs from the committed one.
 async function commit(key: string) {
   clearTimeout(timers[key])
   const setting = settings.value.find(s => s.key === key)
@@ -116,8 +106,7 @@ async function commit(key: string) {
 
   let value = getEditedValue(key, setting.value)
 
-  // Content-retention windows may never exceed the record window — the row (and
-  // all its content) is removed first, so a larger value would have no effect.
+  // Content windows may never exceed the record window: the row and its content are removed first, so a larger value has no effect.
   if (advancedRetentionKeys.includes(key)) {
     const logMax = parseInt(currentValue('retention_days'), 10)
     const n = parseInt(value, 10)
@@ -140,13 +129,11 @@ async function commit(key: string) {
     setting.value = updated ? updated.value : value
     delete editedValues.value[key]
     flashSaved(key)
-    // Lowering the record window pulls any content window that now exceeds it
-    // back down, so the UI matches what the server (capDays) already enforces.
+    // Lowering the record window pulls down content windows that now exceed it, matching the server's capDays.
     if (key === 'retention_days') clampAdvancedToLog()
   } catch {
     const label = settingMeta[key]?.label || key
     notify.error(`Failed to save “${label}”`)
-    // Revert the field to the last committed value.
     delete editedValues.value[key]
   } finally {
     savingKeys.value[key] = false
@@ -161,8 +148,6 @@ function flashSaved(key: string) {
   }, 2000)
 }
 
-// Clamp any content window that exceeds the (just-lowered) record window and
-// persist it, keeping the UI consistent with the server-side cap.
 function clampAdvancedToLog() {
   const logMax = parseInt(currentValue('retention_days'), 10)
   if (isNaN(logMax) || logMax <= 0) return
@@ -175,7 +160,6 @@ function clampAdvancedToLog() {
   }
 }
 
-// Free-text / number input: track the value and debounce the save.
 function onInput(key: string, event: Event) {
   const value = (event.target as HTMLInputElement).value
   setEditedValue(key, value)
@@ -183,8 +167,7 @@ function onInput(key: string, event: Event) {
   timers[key] = setTimeout(() => commit(key), SAVE_DEBOUNCE_MS)
 }
 
-// Toggles that change platform-wide behavior require an explicit confirmation
-// before auto-save fires. Messages adapt to the direction of the change.
+// Toggles that change platform-wide behaviour need explicit confirmation before auto-save fires.
 type ConfirmCopy = { title: string; message: string; confirmText: string; variant: 'danger' | 'warning' | 'info' }
 const sensitiveToggles: Record<string, { enable: ConfirmCopy; disable: ConfirmCopy }> = {
   maintenance_mode: {
@@ -245,7 +228,6 @@ const sensitiveToggles: Record<string, { enable: ConfirmCopy; disable: ConfirmCo
   },
 }
 
-// Boolean toggle: confirm sensitive changes, then flip and persist immediately.
 async function toggleBool(setting: AdminSetting) {
   const next = getEditedValue(setting.key, setting.value) === 'true' ? 'false' : 'true'
 
@@ -305,7 +287,6 @@ async function toggleBool(setting: AdminSetting) {
                 <span v-if="savingKeys[setting.key]" class="setting-status-saving">Saving…</span>
                 <span v-else-if="savedKeys[setting.key]" class="setting-status-saved">Saved ✓</span>
               </span>
-              <!-- Boolean toggle -->
               <template v-if="setting.type === 'bool'">
                 <button
                   :class="['toggle-btn', { active: getEditedValue(setting.key, setting.value) === 'true' }]"
@@ -315,7 +296,6 @@ async function toggleBool(setting: AdminSetting) {
                   <span class="toggle-slider"></span>
                 </button>
               </template>
-              <!-- Number input -->
               <template v-else-if="setting.type === 'int'">
                 <input
                   type="number"
@@ -326,7 +306,6 @@ async function toggleBool(setting: AdminSetting) {
                   @keyup.enter="commit(setting.key)"
                 />
               </template>
-              <!-- String input -->
               <template v-else>
                 <input
                   type="text"
@@ -340,7 +319,6 @@ async function toggleBool(setting: AdminSetting) {
             </div>
           </div>
 
-          <!-- Collapsible per-content-type retention, nested under Email Log Retention -->
           <div
             v-if="setting.key === 'retention_days' && advancedRetentionSettings.length"
             class="content-retention"
@@ -440,7 +418,6 @@ async function toggleBool(setting: AdminSetting) {
   gap: 10px;
 }
 
-/* Collapsible content-retention block, nested under Email Log Retention */
 .content-retention {
   border-bottom: 1px solid var(--border-primary);
 }
@@ -489,7 +466,6 @@ async function toggleBool(setting: AdminSetting) {
   border-bottom: none;
 }
 
-/* Header auto-save status */
 .autosave-status {
   display: inline-flex;
   align-items: center;
@@ -509,7 +485,6 @@ async function toggleBool(setting: AdminSetting) {
 }
 @keyframes autosave-spin { to { transform: rotate(360deg); } }
 
-/* Per-row save status */
 .setting-status {
   font-size: 11.5px;
   min-width: 56px;

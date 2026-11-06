@@ -163,7 +163,6 @@ onMounted(async () => {
       </template>
     </div>
 
-    <!-- Add Member Modal -->
     <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" 
       @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>

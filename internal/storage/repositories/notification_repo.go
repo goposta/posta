@@ -28,8 +28,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// NotificationRepository persists the per-user in-app inbox. It is unrelated to
-// services/notification, which sends email.
+// NotificationRepository is the in-app inbox, unrelated to services/notification, which sends email.
 type NotificationRepository struct {
 	db *gorm.DB
 }
@@ -38,7 +37,6 @@ func NewNotificationRepository(db *gorm.DB) *NotificationRepository {
 	return &NotificationRepository{db: db}
 }
 
-// NotificationFilter narrows the inbox listing.
 type NotificationFilter struct {
 	WorkspaceID *uint
 	UnreadOnly  bool
@@ -46,17 +44,9 @@ type NotificationFilter struct {
 	Category    models.NotificationCategory
 }
 
-// Upsert writes one delivery, folding it into the existing unresolved row for the
-// same (user, workspace, dedup key) when there is one.
-//
-// A dismissal survives only while the condition looks the same. When the
-// fingerprint changes the row is re-armed — undismissed and marked unread — so a
-// worsening condition comes back rather than staying silenced by a dismissal the
-// user made when it was smaller.
+// Upsert folds into the unresolved row for the same dedup key; a changed fingerprint re-arms a dismissed row.
 func (r *NotificationRepository) Upsert(n *models.Notification) error {
-	// Two dashboard loads racing would both find nothing and both insert. The
-	// partial unique index would reject the loser, so let the database arbitrate
-	// and fall through to the update path when it does.
+	// Racing loads would both insert; the partial unique index rejects the loser, which then takes the update path.
 	if err := r.upsertOnce(n); errors.Is(err, errRaceLost) {
 		return r.upsertOnce(n)
 	} else if err != nil {
@@ -108,9 +98,7 @@ func (r *NotificationRepository) upsertOnce(n *models.Notification) error {
 	})
 }
 
-// ResolveExcept closes every unresolved alert for the user and workspace whose
-// dedup key is no longer in keep — the conditions that have cleared since the
-// last scan. Resolved rows stay in the inbox as history but drop off the banner.
+// ResolveExcept resolves alerts whose dedup key is not in keep; resolved rows stay in the inbox as history.
 func (r *NotificationRepository) ResolveExcept(userID uint, workspaceID *uint, keep []string) error {
 	q := r.db.Model(&models.Notification{}).
 		Where("user_id = ? AND kind = ? AND resolved_at IS NULL", userID, models.NotificationKindAlert)
@@ -121,8 +109,7 @@ func (r *NotificationRepository) ResolveExcept(userID uint, workspaceID *uint, k
 	return q.Update("resolved_at", time.Now().UTC()).Error
 }
 
-// List returns a page of the user's inbox, newest first. before is a keyset
-// cursor: pass the id of the last row seen.
+// List pages newest first; before is a keyset cursor, the id of the last row seen.
 func (r *NotificationRepository) List(userID uint, f NotificationFilter, before uint, limit int) ([]models.Notification, error) {
 	q := r.query(userID, f)
 	if before > 0 {
@@ -136,8 +123,7 @@ func (r *NotificationRepository) List(userID uint, f NotificationFilter, before 
 	return out, err
 }
 
-// Counts returns the bell badge and the number of open items, in one round trip
-// each rather than loading the rows.
+// Counts returns the bell badge and the open count without loading the rows.
 func (r *NotificationRepository) Counts(userID uint, workspaceID *uint) (unread, open int64, err error) {
 	unreadQ := r.db.Model(&models.Notification{}).
 		Where("user_id = ? AND read_at IS NULL AND resolved_at IS NULL", userID)
@@ -151,8 +137,7 @@ func (r *NotificationRepository) Counts(userID uint, workspaceID *uint) (unread,
 	return unread, open, err
 }
 
-// Open returns the items the workspace dashboard banner renders: live, not
-// dismissed, and belonging to this workspace or to no workspace at all.
+// Open returns the banner items: live, not dismissed, and in this workspace or in no workspace.
 func (r *NotificationRepository) Open(userID uint, workspaceID *uint) ([]models.Notification, error) {
 	q := r.db.Where("user_id = ? AND resolved_at IS NULL AND dismissed_at IS NULL", userID)
 	if workspaceID != nil {
@@ -179,8 +164,7 @@ func (r *NotificationRepository) MarkAllRead(userID uint, workspaceID *uint) err
 	return q.Update("read_at", time.Now().UTC()).Error
 }
 
-// Dismiss hides one item from the banner. It also marks it read: a user who
-// dismissed something has seen it, and leaving the bell badge lit would be noise.
+// Dismiss also marks items read: a user who dismissed something has seen it.
 func (r *NotificationRepository) Dismiss(userID uint, ids []uint) error {
 	if len(ids) == 0 {
 		return nil
@@ -191,7 +175,6 @@ func (r *NotificationRepository) Dismiss(userID uint, ids []uint) error {
 		Updates(map[string]any{"dismissed_at": now, "read_at": gorm.Expr("COALESCE(read_at, ?)", now)}).Error
 }
 
-// DismissAll clears the banner in one action.
 func (r *NotificationRepository) DismissAll(userID uint, workspaceID *uint) error {
 	now := time.Now().UTC()
 	q := r.db.Model(&models.Notification{}).
@@ -200,8 +183,7 @@ func (r *NotificationRepository) DismissAll(userID uint, workspaceID *uint) erro
 	return q.Updates(map[string]any{"dismissed_at": now, "read_at": gorm.Expr("COALESCE(read_at, ?)", now)}).Error
 }
 
-// Prune drops notifications older than the cutoff. Open items are kept whatever
-// their age: an unresolved condition is still true, however long it has been.
+// Prune keeps open items whatever their age: an unresolved condition is still true.
 func (r *NotificationRepository) Prune(before time.Time) (int64, error) {
 	res := r.db.Where("created_at < ? AND (resolved_at IS NOT NULL OR dismissed_at IS NOT NULL)", before).
 		Delete(&models.Notification{})
@@ -238,8 +220,7 @@ func (r *NotificationRepository) query(userID uint, f NotificationFilter) *gorm.
 	return q
 }
 
-// scopeWorkspace restricts to one workspace while keeping platform-wide items,
-// which belong to the user in every workspace they open.
+// scopeWorkspace keeps platform-wide items, which belong to the user in every workspace.
 func scopeWorkspace(q *gorm.DB, workspaceID *uint) *gorm.DB {
 	if workspaceID == nil {
 		return q

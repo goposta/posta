@@ -36,27 +36,21 @@ import (
 
 const maxPrefillLength = 2000
 
-// fieldEmail and fieldName are the keys of the widget's built-in email and
-// name fields, and the default columns of a subscriber import.
+// fieldEmail and fieldName are the widget's built-in fields and also a subscriber import's default columns.
 const (
 	fieldEmail = "email"
 	fieldName  = "name"
 )
 
-// builtinPrefillKeys are the fields the widget shows for a form without a
-// schema, so its share link can prefill them too.
+// builtinPrefillKeys mirror the widget's fields for a form without a schema, so its share link can prefill them.
 var builtinPrefillKeys = []string{fieldName, fieldEmail, "phone", "subject", "message"}
 
-// hostedPageCSP keeps a hosted page to Posta's own script and API. Inline
-// styles are allowed for the page and the widget's shadow root; images may
-// come from any https host for the header image.
+// Inline styles are needed by the widget's shadow root; any https image host is allowed for the header image.
 const hostedPageCSP = "default-src 'none'; script-src 'self'; connect-src 'self'; " +
 	"style-src 'self' 'unsafe-inline'; img-src https: data:; form-action 'none'; " +
 	"frame-ancestors 'none'; base-uri 'none'"
 
-// SetHostedPages enables the hosted form pages. adminEmail is the abuse
-// contact when the platform setting abuse_report_email is empty; workspaces
-// says which workspaces a platform admin has taken offline.
+// adminEmail is the abuse contact when the platform setting abuse_report_email is empty.
 func (h *FormIngestHandler) SetHostedPages(p *settings.Provider, adminEmail string, workspaces *repositories.WorkspaceRepository) {
 	h.settings = p
 	h.abuseFallback = adminEmail
@@ -69,9 +63,7 @@ const (
 	hostedOffWorkspace = "workspace" // a platform admin took the workspace's pages offline
 )
 
-// hostedOffline says why form may not be used from Posta's own domain, or ""
-// when it may. The workspace flag is read on every request, so turning it off
-// takes effect at once, past any cached form.
+// The workspace flag is read on every request, so taking pages offline takes effect past any cached form.
 func hostedOffline(p *settings.Provider, workspaces *repositories.WorkspaceRepository, form *models.Form) string {
 	if p != nil && !p.HostedFormsEnabled() {
 		return hostedOffPlatform
@@ -101,8 +93,6 @@ type hostedPageData struct {
 	AbuseMail   string
 }
 
-// HostedPage serves a form's share link: a page on Posta's own domain that
-// shows the form through the website widget.
 func (h *FormIngestHandler) HostedPage(c *okapi.Context) error {
 	if h.settings == nil || !h.settings.HostedFormsEnabled() {
 		return trackingNotice(c, http.StatusNotFound, "Form not found", "This form does not exist.", "error")
@@ -153,10 +143,7 @@ func abuseMailto(contact, formKey string) string {
 	return "mailto:" + contact + "?" + strings.ReplaceAll(q.Encode(), "+", "%20")
 }
 
-// prefillAttrs turns ?<key>=value into data-value-<key> attributes for the
-// widget. Only declared, non-PII fields are prefilled: a link must not be a
-// way to plant personal data in someone else's submission. Keys come from the
-// schema (lowercase letters, digits, _), so they are safe attribute names.
+// Only declared non-PII fields prefill, so a link can't plant personal data; schema keys are attribute-safe.
 func prefillAttrs(form *models.Form, query url.Values) []template.HTMLAttr {
 	var attrs []template.HTMLAttr
 	add := func(key, value string) {

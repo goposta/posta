@@ -3,9 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { conversationsApi } from "../../api/chat";
 import type { ChatAttachment } from "../../api/types";
 
-// One file in a chat message. The download route needs the workspace header,
-// so the file is fetched through the API client and shown from a blob URL,
-// never from a plain <img src>.
+// The download route needs the workspace header, so the file goes through the API client into a blob URL, never a plain <img src>.
 const props = defineProps<{
   conversation: string;
   messageId: string;

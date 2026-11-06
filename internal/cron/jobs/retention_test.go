@@ -21,8 +21,7 @@ package jobs
 
 import "testing"
 
-// capDays encodes "content never outlives the record": a positive window is
-// clamped to the record window; 0 ("forever") is never capped or used as a cap.
+// capDays encodes "content never outlives the record"; 0 (forever) is never capped or used as a cap.
 func TestCapDays(t *testing.T) {
 	cases := []struct {
 		v, limit, want int
@@ -41,8 +40,7 @@ func TestCapDays(t *testing.T) {
 	}
 }
 
-// minDays encodes "raw .eml never outlives either content window": the shorter
-// finite window wins, and 0 ("forever") means no bound on that side.
+// minDays encodes "raw .eml never outlives either content window"; 0 (forever) bounds nothing.
 func TestMinDays(t *testing.T) {
 	cases := []struct {
 		a, b, want int

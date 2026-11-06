@@ -71,9 +71,7 @@ func (r *WorkspaceRepository) FindByName(name string) (*models.Workspace, error)
 	return &ws, nil
 }
 
-// FindAll returns every workspace, oldest first. Used by platform cron jobs
-// (api-key-expiry, bounce-alert, daily-report) that operate across all
-// workspaces.
+// FindAll returns every workspace oldest first, for platform cron jobs that span all workspaces.
 func (r *WorkspaceRepository) FindAll() ([]models.Workspace, error) {
 	var workspaces []models.Workspace
 	if err := r.db.Order("id ASC").Find(&workspaces).Error; err != nil {
@@ -82,15 +80,13 @@ func (r *WorkspaceRepository) FindAll() ([]models.Workspace, error) {
 	return workspaces, nil
 }
 
-// AdminWorkspaceFilter narrows the platform-wide workspace list.
 type AdminWorkspaceFilter struct {
 	Search  string
 	OwnerID *uint
 	PlanID  *uint
 }
 
-// FindAllFiltered pages through every workspace for the admin console. The
-// system workspace sorts first so it is easy to find, then newest first.
+// FindAllFiltered sorts the system workspace first so it is easy to find, then newest first.
 func (r *WorkspaceRepository) FindAllFiltered(f AdminWorkspaceFilter, limit, offset int) ([]models.Workspace, int64, error) {
 	var items []models.Workspace
 	var total int64
@@ -122,8 +118,7 @@ func (r *WorkspaceRepository) FindAllFiltered(f AdminWorkspaceFilter, limit, off
 	return items, total, nil
 }
 
-// FindByUserID returns all workspaces the user is a member of. The system
-// workspace sorts last so it never displaces a real one at the top of a list.
+// FindByUserID sorts the system workspace last so it never displaces a real one at the top of a list.
 func (r *WorkspaceRepository) FindByUserID(userID uint) ([]models.Workspace, error) {
 	var workspaces []models.Workspace
 	if err := r.db.
@@ -136,7 +131,6 @@ func (r *WorkspaceRepository) FindByUserID(userID uint) ([]models.Workspace, err
 	return workspaces, nil
 }
 
-// FindSystem returns the built-in platform workspace.
 func (r *WorkspaceRepository) FindSystem() (*models.Workspace, error) {
 	var ws models.Workspace
 	if err := r.db.Where("system = ?", true).First(&ws).Error; err != nil {
@@ -156,8 +150,7 @@ func (r *WorkspaceRepository) NameExists(name string, excludeID uint) bool {
 	return count > 0
 }
 
-// CountNonSystemMemberships returns how many ordinary workspaces the user
-// belongs to. Used to refuse deleting somebody's last workspace.
+// CountNonSystemMemberships is used to refuse deleting somebody's last workspace.
 func (r *WorkspaceRepository) CountNonSystemMemberships(userID uint) int64 {
 	var count int64
 	r.db.Model(&models.WorkspaceMember{}).
@@ -167,12 +160,10 @@ func (r *WorkspaceRepository) CountNonSystemMemberships(userID uint) int64 {
 	return count
 }
 
-// AddMember adds a user as a member of a workspace.
 func (r *WorkspaceRepository) AddMember(member *models.WorkspaceMember) error {
 	return r.db.Create(member).Error
 }
 
-// RemoveMember removes a user from a workspace.
 // RemoveMember takes a user out of a workspace, and off its teams with it.
 func (r *WorkspaceRepository) RemoveMember(workspaceID, userID uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
@@ -186,14 +177,12 @@ func (r *WorkspaceRepository) RemoveMember(workspaceID, userID uint) error {
 	})
 }
 
-// UpdateMemberRole updates a member's role in a workspace.
 func (r *WorkspaceRepository) UpdateMemberRole(workspaceID, userID uint, role models.WorkspaceRole) error {
 	return r.db.Model(&models.WorkspaceMember{}).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
 		Update("role", role).Error
 }
 
-// FindMember returns the membership record for a user in a workspace.
 func (r *WorkspaceRepository) FindMember(workspaceID, userID uint) (*models.WorkspaceMember, error) {
 	var member models.WorkspaceMember
 	if err := r.db.Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
@@ -203,7 +192,6 @@ func (r *WorkspaceRepository) FindMember(workspaceID, userID uint) (*models.Work
 	return &member, nil
 }
 
-// ListMembers returns all members of a workspace with their user details.
 func (r *WorkspaceRepository) ListMembers(workspaceID uint) ([]models.WorkspaceMember, error) {
 	var members []models.WorkspaceMember
 	if err := r.db.Preload("User").
@@ -215,7 +203,6 @@ func (r *WorkspaceRepository) ListMembers(workspaceID uint) ([]models.WorkspaceM
 	return members, nil
 }
 
-// CountMembers returns the number of members in a workspace.
 func (r *WorkspaceRepository) CountMembers(workspaceID uint) (int64, error) {
 	var count int64
 	if err := r.db.Model(&models.WorkspaceMember{}).
@@ -226,12 +213,10 @@ func (r *WorkspaceRepository) CountMembers(workspaceID uint) (int64, error) {
 	return count, nil
 }
 
-// CreateInvitation creates a new workspace invitation.
 func (r *WorkspaceRepository) CreateInvitation(inv *models.WorkspaceInvitation) error {
 	return r.db.Create(inv).Error
 }
 
-// FindInvitationByID returns an invitation by its ID.
 func (r *WorkspaceRepository) FindInvitationByID(id uint) (*models.WorkspaceInvitation, error) {
 	var inv models.WorkspaceInvitation
 	if err := r.db.Preload("Workspace").First(&inv, id).Error; err != nil {
@@ -240,7 +225,6 @@ func (r *WorkspaceRepository) FindInvitationByID(id uint) (*models.WorkspaceInvi
 	return &inv, nil
 }
 
-// FindInvitationByToken returns an invitation by its token.
 func (r *WorkspaceRepository) FindInvitationByToken(token string) (*models.WorkspaceInvitation, error) {
 	var inv models.WorkspaceInvitation
 	if err := r.db.Preload("Workspace").Where("token = ?", token).First(&inv).Error; err != nil {
@@ -249,12 +233,10 @@ func (r *WorkspaceRepository) FindInvitationByToken(token string) (*models.Works
 	return &inv, nil
 }
 
-// UpdateInvitation updates an invitation.
 func (r *WorkspaceRepository) UpdateInvitation(inv *models.WorkspaceInvitation) error {
 	return r.db.Save(inv).Error
 }
 
-// ListPendingInvitations returns pending invitations for a workspace.
 func (r *WorkspaceRepository) ListPendingInvitations(workspaceID uint) ([]models.WorkspaceInvitation, error) {
 	var invitations []models.WorkspaceInvitation
 	if err := r.db.Where("workspace_id = ? AND status = ? AND expires_at > ?",
@@ -266,7 +248,6 @@ func (r *WorkspaceRepository) ListPendingInvitations(workspaceID uint) ([]models
 	return invitations, nil
 }
 
-// FindPendingInvitationsByEmail returns pending invitations for a given email.
 func (r *WorkspaceRepository) FindPendingInvitationsByEmail(email string) ([]models.WorkspaceInvitation, error) {
 	var invitations []models.WorkspaceInvitation
 	if err := r.db.Preload("Workspace").
@@ -279,12 +260,10 @@ func (r *WorkspaceRepository) FindPendingInvitationsByEmail(email string) ([]mod
 	return invitations, nil
 }
 
-// DeleteInvitation deletes an invitation.
 func (r *WorkspaceRepository) DeleteInvitation(id uint) error {
 	return r.db.Delete(&models.WorkspaceInvitation{}, id).Error
 }
 
-// CreateDefaultWorkspace creates a default workspace for a user during registration.
 func (r *WorkspaceRepository) CreateDefaultWorkspace(userID uint, displayName, name string) (*models.Workspace, error) {
 	ws := &models.Workspace{
 		Name:        name,

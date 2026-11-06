@@ -28,7 +28,6 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// EventBus provides an in-memory pub/sub for events with database persistence.
 type EventBus struct {
 	repo        *repositories.EventRepository
 	mu          sync.RWMutex
@@ -43,7 +42,6 @@ func New(repo *repositories.EventRepository) *EventBus {
 	}
 }
 
-// Publish persists an event and broadcasts it to all SSE subscribers.
 func (b *EventBus) Publish(event *models.Event) {
 	if err := b.repo.Create(event); err != nil {
 		logger.Error("failed to persist event", "error", err)
@@ -85,7 +83,6 @@ func (b *EventBus) PublishScoped(workspaceID *uint, category models.EventCategor
 	})
 }
 
-// Subscribe returns a channel that receives new events and a function to unsubscribe.
 func (b *EventBus) Subscribe() (<-chan *models.Event, func()) {
 	ch := make(chan *models.Event, 64)
 

@@ -1,6 +1,4 @@
-// The widget's stylesheet, adopted into its shadow root. Sites theme it with
-// --posta-chat-* custom properties set on any ancestor; the workspace's accent
-// colour arrives as --pc-accent from a second, generated sheet.
+// Sites theme it with --posta-chat-* custom properties on any ancestor; the accent arrives as --pc-accent from a second, generated sheet.
 
 export const css = `
 :host{all:initial}
@@ -67,8 +65,7 @@ textarea{flex:1;resize:none;min-height:40px;max-height:120px}
 @media (prefers-reduced-motion:reduce){.panel{animation:none}.launcher{transition:none}}
 `
 
-// adopt styles a shadow root without a <style> element where the browser
-// allows it, so the widget works under a strict style-src CSP.
+// Constructable sheets need no <style> element, so the widget works under a strict style-src CSP.
 export function adopt(root: ShadowRoot, sheets: string[]): void {
   if ('adoptedStyleSheets' in root && typeof CSSStyleSheet === 'function') {
     try {
@@ -91,8 +88,7 @@ export function adopt(root: ShadowRoot, sheets: string[]): void {
 
 const ACCENT = /^#[0-9a-fA-F]{6}$/
 
-// accentSheet sets the workspace's accent colour, which the server already
-// validated; it is checked again because it lands in a stylesheet.
+// The server already validated the accent; it is checked again because it lands in a stylesheet.
 export function accentSheet(color?: string): string {
   return color && ACCENT.test(color) ? `.pc{--pc-accent:${color}}` : ''
 }

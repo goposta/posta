@@ -111,8 +111,7 @@ func TestProcessTaskAppliesRulesOnce(t *testing.T) {
 	if !reflect.DeepEqual(d.direct, []uint{9}) {
 		t.Errorf("rule webhook dispatched to %v", d.direct)
 	}
-	// Default route (admins) plus the team: its member and its address.
-	// The owner is already among the admins.
+	// Default route (admins) plus the team's member and address; the owner is already among the admins.
 	if !reflect.DeepEqual(n.sent, []string{"admins", "to:sales@acme.com", "user"}) || !reflect.DeepEqual(n.users, []uint{8}) {
 		t.Errorf("sent %v users %v", n.sent, n.users)
 	}
@@ -159,8 +158,7 @@ func TestProcessTaskNoMatchKeepsDefault(t *testing.T) {
 }
 
 func TestRulesNeedALicense(t *testing.T) {
-	// Without a license the rules are skipped: the form's recipients get the
-	// submission, and it stays unrouted for when a license is installed.
+	// Unlicensed, rules are skipped: the form's recipients get it, and it stays unrouted for a later license.
 	h, store, d, n, rules := routedFixture(false)
 	h.edition = enterprisetest.Community
 	if err := h.ProcessTask(context.Background(), processTask(t)); err != nil {

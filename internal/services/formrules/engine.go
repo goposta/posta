@@ -17,8 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package formrules decides where a form submission goes. It is pure: no I/O
-// and no clock, so the worker, the digest and the dry run all agree.
+// Package formrules is pure, with no I/O or clock, so the worker, the digest and the dry run all agree.
 package formrules
 
 import (
@@ -32,7 +31,6 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// Built-in facts a condition can test besides the answers.
 const (
 	FactOrigin      = "$origin"
 	FactReferer     = "$referer"
@@ -41,22 +39,19 @@ const (
 	FactStatus      = "$status"
 )
 
-// Facts is what rules can see of a submission.
 type Facts struct {
 	Status      models.MessageStatus
 	SpamScore   float64
 	Origin      string
 	Referer     string
 	SenderEmail string
-	// Data holds typed answers (forms with questions); Fields the submitted
-	// values by key, for forms without.
+	// Data holds typed answers for forms with questions; Fields the submitted values by key for forms without.
 	Data   map[string]any
 	Fields map[string]string
 	// Schema types the answers, so "10" > "9" compares as numbers.
 	Schema map[string]*models.FieldDef
 }
 
-// FactsFor reads the facts of a stored submission.
 func FactsFor(msg *models.Message, form *models.Form) Facts {
 	f := Facts{
 		Status:      msg.Status,
@@ -89,14 +84,12 @@ func FactsFor(msg *models.Message, form *models.Form) Facts {
 	return f
 }
 
-// Recipient is one destination of a notification, chosen by an admin.
 type Recipient struct {
 	Email  string `json:"email,omitempty"`
 	UserID uint   `json:"user_id,omitempty"`
 	TeamID uint   `json:"team_id,omitempty"`
 }
 
-// Outcome is what the matching rules decided.
 type Outcome struct {
 	Notify          []Recipient `json:"notify,omitempty"`
 	AssignUser      *uint       `json:"assign_user,omitempty"`
@@ -108,13 +101,11 @@ type Outcome struct {
 	Matched         []string    `json:"matched,omitempty"`
 }
 
-// Routable reports whether a submission is routed at all. Spam keeps the
-// old behaviour: no notification, no routing.
+// Spam is never routed and gets no notification.
 func Routable(status models.MessageStatus) bool {
 	return status == models.MessageStatusReceived || status == models.MessageStatusFlagged
 }
 
-// Ordered returns the enabled rules in evaluation order.
 func Ordered(rules []models.FormRule) []models.FormRule {
 	out := make([]models.FormRule, 0, len(rules))
 	for _, r := range rules {
@@ -131,8 +122,7 @@ func Ordered(rules []models.FormRule) []models.FormRule {
 	return out
 }
 
-// Evaluate runs the rules over a submission. Every matching rule applies, in
-// Position order, until one with Stop matches.
+// Every matching rule applies in Position order until one with Stop matches.
 func Evaluate(rules []models.FormRule, facts Facts) Outcome {
 	if !Routable(facts.Status) {
 		return Outcome{}
@@ -150,9 +140,7 @@ func Evaluate(rules []models.FormRule, facts Facts) Outcome {
 	return merge(matched)
 }
 
-// Combine rebuilds the outcome of rules that already matched, in their
-// order, from their current actions. The worker uses it on a retry and the
-// digest at send time, so neither re-evaluates against changed rules.
+// Combine rebuilds a past outcome from current actions so retries and digests never re-evaluate changed rules.
 func Combine(rules []models.FormRule, matched []string) Outcome {
 	want := make(map[string]bool, len(matched))
 	for _, id := range matched {
@@ -169,8 +157,7 @@ func Combine(rules []models.FormRule, matched []string) Outcome {
 
 var priorityRank = map[string]int{"low": 1, "normal": 2, "high": 3, "urgent": 4}
 
-// merge folds the actions of matched rules: recipients, tags and webhooks are
-// a union, the first assignment wins, and the highest priority wins.
+// Recipients, tags and webhooks are a union; the first assignment wins, and the highest priority wins.
 func merge(matched []models.FormRule) Outcome {
 	var o Outcome
 	seenRecipient := map[Recipient]bool{}
@@ -232,8 +219,7 @@ func merge(matched []models.FormRule) Outcome {
 	return o
 }
 
-// Matches reports whether a rule's conditions hold. A rule without
-// conditions always matches.
+// A rule without conditions always matches.
 func Matches(r *models.FormRule, facts Facts) bool {
 	if len(r.Conditions) == 0 {
 		return true
@@ -251,7 +237,6 @@ func Matches(r *models.FormRule, facts Facts) bool {
 	return !any
 }
 
-// value is a fact as rules see it: text, a number, a boolean, or a list.
 type value struct {
 	present bool
 	text    string
@@ -342,7 +327,6 @@ func toString(x any) string {
 	return string(raw)
 }
 
-// wanted reads a condition's value as a list of strings.
 func wanted(v any) []string {
 	switch t := v.(type) {
 	case nil:
@@ -394,8 +378,7 @@ func same(a, b string, exact bool) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
-// equalAny: for a list answer (checkboxes), any overlap; for a boolean, true
-// or false; for a number, numeric equality; otherwise text.
+// equalAny: list answers match on any overlap; booleans, numbers and text compare by kind.
 func equalAny(v value, want []string) bool {
 	for _, w := range want {
 		switch {
@@ -442,8 +425,7 @@ func containsAny(v value, want []string) bool {
 	return false
 }
 
-// compare orders numbers numerically, and dates and times as text, which
-// sorts YYYY-MM-DD and HH:MM correctly.
+// Dates and times compare as text, which sorts YYYY-MM-DD and HH:MM correctly.
 func compare(v value, w string, op string) bool {
 	var cmp int
 	if n, err := strconv.ParseFloat(strings.TrimSpace(w), 64); err == nil && v.num != nil {
@@ -467,8 +449,6 @@ func compare(v value, w string, op string) bool {
 	return cmp <= 0
 }
 
-// The comparison operators: numbers, dates and times compare as such, other
-// values as text.
 const (
 	opGT  = "gt"
 	opGTE = "gte"
@@ -478,8 +458,7 @@ const (
 
 var regexCache sync.Map // pattern → *regexp.Regexp (nil when it does not compile)
 
-// compiled returns the case-insensitive regexp for pattern. Patterns are
-// checked when a rule is saved; one that no longer compiles never matches.
+// Patterns are checked when a rule is saved; one that no longer compiles never matches.
 func compiled(pattern string) *regexp.Regexp {
 	if cached, ok := regexCache.Load(pattern); ok {
 		re, _ := cached.(*regexp.Regexp)

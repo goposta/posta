@@ -29,7 +29,6 @@ const (
 	TrackingEventUnsubscribe TrackingEventType = "unsubscribe"
 )
 
-// TrackedLink stores rewritten links for click tracking.
 type TrackedLink struct {
 	ID          uint      `json:"id" gorm:"primaryKey"`
 	CampaignID  uint      `json:"campaign_id" gorm:"index;not null"`
@@ -41,7 +40,6 @@ type TrackedLink struct {
 	Campaign Campaign `json:"-" gorm:"foreignKey:CampaignID"`
 }
 
-// TrackingEvent records individual open/click/unsubscribe events.
 type TrackingEvent struct {
 	ID                uint              `json:"id" gorm:"primaryKey"`
 	CampaignMessageID uint              `json:"campaign_message_id" gorm:"index;not null"`

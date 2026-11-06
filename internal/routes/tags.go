@@ -19,10 +19,7 @@
 
 package routes
 
-// OpenAPI tag names. A tag groups routes in the generated specification, so
-// every route in a group has to spell it identically — renaming one of a dozen
-// literals silently splits the group in two. They live here because several are
-// used from more than one route file.
+// Every route in a tag group must spell the tag identically, or renaming one literal silently splits the group.
 const (
 	tagAdmin                 = "Admin"
 	tagCampaigns             = "Campaigns"
@@ -43,8 +40,7 @@ const (
 	tagWorkspaces            = "Workspaces"
 )
 
-// Tag descriptions that appear in more than one route file. Duplicated prose
-// drifts; a group whose description differs per file renders unpredictably.
+// Shared so descriptions cannot drift: a group whose description differs per file renders unpredictably.
 const (
 	descAdmin             = "Platform-level administration: users, workspaces, global settings, OAuth providers, and live event streams. Admin-only."
 	descOAuth             = "Single sign-on via external identity providers (Google, GitHub, generic OIDC). Covers public flow, user-account linking, admin provider config, and workspace SSO enforcement."

@@ -24,43 +24,25 @@ import (
 	"strings"
 )
 
-// Canonical reserved variable names.
 const (
 	VarWebView      = "posta_web_view_url"
 	VarWebViewAlias = "posta_mail_web_link"
 	VarUnsubscribe  = "posta_unsubscribe_url"
 )
 
-// Posta reserves the {{ posta_* }} template-variable namespace for system values
-// it injects itself (the hosted "view in browser" link, the unsubscribe link, …).
-//
-// These values are per-message, but a template is often rendered once and reused
-// across many recipients (e.g. campaigns render once per language). So rendering
-// does not substitute the real URL — it substitutes a stable *sentinel*, which is
-// then replaced per message once the email identity (UUID / id) is known
-// (SubstituteSystemLinks).
-//
-// The sentinels are written as root-relative URLs so that:
-//   - html/template's URL filter passes them through unchanged (no #ZgotmplZ),
-//   - premailer leaves them alone during CSS inlining,
-//   - the campaign click-rewriter (which only matches http(s):// hrefs) ignores them.
+// Sentinels are root-relative URLs so html/template, premailer and the http(s)-only click rewriter pass them through.
 const (
 	sentinelWebView     = "/__posta_web_view__"
 	sentinelUnsubscribe = "/__posta_unsubscribe__"
 )
 
-// Canonical template variable names and their documented aliases. All map to a
-// sentinel; unknown {{ posta_* }} vars are not injected (and will render empty
-// under missingkey=zero, or error under missingkey=error — by design, reserved).
+// Unknown {{ posta_* }} vars are not injected, so they render empty or error under missingkey: reserved by design.
 var systemVarSentinels = map[string]any{
 	VarWebView:      sentinelWebView,
 	VarWebViewAlias: sentinelWebView, // alias for posta_web_view_url
 	VarUnsubscribe:  sentinelUnsubscribe,
 }
 
-// SystemVarNames returns the reserved {{ posta_* }} variable names (canonical and
-// aliases), sorted. Useful for editor/template-view surfaces that advertise the
-// available variables.
 func SystemVarNames() []string {
 	names := make([]string, 0, len(systemVarSentinels))
 	for k := range systemVarSentinels {
@@ -70,11 +52,7 @@ func SystemVarNames() []string {
 	return names
 }
 
-// WithSystemVarNames returns a copy of data with each reserved {{ posta_* }}
-// variable present but set to its own name. Used by previews / template views
-// where no real message exists: the template renders without missing-key errors
-// and the author sees which system variable sits where, without any generated
-// URL/data.
+// WithSystemVarNames sets each reserved variable to its own name, for previews where no real message exists.
 func WithSystemVarNames(data map[string]any) map[string]any {
 	out := make(map[string]any, len(data)+len(systemVarSentinels))
 	for k, v := range data {
@@ -86,7 +64,6 @@ func WithSystemVarNames(data map[string]any) map[string]any {
 	return out
 }
 
-// WithSystemVars returns a copy of data with the reserved posta_* variables added.
 // System values are written last so user-supplied data cannot shadow them.
 func WithSystemVars(data map[string]any) map[string]any {
 	out := make(map[string]any, len(data)+len(systemVarSentinels))
@@ -99,15 +76,11 @@ func WithSystemVars(data map[string]any) map[string]any {
 	return out
 }
 
-// HasSystemSentinels reports whether s still contains any unresolved sentinel,
-// so callers can skip the substitution+update when a template uses no system vars.
 func HasSystemSentinels(s string) bool {
 	return strings.Contains(s, sentinelWebView) || strings.Contains(s, sentinelUnsubscribe)
 }
 
-// SubstituteSystemLinks replaces the reserved sentinels with the real per-message
-// URLs. An empty URL (e.g. a disabled feature) removes the sentinel rather than
-// leaving a broken root-relative link in the message.
+// An empty URL removes the sentinel rather than leaving a broken root-relative link.
 func SubstituteSystemLinks(s, webViewURL, unsubscribeURL string) string {
 	if s == "" {
 		return s

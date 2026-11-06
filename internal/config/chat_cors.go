@@ -26,20 +26,9 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ChatAPIPrefix is where the public live chat API lives.
 const ChatAPIPrefix = "/api/v1/chat/"
 
-// ChatPreflight answers CORS preflights for the public chat API, which
-// websites Posta does not know call with an Authorization header.
-//
-// The global CORS handler would refuse them: it allows the dashboard's
-// origins only, and it answers preflights before any route runs. Which
-// origins may use a chat widget is the widget's own allowlist, and a
-// preflight does not say which widget it is for in a way worth a database
-// read, so this one allows any origin. That grants nothing: every real
-// request checks the widget's allowlist before acting, answers a foreign
-// origin without CORS headers, and the API uses no cookies, so the browser
-// never sends credentials and Access-Control-Allow-Credentials is never set.
+// ChatPreflight allows any origin: every real chat request checks its widget's allowlist and no credentials are used.
 func ChatPreflight(c *okapi.Context) error {
 	r := c.Request()
 	if r.Method != http.MethodOptions || !strings.HasPrefix(r.URL.Path, ChatAPIPrefix) {

@@ -10,7 +10,6 @@ import type {
 } from './types'
 
 export const oauthApi = {
-  // Public
   providers() {
     return api.get<ApiResponse<{ providers: OAuthProviderInfo[]; sso_available: boolean }>>('/auth/oauth/providers')
   },
@@ -18,7 +17,6 @@ export const oauthApi = {
     return api.post<ApiResponse<SSODiscovery>>('/auth/oauth/discover', { email })
   },
 
-  // Linked accounts (authenticated user)
   linkedAccounts() {
     return api.get<ApiResponse<OAuthLinkedAccount[]>>('/users/me/oauth')
   },
@@ -26,7 +24,6 @@ export const oauthApi = {
     return api.delete<ApiResponse<{ message: string }>>(`/users/me/oauth/${providerID}`)
   },
 
-  // Admin: provider management
   adminList() {
     return api.get<ApiResponse<OAuthProviderAdmin[]>>('/admin/oauth/providers')
   },
@@ -40,7 +37,6 @@ export const oauthApi = {
     return api.delete(`/admin/oauth/providers/${id}`)
   },
 
-  // Workspace SSO
   getSSO() {
     return api.get<ApiResponse<WorkspaceSSOConfig | null>>('/workspaces/current/sso')
   },

@@ -66,14 +66,11 @@ type MessageWebhookPayload struct {
 	TeamID        *uint                 `json:"team_id,omitempty"`
 	AssignedToID  *uint                 `json:"assigned_to_id,omitempty"`
 	MatchedRules  []string              `json:"matched_rules,omitempty"`
-	// RedactedFields lists the personal-data answers left out because the
-	// form redacts them from webhooks, so a receiver can tell a removed
-	// answer from one never given.
+	// RedactedFields lets a receiver tell a redacted personal-data answer from one never given.
 	RedactedFields []string `json:"redacted_fields,omitempty"`
 }
 
-// redactPII strips answers to personal-data questions from a payload, and
-// the summary values those questions fill.
+// redactPII strips personal-data answers from a payload, and the summary values those questions fill.
 func redactPII(body *MessageWebhookPayload, form *models.Form) {
 	mask := messages.NewPIIMask(form.Fields)
 	if !form.RedactPIIInWebhooks || mask.Empty() {
@@ -113,8 +110,7 @@ func redactPII(body *MessageWebhookPayload, form *models.Form) {
 	}
 }
 
-// messageStore is the slice of MessageRepository the worker needs; an interface
-// so the retry semantics can be tested without a database.
+// messageStore is an interface so the retry semantics can be tested without a database.
 type messageStore interface {
 	FindByID(id uint) (*models.Message, error)
 	UpdateFields(id uint, fields map[string]any) error
@@ -191,8 +187,7 @@ func NewMessageProcessHandler(
 
 func (h *MessageProcessHandler) OnNotified(fn func()) { h.onNotified = fn }
 
-// SetRouting enables a form's routing rules. Rules are a Posta Enterprise
-// feature: without a license, submissions go to the form's recipients.
+// SetRouting enables routing rules; without an Enterprise license submissions go to the form's recipients.
 func (h *MessageProcessHandler) SetRouting(edition enterprise.EE, rules *repositories.FormRuleRepository, dir formrules.Directory) {
 	if rules != nil {
 		h.rules = rules
@@ -200,13 +195,9 @@ func (h *MessageProcessHandler) SetRouting(edition enterprise.EE, rules *reposit
 	h.directory, h.edition = dir, edition
 }
 
-// SetRealtime enables live dashboard events for processed messages.
 func (h *MessageProcessHandler) SetRealtime(b realtime.Bus) { h.realtime = b }
 
-// ProcessTask fans a stored submission out to webhooks, the live dashboard, and
-// notification email. It is safe to retry: the webhook hand-off and the
-// notification are each recorded once done and skipped on a later attempt, and
-// a failed notification returns an error so Asynq retries it.
+// ProcessTask is retry-safe: the webhook hand-off and notification are each recorded once done, then skipped.
 func (h *MessageProcessHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	var payload MessageProcessPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -267,11 +258,7 @@ func (h *MessageProcessHandler) shouldNotify(msg *models.Message, form *models.F
 	return true
 }
 
-// route applies the form's rules to a submission once: assignment, team,
-// tags, priority and the matched rules are stored, and the outcome is
-// returned for the webhooks and notifications that follow. On a retry the
-// stored matches are replayed instead of re-evaluated, so a rule edited in
-// between cannot route the same submission twice.
+// On retry, route replays the stored matches instead of re-evaluating, so an edited rule cannot route twice.
 func (h *MessageProcessHandler) route(msg *models.Message, form *models.Form) formrules.Outcome {
 	if h.rules == nil || h.edition == nil || !h.edition.Licensed() || !formrules.Routable(msg.Status) {
 		return formrules.Outcome{}
@@ -350,8 +337,7 @@ func mergeTags(current, add []string) []string {
 
 var priorityRank = map[string]int{"low": 1, "normal": 2, "high": 3, "urgent": 4}
 
-// higherPriority: a rule only raises priority, so it never quietens a
-// submission an operator already marked urgent.
+// A rule only raises priority, never quietening a submission an operator already marked urgent.
 func higherPriority(candidate, current string) bool {
 	if current == "" {
 		current = string(models.MessagePriorityNormal)
@@ -438,8 +424,7 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form, o
 		subject = fmt.Sprintf("Flagged %s on %s", noun, form.DisplayName)
 	}
 
-	// Answers to personal-data questions stay out of email: inboxes are
-	// forwarded, synced and searched far beyond the workspace.
+	// Personal-data answers stay out of email: inboxes are forwarded, synced and searched beyond the workspace.
 	mask := messages.NewPIIMask(form.Fields)
 	phone := msg.SenderPhone
 	if mask.Value(models.RoleSenderPhone, phone) != phone {
@@ -459,10 +444,7 @@ func (h *MessageProcessHandler) notify(msg *models.Message, form *models.Form, o
 	return h.sendRouted(msg, form, outcome, subject, data)
 }
 
-// sendRouted notifies the form's default route, unless a rule suppressed it,
-// and the recipients the rules added. It returns the last error, so a retry
-// may repeat a notification that already went out; that beats one never
-// arriving.
+// sendRouted returns the last error, so a retry may repeat a sent notification; that beats one never arriving.
 func (h *MessageProcessHandler) sendRouted(msg *models.Message, form *models.Form, outcome formrules.Outcome, subject string, data map[string]any) error {
 	res := formrules.Resolved{Default: true}
 	if h.directory != nil {
@@ -492,10 +474,7 @@ func (h *MessageProcessHandler) sendRouted(msg *models.Message, form *models.For
 	return lastErr
 }
 
-// sendToFormRecipients delivers to the form's explicit notification list, or
-// to the workspace owners and admins when the list is empty. With several
-// addresses it returns the last error: a retry may then repeat a notification
-// to an address that already got it, which beats one never arriving.
+// An empty list means workspace owners and admins; the last error is returned, as a repeat beats a lost notice.
 func (h *MessageProcessHandler) sendToFormRecipients(msg *models.Message, form *models.Form, subject string, data map[string]any) error {
 	h.addWorkspaceName(msg, data)
 	if len(form.NotifyEmails) > 0 {
@@ -580,13 +559,7 @@ func cloneData(in map[string]any) map[string]any {
 	return out
 }
 
-// ProcessReplyTask sends the follow-up for one thread reply: the
-// message.replied webhook for an operator reply, or message.reply_received and
-// a notification for the submitter's emailed answer.
-//
-// The webhook goes out on the first attempt only. Dispatch hands off to the
-// dispatcher's own retrying goroutine and cannot fail here, so only the
-// notification can make the task retry, and a retry must not re-fire it.
+// The webhook fires on the first attempt only, so only the notification can make this task retry.
 func (h *MessageProcessHandler) ProcessReplyTask(ctx context.Context, t *asynq.Task) error {
 	var payload MessageReplyPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -647,8 +620,7 @@ func (h *MessageProcessHandler) dispatchReply(msg *models.Message, form *models.
 		SenderMismatch: reply.SenderMismatch,
 		CreatedAt:      reply.CreatedAt.UTC().Format(time.RFC3339),
 	}
-	// The thread is free text, not answers, but the submitter's address is
-	// one when it came from a personal-data question.
+	// The thread is free text, but the submitter's address is PII when a personal-data question supplied it.
 	if form.RedactPIIInWebhooks && messages.NewPIIMask(form.Fields).Hides(models.RoleSenderEmail) {
 		if reply.Kind == models.MessageReplyKindInbound {
 			body.From = ""
@@ -664,14 +636,12 @@ func (h *MessageProcessHandler) dispatchReply(msg *models.Message, form *models.
 	h.dispatcher.DispatchJSON(0, msg.WorkspaceID, event, encoded, reply.FromAddr)
 }
 
-// shouldNotifyReply follows the form's notification switch, but not its digest
-// mode: an answer on a thread someone is working is time-sensitive.
+// shouldNotifyReply ignores digest mode: an answer on a thread someone is working is time-sensitive.
 func (h *MessageProcessHandler) shouldNotifyReply(msg *models.Message, form *models.Form) bool {
 	return form.NotifyEnabled && form.NotifyMode != models.NotifyModeOff && !msg.IsSpam()
 }
 
-// notifyReply tells the assignee, or the form's usual recipients when nobody
-// is assigned, that the submitter answered.
+// notifyReply tells the assignee, or the form's usual recipients when nobody is assigned.
 func (h *MessageProcessHandler) notifyReply(msg *models.Message, form *models.Form, reply *models.MessageReply) error {
 	if h.notifier == nil || !h.notifier.IsConfigured() {
 		return nil

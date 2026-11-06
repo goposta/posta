@@ -21,15 +21,13 @@ package messages
 
 import "github.com/goposta/posta/internal/models"
 
-// Page is one page of a form: the section that opens it (nil for the first
-// page, before any section) and its active questions, in order.
+// Page holds a form page's opening section (nil for the first page) and its active questions.
 type Page struct {
 	Section   *models.FieldDef
 	Questions []*models.FieldDef
 }
 
-// Pages splits a schema's active entries into pages. A form without sections
-// is one page.
+// A form without sections is one page.
 func Pages(defs models.FieldDefs) []Page {
 	pages := []Page{{}}
 	for i := range defs {
@@ -51,14 +49,7 @@ func Pages(defs models.FieldDefs) []Page {
 	return pages
 }
 
-// Route walks a form the way a respondent moves through it and returns the
-// keys of the questions on the pages they reached. answer gives a question's
-// first submitted value. Hidden questions are always included: an embed sets
-// them, they sit on no page.
-//
-// After each page the respondent goes where the chosen option of a branching
-// question points, else where the section's Next points, else to the next
-// page. Targets only ever lie ahead (CheckSchema), so the walk ends.
+// Hidden questions are always included, and targets only lie ahead (CheckSchema), so the walk ends.
 func Route(defs models.FieldDefs, answer func(key string) string) map[string]bool {
 	pages := Pages(defs)
 	index := make(map[string]int, len(pages))
@@ -102,8 +93,6 @@ func Route(defs models.FieldDefs, answer func(key string) string) map[string]boo
 	return reached
 }
 
-// branchTarget is where answering q with value leads, or "" when q does not
-// branch on that value.
 func branchTarget(q *models.FieldDef, value string) string {
 	if q.Type != models.FieldSelect || value == "" {
 		return ""
@@ -116,7 +105,6 @@ func branchTarget(q *models.FieldDef, value string) string {
 	return ""
 }
 
-// branches reports whether any option of q leads somewhere.
 func branches(q *models.FieldDef) bool {
 	for _, o := range q.Options {
 		if o.Goto != "" {
@@ -126,9 +114,7 @@ func branches(q *models.FieldDef) bool {
 	return false
 }
 
-// BranchTargets lists a schema's branching, keyed by where each target is
-// set: "section:<key>" for a section's Next, "option:<question>=<value>" for
-// an option's Goto. It is empty when the form does not branch.
+// Keys are "section:<key>" for a section's Next and "option:<question>=<value>" for an option's Goto.
 func BranchTargets(defs models.FieldDefs) map[string]string {
 	out := map[string]string{}
 	for _, d := range defs {

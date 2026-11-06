@@ -30,9 +30,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// workspaceRoutes returns route definitions for workspace management.
 func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
-	// Routes that don't require workspace context (user-level)
 	userGroup := r.v1.Group("/workspaces", r.mw.jwtOnly).WithTagInfo(okapi.GroupTag{
 		Name:        tagWorkspaces,
 		Description: "Create workspaces, manage members and invitations, and configure workspace-scoped settings. Creating and listing workspaces is account-level and requires a dashboard session.",
@@ -67,7 +65,6 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 		},
 	}...)
 
-	// Workspace-scoped routes (require workspace context via middleware)
 	wsGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspace).WithTagInfo(okapi.GroupTag{
 		Name:        tagWorkspaces,
 		Description: descWorkspacesWithSSO,
@@ -116,7 +113,6 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// Members
 		{
 			Method:   http.MethodGet,
 			Path:     "/members",
@@ -128,7 +124,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPut,
-			Path:        "/members/{member_id:int}",
+			Path:        "/members/{member_id}",
 			Handler:     okapi.H(r.h.workspace.UpdateMemberRole),
 			Group:       wsGroup,
 			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
@@ -143,7 +139,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/members/{member_id:int}",
+			Path:        "/members/{member_id}",
 			Handler:     okapi.H(r.h.workspace.RemoveMember),
 			Group:       wsGroup,
 			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
@@ -156,7 +152,6 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// Invitations (workspace-scoped)
 		{
 			Method:  http.MethodPost,
 			Path:    "/invitations",
@@ -201,7 +196,6 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// Plan
 		{
 			Method:      http.MethodGet,
 			Path:        "/plan",
@@ -213,7 +207,6 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 
-		// Operational settings
 		{
 			Method:      http.MethodGet,
 			Path:        pathSettings,
@@ -237,7 +230,6 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 
-		// Audit log (workspace-scoped): events WHERE workspace_id = ? AND category = 'audit'.
 		{
 			Method:      http.MethodGet,
 			Path:        "/audit-log",
@@ -252,7 +244,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/audit-log/{id:int}",
+			Path:        "/audit-log/{id}",
 			Handler:     okapi.H(r.h.event.WorkspaceAuditLogDetail),
 			Group:       wsGroup,
 			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
@@ -263,8 +255,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 
-		// Data Export/Import — a full tenant dump and a bulk overwrite, so both
-		// are admin/owner only rather than ordinary workspace content.
+		// A full tenant dump and a bulk overwrite, so admin/owner only rather than ordinary workspace content.
 		{
 			Method:  http.MethodGet,
 			Path:    "/data/export",
@@ -295,7 +286,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},
 
-		// Data Management (GDPR) — destructive, admin/owner only.
+		// GDPR data management is destructive, so admin/owner only.
 		{
 			Method:      http.MethodPost,
 			Path:        "/gdpr/delete-contacts",
@@ -358,7 +349,6 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 		},
 	}...)
 
-	// User-level invitation actions (no workspace context needed)
 	invGroup := r.v1.Group("/invitations", r.mw.jwtOnly).WithTagInfo(okapi.GroupTag{
 		Name:        tagWorkspaces,
 		Description: descWorkspacesWithSSO,
@@ -397,7 +387,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/{id:int}/accept",
+			Path:        "/{id}/accept",
 			Handler:     okapi.H(r.h.workspace.AcceptInvitationByID),
 			Group:       invGroup,
 			Summary:     "Accept invitation by ID",
@@ -409,7 +399,7 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/{id:int}/decline",
+			Path:        "/{id}/decline",
 			Handler:     okapi.H(r.h.workspace.DeclineInvitationByID),
 			Group:       invGroup,
 			Summary:     "Decline invitation by ID",
@@ -424,5 +414,4 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 	return routes
 }
 
-// Ignore unused imports for linting
 var _ = models.WorkspaceRoleOwner

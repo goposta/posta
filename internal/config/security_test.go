@@ -25,8 +25,7 @@ import (
 	"testing"
 )
 
-// strongSecret is a stand-in for a real generated value. It is not a credential
-// for anything: it exists only to be long enough and not a known placeholder.
+// strongSecret is not a credential: it only needs to be long and not a known placeholder.
 const strongSecret = "b7f4c1a9e35d820647fbca1e9d7350af26bc4d1e8f09a3b5c7d2e4f60819a3bc"
 
 func TestIsProduction(t *testing.T) {
@@ -47,8 +46,7 @@ func TestIsProduction(t *testing.T) {
 	}
 }
 
-// A non-production deployment must keep booting on the shipped defaults —
-// that is the quick-start path, and breaking it would be a regression.
+// The shipped defaults are the quick-start path, so non-production must keep booting on them.
 func TestValidateSecurity_DevAcceptsDefaults(t *testing.T) {
 	c := &Config{
 		Env:           "dev",
@@ -60,8 +58,7 @@ func TestValidateSecurity_DevAcceptsDefaults(t *testing.T) {
 	}
 }
 
-// A secret that is public knowledge is no secret at all, so production refuses
-// to start on one.
+// A publicly known secret is no secret, so production refuses to start on one.
 func TestValidateSecurity_ProductionRejectsPublicJWTSecret(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -88,8 +85,7 @@ func TestValidateSecurity_ProductionRejectsPublicJWTSecret(t *testing.T) {
 	}
 }
 
-// A short but operator-chosen secret is not published anywhere. It is reported,
-// but it must not brick a running deployment on upgrade.
+// A short operator-chosen secret is reported but must not brick a running deployment on upgrade.
 func TestValidateSecurity_ProductionWarnsOnShortJWTSecret(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -113,7 +109,6 @@ func TestValidateSecurity_ProductionWarnsOnShortJWTSecret(t *testing.T) {
 	}
 }
 
-// The boundary itself must be accepted without complaint.
 func TestValidateSecurity_MinimumLengthSecretIsClean(t *testing.T) {
 	c := &Config{
 		Env:           "production",
@@ -143,9 +138,7 @@ func TestValidateSecurity_ProductionAcceptsStrongSecret(t *testing.T) {
 	}
 }
 
-// A placeholder admin password must not block startup: an upgraded install
-// changed the password in-app long ago and may never set the variable. The
-// check belongs at the point of seeding instead.
+// Upgraded installs changed the admin password in-app, so the check belongs at seeding, not startup.
 func TestValidateSecurity_ProductionAllowsPlaceholderAdminPassword(t *testing.T) {
 	c := &Config{
 		Env:           "production",
@@ -157,8 +150,7 @@ func TestValidateSecurity_ProductionAllowsPlaceholderAdminPassword(t *testing.T)
 	}
 }
 
-// Nor must an unset encryption key or a wildcard CORS policy, which need a
-// migration and a deployment decision respectively.
+// An unset encryption key or wildcard CORS needs a migration or a deployment decision, so it only warns.
 func TestValidateSecurity_ProductionAllowsAdvisoryProblems(t *testing.T) {
 	c := &Config{
 		Env:           "production",
@@ -210,9 +202,7 @@ func TestValidateAdminSeedPassword(t *testing.T) {
 	}
 }
 
-// The defaults compiled into Load must themselves be the ones the production
-// check rejects. If someone changes a default, this catches a silent drift
-// between the shipped value and the value the guard knows to refuse.
+// Catches drift between a shipped default and the value the production guard refuses.
 func TestShippedDefaultsAreRejectedInProduction(t *testing.T) {
 	c := &Config{
 		Env:           "production",
@@ -253,9 +243,7 @@ func TestValidateWorkerAcceptsAUsableConfig(t *testing.T) {
 	}
 }
 
-// A worker with no queue or no concurrency is not degraded, it is a process
-// that looks healthy and silently does nothing, so these refuse outside
-// production too.
+// A worker with no queue or concurrency looks healthy but does nothing, so it refuses outside production too.
 func TestValidateWorkerRefusesAWorkerThatCannotWork(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -296,8 +284,7 @@ func TestValidateWorkerAcceptsARedisURL(t *testing.T) {
 	}
 }
 
-// The worker seeds no admin, serves no HTTP, and exposes no form endpoint, so
-// none of those should be able to stop it starting or clutter its logs.
+// The worker seeds no admin, serves no HTTP and exposes no form endpoint, so those checks must not apply.
 func TestWorkerProblemsDropServerOnlyChecks(t *testing.T) {
 	cfg := workerConfig()
 	cfg.AdminPassword = "admin1234"
@@ -325,8 +312,7 @@ func TestWorkerProblemsDropServerOnlyChecks(t *testing.T) {
 	}
 }
 
-// Messages are processed by the worker, and their notification needs system
-// SMTP. Advisory, not fatal: the submission is still stored.
+// Messages need system SMTP for their notification; advisory, since the submission is still stored.
 func TestWorkerWarnsWhenMessagesHaveNoNotificationPath(t *testing.T) {
 	cfg := workerConfig()
 	cfg.MessagesEnabled = true
@@ -348,9 +334,7 @@ func TestWorkerWarnsWhenMessagesHaveNoNotificationPath(t *testing.T) {
 	}
 }
 
-// Without trusted proxies the forwarded headers are spoofable, which matters
-// for rate limiting and allow-lists but is a deployment decision, not a reason
-// to refuse to start.
+// Spoofable forwarded headers are a deployment decision, so missing trusted proxies only warns.
 func TestTrustedProxiesAdvisory(t *testing.T) {
 	c := &Config{Env: "production", JWTSecret: strongSecret, AdminPassword: strongSecret}
 	if !hasProblem(c.securityProblems(), "POSTA_TRUSTED_PROXIES") {
@@ -366,8 +350,7 @@ func TestTrustedProxiesAdvisory(t *testing.T) {
 	}
 }
 
-// okapi trusts no proxy at all when one entry is invalid, so a typo must stop
-// the boot rather than collapse every client onto the proxy's address.
+// okapi trusts no proxy when one entry is invalid, so a typo must stop the boot.
 func TestValidateRejectsInvalidTrustedProxy(t *testing.T) {
 	for _, tc := range []struct {
 		entries []string

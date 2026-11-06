@@ -28,11 +28,8 @@ import (
 )
 
 var (
-	// ErrQuotaExceeded means a counter went over its limit.
 	ErrQuotaExceeded = errors.New("quota exceeded")
-	// ErrQuotaUnavailable means a counter could not be read. Public endpoints
-	// treat it as exceeded: one that stops accepting is better than one that
-	// stops limiting.
+	// ErrQuotaUnavailable is treated as exceeded by public endpoints: better to stop accepting than stop limiting.
 	ErrQuotaUnavailable = errors.New("quota store unavailable")
 )
 
@@ -52,9 +49,7 @@ type redisCounter struct {
 	rdb *redis.Client
 }
 
-// Incr runs INCR and EXPIRE NX in one MULTI, so a key can never be left
-// without a TTL; a key stranded without one by older code is given one on its
-// next hit. EXPIRE NX needs Redis 7.0 or later.
+// Incr runs INCR and EXPIRE NX in one MULTI so a key never lacks a TTL; EXPIRE NX needs Redis 7.0+.
 func (c redisCounter) Incr(ctx context.Context, key string, window time.Duration) (int64, error) {
 	pipe := c.rdb.TxPipeline()
 	incr := pipe.Incr(ctx, key)
@@ -65,12 +60,10 @@ func (c redisCounter) Incr(ctx context.Context, key string, window time.Duration
 	return incr.Val(), nil
 }
 
-// Quotas checks a set of counters for one request.
 type Quotas struct {
 	counter Counter
 }
 
-// NewQuotas returns Quotas backed by Redis.
 func NewQuotas(rdb *redis.Client) *Quotas {
 	return &Quotas{counter: redisCounter{rdb: rdb}}
 }
@@ -80,9 +73,7 @@ func NewQuotasWithCounter(c Counter) *Quotas {
 	return &Quotas{counter: c}
 }
 
-// Check counts the request against each quota in order and stops at the first
-// one it exceeds, so later counters are not charged for a request that was
-// already refused. A quota with no key or a non-positive limit is skipped.
+// Check stops at the first exceeded quota so later counters aren't charged; keyless or limitless quotas are skipped.
 func (q *Quotas) Check(ctx context.Context, quotas []Quota) error {
 	for _, quota := range quotas {
 		if quota.Key == "" || quota.Limit <= 0 {

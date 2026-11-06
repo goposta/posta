@@ -38,8 +38,7 @@ const (
 	maxRuleNameLen = 120
 )
 
-// Destinations is what a rule may point at: this workspace's members, teams
-// and webhooks. Nothing else, and nothing from submission data.
+// Destinations limits rule targets to this workspace's members, teams and webhooks, never submission data.
 type Destinations struct {
 	Members  map[uint]bool
 	Teams    map[uint]bool
@@ -58,9 +57,7 @@ var textTypes = map[models.FieldType]bool{
 	models.FieldPhone: true, models.FieldURL: true, models.FieldHidden: true,
 }
 
-// Check validates a rule about to be saved for form, and normalizes it:
-// trimmed values, lowercased tags and addresses, actions stripped of
-// settings their type does not use.
+// Check also normalizes the rule: trimmed values, lowercased tags and addresses, unused action settings dropped.
 func Check(r *models.FormRule, form *models.Form, d Destinations) error {
 	r.Name = strings.TrimSpace(r.Name)
 	if r.Name == "" || len([]rune(r.Name)) > maxRuleNameLen {
@@ -213,7 +210,6 @@ func single(v any) (string, error) {
 	return s, nil
 }
 
-// checkValues type-checks condition values against the question.
 func checkValues(c *models.RuleCondition, def *models.FieldDef, values []string) error {
 	if c.Field == FactStatus {
 		for _, v := range values {
@@ -265,8 +261,6 @@ func checkValues(c *models.RuleCondition, def *models.FieldDef, values []string)
 	return nil
 }
 
-// checkAction validates one action and returns it with only the settings its
-// type uses.
 func checkAction(a models.RuleAction, d Destinations) (models.RuleAction, error) {
 	clean := models.RuleAction{Type: a.Type}
 	switch a.Type {

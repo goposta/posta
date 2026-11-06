@@ -29,8 +29,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ErrChatConversationGone means a message was sent to a conversation that no
-// longer exists.
+// ErrChatConversationGone means a message was sent to a conversation that no longer exists.
 var ErrChatConversationGone = errors.New("conversation not found")
 
 type ChatRepository struct {
@@ -40,8 +39,6 @@ type ChatRepository struct {
 func NewChatRepository(db *gorm.DB) *ChatRepository {
 	return &ChatRepository{db: db}
 }
-
-// Widgets
 
 func (r *ChatRepository) CreateWidget(w *models.ChatWidget) error {
 	return r.db.Create(w).Error
@@ -103,8 +100,6 @@ func (r *ChatRepository) WidgetNameExists(workspaceID uint, name string, exclude
 	return n > 0
 }
 
-// Visitors
-
 func (r *ChatRepository) CreateVisitor(v *models.ChatVisitor) error {
 	return r.db.Create(v).Error
 }
@@ -117,8 +112,6 @@ func (r *ChatRepository) FindVisitorByTokenHash(hash string) (*models.ChatVisito
 	return &v, nil
 }
 
-// TouchVisitor records that the visitor was just seen from ip, on page when
-// it is known.
 func (r *ChatRepository) TouchVisitor(id uint, ip, page string) error {
 	fields := map[string]any{"last_seen_at": time.Now(), "last_seen_ip": ip}
 	if page != "" {
@@ -127,8 +120,7 @@ func (r *ChatRepository) TouchVisitor(id uint, ip, page string) error {
 	return r.db.Model(&models.ChatVisitor{}).Where("id = ?", id).Updates(fields).Error
 }
 
-// UpdateVisitorContact fills in the name and email the visitor gave, without
-// clearing what they gave before.
+// UpdateVisitorContact never clears a name or email the visitor gave before.
 func (r *ChatRepository) UpdateVisitorContact(id uint, name, email string) error {
 	fields := map[string]any{}
 	if name != "" {
@@ -143,8 +135,7 @@ func (r *ChatRepository) UpdateVisitorContact(id uint, name, email string) error
 	return r.db.Model(&models.ChatVisitor{}).Where("id = ?", id).Updates(fields).Error
 }
 
-// CountVisitorStartsFromIP counts conversations started from ip since the
-// given time, for the scanner's repeat-sender signal.
+// CountVisitorStartsFromIP feeds the scanner's repeat-sender signal.
 func (r *ChatRepository) CountVisitorStartsFromIP(ip string, since time.Time) int64 {
 	var n int64
 	r.db.Model(&models.ChatConversation{}).
@@ -154,11 +145,7 @@ func (r *ChatRepository) CountVisitorStartsFromIP(ip string, since time.Time) in
 	return n
 }
 
-// Conversations
-
-// CreateConversation stores a new conversation and its first message in one
-// transaction, so a conversation never exists without the message that
-// started it. The message gets sequence number 1.
+// CreateConversation stores the conversation and its first message (seq 1) in one transaction.
 func (r *ChatRepository) CreateConversation(conv *models.ChatConversation, first *models.ChatMessage) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
@@ -179,8 +166,6 @@ func (r *ChatRepository) CreateConversation(conv *models.ChatConversation, first
 	})
 }
 
-// FindConversation returns a workspace's conversation by UUID, with its
-// visitor, widget and assignee.
 func (r *ChatRepository) FindConversation(workspaceID uint, uuid string) (*models.ChatConversation, error) {
 	var c models.ChatConversation
 	if err := r.db.Preload("Visitor").Preload("Widget").Preload("AssignedTo").
@@ -199,8 +184,7 @@ func (r *ChatRepository) FindConversationByID(id uint) (*models.ChatConversation
 	return &c, nil
 }
 
-// FindVisitorConversation returns one of the visitor's own conversations.
-// Another visitor's conversation is not found, exactly like a missing one.
+// FindVisitorConversation treats another visitor's conversation exactly like a missing one.
 func (r *ChatRepository) FindVisitorConversation(visitorID uint, uuid string) (*models.ChatConversation, error) {
 	var c models.ChatConversation
 	if err := r.db.Where("visitor_id = ? AND uuid = ?", visitorID, uuid).First(&c).Error; err != nil {
@@ -216,7 +200,6 @@ func (r *ChatRepository) ListVisitorConversations(visitorID uint, limit int) ([]
 	return items, err
 }
 
-// ChatConversationFilter narrows the agent's conversation list.
 type ChatConversationFilter struct {
 	State string
 	// Assigned is "me", "unassigned", or empty for any.
@@ -224,8 +207,7 @@ type ChatConversationFilter struct {
 	UserID   uint
 	WidgetID uint
 	Q        string
-	// Quarantined includes conversations whose first message was quarantined;
-	// they are left out unless asked for, or unless State is spam.
+	// Quarantined conversations are left out unless asked for, or unless State is spam.
 	Quarantined bool
 }
 
@@ -264,8 +246,7 @@ func (r *ChatRepository) ListConversations(workspaceID uint, f ChatConversationF
 	return items, total, err
 }
 
-// CountAwaitingReply counts open conversations whose last message is the
-// visitor's, for the dashboard badge.
+// CountAwaitingReply counts open conversations whose last message is the visitor's.
 func (r *ChatRepository) CountAwaitingReply(workspaceID uint) (int64, error) {
 	var n int64
 	err := r.db.Model(&models.ChatConversation{}).
@@ -279,8 +260,6 @@ func (r *ChatRepository) UpdateConversationFields(id uint, fields map[string]any
 	return r.db.Model(&models.ChatConversation{}).Where("id = ?", id).Updates(fields).Error
 }
 
-// Messages
-
 // MessagePreview is the first line of a message, cut to fit the list.
 func MessagePreview(body string) string {
 	line := strings.Join(strings.Fields(body), " ")
@@ -290,14 +269,7 @@ func MessagePreview(body string) string {
 	return line
 }
 
-// AppendMessage adds msg to its conversation with the next sequence number.
-// The conversation row is locked by the UPDATE that bumps last_seq, so
-// writers to one conversation are serialised and sequence numbers have no
-// gaps. A message whose ClientMsgID the conversation already has is not
-// stored again: the stored one is returned with duplicate set, and the
-// caller must not announce it a second time.
-//
-// A visitor's message reopens a pending or closed conversation.
+// AppendMessage locks the conversation row for gapless seqs; duplicate=true (known ClientMsgID) must not be re-announced.
 func (r *ChatRepository) AppendMessage(msg *models.ChatMessage) (duplicate bool, err error) {
 	if msg.ClientMsgID != "" {
 		if existing, findErr := r.findByClientID(msg.ConversationID, msg.ClientMsgID); findErr == nil {
@@ -352,8 +324,7 @@ func (r *ChatRepository) findByClientID(conversationID uint, clientMsgID string)
 	return &m, nil
 }
 
-// MessagesAfter returns up to limit messages with a sequence number above
-// after, oldest first.
+// MessagesAfter returns messages above after, oldest first.
 func (r *ChatRepository) MessagesAfter(conversationID uint, after int64, limit int) ([]models.ChatMessage, error) {
 	var items []models.ChatMessage
 	err := r.db.Preload("Author").
@@ -362,8 +333,7 @@ func (r *ChatRepository) MessagesAfter(conversationID uint, after int64, limit i
 	return items, err
 }
 
-// MessagesBefore returns up to limit messages with a sequence number below
-// before, oldest first: the page of history just above what a client shows.
+// MessagesBefore returns the page just above what a client shows, oldest first.
 func (r *ChatRepository) MessagesBefore(conversationID uint, before int64, limit int) ([]models.ChatMessage, error) {
 	var items []models.ChatMessage
 	if err := r.db.Preload("Author").
@@ -377,7 +347,6 @@ func (r *ChatRepository) MessagesBefore(conversationID uint, before int64, limit
 	return items, nil
 }
 
-// FirstMessage returns the message that started a conversation.
 func (r *ChatRepository) FirstMessage(conversationID uint) (*models.ChatMessage, error) {
 	var m models.ChatMessage
 	if err := r.db.Where("conversation_id = ? AND seq = 1", conversationID).First(&m).Error; err != nil {
@@ -386,8 +355,6 @@ func (r *ChatRepository) FirstMessage(conversationID uint) (*models.ChatMessage,
 	return &m, nil
 }
 
-// FindConversationByThreadToken returns the conversation a visitor's emailed
-// answer belongs to.
 func (r *ChatRepository) FindConversationByThreadToken(token string) (*models.ChatConversation, error) {
 	var c models.ChatConversation
 	if err := r.db.Preload("Visitor").Preload("Widget").Where("thread_token = ?", token).First(&c).Error; err != nil {
@@ -396,8 +363,7 @@ func (r *ChatRepository) FindConversationByThreadToken(token string) (*models.Ch
 	return &c, nil
 }
 
-// MarkRead records that one side has seen the conversation up to seq, never
-// moving backwards or past the newest message. It returns the stored value.
+// MarkRead never moves backwards or past the newest message, and returns the stored value.
 func (r *ChatRepository) MarkRead(conversationID uint, visitor bool, seq int64) (int64, error) {
 	column := "agent_read_seq"
 	if visitor {
@@ -417,8 +383,7 @@ func (r *ChatRepository) MarkRead(conversationID uint, visitor bool, seq int64) 
 	return out[0], nil
 }
 
-// LatestSeqBy returns the sequence number of the newest message by an author
-// kind, or 0.
+// LatestSeqBy returns 0 when the author kind has no messages.
 func (r *ChatRepository) LatestSeqBy(conversationID uint, authorKind string) (int64, error) {
 	var seq int64
 	err := r.db.Model(&models.ChatMessage{}).
@@ -427,8 +392,7 @@ func (r *ChatRepository) LatestSeqBy(conversationID uint, authorKind string) (in
 	return seq, err
 }
 
-// AgentMessagesToEmail returns the agent messages after afterSeq: those the
-// visitor has neither read nor been emailed.
+// AgentMessagesToEmail returns agent messages after afterSeq: those the visitor has neither read nor been emailed.
 func (r *ChatRepository) AgentMessagesToEmail(conversationID uint, afterSeq int64) ([]models.ChatMessage, error) {
 	var items []models.ChatMessage
 	err := r.db.Preload("Author").
@@ -438,8 +402,6 @@ func (r *ChatRepository) AgentMessagesToEmail(conversationID uint, afterSeq int6
 	return items, err
 }
 
-// MarkEmailed records that an email carried the agent messages up to
-// throughSeq.
 func (r *ChatRepository) MarkEmailed(conversationID uint, messageIDs []uint, throughSeq int64, emailUUID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&models.ChatConversation{}).Where("id = ?", conversationID).
@@ -453,9 +415,6 @@ func (r *ChatRepository) MarkEmailed(conversationID uint, messageIDs []uint, thr
 	})
 }
 
-// Identity and trust
-
-// UpdateVisitor writes the given visitor fields.
 func (r *ChatRepository) UpdateVisitor(id uint, fields map[string]any) error {
 	return r.db.Model(&models.ChatVisitor{}).Where("id = ?", id).Updates(fields).Error
 }
@@ -468,10 +427,7 @@ func (r *ChatRepository) FindVisitorByID(id uint) (*models.ChatVisitor, error) {
 	return &v, nil
 }
 
-// LinkedVisitorIDs returns the visitors whose conversations v may read: v
-// itself, plus, when v's identity was verified, every verified visitor of
-// the same widget with the same customer user ID — the same person on
-// another device. Typed, unverified details never link anyone.
+// LinkedVisitorIDs adds verified visitors of the same widget and customer user ID; typed details never link anyone.
 func (r *ChatRepository) LinkedVisitorIDs(v *models.ChatVisitor) []uint {
 	if !v.EmailVerified || v.ExternalID == "" {
 		return []uint{v.ID}
@@ -485,8 +441,7 @@ func (r *ChatRepository) LinkedVisitorIDs(v *models.ChatVisitor) []uint {
 	return ids
 }
 
-// FindLinkedConversation returns a conversation belonging to one of the
-// visitors; any other is not found.
+// FindLinkedConversation treats a conversation of any other visitor as not found.
 func (r *ChatRepository) FindLinkedConversation(visitorIDs []uint, uuid string) (*models.ChatConversation, error) {
 	var c models.ChatConversation
 	if err := r.db.Where("visitor_id IN ? AND uuid = ?", visitorIDs, uuid).First(&c).Error; err != nil {
@@ -502,8 +457,7 @@ func (r *ChatRepository) ListLinkedConversations(visitorIDs []uint, limit int) (
 	return items, err
 }
 
-// VisitorHistory returns the visitor's other conversations, and, for a
-// verified visitor, those of the same person on other devices.
+// VisitorHistory includes, for a verified visitor, the same person's conversations on other devices.
 func (r *ChatRepository) VisitorHistory(conv *models.ChatConversation, limit int) ([]models.ChatConversation, error) {
 	v, err := r.FindVisitorByID(conv.VisitorID)
 	if err != nil {
@@ -516,7 +470,6 @@ func (r *ChatRepository) VisitorHistory(conv *models.ChatConversation, limit int
 	return items, err
 }
 
-// FindContactByEmail returns the workspace's contact with this address.
 func (r *ChatRepository) FindContactByEmail(workspaceID uint, email string) (*models.Contact, error) {
 	var c models.Contact
 	if err := r.db.Where("workspace_id = ? AND LOWER(email) = LOWER(?)", workspaceID, email).First(&c).Error; err != nil {
@@ -536,7 +489,6 @@ func (r *ChatRepository) AddSpamHit(conversationID uint) (int, error) {
 	return hits[0], nil
 }
 
-// OpenAssignedCounts returns how many open conversations each agent holds.
 func (r *ChatRepository) OpenAssignedCounts(workspaceID uint) (map[uint]int, error) {
 	var rows []struct {
 		AssignedToID uint
@@ -553,7 +505,6 @@ func (r *ChatRepository) OpenAssignedCounts(workspaceID uint) (map[uint]int, err
 	return out, err
 }
 
-// FindMessage returns one of a conversation's messages by UUID.
 func (r *ChatRepository) FindMessage(conversationID uint, uuid string) (*models.ChatMessage, error) {
 	var m models.ChatMessage
 	if err := r.db.Where("conversation_id = ? AND uuid = ?", conversationID, uuid).First(&m).Error; err != nil {
@@ -561,8 +512,6 @@ func (r *ChatRepository) FindMessage(conversationID uint, uuid string) (*models.
 	}
 	return &m, nil
 }
-
-// Snippets
 
 func (r *ChatRepository) ListSnippets(workspaceID uint) ([]models.ChatSnippet, error) {
 	var items []models.ChatSnippet
@@ -596,10 +545,7 @@ func (r *ChatRepository) DeleteSnippet(id uint) error {
 	return r.db.Delete(&models.ChatSnippet{}, id).Error
 }
 
-// Analytics
-
-// ChatAnalytics summarises a workspace's chats over a period. Times are in
-// seconds; nil when there is nothing to measure.
+// ChatAnalytics times are in seconds, nil when there is nothing to measure.
 type ChatAnalytics struct {
 	Conversations       int64             `json:"conversations"`
 	Open                int64             `json:"open"`
@@ -619,8 +565,7 @@ type ChatAnalyticDay struct {
 	Conversations int64  `json:"conversations"`
 }
 
-// Analytics counts the conversations started in [from, to), quarantined
-// ones excluded.
+// Analytics counts conversations started in [from, to), quarantined ones excluded.
 func (r *ChatRepository) Analytics(workspaceID uint, widgetID uint, from, to time.Time) (*ChatAnalytics, error) {
 	base := func() *gorm.DB {
 		q := r.db.Model(&models.ChatConversation{}).
@@ -670,7 +615,6 @@ func (r *ChatRepository) Analytics(workspaceID uint, widgetID uint, from, to tim
 	return out, nil
 }
 
-// FindMessageByID returns a message with its author.
 func (r *ChatRepository) FindMessageByID(id uint) (*models.ChatMessage, error) {
 	var m models.ChatMessage
 	if err := r.db.Preload("Author").First(&m, id).Error; err != nil {
@@ -679,11 +623,7 @@ func (r *ChatRepository) FindMessageByID(id uint) (*models.ChatMessage, error) {
 	return &m, nil
 }
 
-// Erasure
-
-// EraseConversation hard-deletes a conversation and its messages, and its
-// visitor when that was their last conversation. It returns the attachment
-// blob keys to delete once the transaction has committed.
+// EraseConversation deletes the visitor too if this was their last conversation; delete the returned blobs after commit.
 func (r *ChatRepository) EraseConversation(conversationID uint) ([]string, error) {
 	var keys []string
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -707,9 +647,7 @@ func (r *ChatRepository) EraseConversation(conversationID uint) ([]string, error
 	return keys, err
 }
 
-// EraseChatsByEmail hard-deletes every conversation of the workspace's
-// visitors with this email, typed or verified, and those visitors. It returns
-// how many conversations went, and the blob keys to delete afterwards.
+// EraseChatsByEmail matches typed or verified email; delete the returned blob keys once the transaction has committed.
 func (r *ChatRepository) EraseChatsByEmail(workspaceID uint, email string) (int64, []string, error) {
 	var count int64
 	var keys []string
@@ -735,8 +673,6 @@ func (r *ChatRepository) EraseChatsByEmail(workspaceID uint, email string) (int6
 	return count, keys, err
 }
 
-// ExportChatsByEmail returns every conversation, with its messages, of the
-// workspace's visitors with this email, for a data subject access request.
 func (r *ChatRepository) ExportChatsByEmail(workspaceID uint, email string) ([]ChatExport, error) {
 	var convs []models.ChatConversation
 	err := r.db.Unscoped().Preload("Visitor").Preload("Widget").
@@ -757,7 +693,6 @@ func (r *ChatRepository) ExportChatsByEmail(workspaceID uint, email string) ([]C
 	return out, nil
 }
 
-// ChatExport is one conversation in a data subject export.
 type ChatExport struct {
 	Conversation models.ChatConversation `json:"conversation"`
 	Messages     []models.ChatMessage    `json:"messages"`
@@ -790,24 +725,19 @@ func deleteOrphanVisitor(tx *gorm.DB, visitorID uint) error {
 	return tx.Delete(&models.ChatVisitor{}, visitorID).Error
 }
 
-// Retention
-
-// ChatRetentionWidget is a widget's retention setting.
 type ChatRetentionWidget struct {
 	ID            uint
 	RetentionDays int
 }
 
-// RetentionWidgets lists every widget, deleted ones too, so their
-// conversations age out like the rest.
+// RetentionWidgets includes deleted widgets so their conversations age out like the rest.
 func (r *ChatRepository) RetentionWidgets() ([]ChatRetentionWidget, error) {
 	var out []ChatRetentionWidget
 	err := r.db.Unscoped().Model(&models.ChatWidget{}).Select("id, retention_days").Scan(&out).Error
 	return out, err
 }
 
-// ExpiredConversationIDs returns up to limit closed or spam conversations of
-// a widget whose last message is older than cutoff.
+// ExpiredConversationIDs selects only closed or spam conversations.
 func (r *ChatRepository) ExpiredConversationIDs(widgetID uint, cutoff time.Time, limit int) ([]uint, error) {
 	var ids []uint
 	err := r.db.Unscoped().Model(&models.ChatConversation{}).
@@ -817,23 +747,20 @@ func (r *ChatRepository) ExpiredConversationIDs(widgetID uint, cutoff time.Time,
 	return ids, err
 }
 
-// DeleteIdleVisitors removes visitors with no conversations left who have
-// not been seen since cutoff.
+// DeleteIdleVisitors removes visitors with no conversations left who have not been seen since cutoff.
 func (r *ChatRepository) DeleteIdleVisitors(cutoff time.Time) (int64, error) {
 	res := r.db.Where("last_seen_at < ? AND NOT EXISTS (SELECT 1 FROM chat_conversations c WHERE c.visitor_id = chat_visitors.id)", cutoff).
 		Delete(&models.ChatVisitor{})
 	return res.RowsAffected, res.Error
 }
 
-// ChatVisitorIPs is a visitor's stored addresses.
 type ChatVisitorIPs struct {
 	ID          uint
 	FirstSeenIP string
 	LastSeenIP  string
 }
 
-// VisitorsWithIPsBefore returns up to limit visitors last seen before
-// cutoff, after afterID, whose addresses may still be whole.
+// VisitorsWithIPsBefore pages by afterID over visitors whose addresses may still be whole.
 func (r *ChatRepository) VisitorsWithIPsBefore(cutoff time.Time, afterID uint, limit int) ([]ChatVisitorIPs, error) {
 	var out []ChatVisitorIPs
 	err := r.db.Model(&models.ChatVisitor{}).Select("id, first_seen_ip, last_seen_ip").
@@ -842,8 +769,7 @@ func (r *ChatRepository) VisitorsWithIPsBefore(cutoff time.Time, afterID uint, l
 	return out, err
 }
 
-// CountConversationsSince counts a workspace's conversations started since t,
-// quarantined ones excluded.
+// CountConversationsSince excludes quarantined conversations.
 func (r *ChatRepository) CountConversationsSince(workspaceID uint, t time.Time) (int64, error) {
 	var n int64
 	err := r.db.Unscoped().Model(&models.ChatConversation{}).

@@ -35,7 +35,6 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// OAuthUserInfo represents the user info extracted from an OAuth provider.
 type OAuthUserInfo struct {
 	Sub       string
 	Email     string
@@ -43,7 +42,6 @@ type OAuthUserInfo struct {
 	AvatarURL string
 }
 
-// OAuthService handles OAuth authentication flows.
 type OAuthService struct {
 	providerRepo *repositories.OAuthProviderRepository
 	accountRepo  *repositories.OAuthAccountRepository
@@ -62,7 +60,6 @@ func NewOAuthService(
 	}
 }
 
-// GetOAuthConfig builds an oauth2.Config for the given provider.
 func (s *OAuthService) GetOAuthConfig(provider *models.OAuthProvider, redirectURI string) (*oauth2.Config, error) {
 	scopes := strings.Split(provider.Scopes, " ")
 	if len(scopes) == 0 || scopes[0] == "" {
@@ -102,7 +99,6 @@ func (s *OAuthService) GetOAuthConfig(provider *models.OAuthProvider, redirectUR
 	return cfg, nil
 }
 
-// ExchangeCode exchanges an authorization code for tokens and user info.
 func (s *OAuthService) ExchangeCode(ctx context.Context, provider *models.OAuthProvider, code, redirectURI string) (*OAuthUserInfo, *oauth2.Token, error) {
 	cfg, err := s.GetOAuthConfig(provider, redirectURI)
 	if err != nil {
@@ -131,7 +127,6 @@ func (s *OAuthService) ExchangeCode(ctx context.Context, provider *models.OAuthP
 	return info, token, nil
 }
 
-// parseIDToken validates and extracts claims from an OIDC ID token.
 func (s *OAuthService) parseIDToken(ctx context.Context, provider *models.OAuthProvider, rawIDToken string) (*OAuthUserInfo, error) {
 	var issuer string
 	if provider.Type == models.OAuthProviderGoogle {
@@ -241,9 +236,7 @@ func (s *OAuthService) fetchUserInfo(ctx context.Context, provider *models.OAuth
 	}, nil
 }
 
-// FindOrCreateUser implements the account linking logic.
 func (s *OAuthService) FindOrCreateUser(provider *models.OAuthProvider, info *OAuthUserInfo, token *oauth2.Token) (*models.User, bool, error) {
-	// 1. Check if OAuth account already exists
 	account, err := s.accountRepo.FindByProviderAndExternalID(provider.ID, info.Sub)
 	if err == nil && account != nil {
 		account.AccessToken = token.AccessToken
@@ -264,13 +257,11 @@ func (s *OAuthService) FindOrCreateUser(provider *models.OAuthProvider, info *OA
 		return user, false, nil
 	}
 
-	// 2. Check if user exists by email
 	email := strings.ToLower(strings.TrimSpace(info.Email))
 	if email == "" {
 		return nil, false, fmt.Errorf("OAuth provider did not return an email")
 	}
 
-	// Check allowed domains
 	if provider.AllowedDomains != "" {
 		parts := strings.SplitN(email, "@", 2)
 		if len(parts) == 2 {
@@ -290,7 +281,6 @@ func (s *OAuthService) FindOrCreateUser(provider *models.OAuthProvider, info *OA
 
 	existingUser, err := s.userRepo.FindByEmail(email)
 	if err == nil && existingUser != nil {
-		// User exists — link OAuth account
 		oauthAccount := &models.OAuthAccount{
 			UserID:         existingUser.ID,
 			ProviderID:     provider.ID,
@@ -308,7 +298,6 @@ func (s *OAuthService) FindOrCreateUser(provider *models.OAuthProvider, info *OA
 			return nil, false, fmt.Errorf("failed to link account: %w", err)
 		}
 
-		// Update auth method
 		if existingUser.AuthMethod == "password" {
 			existingUser.AuthMethod = "both"
 		}
@@ -325,7 +314,6 @@ func (s *OAuthService) FindOrCreateUser(provider *models.OAuthProvider, info *OA
 		return existingUser, false, nil
 	}
 
-	// 3. No user found — auto-register if allowed
 	if !provider.AutoRegister {
 		return nil, false, fmt.Errorf("account not found and auto-registration is disabled for this provider")
 	}

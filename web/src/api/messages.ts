@@ -220,8 +220,7 @@ export const messageFiltersApi = {
   },
 }
 
-// Submission filters become flat query parameters: field.<key>=v for
-// equality, field.<key>[gte]=n and field.<key>[lte]=n for ranges.
+// Filters become flat params: field.<key>=v for equality, field.<key>[gte]=n and [lte]=n for ranges.
 function submissionParams(formId: number, query: SubmissionQuery): Record<string, string | number> {
   const params: Record<string, string | number> = { form_id: formId }
   for (const k of ['page', 'size', 'status', 'q', 'after', 'before', 'tag', 'priority'] as const) {
@@ -245,8 +244,7 @@ export const formSubmissionsApi = {
       params: submissionParams(formId, query),
     })
   },
-  // A browser download cannot send the workspace header, so the workspace
-  // travels as a query parameter (WorkspaceFromQueryOrHeader).
+  // A browser download cannot send the workspace header, so it travels as a query parameter.
   exportUrl(formId: number, format: 'csv' | 'json', query: SubmissionQuery = {}) {
     const { page: _page, size: _size, ...rest } = query
     const params = new URLSearchParams()

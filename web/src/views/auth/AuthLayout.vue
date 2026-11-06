@@ -1,21 +1,12 @@
 <script setup lang="ts">
-// Shared chrome for the primary auth pages (sign in, sign up): a brand panel on
-// the left and a centered form column on the right, collapsing to the form alone
-// on narrow screens.
-//
-// Only the chrome lives here. Form styling stays in the page that owns the form,
-// because Vue's scoped CSS applies to slot content in the *parent's* scope, not
-// this component's — styling slotted markup from here would need :slotted() and
-// would couple the layout to each page's internals.
+// Form styling stays in each page: scoped CSS applies to slot content in the parent's scope, not this component's.
 import { useThemeStore } from '../../stores/theme'
 
 withDefaults(
   defineProps<{
     title: string
     subtitle?: string
-    // Secondary pages (forgot / reset password) drop the brand panel and centre
-    // the form on its own — the hero is an entry-point flourish, and repeating
-    // it on a mid-flow step makes those pages feel heavier than they are.
+    // Secondary pages drop the brand panel: the hero is an entry-point flourish that makes mid-flow steps feel heavier.
     hero?: boolean
   }>(),
   { hero: true }
@@ -26,8 +17,7 @@ const theme = useThemeStore()
 
 <template>
   <div class="auth" :class="{ 'auth-no-hero': !hero }">
-    <!-- Brand panel. Decorative and duplicated by the form column's own
-         heading, so it is hidden from assistive tech. -->
+    <!-- Decorative and duplicated by the form column's heading, so it is hidden from assistive tech. -->
     <aside v-if="hero" class="auth-hero" aria-hidden="true">
       <div class="auth-hero-inner">
         <div class="auth-hero-wordmark">Posta<span class="wm-dot">.</span></div>
@@ -85,7 +75,6 @@ const theme = useThemeStore()
   position: relative;
 }
 
-/* ─── Brand panel ─── */
 .auth-hero {
   position: relative;
   overflow: hidden;
@@ -96,7 +85,6 @@ const theme = useThemeStore()
     radial-gradient(90% 70% at 0% 100%, rgba(13, 20, 36, 0.5), transparent 60%),
     linear-gradient(150deg, var(--primary-600) 0%, var(--primary-800) 70%, #2a0f4d 100%);
 }
-/* Oversized wordmark watermark, echoing the lockup above it. */
 .auth-hero::after {
   content: 'P';
   position: absolute;
@@ -177,7 +165,6 @@ const theme = useThemeStore()
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* ─── Form column ─── */
 .auth-main {
   display: flex;
   align-items: center;
@@ -233,7 +220,6 @@ const theme = useThemeStore()
 
 .auth-no-hero { grid-template-columns: 1fr; }
 
-/* ─── Responsive: collapse to a single centered form ─── */
 @media (max-width: 900px) {
   .auth { grid-template-columns: 1fr; }
   .auth-hero { display: none; }

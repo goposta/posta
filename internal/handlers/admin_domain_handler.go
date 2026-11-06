@@ -41,7 +41,6 @@ func NewAdminDomainHandler(db *gorm.DB, repo *repositories.DomainRepository, aud
 	return &AdminDomainHandler{db: db, repo: repo, audit: auditLogger}
 }
 
-// AdminDomainRow is one line of the platform-wide domain table.
 type AdminDomainRow struct {
 	ID                uint      `json:"id"`
 	Domain            string    `json:"domain"`
@@ -57,9 +56,6 @@ type AdminDomainRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
-// AdminDomainDetail adds what an administrator needs to act on a domain: who
-// owns it, the records its owner still has to publish, and whether the same name
-// is already verified somewhere else.
 type AdminDomainDetail struct {
 	AdminDomainRow
 	VerificationToken     string             `json:"verification_token"`
@@ -138,8 +134,7 @@ func (h *AdminDomainHandler) Get(c *okapi.Context, req *AdminDomainIDRequest) er
 	return ok(c, detail)
 }
 
-// Verify runs the real DNS check against a tenant's domain, so an administrator
-// can answer "is their DNS actually right?" without asking them to click it.
+// Verify runs the real DNS check on a tenant's domain on the administrator's behalf.
 func (h *AdminDomainHandler) Verify(c *okapi.Context, req *AdminDomainIDRequest) error {
 	d, err := h.repo.FindByID(uint(req.ID))
 	if err != nil {
@@ -196,9 +191,7 @@ func (h *AdminDomainHandler) SetVerification(c *okapi.Context, req *AdminSetDoma
 	}
 
 	if req.Body.OwnershipVerified {
-		// At most one workspace may hold a given name verified; the database
-		// enforces it with a partial unique index. Catching it here turns what
-		// would be an opaque 500 into an answer naming the workspace at fault.
+		// A partial unique index allows one verified holder per name; checking here names the culprit instead of a 500.
 		if other := h.conflictingOwner(d); other != nil {
 			return c.AbortConflict(
 				"another workspace has already verified " + d.Domain +
@@ -224,8 +217,7 @@ func (h *AdminDomainHandler) SetVerification(c *okapi.Context, req *AdminSetDoma
 	return ok(c, d)
 }
 
-// conflictingOwner returns the domain row that already holds this name verified,
-// when it is a different row. Nil means the name is free to verify.
+// conflictingOwner returns a different row already holding this name verified, or nil when the name is free.
 func (h *AdminDomainHandler) conflictingOwner(d *models.Domain) *models.Domain {
 	other, err := h.repo.FindVerifiedByName(d.Domain)
 	if err != nil || other == nil || other.ID == d.ID {
@@ -254,8 +246,6 @@ func (h *AdminDomainHandler) row(d *models.Domain, workspaces map[uint]string, o
 	return row
 }
 
-// workspaceNames resolves the names for a page of domains in one query rather
-// than one per row.
 func (h *AdminDomainHandler) workspaceNames(domains []models.Domain) map[uint]string {
 	ids := make([]uint, 0, len(domains))
 	for i := range domains {

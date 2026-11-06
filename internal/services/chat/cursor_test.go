@@ -24,9 +24,7 @@ import (
 	"testing"
 )
 
-// stream simulates the visitor stream: a database of messages 1..n, a replay
-// from the database, and live events that pub/sub may drop, duplicate, or
-// deliver before the replay that already contains them.
+// stream simulates a database replay plus live events that pub/sub may drop, duplicate, or deliver before the replay.
 type stream struct {
 	db     []int64
 	cursor Cursor
@@ -106,8 +104,7 @@ func TestCursorAdvanceNeverGoesBack(t *testing.T) {
 	}
 }
 
-// Whatever pub/sub does to the live events — drops, duplicates, reordering —
-// the stream sends every message exactly once, in order.
+// Whatever pub/sub does to the live events, the stream sends every message exactly once, in order.
 func TestCursorExactlyOnceUnderRandomDelivery(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	for run := 0; run < 500; run++ {
@@ -127,8 +124,7 @@ func TestCursorExactlyOnceUnderRandomDelivery(t *testing.T) {
 				s.db = append(s.db, seq)
 			}
 		}
-		// Events for messages stored just before the replay may still be in
-		// flight; the stream subscribed first, so it can receive them.
+		// The stream subscribed before the replay, so it can still receive events for messages stored just before it.
 		var inflight []int64
 		for seq := pre - 2; seq <= pre; seq++ {
 			if seq > 0 && rng.Intn(2) == 0 {
@@ -153,8 +149,7 @@ func TestCursorExactlyOnceUnderRandomDelivery(t *testing.T) {
 				s.live(seq)
 			}
 		}
-		// The stream may end on a gap it has not yet seen; the next event
-		// (or reconnect) closes it. Simulate the next message's event.
+		// The stream may end on a gap it has not seen yet; simulate the next message's event, which closes it.
 		s.db = append(s.db, n+1)
 		s.live(n + 1)
 		assertExactlyOnceInOrder(t, s.sent, resume, n+1)

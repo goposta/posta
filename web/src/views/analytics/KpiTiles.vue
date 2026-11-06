@@ -8,11 +8,9 @@ export interface Kpi {
   value: number;
   kind: "count" | "percent" | "latency";
   hint: string;
-  // change is the period-over-period move in percentage points for rates and in
-  // percent for counts. null means there was no prior figure to compare against.
+  // Percentage points for rates, percent for counts; null when there is no prior figure.
   change: number | null;
-  // higherIsBetter decides whether a rise is coloured as good or bad. Bounce and
-  // latency are the ones where up is the wrong direction.
+  // Whether a rise is coloured as good; false for bounce and latency.
   higherIsBetter: boolean;
 }
 
@@ -28,8 +26,7 @@ function changeLabel(k: Kpi): string {
   if (k.change === null) return "";
   const arrow = k.change > 0 ? "↑" : k.change < 0 ? "↓" : "→";
   const magnitude = Math.abs(k.change);
-  // A rate's move is stated in points, because "the bounce rate rose 50%" is
-  // ambiguous between 2%→3% and 2%→52%.
+  // A rate's move is stated in points: "bounce rate rose 50%" is ambiguous between 2%→3% and 2%→52%.
   const unit = k.kind === "percent" ? " pts" : "%";
   return `${arrow} ${magnitude.toFixed(magnitude < 10 ? 1 : 0)}${unit}`;
 }

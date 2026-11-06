@@ -27,7 +27,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Run executes all schema migrations and adds FK constraints.
 func Run(db *gorm.DB) error {
 	if err := renameIdentifiers(db); err != nil {
 		return err
@@ -99,7 +98,6 @@ func Run(db *gorm.DB) error {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	// run constraints
 	runConstraints(db)
 
 	logger.Info("database migrated")

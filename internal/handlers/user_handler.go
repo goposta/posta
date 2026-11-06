@@ -99,23 +99,19 @@ func (h *UserHandler) SetSettings(s *settings.Provider) {
 	h.settings = s
 }
 
-// SetNotifier sets the notification service for sending welcome and password change emails.
 func (h *UserHandler) SetNotifier(n *notification.Service) {
 	h.notifier = n
 }
 
-// SetEmailVerifier wires the email verification service.
 func (h *UserHandler) SetEmailVerifier(s *emailverify.Service) {
 	h.emailVerifier = s
 }
 
-// SetPasswordReset wires the self-service password reset service.
 func (h *UserHandler) SetPasswordReset(s *passwordreset.Service) {
 	h.passwordReset = s
 }
 
-// passwordResetEnabled reports whether the forgot-password flow is both turned
-// on in platform settings and actually deliverable (notifier configured).
+// passwordResetEnabled requires the platform setting on and a notifier configured to deliver the email.
 func (h *UserHandler) passwordResetEnabled() bool {
 	return h.settings != nil && h.settings.PasswordResetEnabled() &&
 		h.passwordReset != nil && h.passwordReset.Deliverable()
@@ -150,8 +146,7 @@ type UserProfile struct {
 	EmailVerifiedAt           *time.Time      `json:"email_verified_at"`
 	EmailVerificationRequired bool            `json:"email_verification_required"`
 	DefaultWorkspaceID        *uint           `json:"default_workspace_id"`
-	// Deprecated: renamed to default_workspace_id. Mirrors it for one minor
-	// release so an older dashboard build keeps working.
+	// Deprecated: renamed to default_workspace_id; mirrored for one minor release so older dashboards keep working.
 	PersonalWorkspaceID *uint     `json:"personal_workspace_id"`
 	CreatedAt           time.Time `json:"created_at"`
 }
@@ -195,7 +190,6 @@ type RegisterRequest struct {
 	} `json:"body"`
 }
 
-// Register allows new users to self-register when registration is enabled.
 func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 	if h.settings == nil || !h.settings.RegistrationEnabled() {
 		return c.AbortForbidden("registration is disabled")
@@ -206,7 +200,6 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 		return c.AbortBadRequest("email is required")
 	}
 
-	// Check allowed signup domains
 	allowedDomains := h.settings.GetString("allowed_signup_domains", "")
 	if allowedDomains != "" {
 		parts := strings.SplitN(email, "@", 2)
@@ -242,8 +235,7 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 		return c.AbortConflict("email already registered")
 	}
 
-	// Provision the user's personal workspace (and seed its default content)
-	// before issuing the JWT, so the first authenticated request lands in it.
+	// Provisioned before issuing the JWT, so the first authenticated request lands in it.
 	h.ensurePersonalWorkspace(user.ID)
 
 	if h.bus != nil {
@@ -251,9 +243,7 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 			fmt.Sprintf("User %q registered", user.Email), nil)
 	}
 
-	// Email verification: if the notifier is configured, send a verification email.
-	// Otherwise (self-hosted without SMTP) auto-verify so the account isn't locked out.
-	// The welcome email is deferred until after verification (see VerifyEmail).
+	// Without a notifier (no SMTP) auto-verify so the account isn't locked out; welcome waits for VerifyEmail.
 	if h.emailVerifier != nil {
 		if h.emailVerifier.Required() {
 			go func() {
@@ -266,7 +256,6 @@ func (h *UserHandler) Register(c *okapi.Context, req *RegisterRequest) error {
 		}
 	}
 
-	// Auto-login: generate JWT token
 	token, _, err := h.generateTokenWithSession(c, user)
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate token", err)
@@ -332,7 +321,6 @@ func (h *UserHandler) ForgotPassword(c *okapi.Context, req *ForgotPasswordReques
 	return ok(c, okapi.M{"message": genericMsg})
 }
 
-// ResetPassword redeems a reset token and sets the new password.
 func (h *UserHandler) ResetPassword(c *okapi.Context, req *ResetPasswordRequest) error {
 	if !h.passwordResetEnabled() {
 		return c.AbortBadRequest("password reset is not enabled")
@@ -347,7 +335,6 @@ func (h *UserHandler) ResetPassword(c *okapi.Context, req *ResetPasswordRequest)
 		h.bus.PublishSimple(models.EventCategoryUser, "user.password_reset", &user.ID, user.Email, c.RealIP(),
 			fmt.Sprintf("Password reset completed for %q", user.Email), nil)
 	}
-	// Notify the account owner that their password changed (best-effort).
 	if h.notifier != nil {
 		go func(uid uint) {
 			_ = h.notifier.SendSecurityToUser(uid, "Your password has been changed", notification.TemplatePasswordChanged, map[string]any{
@@ -362,7 +349,6 @@ type VerifyEmailRequest struct {
 	Token string `query:"token" required:"true"`
 }
 
-// VerifyEmail redeems a verification token and marks the user's email as verified.
 func (h *UserHandler) VerifyEmail(c *okapi.Context, req *VerifyEmailRequest) error {
 	if h.emailVerifier == nil {
 		return c.AbortBadRequest("email verification is not enabled")
@@ -386,7 +372,6 @@ func (h *UserHandler) VerifyEmail(c *okapi.Context, req *VerifyEmailRequest) err
 	return ok(c, okapi.M{"message": "email verified"})
 }
 
-// ResendVerificationEmail issues a fresh token for the authenticated user.
 func (h *UserHandler) ResendVerificationEmail(c *okapi.Context) error {
 	if h.emailVerifier == nil || !h.emailVerifier.Required() {
 		return c.AbortBadRequest("email verification is not enabled")
@@ -409,7 +394,6 @@ func (h *UserHandler) ResendVerificationEmail(c *okapi.Context) error {
 	return ok(c, okapi.M{"message": "verification email sent"})
 }
 
-// UpdateProfile allows authenticated users to update their profile (name).
 func (h *UserHandler) UpdateProfile(c *okapi.Context, req *UpdateProfileRequest) error {
 	userID := c.GetInt("user_id")
 	user, err := h.repo.FindByID(uint(userID))
@@ -428,7 +412,6 @@ func (h *UserHandler) UpdateProfile(c *okapi.Context, req *UpdateProfileRequest)
 	return ok(c, h.buildProfile(user))
 }
 
-// ChangePassword allows authenticated users to change their own password.
 func (h *UserHandler) ChangePassword(c *okapi.Context, req *ChangePasswordRequest) error {
 	userID := c.GetInt("user_id")
 	user, err := h.repo.FindByID(uint(userID))
@@ -450,7 +433,6 @@ func (h *UserHandler) ChangePassword(c *okapi.Context, req *ChangePasswordReques
 		return c.AbortInternalServerError("failed to update password")
 	}
 
-	// Send password change notification (best-effort)
 	if h.notifier != nil {
 		go func() {
 			_ = h.notifier.SendSecurityToUser(user.ID, "Your password has been changed", notification.TemplatePasswordChanged, map[string]any{
@@ -476,8 +458,7 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 	localOK := err == nil && user.AuthMethod != models.AuthMethodLDAP &&
 		bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Body.Password)) == nil
 	if !localOK {
-		// Only after the local check fails, so local accounts and the
-		// bootstrap admin keep working when the directory is down.
+		// Only after the local check fails, so local accounts and the bootstrap admin work when the directory is down.
 		dirUser, dirErr := h.directory.Login(c.Request().Context(), req.Body.Email, req.Body.Password)
 		switch {
 		case dirUser != nil:
@@ -503,7 +484,6 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 		return c.AbortForbidden("account is disabled")
 	}
 
-	// Check 2FA
 	if user.TwoFactorEnabled {
 		if req.Body.TwoFactorCode == "" {
 			return c.JSON(http.StatusUnauthorized, dto.Response[any]{
@@ -522,7 +502,6 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 
 	h.ensurePersonalWorkspace(user.ID)
 
-	// Record last login time
 	now := time.Now()
 	user.LastLoginAt = &now
 	_ = h.repo.Update(user)
@@ -532,8 +511,7 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 			fmt.Sprintf("User %q logged in", user.Email), nil)
 	}
 
-	// Detect a sign-in from a new device before the session is recorded, so the
-	// freshly created session doesn't count as a prior known device.
+	// Detected before the session is recorded, so the new session doesn't count as a known device.
 	ua := c.Header("User-Agent")
 	newDevice := h.isNewDevice(user.ID, ua)
 
@@ -542,8 +520,7 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 		return c.AbortInternalServerError("failed to generate token", err)
 	}
 
-	// Browser clients ride the HttpOnly cookie; the body's token remains for
-	// CLI/SDK clients, which send it back as a Bearer header.
+	// Browsers ride the HttpOnly cookie; the body's token remains for CLI/SDK clients sending it as Bearer.
 	session.SetCookie(c, token, jwtTokenTTL)
 
 	if newDevice {
@@ -561,7 +538,6 @@ func (h *UserHandler) Login(c *okapi.Context, req *LoginRequest) error {
 	})
 }
 
-// Me returns the current user's profile.
 func (h *UserHandler) Me(c *okapi.Context) error {
 	userID := c.GetInt("user_id")
 	user, err := h.repo.FindByID(uint(userID))
@@ -606,7 +582,6 @@ func (h *UserHandler) Setup2FA(c *okapi.Context) error {
 		return c.AbortInternalServerError("failed to generate 2FA secret")
 	}
 
-	// Store secret temporarily (not enabled yet)
 	user.TwoFactorSecret = secret
 	if err := h.repo.Update(user); err != nil {
 		return c.AbortInternalServerError("failed to save 2FA secret")
@@ -618,7 +593,6 @@ func (h *UserHandler) Setup2FA(c *okapi.Context) error {
 	})
 }
 
-// Verify2FA verifies a TOTP code and enables 2FA.
 func (h *UserHandler) Verify2FA(c *okapi.Context, req *Verify2FARequest) error {
 	userID := c.GetInt("user_id")
 	user, err := h.repo.FindByID(uint(userID))
@@ -646,7 +620,6 @@ func (h *UserHandler) Verify2FA(c *okapi.Context, req *Verify2FARequest) error {
 	return ok(c, okapi.M{"message": "2FA enabled successfully"})
 }
 
-// Disable2FA disables 2FA after verifying a code.
 func (h *UserHandler) Disable2FA(c *okapi.Context, req *Disable2FARequest) error {
 	userID := c.GetInt("user_id")
 	user, err := h.repo.FindByID(uint(userID))
@@ -689,7 +662,6 @@ func (h *UserHandler) isNewDevice(userID uint, ua string) bool {
 	return true
 }
 
-// sendLoginAlert emails the user about a sign-in from a new device (best-effort).
 func (h *UserHandler) sendLoginAlert(userID uint, ua, ip string) {
 	if h.notifier == nil {
 		return
@@ -707,7 +679,6 @@ func (h *UserHandler) sendLoginAlert(userID uint, ua, ip string) {
 	}()
 }
 
-// sendTwoFactorAlert emails the user when 2FA is enabled or disabled (best-effort).
 // action must be "enabled" or "disabled".
 func (h *UserHandler) sendTwoFactorAlert(userID uint, action string) {
 	if h.notifier == nil {
@@ -723,7 +694,6 @@ func (h *UserHandler) sendTwoFactorAlert(userID uint, action string) {
 	}()
 }
 
-// generateTokenWithSession creates a JWT with a jti claim and records the session.
 func (h *UserHandler) generateTokenWithSession(c *okapi.Context, user *models.User) (string, string, error) { //nolint:unparam
 	jti := uuid.NewString()
 
@@ -738,7 +708,6 @@ func (h *UserHandler) generateTokenWithSession(c *okapi.Context, user *models.Us
 		return "", "", err
 	}
 
-	// Track session in database
 	if h.sessionRepo != nil {
 		ua := c.Header("User-Agent")
 		if len(ua) > 512 {
@@ -787,7 +756,6 @@ func (h *UserHandler) RequestAccountDeletion(c *okapi.Context) error {
 			fmt.Sprintf("Account deletion scheduled for %s", deletionDate.Format("2006-01-02")), nil)
 	}
 
-	// Confirm the scheduled deletion by email (best-effort).
 	if h.notifier != nil {
 		uid := user.ID
 		data := map[string]any{
@@ -804,7 +772,6 @@ func (h *UserHandler) RequestAccountDeletion(c *okapi.Context) error {
 	})
 }
 
-// CancelAccountDeletion cancels a previously scheduled account deletion.
 func (h *UserHandler) CancelAccountDeletion(c *okapi.Context) error {
 	userID := c.GetInt("user_id")
 	user, err := h.repo.FindByID(uint(userID))
@@ -838,9 +805,7 @@ type SetDefaultWorkspaceRequest struct {
 	} `json:"body"`
 }
 
-// SetDefaultWorkspace records which workspace a request that names none lands
-// in. The caller must be a member, and the system workspace is not a valid
-// choice: landing there by default would hide the user's real work.
+// The system workspace is refused: landing there by default would hide the user's real work.
 func (h *UserHandler) SetDefaultWorkspace(c *okapi.Context, req *SetDefaultWorkspaceRequest) error {
 	userID := uint(c.GetInt("user_id"))
 

@@ -27,9 +27,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// licenseRoutes manage the Posta Enterprise license. Installing and removing
-// it is platform administration, so it takes an admin session and never an
-// API key. Any signed-in caller may ask whether Enterprise features are on.
+// Installing or removing a license takes an admin session, never an API key; any signed-in caller may read status.
 func (r *Router) licenseRoutes() []okapi.RouteDefinition {
 	admin := r.v1.Group("/admin/license", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
 		Name:        tagAdmin,
@@ -84,13 +82,11 @@ func (r *Router) licenseRoutes() []okapi.RouteDefinition {
 	}
 }
 
-// licensed refuses a route with 402 unless Enterprise features may run.
 func (r *Router) licensed() []okapi.Middleware {
 	return []okapi.Middleware{handlers.RequireLicense(r.ee)}
 }
 
-// licensedToChange refuses a route with 402 unless Enterprise settings may
-// change, which an expired license no longer allows.
+// An expired license still runs Enterprise features but refuses settings changes with 402.
 func (r *Router) licensedToChange() []okapi.Middleware {
 	return []okapi.Middleware{handlers.RequireLicenseToChange(r.ee)}
 }

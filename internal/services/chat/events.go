@@ -28,8 +28,7 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// Live event types. Agents receive them on the workspace topic, visitors on
-// their conversation's topic.
+// Live event types: agents receive them on the workspace topic, visitors on their conversation's topic.
 const (
 	EventMessage      = "chat.message"
 	EventConversation = "chat.conversation"
@@ -48,7 +47,7 @@ const (
 	WebhookClosed   = "chat.conversation.closed"
 )
 
-// webhook queues a webhook event. messageID is 0 for conversation events.
+// webhook queues a webhook event; messageID is 0 for conversation events.
 func (s *Service) webhook(event string, conv *models.ChatConversation, messageID uint) {
 	if s.enqueuer == nil || conv.Status == models.MessageStatusQuarantined {
 		return
@@ -58,34 +57,30 @@ func (s *Service) webhook(event string, conv *models.ChatConversation, messageID
 	}
 }
 
-// TypingEvent says one side is writing. Name is the agent's, when shown.
+// TypingEvent says one side is writing; Name is the agent's, and only when shown.
 type TypingEvent struct {
 	ConversationID string `json:"conversation_id"`
 	Author         string `json:"author"`
 	Name           string `json:"name,omitempty"`
 }
 
-// ReadEvent says how far one side has read.
 type ReadEvent struct {
 	ConversationID string `json:"conversation_id"`
 	Reader         string `json:"reader"`
 	Seq            int64  `json:"seq"`
 }
 
-// PresenceEvent is an agent's new status.
 type PresenceEvent struct {
 	UserID uint   `json:"user_id"`
 	Status string `json:"status"`
 }
 
-// VisitorEvent says whether the visitor's widget is connected.
 type VisitorEvent struct {
 	ConversationID string `json:"conversation_id"`
 	Live           bool   `json:"live"`
 }
 
-// VisitorMessage is a message as the visitor's widget sees it: no agent IDs
-// or emails, and the agent's name only when the widget shows names.
+// VisitorMessage omits agent IDs and emails, and the agent's name unless the widget shows names.
 type VisitorMessage struct {
 	ID          string    `json:"id"`
 	Seq         int64     `json:"seq"`
@@ -98,7 +93,6 @@ type VisitorMessage struct {
 	Attachments models.ChatAttachments `json:"attachments,omitempty"`
 }
 
-// ToVisitorMessage converts a stored message for the widget.
 func ToVisitorMessage(m *models.ChatMessage, showAgentNames bool) VisitorMessage {
 	out := VisitorMessage{
 		ID:          m.UUID,
@@ -115,7 +109,6 @@ func ToVisitorMessage(m *models.ChatMessage, showAgentNames bool) VisitorMessage
 	return out
 }
 
-// ToVisitorMessages converts a page of messages for the widget.
 func ToVisitorMessages(items []models.ChatMessage, showAgentNames bool) []VisitorMessage {
 	out := make([]VisitorMessage, 0, len(items))
 	for i := range items {
@@ -124,7 +117,6 @@ func ToVisitorMessages(items []models.ChatMessage, showAgentNames bool) []Visito
 	return out
 }
 
-// VisitorConversation is a conversation as the visitor's widget sees it.
 type VisitorConversation struct {
 	ID            string    `json:"id"`
 	State         string    `json:"state"`
@@ -146,14 +138,11 @@ func ToVisitorConversation(c *models.ChatConversation) VisitorConversation {
 	}
 }
 
-// AgentMessageEvent is the data of a chat.message event on the workspace topic.
 type AgentMessageEvent struct {
 	ConversationID string              `json:"conversation_id"`
 	Message        *models.ChatMessage `json:"message"`
 }
 
-// ConversationEvent is the data of a chat.conversation event on the workspace
-// topic.
 type ConversationEvent struct {
 	ConversationID string           `json:"conversation_id"`
 	Started        bool             `json:"started,omitempty"`
@@ -164,9 +153,7 @@ type ConversationEvent struct {
 	Preview        string           `json:"preview,omitempty"`
 }
 
-// publishMessage announces a stored message to the agents and to the
-// visitor. A failed publish costs latency, never the message: both sides
-// catch up from the database by sequence number.
+// A failed publish costs latency, never the message: both sides catch up from the database by sequence number.
 func (s *Service) publishMessage(ctx context.Context, conv *models.ChatConversation, widget *models.ChatWidget, msg *models.ChatMessage) {
 	if s.bus == nil || conv.WorkspaceID == nil {
 		return
@@ -183,8 +170,7 @@ func (s *Service) publishMessage(ctx context.Context, conv *models.ChatConversat
 	})
 }
 
-// publishConversation announces a conversation's new state to the agents
-// and, unless it only matters to them, to the visitor.
+// publishConversation also reaches the visitor unless the change only matters to agents.
 func (s *Service) publishConversation(ctx context.Context, conv *models.ChatConversation, started bool, preview string) {
 	if s.bus == nil || conv.WorkspaceID == nil {
 		return

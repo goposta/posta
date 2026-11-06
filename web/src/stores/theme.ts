@@ -31,7 +31,6 @@ export const useThemeStore = defineStore('theme', () => {
     apply()
   }, { immediate: true })
 
-  // Listen for OS theme changes when in system mode
   mediaQuery.addEventListener('change', () => {
     if (mode.value === 'system') apply()
   })

@@ -102,7 +102,6 @@ func (h *TemplateHandler) Create(c *okapi.Context, req *CreateTemplateRequest) e
 
 	defaultLang := req.Body.DefaultLanguage
 	if defaultLang == "" {
-		// Use the scope's default language if one is configured
 		if defLang, err := h.languageRepo.FindDefault(scope); err == nil {
 			defaultLang = defLang.Code
 		} else {
@@ -247,9 +246,7 @@ func (h *TemplateHandler) Preview(c *okapi.Context, req *PreviewTemplateRequest)
 	if data == nil {
 		data = map[string]any{}
 	}
-	// Expose reserved {{ posta_* }} variables by name so previews of templates that
-	// use them render without missing-key errors. No real message exists here, so
-	// they resolve to their own names rather than generated links.
+	// Reserved {{ posta_* }} variables resolve to their own names so previews render without missing-key errors.
 	data = email.WithSystemVarNames(data)
 
 	input := &email.RenderInput{
@@ -452,9 +449,7 @@ func (h *TemplateHandler) Import(c *okapi.Context, req *ImportTemplateRequest) e
 	return created(c, tmpl)
 }
 
-// ImportHTML creates a template from an uploaded .html file.
-// It extracts <style> CSS into a separate StyleSheet and uses the HTML body
-// as the template localization content.
+// ImportHTML moves <style> CSS into a separate StyleSheet and uses the body as the localization content.
 func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("Insufficient workspace permissions", err)
@@ -467,19 +462,16 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 	}
 	defer func() { _ = file.Close() }()
 
-	// Validate file extension
 	filename := header.Filename
 	lower := strings.ToLower(filename)
 	if !strings.HasSuffix(lower, ".html") && !strings.HasSuffix(lower, ".htm") {
 		return c.AbortBadRequest("only .html files are accepted")
 	}
 
-	// Limit file size to 2MB
 	if header.Size > 2*1024*1024 {
 		return c.AbortBadRequest("file size must not exceed 2MB")
 	}
 
-	// Read file contents
 	buf := new(strings.Builder)
 	if _, err := io.Copy(buf, file); err != nil {
 		return c.AbortBadRequest("failed to read file")
@@ -489,14 +481,10 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 		return c.AbortBadRequest("file is empty")
 	}
 
-	// Optional form fields override what is otherwise derived from the
-	// filename and the document: name, display_name, description, subject
-	// and language.
+	// Optional form fields override what is otherwise derived from the filename and the document.
 	form := func(key string) string { return strings.TrimSpace(c.Request().FormValue(key)) }
 
-	// Without a name or display name, the template is named after the
-	// filename, keeping its capitalisation: the lowercased copy is only
-	// there to match the extension.
+	// Named after the filename, keeping its capitalisation; the lowercased copy only matches the extension.
 	name := form("display_name")
 	if name == "" && form("name") == "" {
 		name = strings.TrimSpace(filename[:len(filename)-len(filepath.Ext(filename))])
@@ -510,11 +498,9 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 	}
 	name = displayName
 
-	// Extract CSS and HTML body, plus any <link rel="stylesheet"> references
 	css, body := extractStyleAndBody(htmlContent)
 	linkNames := extractStyleSheetLinks(htmlContent)
 
-	// Try to extract a subject from <title>
 	subject := form("subject")
 	if subject == "" {
 		subject = extractTitle(htmlContent)
@@ -523,7 +509,6 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 		subject = name
 	}
 
-	// Resolve default language from scope
 	defaultLang := form("language")
 	if defaultLang == "" {
 		defaultLang = "en"
@@ -569,7 +554,6 @@ func (h *TemplateHandler) ImportHTML(c *okapi.Context) error {
 	return created(c, tmpl)
 }
 
-// resolveImportedStyleSheet resolves the stylesheet for an HTML import
 func (h *TemplateHandler) resolveImportedStyleSheet(scope repositories.ResourceScope, baseName, inlineCSS string, linkNames []string) *uint {
 	for _, name := range linkNames {
 		if name == "" {

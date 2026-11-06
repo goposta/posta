@@ -38,9 +38,7 @@ func TestRegistryIDsAreUniqueAndOrdered(t *testing.T) {
 		}
 		seen[s.ID] = true
 
-		// Only the date prefix must not go backwards. Steps sharing a date run in
-		// dependency order, which is rarely alphabetical: 2026-08-28-system-workspace
-		// has to precede the steps that read workspaces.system.
+		// Only dates must not go backwards: same-date steps run in dependency order (system-workspace before its readers).
 		date := s.ID
 		if len(date) > 10 {
 			date = date[:10]

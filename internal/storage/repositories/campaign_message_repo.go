@@ -143,7 +143,6 @@ func (r *CampaignMessageRepository) CountByStatus(campaignID uint) (map[models.C
 	return counts, nil
 }
 
-// SkipPendingForCampaign marks all still-pending CampaignMessages as skipped.
 func (r *CampaignMessageRepository) SkipPendingForCampaign(campaignID uint, reason string) (int64, error) {
 	res := r.db.Model(&models.CampaignMessage{}).
 		Where("campaign_id = ? AND status = ?", campaignID, models.CampaignMsgPending).
@@ -180,7 +179,6 @@ func (r *CampaignMessageRepository) UpdateClickedAt(id uint) error {
 		Update("clicked_at", time.Now()).Error
 }
 
-// FindByEmailID looks up a campaign message by its linked email record.
 func (r *CampaignMessageRepository) FindByEmailID(emailID uint) (*models.CampaignMessage, error) {
 	var msg models.CampaignMessage
 	if err := r.db.Where("email_id = ?", emailID).First(&msg).Error; err != nil {
@@ -189,7 +187,6 @@ func (r *CampaignMessageRepository) FindByEmailID(emailID uint) (*models.Campaig
 	return &msg, nil
 }
 
-// UpdateBouncedAt marks a campaign message as bounced.
 func (r *CampaignMessageRepository) UpdateBouncedAt(id uint) error {
 	return r.db.Model(&models.CampaignMessage{}).Where("id = ? AND bounced_at IS NULL", id).
 		Update("bounced_at", time.Now()).Error

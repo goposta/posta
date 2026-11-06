@@ -27,8 +27,7 @@ const PRESETS = [
   { key: "custom", label: "Custom" },
 ];
 
-// A relative range does not say where the charts actually start, and every axis
-// label is in the reader's own timezone, so spell the window out.
+// A relative range does not say where the charts start, and axis labels are in the reader's timezone, so spell the window out.
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
 
 const window = computed(() => `${longDate(props.from)} — ${longDate(props.to)}`);

@@ -25,8 +25,7 @@ const newKeyIPs = ref('')
 const newKeyScopes = ref<string[]>(['send'])
 const newKeyExpiry = ref('default')
 
-// Workspace-level scopes. None of them grant platform administration — the
-// /admin dashboard is reachable only with a user session.
+// None of these scopes grant platform administration: /admin is reachable only with a user session.
 const scopeOptions = [
   { value: 'send', label: 'Send', hint: 'Send emails, batches, templates, and manage subscriber lists' },
   { value: 'read', label: 'Read', hint: 'List/get emails, bounces, and webhook deliveries' },
@@ -281,7 +280,6 @@ onMounted(() => {
       </template>
     </div>
 
-    <!-- Create Key Modal -->
     <div v-if="showCreateModal" class="modal-overlay" @mousedown="watchClickStart" 
       @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
@@ -350,7 +348,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Show Key Modal -->
     <div v-if="showKeyModal" class="modal-overlay">
       <div class="modal">
         <div class="modal-header">

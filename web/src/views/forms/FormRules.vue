@@ -20,9 +20,7 @@ import type {
   WorkspaceMember,
 } from "../../api/types";
 
-// Routing rules for one form. A rule offers only this form's questions to
-// test and this workspace's members, teams and webhooks to send to: a value
-// a visitor typed never becomes a destination.
+// Rules offer only this form's questions and this workspace's destinations: a value a visitor typed never becomes a destination.
 
 const props = defineProps<{ form: Form }>();
 const notify = useNotificationStore();
@@ -45,8 +43,6 @@ const members = ref<WorkspaceMember[]>([]);
 const webhooks = ref<Webhook[]>([]);
 const testing = ref(false);
 const test = ref<RuleTestResult | null>(null);
-
-// ─── Fields and operators ─────────────────────────────────────────────────
 
 const BUILTINS = [
   { key: "$sender_email", label: "Sender email" },
@@ -129,8 +125,6 @@ function fieldLabel(key: string) {
   return fieldDef(key)?.label || BUILTINS.find((b) => b.key === key)?.label || key;
 }
 
-// ─── Actions ──────────────────────────────────────────────────────────────
-
 const ACTIONS: { type: RuleActionType; label: string }[] = [
   { type: "notify_team", label: "Notify a team" },
   { type: "notify_members", label: "Notify members" },
@@ -190,7 +184,6 @@ const memberName = (id?: number) => {
   return m ? m.name || m.email : "a member";
 };
 
-// summary reads a rule back in one line, for the collapsed card.
 function summary(d: Draft) {
   const when = d.conditions.length
     ? d.conditions
@@ -228,8 +221,6 @@ function summary(d: Draft) {
     .join(", ");
   return `${when} → ${then || "nothing yet"}`;
 }
-
-// ─── Load and save ────────────────────────────────────────────────────────
 
 function input(d: Draft): FormRuleInput {
   return JSON.parse(

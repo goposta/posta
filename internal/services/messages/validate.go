@@ -34,7 +34,6 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// FieldError is one reason a submission does not match its form's schema.
 // Message is an English default; clients can localise by Code.
 type FieldError struct {
 	Key     string `json:"key"`
@@ -43,8 +42,7 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
-// ValidationError is returned by Submit when a submission does not match the
-// form's schema. Nothing is stored.
+// Nothing is stored when a submission fails validation.
 type ValidationError struct {
 	Fields []FieldError
 }
@@ -53,15 +51,11 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("submission has %d invalid field(s)", len(e.Fields))
 }
 
-// Validated is a submission that matches its form's schema.
 type Validated struct {
-	// Data holds the typed answers, keyed by field key.
 	Data models.SubmissionData
-	// Fields is the display copy: declared fields in schema order, then kept
-	// unknown fields.
+	// Fields lists declared fields in schema order, then kept unknown fields.
 	Fields []models.MessageField
-	// Roles maps each role to its field's display value.
-	Roles map[models.FieldRole]string
+	Roles  map[models.FieldRole]string
 }
 
 const (
@@ -95,8 +89,7 @@ func fieldError(f *models.FieldDef, key, code, message string) FieldError {
 	return FieldError{Key: key, Label: label, Code: code, Message: message}
 }
 
-// Validate checks fields against form's schema. A key may repeat, which is
-// how a multi-select arrives; other fields use their first value.
+// A key may repeat, which is how a multi-select arrives; other fields use their first value.
 func Validate(form *models.Form, fields []models.MessageField) (*Validated, []FieldError) {
 	values := make(map[string][]string, len(fields))
 	var order []string
@@ -117,8 +110,7 @@ func Validate(form *models.Form, fields []models.MessageField) (*Validated, []Fi
 		Roles: map[models.FieldRole]string{},
 	}
 	var errs []FieldError
-	// On a form with sections, only the pages the answers lead through count:
-	// a skipped page's questions are neither required nor stored.
+	// Only pages the answers lead through count: a skipped page's questions are neither required nor stored.
 	reached := Route(form.Fields, func(key string) string {
 		if v := values[key]; len(v) > 0 {
 			return v[0]
@@ -180,8 +172,7 @@ func isArchived(defs models.FieldDefs, key string) bool {
 	return false
 }
 
-// coerce turns a field's submitted values into its typed value and display
-// string. A nil value with no error means the optional field was left empty.
+// A nil value with no error means the optional field was left empty.
 func coerce(f *models.FieldDef, vals []string) (any, string, *FieldError) {
 	fail := func(code string) (any, string, *FieldError) {
 		e := fieldError(f, f.Key, code, "")
@@ -358,8 +349,7 @@ func rangeMessage(lo, hi *float64) string {
 
 var patternCache sync.Map // pattern → *regexp.Regexp
 
-// matchesPattern reports whether the whole value matches pattern. Patterns
-// were compiled when the schema was saved, so a failure here is a mismatch.
+// Patterns were compiled when the schema was saved, so a failure here is a mismatch.
 func matchesPattern(pattern, value string) bool {
 	cached, ok := patternCache.Load(pattern)
 	if !ok {
@@ -372,8 +362,6 @@ func matchesPattern(pattern, value string) bool {
 	return cached.(*regexp.Regexp).MatchString(value)
 }
 
-// ExtractWithRoles fills the summary values from role fields, falling back to
-// key-name guessing for roles the schema leaves unset.
 func ExtractWithRoles(roles map[models.FieldRole]string, schema models.FieldDefs, fields []models.MessageField) Extracted {
 	guessed := Extract(fields)
 	has := func(role models.FieldRole) bool {
@@ -399,9 +387,7 @@ func ExtractWithRoles(roles map[models.FieldRole]string, schema models.FieldDefs
 	}
 }
 
-// JoinRepeated merges repeated keys into one field with comma-separated
-// values, in order of first appearance. It is the display copy for forms
-// without a schema, matching how multi-value inputs were always stored.
+// JoinRepeated matches how multi-value inputs were always stored for forms without a schema.
 func JoinRepeated(fields []models.MessageField) []models.MessageField {
 	index := make(map[string]int, len(fields))
 	out := make([]models.MessageField, 0, len(fields))
@@ -421,7 +407,6 @@ func JoinRepeated(fields []models.MessageField) []models.MessageField {
 	return out
 }
 
-// DistinctKeys counts the different keys among fields.
 func DistinctKeys(fields []models.MessageField) int {
 	seen := make(map[string]struct{}, len(fields))
 	for _, f := range fields {

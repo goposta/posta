@@ -12,10 +12,6 @@ interface Item {
   to?: string;
 }
 
-// Flat counts belong in one compact row, not six cards each carrying an icon
-// and a chunk of vertical space. Runtime figures and ratios stay on the health
-// card above; this is inventory only, and each number appears in exactly one
-// of the two.
 const items = computed<Item[]>(() => {
   const m = props.metrics;
   const out: Item[] = [

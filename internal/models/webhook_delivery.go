@@ -21,7 +21,6 @@ package models
 
 import "time"
 
-// WebhookDeliveryStatus represents the outcome of a webhook delivery attempt.
 type WebhookDeliveryStatus string
 
 const (
@@ -29,7 +28,6 @@ const (
 	WebhookDeliveryFailed  WebhookDeliveryStatus = "failed"
 )
 
-// WebhookDelivery records the result of delivering a webhook notification.
 type WebhookDelivery struct {
 	ID             uint                  `json:"id" gorm:"primaryKey"`
 	WebhookID      uint                  `json:"webhook_id" gorm:"index;not null"`

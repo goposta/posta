@@ -1,5 +1,4 @@
-// The public chat API. Every call names the widget by its public key; calls
-// after the first message carry the visitor's bearer token.
+// Every call names the widget by its public key; calls after the first message carry the visitor's bearer token.
 
 export interface Nonce {
   nonce: string
@@ -159,8 +158,7 @@ export class Api {
     return payload.data
   }
 
-  // attachment fetches a file with the visitor's token; the widget shows it
-  // through an object URL, since an <img src> cannot carry the token.
+  // An <img src> cannot carry the visitor's token, so attachments are fetched here and shown through an object URL.
   async attachment(conv: string, message: string, idx: number): Promise<Blob> {
     const res = await fetch(
       this.url(`/conversations/${encodeURIComponent(conv)}/messages/${encodeURIComponent(message)}/attachments/${idx}`),

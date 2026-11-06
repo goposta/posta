@@ -21,8 +21,7 @@ package models
 
 import "time"
 
-// PasswordResetToken backs the "forgot password" flow: a single-use, hashed,
-// expiring token tied to a user. Only the SHA-256 hash is stored.
+// PasswordResetToken is single-use and expiring; only its SHA-256 hash is stored.
 type PasswordResetToken struct {
 	ID        uint       `gorm:"primaryKey"`
 	UserID    uint       `gorm:"index;not null"`

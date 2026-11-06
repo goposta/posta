@@ -34,10 +34,7 @@ type formDef struct {
 	Fields       models.FieldDefs
 }
 
-// defaultFormDefs returns the example forms seeded into every new workspace:
-// a contact form whose submissions are conversations, a survey whose
-// responses are read as data, and a form over several pages. Kept as a pure
-// function (no DB) so tests can check each schema the way the API would.
+// defaultFormDefs is a pure function (no DB) so tests can check each schema the way the API would.
 func defaultFormDefs() []formDef {
 	return []formDef{
 		{
@@ -182,8 +179,7 @@ func senderEmail() models.FieldDef {
 	return models.FieldDef{Key: "email", Label: "Email", Type: models.FieldEmail, Required: true, Role: models.RoleSenderEmail, PII: true}
 }
 
-// followUpEmail is an optional email question, for a survey that is
-// anonymous unless the respondent wants an answer.
+// followUpEmail is optional: a survey stays anonymous unless the respondent wants an answer.
 func followUpEmail() models.FieldDef {
 	f := senderEmail()
 	f.Required, f.Role, f.Help = false, models.RoleNone, "Only if you'd like us to follow up."

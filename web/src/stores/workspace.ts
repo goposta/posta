@@ -22,16 +22,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const currentRole = computed(() => currentWorkspace.value?.role ?? null)
   const isWorkspaceContext = computed(() => currentWorkspaceId.value !== null)
   const isWorkspaceAdmin = computed(() => currentRole.value === 'owner' || currentRole.value === 'admin')
-  // No workspace means no permissions. The pre-workspace era granted edit rights
-  // to a context with no workspace; every resource is scoped now, so a caller
-  // without one can read and write nothing.
+  // Every resource is workspace-scoped, so a caller without a workspace can read and write nothing.
   const canEdit = computed(() => {
     const role = currentRole.value
     return role === 'owner' || role === 'admin' || role === 'editor'
   })
 
-  // Ordinary workspaces, i.e. everything the user actually works in. The system
-  // workspace is platform infrastructure and only platform admins can see it.
+  // The system workspace is platform infrastructure, visible only to platform admins.
   const ownWorkspaces = computed(() => workspaces.value.filter((w) => !w.system))
   const systemWorkspace = computed(() => workspaces.value.find((w) => w.system) ?? null)
   const currentWorkspaceIsSystem = computed(() => currentWorkspace.value?.system ?? false)
@@ -53,8 +50,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const res = await workspaceApi.list()
       workspaces.value = res.data.data ?? []
       const valid = currentWorkspaceId.value && workspaces.value.find((w) => w.id === currentWorkspaceId.value)
-      // Land in an ordinary workspace, never the system one: a platform admin
-      // opening the dashboard wants their own work, not platform infrastructure.
+      // Never land in the system workspace: a platform admin opening the dashboard wants their own work.
       if (!valid) {
         setWorkspace(ownWorkspaces.value[0]?.id ?? null)
       }
@@ -87,7 +83,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 })
 
-// Axios interceptor: inject X-Posta-Workspace-Id header when a workspace is selected
 api.interceptors.request.use((config) => {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) {

@@ -130,9 +130,7 @@ func TestConnectionDriftPerField(t *testing.T) {
 	}
 }
 
-// A map-based Updates call bypasses GORM's BeforeSave hook, so the rotated
-// password has to be encrypted here. Without it the secret lands in the
-// database in the clear, and nothing else in the system would notice.
+// A map-based Updates bypasses GORM's BeforeSave, so the rotated password must be encrypted explicitly.
 func TestConnectionDriftEncryptsRotatedPassword(t *testing.T) {
 	crypto.Init("0123456789abcdef0123456789abcdef")
 
@@ -156,8 +154,7 @@ func TestConnectionDriftEncryptsRotatedPassword(t *testing.T) {
 	}
 }
 
-// An unset password must not clear the stored one: an operator may have set it
-// through the dashboard and dropped it from the environment.
+// An unset password must not clear the stored one: an operator may have set it in the dashboard.
 func TestConnectionDriftIgnoresEmptyPassword(t *testing.T) {
 	cfg := testConfig()
 	cfg.Password = ""

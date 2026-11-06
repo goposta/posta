@@ -1,7 +1,4 @@
-// IANA timezone names for timezone pickers, with their current UTC offset.
-// The list comes from the browser (Intl.supportedValuesOf) so it tracks the
-// tz database instead of a hand-maintained subset; the backend validates the
-// chosen name against Go's tz database (okapi `format:"timezone"`).
+// Zones come from Intl.supportedValuesOf; the backend validates the name against Go's tz database (okapi `format:"timezone"`).
 
 export interface TimezoneOption {
   value: string
@@ -41,9 +38,7 @@ function utcOffset(zone: string, at: Date): string {
 
 let cached: TimezoneOption[] | null = null
 
-// timezoneOptions returns UTC first, then every zone sorted by name. A saved
-// value missing from the browser's list (an alias such as Asia/Calcutta, or a
-// zone this engine does not know) is kept so opening the form never changes it.
+// A saved value missing from the browser's list (an alias, or a zone this engine lacks) is kept so opening the form never changes it.
 export function timezoneOptions(current?: string): TimezoneOption[] {
   if (!cached) {
     const now = new Date()

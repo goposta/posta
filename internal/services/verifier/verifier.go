@@ -17,13 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package verifier checks whether an email address is valid/deliverable without
-// sending to it. It runs cheap-to-expensive checks (syntax, suppression/bounce
-// history, disposable/role detection, MX lookup) and caches the intrinsic result
-// in Redis so the same address and domain are not re-checked on every call.
-//
-// Note: the MVP does not perform an SMTP RCPT probe, so mailbox existence is not
-// confirmed; checks.smtp is reported as "skipped".
+// Package verifier checks deliverability without sending; there is no RCPT probe, so checks.smtp is "skipped".
 package verifier
 
 import (
@@ -40,10 +34,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// ErrRateLimited is returned by Verify when the per-user hourly limit is hit.
 var ErrRateLimited = errors.New("verification rate limit exceeded")
 
-// Status is the overall verdict for an address.
 type Status string
 
 const (
@@ -54,7 +46,6 @@ const (
 	StatusUnknown    Status = "unknown"    // could not determine (e.g. DNS error)
 )
 
-// Checks records which individual checks passed.
 type Checks struct {
 	Syntax      bool   `json:"syntax"`
 	MX          bool   `json:"mx"`
@@ -63,9 +54,7 @@ type Checks struct {
 	SMTP        string `json:"smtp"` // always "skipped"; no SMTP probe is performed
 }
 
-// Result is the verification outcome returned to the caller. The intrinsic
-// fields (everything except Suppressed/PreviouslyBounced/Cached) are what gets
-// cached in Redis; the per-tenant flags are layered on per request.
+// Only Result's intrinsic fields are cached; Suppressed/PreviouslyBounced/Cached are layered on per request.
 type Result struct {
 	Email             string    `json:"email"`
 	Status            Status    `json:"status" enum:"valid,invalid,risky,disposable,unknown"`
@@ -79,7 +68,6 @@ type Result struct {
 	CheckedAt         time.Time `json:"checked_at"`
 }
 
-// Options configures a Service. Durations and limits come from app config.
 type Options struct {
 	Enabled    bool
 	AddrTTL    time.Duration
@@ -87,7 +75,6 @@ type Options struct {
 	RateHourly int // per-user hourly cap; 0 disables rate limiting
 }
 
-// Service verifies email addresses and caches results in Redis.
 type Service struct {
 	client          *redis.Client
 	suppressionRepo *repositories.SuppressionRepository
@@ -96,8 +83,7 @@ type Service struct {
 	resolver        *net.Resolver // injectable for tests; nil uses the default
 }
 
-// NewService builds a verifier. suppressionRepo/bounceRepo may be nil (the
-// per-tenant overlay is then skipped); client must be non-nil for caching.
+// NewService: nil suppression/bounce repos skip the tenant overlay; client must be non-nil for caching.
 func NewService(client *redis.Client, suppressionRepo *repositories.SuppressionRepository, bounceRepo *repositories.BounceRepository, opts Options) *Service {
 	return &Service{
 		client:          client,
@@ -108,11 +94,9 @@ func NewService(client *redis.Client, suppressionRepo *repositories.SuppressionR
 	}
 }
 
-// Enabled reports whether verification is turned on.
 func (s *Service) Enabled() bool { return s.opts.Enabled }
 
-// Verify checks an address. fresh=true bypasses the Redis cache. The returned
-// Result always reflects the current tenant's suppression/bounce history.
+// Verify: fresh bypasses the cache; the result always reflects the tenant's current suppression/bounce history.
 func (s *Service) Verify(ctx context.Context, scope repositories.ResourceScope, rawEmail string, fresh bool) (*Result, error) {
 	email := strings.ToLower(strings.TrimSpace(rawEmail))
 
@@ -133,8 +117,7 @@ func (s *Service) Verify(ctx context.Context, scope repositories.ResourceScope, 
 		}
 	}
 
-	// Per-tenant history overlay (no network). Suppressed or previously
-	//    hard-bounced addresses are conclusively bad for this tenant.
+	// Suppressed or hard-bounced addresses are conclusively bad for this tenant.
 	suppressed, bounced := s.tenantOverlay(scope, email)
 	if suppressed || bounced {
 		r := baseResult(email)
@@ -151,7 +134,6 @@ func (s *Service) Verify(ctx context.Context, scope repositories.ResourceScope, 
 		return r, nil
 	}
 
-	// Redis cache for the intrinsic result.
 	if !fresh {
 		if cached := s.getCache(ctx, email); cached != nil {
 			cached.Cached = true
@@ -161,7 +143,6 @@ func (s *Service) Verify(ctx context.Context, scope repositories.ResourceScope, 
 		}
 	}
 
-	// Compute the intrinsic result (disposable/role/MX) and cache it.
 	r := s.compute(ctx, email)
 	s.setCache(ctx, email, r)
 
@@ -211,7 +192,6 @@ func decide(syntaxOK, disposable, roleAccount, hasMX bool) (Status, int, string)
 	}
 }
 
-// tenantOverlay returns the current tenant's suppression/bounce status.
 func (s *Service) tenantOverlay(scope repositories.ResourceScope, email string) (suppressed, bounced bool) {
 	if s.suppressionRepo != nil {
 		if ok, err := s.suppressionRepo.IsSuppressed(scope, email); err == nil {
@@ -226,10 +206,7 @@ func (s *Service) tenantOverlay(scope repositories.ResourceScope, email string) 
 	return suppressed, bounced
 }
 
-// mxHosts returns the domain's mail exchangers (or the domain itself when only
-// an A/AAAA record exists — an implicit MX per RFC 5321 §5.1), caching the
-// answer per domain in Redis. An empty slice means the domain cannot receive
-// mail. The cached sentinel "none" distinguishes a negative result from a miss.
+// mxHosts treats an A/AAAA-only domain as an implicit MX (RFC 5321 5.1); a cached "none" marks a negative.
 func (s *Service) mxHosts(ctx context.Context, domain string) []string {
 	key := mxKey(domain)
 	if s.client != nil {

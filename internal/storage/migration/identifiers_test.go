@@ -29,12 +29,7 @@ import (
 	gl "gorm.io/gorm/logger"
 )
 
-// TestIdentifiersAfterMigration runs the full migration against a scratch
-// database, ideally a copy of one made before 0.18, and checks that every
-// workspace, form, OAuth provider, template and stylesheet ends with an
-// identifier for a name and a label for a display name. It is skipped
-// unless MIGRATION_SMOKE_DSN is set. Running it twice checks the move is
-// done once.
+// TestIdentifiersAfterMigration runs the migration twice on MIGRATION_SMOKE_DSN, ideally a copy made before 0.18.
 func TestIdentifiersAfterMigration(t *testing.T) {
 	dsn := os.Getenv("MIGRATION_SMOKE_DSN")
 	if dsn == "" {

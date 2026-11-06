@@ -57,8 +57,7 @@ onBeforeUnmount(() => {
 
 function startWorkerStream() {
   const baseUrl = import.meta.env.VITE_API_URL || '/api/v1'
-  // EventSource cannot set an Authorization header; the HttpOnly session cookie
-  // rides the handshake instead.
+  // EventSource cannot set an Authorization header; the HttpOnly session cookie rides the handshake instead.
   workerSSE = new EventSource(`${baseUrl}/admin/metrics/stream`, { withCredentials: true })
 
   workerSSE.addEventListener('worker.status', (e) => {
@@ -125,7 +124,6 @@ function failedLoginColor(count: number): string {
   return 'var(--danger-600, #dc2626)'
 }
 
-// Analytics helpers
 const maxDailyCount = computed(() => {
   if (!analytics.value?.daily_counts?.length) return 1
   return Math.max(...analytics.value.daily_counts.map(d => d.count), 1)
@@ -153,7 +151,6 @@ function statusColor(status: string): string {
 
 const totalBreakdown = computed(() => analytics.value?.status_breakdown?.reduce((s, b) => s + b.count, 0) || 0)
 
-// Dashboard analytics helpers
 const deliveryRateMax = computed(() => {
   if (!dashAnalytics.value) return 1
   return Math.max(...dashAnalytics.value.delivery_rate_trends.map(d => d.total), 1)
@@ -238,9 +235,6 @@ const avgDeliveryRate = computed(() => {
     </div>
 
     <template v-else-if="metrics">
-      <!-- Verdict first, then stock, then the places to go. Anything
-           countable is a tile in the inventory row, and that tile is also
-           the link, so no figure on this page is printed twice. -->
       <AdminHealth
         :metrics="metrics"
         :worker-status="workerStatus"
@@ -253,7 +247,6 @@ const avgDeliveryRate = computed(() => {
 
       <AdminQuickLinks />
 
-      <!-- Worker Details -->
       <template v-if="workerStatus && workerStatus.workers.length > 0">
         <div class="metrics-section-label">Workers</div>
 
@@ -313,7 +306,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </template>
 
-      <!-- Security -->
       <div class="metrics-section-label">Security</div>
       <div class="stats-grid">
         <div class="stat-card">
@@ -336,7 +328,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </div>
 
-      <!-- Email Delivery -->
       <div class="metrics-section-label">Email Delivery</div>
       <div class="stats-grid">
         <div class="stat-card">
@@ -379,7 +370,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </div>
 
-      <!-- Inbound Email Metrics -->
       <div class="metrics-section-label">Inbound Email</div>
       <div class="stats-grid" style="margin-bottom: 28px;">
         <div class="stat-card">
@@ -432,7 +422,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </div>
 
-      <!-- Email delivery progress bar -->
       <div class="card" style="margin-bottom: 28px;">
         <div class="card-body">
           <div class="delivery-bar-label">
@@ -457,7 +446,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </div>
 
-      <!-- Analytics (last 30 days) -->
       <template v-if="analytics">
         <div class="metrics-section-label">Email Volume (Last 30 Days)</div>
         <div class="card" style="margin-bottom: 28px;">
@@ -501,7 +489,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </template>
 
-      <!-- Webhook Deliveries -->
       <template v-if="metrics.webhook_deliveries && metrics.webhook_deliveries.total_deliveries > 0">
         <div class="metrics-section-label">Webhook Deliveries</div>
         <div class="stats-grid">
@@ -562,7 +549,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </template>
 
-      <!-- Dashboard Analytics: Delivery Rate, Bounce Rate, Latency -->
       <template v-if="dashAnalytics">
         <div class="metrics-section-label">Delivery Rate Trends <span class="metrics-section-sub">{{ avgDeliveryRate.toFixed(1) }}% avg</span></div>
         <div class="card" style="margin-bottom: 28px;">
@@ -651,7 +637,6 @@ const avgDeliveryRate = computed(() => {
         </div>
       </template>
 
-      <!-- API Keys & Reputation -->
       <div class="metrics-section-label">Reputation</div>
       <div class="stats-grid">
         <div class="stat-card">
@@ -885,7 +870,6 @@ const avgDeliveryRate = computed(() => {
   color: var(--text-muted);
 }
 
-/* Dashboard analytics charts */
 .da-chart {
   display: flex;
   align-items: flex-end;

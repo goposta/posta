@@ -60,7 +60,6 @@ func (r *TrackingRepository) IncrementLinkClickCount(linkID uint) {
 		Update("click_count", gorm.Expr("click_count + 1"))
 }
 
-// FindOrCreateLink finds existing or creates a new tracked link.
 func (r *TrackingRepository) FindOrCreateLink(campaignID uint, originalURL, hash string) (*models.TrackedLink, error) {
 	var link models.TrackedLink
 	if err := r.db.Where("hash = ?", hash).First(&link).Error; err == nil {
@@ -85,7 +84,6 @@ func (r *TrackingRepository) CreateEvent(event *models.TrackingEvent) error {
 	return r.db.Create(event).Error
 }
 
-// HasEvent checks if an event of this type already exists for a campaign message (deduplication).
 func (r *TrackingRepository) HasEvent(campaignMessageID uint, eventType models.TrackingEventType) bool {
 	var count int64
 	r.db.Model(&models.TrackingEvent{}).
@@ -94,7 +92,6 @@ func (r *TrackingRepository) HasEvent(campaignMessageID uint, eventType models.T
 	return count > 0
 }
 
-// HasClickEvent checks if a click event already exists for a specific link.
 func (r *TrackingRepository) HasClickEvent(campaignMessageID uint, trackedLinkID uint) bool {
 	var count int64
 	r.db.Model(&models.TrackingEvent{}).
@@ -122,7 +119,6 @@ type CampaignAnalytics struct {
 func (r *TrackingRepository) CampaignAnalytics(campaignID uint) (*CampaignAnalytics, error) {
 	a := &CampaignAnalytics{}
 
-	// Single aggregation query instead of 7 separate COUNT queries
 	err := r.db.Model(&models.CampaignMessage{}).
 		Select(`COUNT(*) as total_messages,
 			COUNT(CASE WHEN status = ? THEN 1 END) as sent_messages,
@@ -168,7 +164,6 @@ func (r *TrackingRepository) EventTimeSeries(campaignID uint, eventType models.T
 	return results, err
 }
 
-// CampaignAnalyticsByVariant returns analytics grouped by A/B test variant.
 func (r *TrackingRepository) CampaignAnalyticsByVariant(campaignID uint) (map[string]*CampaignAnalytics, error) {
 	type variantRow struct {
 		Variant         string
@@ -223,7 +218,6 @@ func (r *TrackingRepository) CampaignAnalyticsByVariant(campaignID uint) (map[st
 	return result, nil
 }
 
-// DeleteOlderThan deletes tracking events older than the given time.
 func (r *TrackingRepository) DeleteOlderThan(before time.Time) (int64, error) {
 	result := r.db.Where("created_at < ?", before).Delete(&models.TrackingEvent{})
 	return result.RowsAffected, result.Error

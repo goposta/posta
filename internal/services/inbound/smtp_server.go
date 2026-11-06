@@ -36,7 +36,6 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// SMTPConfig holds configuration for the built-in SMTP receiver.
 type SMTPConfig struct {
 	Host           string
 	Port           int
@@ -47,7 +46,6 @@ type SMTPConfig struct {
 	TLSKeyFile     string
 }
 
-// Backend implements smtp.Backend for go-smtp.
 type Backend struct {
 	svc            *Service
 	domainRepo     *repositories.DomainRepository
@@ -59,7 +57,6 @@ func NewBackend(svc *Service, domainRepo *repositories.DomainRepository, maxMess
 	return &Backend{svc: svc, domainRepo: domainRepo, maxMessageSize: maxMessageSize}
 }
 
-// SetRateLimiter enables per-IP rate limiting for new SMTP sessions.
 func (b *Backend) SetRateLimiter(l *IPRateLimiter) { b.limiter = l }
 
 func (b *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
@@ -105,8 +102,7 @@ func (s *session) Mail(from string, _ *smtp.MailOptions) error {
 	return nil
 }
 
-// Rcpt rejects recipients whose domain is not ownership-verified, saving bandwidth
-// by failing before DATA.
+// Rcpt rejects unverified domains before DATA to save bandwidth.
 func (s *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	addr := to
 	if parsed, err := mail.ParseAddress(to); err == nil {
@@ -123,11 +119,7 @@ func (s *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	return nil
 }
 
-// Data reads the raw message (bounded by MaxMessageSize) and hands the bytes
-// to the store-first ingest path. Parsing is deferred to the async worker,
-// so a malformed MIME body or a Postgres encoding error during structured
-// persistence no longer maps to 451 — once IngestRaw succeeds, the message
-// is durably stored and the MTA gets 250.
+// Parsing is deferred to the worker, so once IngestRaw succeeds the message is durable and the MTA gets 250.
 func (s *session) Data(r io.Reader) error {
 	limit := s.backend.maxMessageSize
 	if limit <= 0 {
@@ -163,8 +155,7 @@ func (s *session) Data(r io.Reader) error {
 	}
 }
 
-// NewSMTPServer builds a configured *smtp.Server. When cfg.TLSMode == "starttls",
-// STARTTLS is automatically advertised by go-smtp once TLSConfig is set.
+// go-smtp advertises STARTTLS automatically once TLSConfig is set.
 func NewSMTPServer(backend *Backend, cfg SMTPConfig) (*smtp.Server, error) {
 	srv := smtp.NewServer(backend)
 	srv.Addr = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)

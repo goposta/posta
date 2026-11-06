@@ -38,25 +38,16 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// Form submissions are a form's messages read as responses: typed answers,
-// field filters, a summary and an export. They live outside /forms on
-// purpose: /forms is tenant administration (admin scope), while reading
-// responses is reading content (read scope).
+// Submissions live outside /forms on purpose: reading responses needs the read scope, not admin.
 
 const (
-	// maxSummarySubmissions bounds how many of the newest submissions a
-	// summary reads; the result says when it stopped short.
+	// maxSummarySubmissions bounds a summary to the newest submissions; the result says when it stopped short.
 	maxSummarySubmissions = 50000
-	// maxSubmissionExport bounds one export.
-	maxSubmissionExport = 100000
+	maxSubmissionExport   = 100000
 )
 
-// SubmissionQueryRequest selects a form's submissions. Field filters are read
-// from the raw query: field.<key>=value for equality, field.<key>[gte]=n and
-// field.<key>[lte]=n for ranges on number, scale, rating, date and time
-// questions.
+// Field filters come from the raw query: field.<key>=v for equality, field.<key>[gte]=n / [lte]=n for ranges.
 
-// formatCSV is the default export format.
 const formatCSV = "csv"
 
 type SubmissionQueryRequest struct {
@@ -72,8 +63,7 @@ type SubmissionQueryRequest struct {
 	Format   string `query:"format" enum:"csv,json" default:"csv" doc:"Export only"`
 }
 
-// submissionQuery resolves the form and the filter a request names. It writes
-// the error response itself and returns nil when the request is invalid.
+// submissionQuery writes the error response itself and returns nil when the request is invalid.
 func (h *MessageHandler) submissionQuery(c *okapi.Context, req *SubmissionQueryRequest) (*models.Form, *repositories.MessageFilterQuery, error) {
 	if req.FormID <= 0 {
 		return nil, nil, c.AbortBadRequest("form_id is required")
@@ -109,9 +99,7 @@ func (h *MessageHandler) submissionQuery(c *okapi.Context, req *SubmissionQueryR
 	return form, filter, nil
 }
 
-// parseFieldFilters turns field.<key>[op]=value query parameters into typed
-// filters. Every key must be a question of the form, so nothing a caller
-// sends reaches SQL except as a bound value.
+// Every key must be a question of the form, so caller input reaches SQL only as a bound value.
 func parseFieldFilters(defs models.FieldDefs, query url.Values) (map[string]any, []repositories.DataRange, error) {
 	var equals map[string]any
 	var ranges []repositories.DataRange
@@ -174,8 +162,7 @@ func parseFieldFilters(defs models.FieldDefs, query url.Values) (map[string]any,
 	return equals, ranges, nil
 }
 
-// equalityValue types a filter value the way submissions store it, so the
-// containment match is exact.
+// equalityValue types the value the way submissions store it, so the containment match is exact.
 func equalityValue(def *models.FieldDef, raw string) (any, error) {
 	switch def.Type {
 	case models.FieldNumber, models.FieldScale, models.FieldRating:
@@ -198,9 +185,7 @@ func equalityValue(def *models.FieldDef, raw string) (any, error) {
 	return raw, nil
 }
 
-// canSeePII reports whether the caller may read personal-data answers in
-// bulk: a workspace owner or admin, or an API key with the admin scope. A
-// workspace-bound key resolves as owner, so its scopes decide, not its role.
+// Owners, admins and admin-scope keys; a workspace-bound key resolves as owner, so its scopes decide.
 func canSeePII(c *okapi.Context) bool {
 	if c.GetString(middlewares.CtxAuthMethod) == middlewares.AuthMethodAPIKey {
 		for _, s := range middlewares.APIKeyScopes(c) {
@@ -232,7 +217,6 @@ func (h *MessageHandler) ListSubmissions(c *okapi.Context, req *SubmissionQueryR
 	return paginated(c, items, total, page, size)
 }
 
-// SubmissionSummary reduces a form's submissions to per-question figures.
 func (h *MessageHandler) SubmissionSummary(c *okapi.Context, req *SubmissionQueryRequest) error {
 	form, filter, err := h.submissionQuery(c, req)
 	if filter == nil {
@@ -251,8 +235,7 @@ func (h *MessageHandler) SubmissionSummary(c *okapi.Context, req *SubmissionQuer
 	return ok(c, s.Result(truncated))
 }
 
-// answersOf returns a submission's answers by key. Submissions stored before
-// the form had a schema have no typed data, so their raw fields stand in.
+// Submissions stored before the form had a schema have no typed data, so their raw fields stand in.
 func answersOf(m *models.Message) models.SubmissionData {
 	if m.Data != nil {
 		return m.Data
@@ -267,9 +250,6 @@ func answersOf(m *models.Message) models.SubmissionData {
 	return out
 }
 
-// exportColumns are the questions an export carries, active ones first, then
-// archived ones, so old answers are not lost. Personal-data questions are
-// left out unless the caller may see them.
 func priorityOf(m *models.Message) models.MessagePriority {
 	if m.Priority == "" {
 		return models.MessagePriorityNormal
@@ -300,8 +280,7 @@ func exportColumns(defs models.FieldDefs, showPII bool) (cols []models.FieldDef,
 	return cols, withheld
 }
 
-// csvSafe keeps a cell from being read as a formula by a spreadsheet:
-// submissions are written by the public.
+// csvSafe keeps a cell from being read as a formula: submissions are written by the public.
 func csvSafe(v string) string {
 	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
 		return "'" + v
@@ -309,7 +288,6 @@ func csvSafe(v string) string {
 	return v
 }
 
-// ExportSubmissions streams a form's submissions as CSV or JSON.
 func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQueryRequest) error {
 	form, filter, err := h.submissionQuery(c, req)
 	if filter == nil {
@@ -478,8 +456,7 @@ func (h *MessageHandler) ExportSubmissions(c *okapi.Context, req *SubmissionQuer
 	return nil
 }
 
-// otherFields returns, as a JSON object, the submitted fields the schema does
-// not declare (kept under the "keep" policy), or "" when there are none.
+// otherFields returns undeclared fields (kept under the "keep" policy) as a JSON object, or "" when none.
 func otherFields(m *models.Message, known map[string]bool) string {
 	hydrate(m)
 	extra := map[string]string{}

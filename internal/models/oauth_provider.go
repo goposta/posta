@@ -28,7 +28,6 @@ const (
 	OAuthProviderOIDC   OAuthProviderType = "oidc"
 )
 
-// OAuthProvider stores configuration for an OAuth/OIDC identity provider.
 type OAuthProvider struct {
 	ID             uint              `json:"id" gorm:"primaryKey"`
 	WorkspaceID    *uint             `json:"workspace_id,omitempty" gorm:"index"`

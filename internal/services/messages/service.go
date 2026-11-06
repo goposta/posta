@@ -128,10 +128,7 @@ func (s *Service) OnReceived(fn func(models.MessageStatus)) { s.onReceived = fn 
 
 func (s *Service) Scanner() *messagescan.Scanner { return s.scanner }
 
-// OriginAllowed reports whether a browser Origin may post to an endpoint with
-// this allowlist. An empty allowlist accepts any origin; "*" does explicitly.
-// A missing Origin (curl, server-to-server, a native app) is accepted unless
-// strict is set. The allowlist slows spam; it is not authentication.
+// The allowlist slows spam but is not authentication; a missing Origin passes unless strict is set.
 func OriginAllowed(allowlist []string, strict bool, origin string) bool {
 	origin = strings.TrimSpace(origin)
 	if origin == "" {
@@ -152,9 +149,7 @@ func OriginAllowed(allowlist []string, strict bool, origin string) bool {
 	return false
 }
 
-// RedirectAllowed reports whether target is a safe post-submit redirect: on
-// the host of the endpoint's configured redirect, or on an explicitly allowed
-// origin. Anything else would be an open redirect on a trusted domain.
+// Anything off the configured redirect host or allowed origins would be an open redirect on a trusted domain.
 func RedirectAllowed(allowlist []string, fixedRedirect, target string) bool {
 	if target == "" {
 		return false
@@ -218,8 +213,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 		fields = append(fields, models.MessageField{Key: key, Value: Sanitize(f.Value)})
 	}
 
-	// Validate only what may be a person: a honeypot or nonce failure is
-	// rejected silently, so it must not learn about the schema from a 422.
+	// Honeypot and nonce failures are rejected silently, so they must not learn the schema from a 422.
 	var (
 		extracted     Extracted
 		data          models.SubmissionData
@@ -243,9 +237,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 	}
 	senderEmail := NormalizeEmail(extracted.Email)
 
-	// Quotas come before the 422, so a rate-limited client cannot probe the
-	// schema; validation comes before dedup and scanning, so invalid input
-	// never counts towards them.
+	// Quotas precede the 422 so limited clients cannot probe the schema; invalid input never counts toward dedup.
 	if err := s.checkQuotas(ctx, form.ID, *form.WorkspaceID, req.ClientIP, senderEmail, req.HoneypotHit); err != nil {
 		return nil, err
 	}
@@ -323,8 +315,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*SubmitResult,
 	}
 
 	_ = s.formRepo.RecordSubmission(form.ID, msg.IsSpam(), msg.CreatedAt)
-	// The response limit reads the counts from the cached form; drop it so
-	// the next request sees this submission instead of waiting out the TTL.
+	// The response limit reads counts from the cached form, so drop it rather than wait out the TTL.
 	if form.MaxResponses > 0 && !msg.IsSpam() {
 		s.InvalidateFormKey(form.PublicKey)
 	}
@@ -462,13 +453,9 @@ func (s *Service) threadReplyTo(msg *models.Message) string {
 
 func (s *Service) ThreadReplyTo(msg *models.Message) string { return s.threadReplyTo(msg) }
 
-// maxReferences caps the References header at the thread root plus the most
-// recent replies; RFC 5322 §3.6.4 lets a long thread trim the middle.
+// RFC 5322 §3.6.4 lets a long thread trim the middle of References.
 const maxReferences = 10
 
-// threadHeaders returns the In-Reply-To and References values for a new reply
-// on a thread whose first reply was root and whose later replies are prior,
-// oldest first.
 func threadHeaders(root string, prior []string) (inReplyTo, references string) {
 	chain := make([]string, 0, maxReferences+1)
 	chain = append(chain, root)
@@ -485,8 +472,7 @@ func threadHeaders(root string, prior []string) (inReplyTo, references string) {
 	return chain[len(chain)-1], strings.Join(chain, " ")
 }
 
-// newMessageID builds an RFC 5322 Message-ID on the sending domain, so it is
-// covered by the same DKIM signature as the rest of the message.
+// The Message-ID is on the sending domain so the same DKIM signature covers it.
 func newMessageID(messageUUID, from string) string {
 	domain := "posta.local"
 	if addr, err := mail.ParseAddress(from); err == nil {
@@ -558,8 +544,6 @@ func (l *lookup) SubmissionsFromSender(src models.ScanSource, email string, sinc
 	return l.messageRepo.CountBySenderSince(src.ID, email, since)
 }
 
-// ActiveFilters returns the workspace-wide filters plus those scoped to the
-// source. Only forms carry source-scoped filters today.
 func (l *lookup) ActiveFilters(workspaceID uint, src models.ScanSource) ([]models.MessageFilter, error) {
 	var formID uint
 	if src.Kind == models.ScanSourceForm {

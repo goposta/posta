@@ -111,9 +111,7 @@ func (r *EmailRepository) FindByScope(scope ResourceScope, limit, offset int) ([
 	return items, total, nil
 }
 
-// FindByScopeFiltered returns scoped emails narrowed by the given search filter.
-// sort is an optional sort key (e.g. "subject", "-sent_at"); empty/unknown keeps
-// the default newest-first order.
+// FindByScopeFiltered sorts by an optional key like "-sent_at"; empty or unknown keeps newest-first.
 func (r *EmailRepository) FindByScopeFiltered(scope ResourceScope, f EmailFilter, sort string, limit, offset int) ([]models.Email, int64, error) {
 	var items []models.Email
 	var total int64
@@ -176,7 +174,6 @@ func (r *EmailRepository) FindByScopeFiltered(scope ResourceScope, f EmailFilter
 	return items, total, nil
 }
 
-// FindFailedForRetry returns failed emails with retry_count < maxRetries for a given user.
 func (r *EmailRepository) FindFailedForRetry(userID uint, maxRetries int) ([]models.Email, error) {
 	var emails []models.Email
 	if err := r.db.Where("user_id = ? AND status = ? AND retry_count < ?", userID, models.EmailStatusFailed, maxRetries).
@@ -187,7 +184,6 @@ func (r *EmailRepository) FindFailedForRetry(userID uint, maxRetries int) ([]mod
 	return emails, nil
 }
 
-// FindFailedForRetryByWorkspace returns failed emails for a workspace that haven't exceeded max retries.
 func (r *EmailRepository) FindFailedForRetryByWorkspace(workspaceID uint, maxRetries int) ([]models.Email, error) {
 	var emails []models.Email
 	if err := r.db.Where("workspace_id = ? AND status = ? AND retry_count < ?", workspaceID, models.EmailStatusFailed, maxRetries).
@@ -212,16 +208,12 @@ func (r *EmailRepository) FindAll(limit, offset int) ([]models.Email, int64, err
 	return emails, total, nil
 }
 
-// DeleteOlderThan deletes email records older than the given time.
-// Returns the number of rows deleted.
 func (r *EmailRepository) DeleteOlderThan(before time.Time) (int64, error) {
 	result := r.db.Where("created_at < ?", before).Delete(&models.Email{})
 	return result.RowsAffected, result.Error
 }
 
-// AttachmentsJSONOlderThan returns the attachments_json blob for every email
-// row older than the cutoff. The caller decodes each to enumerate blob-storage
-// keys so they can be deleted before the rows are dropped.
+// AttachmentsJSONOlderThan lets the caller delete blob-storage keys before the rows are dropped.
 func (r *EmailRepository) AttachmentsJSONOlderThan(before time.Time) ([]string, error) {
 	var out []string
 	err := r.db.Model(&models.Email{}).
@@ -230,8 +222,7 @@ func (r *EmailRepository) AttachmentsJSONOlderThan(before time.Time) ([]string, 
 	return out, err
 }
 
-// ScrubBodiesOlderThan clears HTML/text bodies of emails older than the cutoff,
-// keeping the record. Returns the number of rows scrubbed.
+// ScrubBodiesOlderThan clears bodies but keeps the record.
 func (r *EmailRepository) ScrubBodiesOlderThan(before time.Time) (int64, error) {
 	result := r.db.Model(&models.Email{}).
 		Where("created_at < ? AND (html_body <> '' OR text_body <> '')", before).
@@ -239,8 +230,7 @@ func (r *EmailRepository) ScrubBodiesOlderThan(before time.Time) (int64, error) 
 	return result.RowsAffected, result.Error
 }
 
-// ScrubAttachmentsOlderThan clears attachment metadata of emails older than the
-// cutoff, keeping the record. Blobs are deleted separately by the caller.
+// ScrubAttachmentsOlderThan clears metadata but keeps the record; the caller deletes the blobs.
 func (r *EmailRepository) ScrubAttachmentsOlderThan(before time.Time) (int64, error) {
 	result := r.db.Model(&models.Email{}).
 		Where("created_at < ? AND attachments_json <> ''", before).

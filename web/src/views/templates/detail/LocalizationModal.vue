@@ -13,8 +13,7 @@ const emit = defineEmits<{ (e: "close"): void; (e: "save"): void }>();
 
 const form = defineModel<TemplateLocalizationInput>("form", { required: true });
 
-// A language already present on this version would be rejected by the unique
-// index, so it is not offered.
+// A language already on this version would be rejected by the unique index, so it is not offered.
 const available = computed(() => props.languages.filter((l) => !props.taken.includes(l.code)));
 
 const valid = computed(

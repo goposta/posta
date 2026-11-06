@@ -27,11 +27,9 @@ import (
 	"strings"
 )
 
-// VisitorTokenPrefix marks a chat visitor's bearer token.
 const VisitorTokenPrefix = "pcv_"
 
-// NewVisitorToken returns a fresh visitor token and the hash to store. The
-// token itself is handed to the browser once and never kept.
+// The token itself is handed to the browser once and never kept; only its hash is stored.
 func NewVisitorToken() (token, hash string, err error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -41,14 +39,11 @@ func NewVisitorToken() (token, hash string, err error) {
 	return token, HashVisitorToken(token), nil
 }
 
-// HashVisitorToken returns the stored form of a visitor token.
 func HashVisitorToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
 
-// BearerVisitorToken extracts a visitor token from an Authorization header,
-// or returns "" when there is none of the right shape.
 func BearerVisitorToken(header string) string {
 	const bearer = "Bearer "
 	if len(header) <= len(bearer) || !strings.EqualFold(header[:len(bearer)], bearer) {

@@ -32,8 +32,6 @@ import (
 	"github.com/goposta/posta/internal/services/inbound"
 )
 
-// parseBuilt parses a message produced by buildMessage back into its bodies and
-// attachments, the way a receiving MTA would.
 func parseBuilt(t *testing.T, raw []byte) *inbound.ParsedEmail {
 	t.Helper()
 	p, err := inbound.ParseRawEmail(raw)
@@ -43,9 +41,7 @@ func parseBuilt(t *testing.T, raw []byte) *inbound.ParsedEmail {
 	return p
 }
 
-// The SMTP relay hands Posta filenames that came from real mail clients, so they
-// are routinely non-ASCII. A MIME header must be 7-bit; raw UTF-8 in one is what
-// makes a downstream MTA reject the part as unreadable.
+// Relayed filenames are often non-ASCII, and raw UTF-8 in a MIME header makes downstream MTAs reject the part.
 func TestBuildMessageEncodesNonASCIIAttachmentFilename(t *testing.T) {
 	const filename = "Отчёт за июль.pdf"
 	payload := []byte("%PDF-1.4\x00\x01binary\xffbytes")
@@ -79,8 +75,7 @@ func TestBuildMessageEncodesNonASCIIAttachmentFilename(t *testing.T) {
 	}
 }
 
-// A filename is attacker-controlled on the relay path, so quotes and CRLF must
-// not be able to break out of the header.
+// Relay filenames are attacker-controlled, so quotes and CRLF must not break out of the header.
 func TestBuildMessageFilenameCannotInjectHeaders(t *testing.T) {
 	raw := buildMessage(
 		"sender@example.com", []string{"rcpt@example.com"},
@@ -105,8 +100,7 @@ func TestBuildMessageFilenameCannotInjectHeaders(t *testing.T) {
 	}
 }
 
-// Attachment bytes must survive base64 line-wrapping unchanged, at lengths that
-// do and do not land on a line boundary.
+// Attachment bytes must survive base64 line-wrapping at lengths on and off a line boundary.
 func TestBuildMessageAttachmentBytesRoundTrip(t *testing.T) {
 	for _, size := range []int{1, 57, 76, 1000, 4096} {
 		payload := make([]byte, size)
@@ -151,9 +145,7 @@ func TestBuildMessageAttachmentBytesRoundTrip(t *testing.T) {
 	}
 }
 
-// End-to-end for the relay: a message as a mail client submits it, through the
-// parser the relay uses, back out through the builder. The attachment must come
-// out the far side byte-identical with its name intact.
+// End-to-end relay path: the attachment must come out byte-identical with its name intact.
 func TestRelayRoundTripPreservesAttachment(t *testing.T) {
 	const filename = "Отчёт за июль.pdf"
 	payload := []byte("%PDF-1.4\x00\x01binary\xffbytes")
@@ -216,8 +208,7 @@ func TestRelayRoundTripPreservesAttachment(t *testing.T) {
 	}
 }
 
-// The message must be a real multipart/mixed, not a flat body with the MIME
-// structure inlined as text.
+// The message must be real multipart/mixed, not a flat body with the MIME structure inlined as text.
 func TestBuildMessageWithAttachmentIsMultipart(t *testing.T) {
 	raw := buildMessage(
 		"sender@example.com", []string{"rcpt@example.com"},

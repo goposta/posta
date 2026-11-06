@@ -37,10 +37,7 @@ func rel(tag string, pre, draft bool) Release {
 	return Release{TagName: tag, Prerelease: pre, Draft: draft, HTMLURL: "https://example.test/" + tag}
 }
 
-// ─── Version selection (no database required) ───
-
-// A lexical compare puts "v0.12.0-rc.9" after "v0.12.0-rc.10", which would offer
-// an rc.10 user a downgrade. Ordering must be semver.
+// Ordering must be semver: a lexical compare would offer an rc.10 user a downgrade to rc.9.
 func TestNewestPicksBySemverNotString(t *testing.T) {
 	releases := []Release{rel("v0.12.0-rc.9", true, false), rel("v0.12.0-rc.10", true, false)}
 	got, ok := Newest("v0.12.0-rc.2", releases)
@@ -92,8 +89,7 @@ func TestDevBuildNeverChecks(t *testing.T) {
 	}
 }
 
-// Posta stamps the tag with a leading "v", but accept a bare version too so a
-// differently-built image still compares.
+// Accept a bare version too so a differently-built image still compares.
 func TestNormalizeHandlesBakedTagWithoutV(t *testing.T) {
 	for _, v := range []string{"0.12.0", "v0.12.0", " v0.12.0 "} {
 		if got := normalize(v); got != "v0.12.0" {
@@ -119,8 +115,6 @@ func TestIsNewerRejectsOlderAndEqual(t *testing.T) {
 		}
 	}
 }
-
-// ─── Check against a stub GitHub (requires a database) ───
 
 func testDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -183,10 +177,7 @@ func TestCheckStoresNewerVersion(t *testing.T) {
 	}
 }
 
-// The regression that motivates CheckedVersion: after an upgrade the release
-// list is unchanged, so replaying the ETag earns a 304 and would preserve a
-// verdict computed for the *previous* build — telling a v0.13.0 install that
-// v0.13.0 is available.
+// After an upgrade, replaying the ETag must not keep a verdict computed for the previous build.
 func TestUpgradedBuildIsNotOfferedTheReleaseItAlreadyPassed(t *testing.T) {
 	db := testDB(t)
 	releases := []Release{rel("v0.13.0", false, false)}
@@ -264,8 +255,7 @@ func TestCheckClearsStalePointerWhenUpToDate(t *testing.T) {
 	}
 }
 
-// An air-gapped install fails this daily. It must record the failure rather than
-// return an error that would paint the jobs page red forever.
+// An air-gapped install fails daily: record the failure instead of turning the jobs page red forever.
 func TestCheckRecordsErrorWithoutFailing(t *testing.T) {
 	db := testDB(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

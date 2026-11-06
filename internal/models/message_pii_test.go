@@ -127,8 +127,7 @@ func TestPIINotEncryptedWithoutLicense(t *testing.T) {
 		t.Error("without an Enterprise license, new answers must be stored as given")
 	}
 
-	// Answers encrypted under a license stay encrypted, and readable, after it
-	// is gone: saving a loaded message encrypts it again.
+	// Answers encrypted under a license stay encrypted and readable after it is gone; saving re-encrypts.
 	licensed(t)
 	sealed := piiMessage()
 	sealed.SealPII(piiForm())

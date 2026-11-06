@@ -26,12 +26,7 @@ import (
 	"time"
 )
 
-// ChatVisitor is an anonymous browser that has written to a chat widget. It
-// is created with the visitor's first message, not when the page loads, and
-// is known by a bearer token whose hash is all Posta keeps.
-//
-// Name and Email are whatever the visitor typed. They are shown to agents and
-// never used to match the visitor to anyone else's history.
+// ChatVisitor is created with the first message and keeps only its token's hash; typed Name/Email never link history.
 type ChatVisitor struct {
 	ID          uint   `json:"id" gorm:"primaryKey"`
 	UUID        string `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
@@ -41,10 +36,7 @@ type ChatVisitor struct {
 
 	Name  string `json:"name"`
 	Email string `json:"email"`
-	// EmailVerified is set only by a signed identity from the customer's
-	// server, never by what the visitor typed. ExternalID is the customer's
-	// user ID from that identity; visitors sharing a verified ExternalID on a
-	// widget share their history.
+	// EmailVerified and ExternalID come only from a signed identity; visitors sharing a verified ExternalID share history.
 	EmailVerified bool           `json:"email_verified" gorm:"default:false;not null"`
 	ExternalID    string         `json:"external_id,omitempty" gorm:"index"`
 	Attributes    ChatAttributes `json:"attributes,omitempty" gorm:"type:jsonb"`
@@ -58,8 +50,7 @@ type ChatVisitor struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// ChatAttributes are custom facts the customer's page sets on a visitor
-// (plan, account age): flat string, number and boolean values, 2 KiB at most.
+// ChatAttributes are flat string, number and boolean values the customer's page sets, 2 KiB at most.
 type ChatAttributes map[string]any
 
 // MaxChatAttributesBytes caps a visitor's attributes once encoded.

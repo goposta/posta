@@ -1,6 +1,4 @@
-// A server-sent events parser for fetch() streams. The widget reads its
-// stream with fetch, not EventSource, so it can send the visitor token in an
-// Authorization header instead of the URL.
+// Read with fetch, not EventSource, so the visitor token goes in an Authorization header instead of the URL.
 
 export interface SSEEvent {
   id?: string
@@ -64,9 +62,7 @@ export class SSEParser {
   }
 }
 
-// backoff is the wait before reconnect attempt n (0-based): exponential from
-// one second, capped at 30, with up to 30% jitter so a server restart is not
-// met by every widget at the same instant.
+// Exponential from 1 s, capped at 30 s, with up to 30% jitter so a server restart is not met by every widget at the same instant.
 export function backoff(attempt: number, random: () => number = Math.random): number {
   const base = Math.min(30000, 1000 * 2 ** Math.min(attempt, 5))
   return Math.round(base * (1 - 0.3 * random()))

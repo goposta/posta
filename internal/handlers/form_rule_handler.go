@@ -30,9 +30,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// FormRuleHandler edits a form's routing rules. Rules are form configuration,
-// so they need the admin scope like the form itself (/forms is a tenant
-// admin path).
+// Rules are form configuration, so they need the admin scope like the form itself.
 type FormRuleHandler struct {
 	repo          *repositories.FormRuleRepository
 	formRepo      *repositories.FormRepository
@@ -58,7 +56,6 @@ func NewFormRuleHandler(
 	}
 }
 
-// RuleBody is a rule as the dashboard edits it.
 type RuleBody struct {
 	Name       string                `json:"name" doc:"Shown in the rule list and on routed submissions"`
 	Enabled    *bool                 `json:"enabled" doc:"Default true"`
@@ -103,8 +100,7 @@ type TestFormRulesRequest struct {
 	} `json:"body"`
 }
 
-// RuleTestResult is a dry run: what the rules would have done with recent
-// submissions. Nothing is sent or changed.
+// RuleTestResult is a dry run: nothing is sent or changed.
 type RuleTestResult struct {
 	Scanned int              `json:"scanned"`
 	Matched int              `json:"matched" doc:"Submissions at least one rule matched"`
@@ -131,7 +127,6 @@ func (h *FormRuleHandler) form(c *okapi.Context, id int) (*models.Form, error) {
 	return h.formRepo.FindByIDForScope(getScope(c), uint(id))
 }
 
-// destinations lists what this workspace's rules may point at.
 func (h *FormRuleHandler) destinations(workspaceID uint) (formrules.Destinations, error) {
 	d := formrules.Destinations{Members: map[uint]bool{}, Teams: map[uint]bool{}, Webhooks: map[uint]bool{}}
 	members, err := h.workspaceRepo.ListMembers(workspaceID)

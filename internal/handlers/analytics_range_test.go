@@ -36,8 +36,7 @@ func TestParseTimeRangeIsUTCAndInclusive(t *testing.T) {
 	if from.Format(time.RFC3339) != "2026-03-01T00:00:00Z" {
 		t.Errorf("from should be midnight UTC, got %s", from.Format(time.RFC3339))
 	}
-	// The old implementation stopped a second early and dropped anything
-	// accepted in the final second of the day.
+	// Anything accepted in the final second of the day must be included.
 	lastSecond := time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC)
 	if to.Before(lastSecond) {
 		t.Errorf("to (%s) excludes the last second of the day", to.Format(time.RFC3339Nano))
@@ -58,8 +57,7 @@ func TestParseTimeRangeDefaultsToThirtyDays(t *testing.T) {
 	}
 }
 
-// Without a cap, a caller asking for a century would have the server build a
-// point per day, per chart, in memory and in the response.
+// Without a cap the server would build a point per day, per chart, in memory and in the response.
 func TestParseTimeRangeRejectsAbsurdSpans(t *testing.T) {
 	_, _, err := parseTimeRange("1970-01-01", "2099-01-01")
 	if err == nil {
@@ -82,9 +80,7 @@ func TestParseTimeRangeRejectsBadInput(t *testing.T) {
 	}
 }
 
-// Both sides of the cap. Duration.Hours() is a float64 and rounds
-// 9599h59m59.999999999s to exactly 9600, which put the day count one over and
-// rejected a range sitting exactly on the limit.
+// Duration.Hours() rounds 9599h59m59.999999999s to 9600; a range exactly on the cap must still pass.
 func TestParseTimeRangeCapBoundary(t *testing.T) {
 	today := time.Now().UTC().Format("2006-01-02")
 

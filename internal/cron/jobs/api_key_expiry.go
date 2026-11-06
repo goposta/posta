@@ -31,8 +31,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// APIKeyExpiryJob checks for workspace API keys expiring within 7 days and
-// notifies the owning workspace's owners and admins.
+// APIKeyExpiryJob notifies workspace owners and admins of workspace API keys expiring within 7 days.
 type APIKeyExpiryJob struct {
 	db       *gorm.DB
 	notifier *notification.Service
@@ -43,7 +42,7 @@ func NewAPIKeyExpiryJob(db *gorm.DB, notifier *notification.Service) *APIKeyExpi
 }
 
 func (j *APIKeyExpiryJob) Name() string     { return "api-key-expiry" }
-func (j *APIKeyExpiryJob) Schedule() string { return "0 8 * * *" } // daily at 08:00 UTC
+func (j *APIKeyExpiryJob) Schedule() string { return "0 8 * * *" }
 
 type expiringKey struct {
 	Name      string
@@ -55,8 +54,7 @@ func (j *APIKeyExpiryJob) Run(_ context.Context, _ *asynq.Client) error {
 		return nil
 	}
 
-	// Find workspace API keys expiring within the next 7 days. Personal
-	// (user-scoped) keys are excluded: scoping is workspace-only.
+	// Personal (user-scoped) keys are excluded: scoping is workspace-only.
 	now := time.Now().UTC()
 	deadline := now.AddDate(0, 0, 7)
 
@@ -71,7 +69,6 @@ func (j *APIKeyExpiryJob) Run(_ context.Context, _ *asynq.Client) error {
 		return nil
 	}
 
-	// Group by workspace
 	workspaceKeys := make(map[uint][]expiringKey)
 	for _, k := range keys {
 		if k.WorkspaceID == nil {

@@ -167,8 +167,6 @@ async function handleCancelDeletion() {
   }
 }
 
-// selectedPlanId reads a <select> change event's value as a plan id, or null
-// for the "no plan" option.
 function selectedPlanId(event: Event): number | null {
   const value = (event.target as HTMLSelectElement).value
   return Number(value) || null
@@ -433,7 +431,6 @@ function formatDate(date: string) {
         </div>
       </div>
 
-      <!-- User Plan -->
       <div class="card" style="margin-top: 24px;">
         <div class="card-header">
           <h2>Account Plan</h2>
@@ -460,7 +457,6 @@ function formatDate(date: string) {
         </div>
       </div>
 
-      <!-- Workspaces Section -->
       <div class="card" style="margin-top: 24px;">
         <div class="card-header">
           <h2>Workspaces</h2>

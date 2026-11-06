@@ -29,7 +29,6 @@ export const workspaceApi = {
     return api.delete('/workspaces/current')
   },
 
-  // Members
   listMembers() {
     return api.get<ApiResponse<WorkspaceMember[]>>('/workspaces/current/members')
   },
@@ -40,7 +39,6 @@ export const workspaceApi = {
     return api.delete(`/workspaces/current/members/${memberUserId}`)
   },
 
-  // Invitations (workspace-scoped)
   invite(data: InviteMemberInput) {
     return api.post<ApiResponse<WorkspaceInvitation>>('/workspaces/current/invitations', data)
   },
@@ -51,7 +49,6 @@ export const workspaceApi = {
     return api.delete(`/workspaces/current/invitations/${invitationId}`)
   },
 
-  // User-level invitation actions
   myInvitations() {
     return api.get<ApiResponse<WorkspaceInvitation[]>>('/invitations')
   },
@@ -68,12 +65,10 @@ export const workspaceApi = {
     return api.post<ApiResponse<{ message: string }>>(`/invitations/${id}/decline`)
   },
 
-  // Plan
   getPlan() {
     return api.get<ApiResponse<Plan | null>>('/workspaces/current/plan')
   },
 
-  // Data Export/Import
   exportData() {
     return api.get<ApiResponse<WorkspaceDataExport>>('/workspaces/current/data/export')
   },
@@ -81,7 +76,6 @@ export const workspaceApi = {
     return api.post<ApiResponse<{ message: string; imported_count: number }>>('/workspaces/current/data/import', data)
   },
 
-  // Data Management (GDPR)
   deleteContacts(email?: string) {
     return api.post<ApiResponse<GDPRDeleteResult>>('/workspaces/current/gdpr/delete-contacts', { email: email || '' })
   },

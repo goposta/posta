@@ -149,7 +149,6 @@ onMounted(fetchServer)
     </div>
 
     <template v-else-if="server">
-      <!-- Info card -->
       <div class="card" style="margin-bottom: 24px;">
         <div class="card-header">
           <h2>{{ server.host }}:{{ server.port }}</h2>
@@ -217,7 +216,6 @@ onMounted(fetchServer)
         </div>
       </div>
 
-      <!-- Actions -->
       <div class="card">
         <div class="card-header"><h2>Actions</h2></div>
         <div class="card-body">
@@ -238,7 +236,6 @@ onMounted(fetchServer)
       <h3>SMTP server not found</h3>
     </div>
 
-    <!-- Edit Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal">
         <div class="modal-header" @mousedown.stop @mouseup.stop>

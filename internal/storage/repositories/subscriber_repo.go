@@ -94,7 +94,6 @@ func (r *SubscriberRepository) Update(s *models.Subscriber) error {
 
 func (r *SubscriberRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Remove from all static lists first
 		if err := tx.Where("subscriber_id = ?", id).Delete(&models.SubscriberListMember{}).Error; err != nil {
 			return err
 		}
@@ -131,7 +130,6 @@ func (r *SubscriberRepository) FindByFilterRules(scope ResourceScope, rules mode
 	return items, total, nil
 }
 
-// CountByFilterRules returns the count of subscribers matching filter rules.
 func (r *SubscriberRepository) CountByFilterRules(scope ResourceScope, rules models.FilterRules) (int64, error) {
 	var count int64
 	q := r.applyFilterRules(ApplyScope(r.db.Model(&models.Subscriber{}), scope), rules)
@@ -141,61 +139,50 @@ func (r *SubscriberRepository) CountByFilterRules(scope ResourceScope, rules mod
 	return count, nil
 }
 
-// applyFilterRules translates FilterRules into SQL WHERE clauses.
 func (r *SubscriberRepository) applyFilterRules(q *gorm.DB, rules models.FilterRules) *gorm.DB {
 	for _, rule := range rules {
 		field := rule.Field
 		op := rule.Operator
 		val := rule.Value
 
-		// Engagement-based filters — use subqueries on campaign_messages
 		if strings.HasPrefix(field, "engagement.") {
 			engagementField := strings.TrimPrefix(field, "engagement.")
 			switch engagementField {
 			case "opened_campaign":
-				// Subscribers who opened a specific campaign
 				q = q.Where("EXISTS (SELECT 1 FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.campaign_id = ? AND campaign_messages.opened_at IS NOT NULL)", val)
 			case "clicked_campaign":
-				// Subscribers who clicked in a specific campaign
 				q = q.Where("EXISTS (SELECT 1 FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.campaign_id = ? AND campaign_messages.clicked_at IS NOT NULL)", val)
 			case "not_opened_campaign":
-				// Subscribers who did NOT open a specific campaign
 				q = q.Where("NOT EXISTS (SELECT 1 FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.campaign_id = ? AND campaign_messages.opened_at IS NOT NULL)", val)
 			case "received_campaign":
-				// Subscribers who received a specific campaign (regardless of open/click)
 				q = q.Where("EXISTS (SELECT 1 FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.campaign_id = ?)", val)
 			case "inactive_days":
-				// Subscribers with no opens in the last N days
 				q = q.Where("NOT EXISTS (SELECT 1 FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.opened_at > NOW() - INTERVAL '1 day' * ?)", val)
 			case "active_days":
-				// Subscribers with opens in the last N days
 				q = q.Where("EXISTS (SELECT 1 FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.opened_at > NOW() - INTERVAL '1 day' * ?)", val)
 			case "total_opens_gte":
-				// Subscribers with at least N total opens
 				q = q.Where("(SELECT COUNT(*) FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.opened_at IS NOT NULL) >= ?", val)
 			case "total_clicks_gte":
-				// Subscribers with at least N total clicks
 				q = q.Where("(SELECT COUNT(*) FROM campaign_messages WHERE campaign_messages.subscriber_id = subscribers.id AND campaign_messages.clicked_at IS NOT NULL) >= ?", val)
 			}
 			continue
 		}
 
-		// Determine the SQL column expression
 		var column string
 		if strings.HasPrefix(field, "custom_fields.") {
-			// JSON field extraction (PostgreSQL) - sanitize key to prevent SQL injection
+			// The JSON key is sanitized because it is interpolated into SQL.
 			jsonKey := strings.TrimPrefix(field, "custom_fields.")
 			if !isAlphanumericUnderscore(jsonKey) || jsonKey == "" {
 				continue
 			}
 			column = fmt.Sprintf("custom_fields::jsonb->>'%s'", jsonKey)
 		} else {
-			// Direct column (sanitize: only allow known fields)
+			// Only known columns, so user input never names one.
 			switch field {
 			case "email", "name", "status":
 				column = field
 			default:
-				continue // skip unknown fields
+				continue
 			}
 		}
 

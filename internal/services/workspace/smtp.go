@@ -32,23 +32,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// SystemSMTPServerName labels the server provisioned from POSTA_SYSTEM_SMTP_*.
-// Only the label: the row is located by its IsSystem marker, so an operator may
-// rename it freely.
+// SystemSMTPServerName is only a label: the row is found by its IsSystem marker, so it may be renamed.
 const SystemSMTPServerName = "System SMTP"
 
-// connectionColumns are owned by configuration and re-synced on every boot, so
-// rotating a credential in the environment takes effect on restart. Everything
-// else on the row — the label, the status, retry and recipient limits — belongs
-// to the operator and is written once at creation.
+// connectionColumns are re-synced from config on every boot; the rest of the row belongs to the operator.
 var connectionColumns = []string{"host", "port", "username", "encryption", "password"}
 
-// provisionSystemSMTP creates the system workspace's SMTP server from
-// configuration, or re-syncs the connection settings of the one already there.
-//
-// An unconfigured or unusable POSTA_SYSTEM_SMTP_* is not an error: the platform
-// boots without a server and the notification service falls back to sending
-// straight from configuration.
+// provisionSystemSMTP treats unusable config as no server: notifications then send straight from config.
 func provisionSystemSMTP(tx *gorm.DB, ws *models.Workspace, ownerID uint, cfg config.SystemSMTPConfig) error {
 	existing, err := findSystemSMTP(tx, ws.ID)
 	if err != nil {
@@ -98,9 +88,7 @@ func provisionSystemSMTP(tx *gorm.DB, ws *models.Workspace, ownerID uint, cfg co
 	return nil
 }
 
-// findSystemSMTP locates the provisioned server by its marker rather than by
-// name or position, so a server the operator adds to the same workspace is
-// never adopted and overwritten from the environment.
+// findSystemSMTP uses the IsSystem marker so an operator-added server is never overwritten from env.
 func findSystemSMTP(tx *gorm.DB, workspaceID uint) (*models.SMTPServer, error) {
 	var server models.SMTPServer
 	err := tx.Where("workspace_id = ? AND is_system = ?", workspaceID, true).
@@ -114,13 +102,7 @@ func findSystemSMTP(tx *gorm.DB, workspaceID uint) (*models.SMTPServer, error) {
 	return &server, nil
 }
 
-// connectionDrift returns the config-owned columns whose stored value differs
-// from configuration. An empty map means the row is already in sync and no
-// write happens.
-//
-// The password compares in plaintext because models.SMTPServer decrypts it on
-// read, and is re-encrypted explicitly here: a map-based Updates call bypasses
-// BeforeSave, so without this the secret would be stored in the clear.
+// connectionDrift re-encrypts the password itself: a map-based Updates call bypasses BeforeSave.
 func connectionDrift(cfg config.SystemSMTPConfig, existing *models.SMTPServer) map[string]any {
 	updates := map[string]any{}
 	if existing.Host != cfg.Host {
@@ -147,8 +129,7 @@ func connectionDrift(cfg config.SystemSMTPConfig, existing *models.SMTPServer) m
 	return updates
 }
 
-// changedColumns lists updated column names in a stable order for logging. The
-// password's presence is reported; its value never is.
+// changedColumns reports the password's presence, never its value.
 func changedColumns(updates map[string]any) []string {
 	out := make([]string, 0, len(updates))
 	for _, col := range connectionColumns {
@@ -159,10 +140,7 @@ func changedColumns(updates map[string]any) []string {
 	return out
 }
 
-// NormalizeEncryption maps a configured value onto a mode the sender
-// understands, treating "tls" as a synonym for implicit TLS and defaulting to
-// STARTTLS as the configuration default does. Without it a typo produces a row
-// the sender rejects at delivery time rather than at boot.
+// NormalizeEncryption maps "tls" to implicit TLS and defaults to STARTTLS, so a typo can't fail at delivery.
 func NormalizeEncryption(enc string) string {
 	switch strings.ToLower(strings.TrimSpace(enc)) {
 	case models.EncryptionNone:
@@ -174,8 +152,7 @@ func NormalizeEncryption(enc string) string {
 	}
 }
 
-// ParseSender splits POSTA_SYSTEM_SMTP_FROM into a display name and an address,
-// accepting both a bare address and RFC 5322 display-name form.
+// ParseSender accepts both a bare address and the RFC 5322 display-name form.
 func ParseSender(from string) (name, addr string, err error) {
 	from = strings.TrimSpace(from)
 	if from == "" {

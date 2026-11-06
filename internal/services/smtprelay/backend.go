@@ -152,10 +152,7 @@ func (s *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	return nil
 }
 
-// Data reads the raw message (bounded by MaxMessageSize), parses it, and
-// relays it through the outbound email pipeline using the SMTP envelope
-// (MAIL FROM / RCPT TO) rather than the parsed header addresses, matching
-// normal MTA behavior.
+// Data relays using the SMTP envelope (MAIL FROM / RCPT TO), not the parsed header addresses, as an MTA does.
 func (s *session) Data(r io.Reader) error {
 	if s.credential == nil {
 		return smtp.ErrAuthRequired
@@ -205,8 +202,7 @@ func (s *session) Data(r io.Reader) error {
 	return mapSendError(serr, s.remote)
 }
 
-// mapSendError translates an error returned by email.Service.Send into the
-// appropriate SMTP status for the submitting client.
+// mapSendError maps an email.Service.Send error to the SMTP status for the submitting client.
 func mapSendError(err error, remote string) error {
 	if err == nil {
 		return nil
