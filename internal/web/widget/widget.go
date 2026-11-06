@@ -38,3 +38,16 @@ var FormScriptETag = func() string {
 	sum := sha256.Sum256(FormScript)
 	return `"` + hex.EncodeToString(sum[:12]) + `"`
 }()
+
+// ChatScript is the live chat widget, served at /widget/v1/posta-chat.js. It
+// is built from posta/widget (make build-widget) and committed, so the server
+// builds without Node.
+//
+//go:embed posta-chat.js
+var ChatScript []byte
+
+// ChatScriptETag is a strong ETag over ChatScript.
+var ChatScriptETag = func() string {
+	sum := sha256.Sum256(ChatScript)
+	return `"` + hex.EncodeToString(sum[:12]) + `"`
+}()

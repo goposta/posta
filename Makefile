@@ -1,4 +1,4 @@
-.PHONY: build build-ce build-ui build-all run run-worker dev dev-worker dev-deps test test-ce vet fmt lint clean
+.PHONY: build build-ce build-ui build-widget build-all run run-worker dev dev-worker dev-deps test test-ce vet fmt lint clean
 
 BINARY := posta
 BUILD_DIR := bin
@@ -27,6 +27,9 @@ build-ui: ## Build the dashboard and stage it for embedding (internal/web/dist)
 	rm -rf $(EMBED_UI_DIR)
 	cp -r $(UI_DIR)/dist $(EMBED_UI_DIR)
 	touch $(EMBED_UI_DIR)/.gitkeep
+
+build-widget: ## Build the live chat widget into internal/web/widget/posta-chat.js (committed)
+	cd widget && npm install && npm run build
 
 build-all: build-ui build ## Build the dashboard, then a self-contained binary
 

@@ -60,6 +60,17 @@ func TestWorkspaceScopeForMessageRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/workspaces/current/teams", models.ScopeAdmin},
 		{http.MethodPut, "/api/v1/workspaces/current/messages/abc/team", models.ScopeWrite},
 		{http.MethodPost, "/api/v1/workspaces/current/message-filters", models.ScopeAdmin},
+
+		// A chat widget holds the reply sender and, later, the identity
+		// secret: tenant administration. Conversations are content.
+		{http.MethodGet, "/api/v1/workspaces/current/chat-widgets", models.ScopeAdmin},
+		{http.MethodPost, "/api/v1/workspaces/current/chat-widgets", models.ScopeAdmin},
+		{http.MethodGet, "/api/v1/workspaces/current/chat-widgets/1/snippet", models.ScopeAdmin},
+		{http.MethodGet, "/api/v1/workspaces/current/conversations", models.ScopeRead},
+		{http.MethodGet, "/api/v1/workspaces/current/conversations/abc/messages", models.ScopeRead},
+		{http.MethodPost, "/api/v1/workspaces/current/conversations/abc/messages", models.ScopeWrite},
+		{http.MethodPut, "/api/v1/workspaces/current/conversations/abc/state", models.ScopeWrite},
+		{http.MethodGet, "/api/v1/workspaces/current/chat-stream", models.ScopeRead},
 	}
 
 	for _, tc := range cases {

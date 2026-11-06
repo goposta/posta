@@ -28,6 +28,9 @@ const form = ref<PlanInput>({
   max_api_keys: 0,
   max_domains: 0,
   max_smtp_servers: 0,
+  max_chat_widgets: 0,
+  max_chat_agents: 0,
+  monthly_conversation_limit: 0,
   max_workspaces: 0,
   email_log_retention_days: 0,
 })
@@ -58,6 +61,9 @@ function openEdit() {
     max_api_keys: plan.value.max_api_keys,
     max_domains: plan.value.max_domains,
     max_smtp_servers: plan.value.max_smtp_servers,
+    max_chat_widgets: plan.value.max_chat_widgets ?? 0,
+    max_chat_agents: plan.value.max_chat_agents ?? 0,
+    monthly_conversation_limit: plan.value.monthly_conversation_limit ?? 0,
     max_workspaces: plan.value.max_workspaces,
     email_log_retention_days: plan.value.email_log_retention_days,
   }
@@ -237,6 +243,18 @@ onMounted(fetchPlan)
                 <td>{{ formatLimit(plan.max_smtp_servers) }}</td>
               </tr>
               <tr>
+                <td style="font-weight: 600">Max Chat Widgets</td>
+                <td>{{ formatLimit(plan.max_chat_widgets) }}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 600">Max Chat Agents</td>
+                <td>{{ formatLimit(plan.max_chat_agents) }}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 600">Monthly Conversations</td>
+                <td>{{ formatLimit(plan.monthly_conversation_limit) }}</td>
+              </tr>
+              <tr>
                 <td style="font-weight: 600">Max Workspaces</td>
                 <td>{{ formatLimit(plan.max_workspaces) }}</td>
               </tr>
@@ -347,6 +365,21 @@ onMounted(fetchPlan)
                 <label class="form-label">Max SMTP Servers</label>
                 <input v-model.number="form.max_smtp_servers" type="number" class="form-input" min="0" />
                 <span class="form-hint">0 = unlimited</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Max Chat Widgets</label>
+                <input v-model.number="form.max_chat_widgets" type="number" class="form-input" min="0" />
+                <span class="form-hint">0 = unlimited. Enforced with POSTA_PLAN_ENFORCEMENT.</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Max Chat Agents</label>
+                <input v-model.number="form.max_chat_agents" type="number" class="form-input" min="0" />
+                <span class="form-hint">Agents online or away at once. 0 = unlimited.</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Monthly Conversations</label>
+                <input v-model.number="form.monthly_conversation_limit" type="number" class="form-input" min="0" />
+                <span class="form-hint">New chats per calendar month; past it the widget takes messages offline. 0 = unlimited.</span>
               </div>
               <div class="form-group">
                 <label class="form-label">Max Workspaces</label>

@@ -232,6 +232,10 @@ func runWorker() error {
 		mux.HandleFunc(worker.TypeMessageReply, messageHandler.ProcessReplyTask)
 	}
 
+	if cfg.ChatEnabled {
+		registerChatTasks(mux, db, cfg, notifier, blobStore)
+	}
+
 	// Publish worker's build info
 	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
 

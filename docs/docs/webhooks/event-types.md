@@ -25,6 +25,15 @@ description: Available webhook event types
 | `message.replied` | An operator replied to a web form message |
 | `message.reply_received` | The sender answered a web form thread by email |
 
+## Live Chat Events
+
+| Event | Description |
+|---|---|
+| `chat.conversation.started` | A visitor started a chat and the first message passed scanning (see [Live Chat](#live-chat)) |
+| `chat.message.created` | A visitor or an agent sent a chat message |
+| `chat.conversation.assigned` | A chat's assignee changed |
+| `chat.conversation.closed` | A chat was closed |
+
 ## Campaign Events
 
 | Event | Description |
@@ -202,3 +211,43 @@ Both carry one thread reply. `kind` is `operator` for `message.replied` and `inb
 `message_id` is the thread's original submission. An operator reply also carries `email_id`, the outbound email whose delivery status is in the email log. `sender_mismatch` is `true` when an emailed answer came from an address other than the original submitter.
 
 For configuring forms and replying to submissions, see the Forms & Messages section in the sidebar.
+
+## Live Chat
+
+Every `chat.*` event carries the conversation; `chat.message.created`, and `chat.conversation.started` with the first message, also carry the message. `email_verified` is true only when your server signed the visitor's identity.
+
+```json
+{
+  "event": "chat.message.created",
+  "timestamp": "2026-11-05T14:02:11Z",
+  "conversation": {
+    "id": "5b0c…",
+    "widget_id": "8e1d…",
+    "widget_name": "Website chat",
+    "state": "open",
+    "status": "received",
+    "assigned_to_id": 3,
+    "start_page_url": "https://example.com/pricing",
+    "visitor": {
+      "id": "c41f…",
+      "name": "Jane",
+      "email": "jane@example.com",
+      "email_verified": true,
+      "external_id": "u_123",
+      "attributes": { "plan": "pro" }
+    },
+    "created_at": "2026-11-05T14:01:40Z"
+  },
+  "message": {
+    "id": "9a77…",
+    "seq": 3,
+    "author_kind": "visitor",
+    "body": "Do you ship to Canada?",
+    "channel": "chat",
+    "attachments": [{ "filename": "order.pdf", "content_type": "application/pdf", "size": 48211 }],
+    "created_at": "2026-11-05T14:02:11Z"
+  }
+}
+```
+
+`channel` is `email` for a visitor's answer to a follow-up email. Files are not included; fetch them from the conversation in the dashboard API.

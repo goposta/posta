@@ -43,6 +43,7 @@ type DashboardFeatures struct {
 	Messages bool `json:"messages"`
 	Inbound  bool `json:"inbound"`
 	Relay    bool `json:"relay"`
+	Chat     bool `json:"chat"`
 }
 
 type DashboardStats struct {

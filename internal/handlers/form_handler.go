@@ -527,11 +527,17 @@ func (h *FormHandler) Snippet(c *okapi.Context, req *FormIDRequest) error {
 }
 
 func (h *FormHandler) checkSender(scope repositories.ResourceScope, address string) error {
+	return checkVerifiedSender(h.domainRepo, scope, address)
+}
+
+// checkVerifiedSender requires a reply sender on one of the workspace's
+// ownership-verified domains, so replies cannot be sent as someone else.
+func checkVerifiedSender(domainRepo *repositories.DomainRepository, scope repositories.ResourceScope, address string) error {
 	addr, err := mail.ParseAddress(address)
 	if err != nil {
 		return fmt.Errorf("reply_from must be a valid email address")
 	}
-	if h.domainRepo == nil {
+	if domainRepo == nil {
 		return nil
 	}
 	at := strings.LastIndex(addr.Address, "@")
@@ -540,7 +546,7 @@ func (h *FormHandler) checkSender(scope repositories.ResourceScope, address stri
 	}
 	domain := strings.ToLower(addr.Address[at+1:])
 
-	domains, _, err := h.domainRepo.FindByScope(scope, 200, 0)
+	domains, _, err := domainRepo.FindByScope(scope, 200, 0)
 	if err != nil {
 		return nil
 	}

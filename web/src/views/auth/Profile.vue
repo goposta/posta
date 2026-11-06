@@ -423,6 +423,9 @@ onMounted(() => { loadSessions() })
                 <div class="plan-limit-row"><span>API Keys</span><span>{{ formatLimit(userPlan.max_api_keys) }}</span></div>
                 <div class="plan-limit-row"><span>Domains</span><span>{{ formatLimit(userPlan.max_domains) }}</span></div>
                 <div class="plan-limit-row"><span>SMTP Servers</span><span>{{ formatLimit(userPlan.max_smtp_servers) }}</span></div>
+                <div class="plan-limit-row"><span>Chat Widgets</span><span>{{ formatLimit(userPlan.max_chat_widgets) }}</span></div>
+                <div class="plan-limit-row"><span>Chat Agents Online</span><span>{{ formatLimit(userPlan.max_chat_agents) }}</span></div>
+                <div class="plan-limit-row"><span>Chats per Month</span><span>{{ formatLimit(userPlan.monthly_conversation_limit) }}</span></div>
               </div>
               <div class="plan-limit-group">
                 <h4 class="plan-limit-title">Email Constraints</h4>

@@ -4,7 +4,7 @@
 |---|---|---|
 | [`compose/compose.yml`](compose/compose.yml) | One container, embedded worker | Development, small installs |
 | [`compose/docker-compose-full.yml`](compose/docker-compose-full.yml) | Server + dedicated worker | Production on a single Docker host |
-| [`miabi/posta.yaml`](miabi/posta.yaml) | One app, embedded worker, managed Postgres/Redis, TLS route | Small and medium installs on [Miabi](https://miabi.io) |
+| [`miabi/posta.yaml`](miabi/posta.yaml) | Server + dedicated worker in one stack, managed Postgres/Redis, TLS route | Small and medium installs on [Miabi](https://miabi.io) |
 | [`miabi/posta-replicated.yaml`](miabi/posta-replicated.yaml) | Replicated server and workers as Swarm services, S3 attachments | Production on a Miabi cluster |
 
 ## Docker Compose

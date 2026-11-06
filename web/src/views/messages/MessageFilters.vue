@@ -1,20 +1,47 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { formsApi, messageFiltersApi, type FilterTestResult } from "../../api/messages";
+import { chatWidgetsApi } from "../../api/chat";
+import { useChatStore } from "../../stores/chat";
 import { useNotificationStore } from "../../stores/notification";
 import { apiMessage } from "../../composables/apiError";
-import type { Form, MessageFilterRule } from "../../api/types";
+import type { ChatWidget, Form, MessageFilterRule } from "../../api/types";
 
 const notify = useNotificationStore();
 const loading = ref(true);
 const featureDisabled = ref(false);
 const filters = ref<MessageFilterRule[]>([]);
 const forms = ref<Form[]>([]);
+const chat = useChatStore();
+// Chat widgets, listed only when live chat is enabled.
+const widgets = ref<ChatWidget[]>([]);
 const saving = ref(false);
+
+async function loadWidgets() {
+  if (!chat.enabled) {
+    widgets.value = [];
+    return;
+  }
+  try {
+    widgets.value = (await chatWidgetsApi.list({ size: 100 })).data.data;
+  } catch {
+    widgets.value = [];
+  }
+}
+watch(() => chat.enabled, loadWidgets);
+
+/** A filter's scope as one select value: "all", "form:<id>" or "widget:<id>". */
+function scopeIds(scope: string): { form_id: number | null; widget_id: number | null } {
+  const [kind, id] = scope.split(":");
+  return {
+    form_id: kind === "form" ? Number(id) : null,
+    widget_id: kind === "widget" ? Number(id) : null,
+  };
+}
 
 const showModal = ref(false);
 const draft = ref({
-  form_id: 0,
+  scope: "all",
   kind: "keyword",
   pattern: "",
   action: "score",
@@ -36,6 +63,7 @@ async function load() {
     filters.value = filtersRes.data.data;
     forms.value = formsRes.data.data;
     featureDisabled.value = false;
+    loadWidgets();
   } catch (e: any) {
     if (e?.response?.status === 404) {
       featureDisabled.value = true;
@@ -49,7 +77,7 @@ async function load() {
 
 function openCreate() {
   draft.value = {
-    form_id: 0,
+    scope: "all",
     kind: "keyword",
     pattern: "",
     action: "score",
@@ -66,7 +94,7 @@ async function create() {
   saving.value = true;
   try {
     await messageFiltersApi.create({
-      form_id: draft.value.form_id || null,
+      ...scopeIds(draft.value.scope),
       kind: draft.value.kind,
       pattern: draft.value.pattern.trim(),
       action: draft.value.action,
@@ -121,8 +149,16 @@ async function remove(filter: MessageFilterRule) {
   }
 }
 
-function formName(formId: number | null | undefined) {
-  if (!formId) return "All forms";
+function scopeName(filter: MessageFilterRule) {
+  if (filter.widget_id) {
+    const w = widgets.value.find((x) => x.id === filter.widget_id);
+    return `Chat: ${w?.display_name || `widget ${filter.widget_id}`}`;
+  }
+  return formName(filter.form_id, true);
+}
+
+function formName(formId: number | null | undefined, withChat = false) {
+  if (!formId) return withChat && chat.enabled ? "All forms and chats" : "All forms";
   return forms.value.find((f) => f.id === formId)?.display_name || `Form ${formId}`;
 }
 
@@ -206,7 +242,7 @@ load();
               <td>{{ filter.kind }}</td>
               <td><span :class="actionBadgeClass(filter.action)">{{ filter.action }}</span></td>
               <td>{{ filter.action === "score" ? filter.score : "-" }}</td>
-              <td>{{ formName(filter.form_id) }}</td>
+              <td>{{ scopeName(filter) }}</td>
               <td>{{ filter.hit_count }}</td>
               <td>{{ formatDate(filter.last_hit_at) }}</td>
               <td style="text-align: right; white-space: nowrap">
@@ -231,9 +267,14 @@ load();
         <div class="modal-body">
           <div class="form-group">
             <label class="form-label">Applies to</label>
-            <select v-model.number="draft.form_id" class="form-select">
-              <option :value="0">All forms</option>
-              <option v-for="f in forms" :key="f.id" :value="f.id">{{ f.display_name }}</option>
+            <select v-model="draft.scope" class="form-select">
+              <option value="all">{{ chat.enabled ? "All forms and chats" : "All forms" }}</option>
+              <optgroup v-if="forms.length" label="One form">
+                <option v-for="f in forms" :key="f.id" :value="`form:${f.id}`">{{ f.display_name }}</option>
+              </optgroup>
+              <optgroup v-if="widgets.length" label="One chat widget">
+                <option v-for="w in widgets" :key="w.id" :value="`widget:${w.id}`">{{ w.display_name }}</option>
+              </optgroup>
             </select>
           </div>
           <div class="form-group">

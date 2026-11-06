@@ -30,6 +30,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -46,28 +48,56 @@ type Nonce struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
+// Nonces issues and checks the signed, single-use tokens that public
+// endpoints require before accepting a submission. A nonce is bound to one
+// public key, carries its issue time, and is remembered in Redis once used.
+type Nonces struct {
+	key          []byte
+	redis        *redis.Client
+	replayPrefix string
+}
+
+// NewNonces returns Nonces signed with key. replayPrefix namespaces the Redis
+// keys that remember used nonces; without Redis, replays are not detected.
+func NewNonces(key []byte, rdb *redis.Client, replayPrefix string) *Nonces {
+	return &Nonces{key: key, redis: rdb, replayPrefix: replayPrefix}
+}
+
+func (s *Service) nonces() *Nonces { return NewNonces(s.hmacKey, s.redis, "form:nonce:") }
+
 func (s *Service) IssueNonce(ctx context.Context, formKey string) (*Nonce, error) {
+	return s.nonces().Issue(ctx, formKey)
+}
+
+func (s *Service) VerifyNonce(ctx context.Context, formKey, token string, minFillSeconds int) error {
+	return s.nonces().Verify(ctx, formKey, token, minFillSeconds)
+}
+
+// Issue returns a nonce for the endpoint with the given public key.
+func (n *Nonces) Issue(_ context.Context, publicKey string) (*Nonce, error) {
 	raw := make([]byte, 12)
 	if _, err := rand.Read(raw); err != nil {
 		return nil, err
 	}
 	issued := time.Now().Unix()
-	body := fmt.Sprintf("%s.%d.%s", formKey, issued, base64.RawURLEncoding.EncodeToString(raw))
-	token := body + "." + sign(s.hmacKey, body)
+	body := fmt.Sprintf("%s.%d.%s", publicKey, issued, base64.RawURLEncoding.EncodeToString(raw))
+	token := body + "." + sign(n.key, body)
 
 	return &Nonce{Value: token, ExpiresIn: int(nonceTTL.Seconds())}, nil
 }
 
-func (s *Service) VerifyNonce(ctx context.Context, formKey, token string, minFillSeconds int) error {
+// Verify checks a nonce for publicKey: its signature, its age, that at least
+// minFillSeconds have passed since it was issued, and that it is unused.
+func (n *Nonces) Verify(ctx context.Context, publicKey, token string, minFillSeconds int) error {
 	parts := strings.Split(token, ".")
 	if len(parts) != 4 {
 		return ErrNonceInvalid
 	}
 	body := strings.Join(parts[:3], ".")
-	if !hmac.Equal([]byte(sign(s.hmacKey, body)), []byte(parts[3])) {
+	if !hmac.Equal([]byte(sign(n.key, body)), []byte(parts[3])) {
 		return ErrNonceInvalid
 	}
-	if parts[0] != formKey {
+	if parts[0] != publicKey {
 		return ErrNonceInvalid
 	}
 
@@ -83,9 +113,9 @@ func (s *Service) VerifyNonce(ctx context.Context, formKey, token string, minFil
 		return ErrNonceTooFast
 	}
 
-	if s.redis != nil {
-		key := "form:nonce:" + sign(s.hmacKey, token)
-		set, err := s.redis.SetNX(ctx, key, 1, nonceTTL).Result()
+	if n.redis != nil {
+		key := n.replayPrefix + sign(n.key, token)
+		set, err := n.redis.SetNX(ctx, key, 1, nonceTTL).Result()
 		if err == nil && !set {
 			return ErrNonceReplay
 		}

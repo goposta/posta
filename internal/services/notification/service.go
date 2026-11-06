@@ -52,15 +52,19 @@ const (
 	TemplateAccountDeletion = "account_deletion"
 	TemplateNewMessage      = "new_message"
 	TemplateMessageDigest   = "message_digest"
+	TemplateNewChat         = "chat_new_conversation"
+	TemplateChatUnanswered  = "chat_unanswered"
 )
 
 var templatePreference = map[string]func(*models.UserSetting) bool{
-	TemplateDailyReport:   func(s *models.UserSetting) bool { return s.DailyReport },
-	TemplateBounceAlert:   func(s *models.UserSetting) bool { return s.NotifyBounceAlerts },
-	TemplateAPIKeyExpiry:  func(s *models.UserSetting) bool { return s.NotifyAPIKeyExpiry },
-	TemplateRoleChanged:   func(s *models.UserSetting) bool { return s.NotifyWorkspaceActivity },
-	TemplateNewMessage:    func(s *models.UserSetting) bool { return s.NotifyNewMessage },
-	TemplateMessageDigest: func(s *models.UserSetting) bool { return s.NotifyNewMessage },
+	TemplateDailyReport:    func(s *models.UserSetting) bool { return s.DailyReport },
+	TemplateBounceAlert:    func(s *models.UserSetting) bool { return s.NotifyBounceAlerts },
+	TemplateAPIKeyExpiry:   func(s *models.UserSetting) bool { return s.NotifyAPIKeyExpiry },
+	TemplateRoleChanged:    func(s *models.UserSetting) bool { return s.NotifyWorkspaceActivity },
+	TemplateNewMessage:     func(s *models.UserSetting) bool { return s.NotifyNewMessage },
+	TemplateMessageDigest:  func(s *models.UserSetting) bool { return s.NotifyNewMessage },
+	TemplateNewChat:        func(s *models.UserSetting) bool { return s.NotifyNewChat },
+	TemplateChatUnanswered: func(s *models.UserSetting) bool { return s.NotifyNewChat },
 }
 
 func templateEnabled(templateName string, settings *models.UserSetting) bool {
@@ -122,6 +126,8 @@ func (s *Service) loadTemplates() {
 		TemplateAccountDeletion,
 		TemplateNewMessage,
 		TemplateMessageDigest,
+		TemplateNewChat,
+		TemplateChatUnanswered,
 	}
 	for _, name := range names {
 		tmpl := template.Must(template.ParseFS(templateFS,

@@ -1,0 +1,25 @@
+{
+  "name": "posta-chat-widget",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Posta live chat widget, built into internal/web/widget/posta-chat.js",
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "scripts": {
+    "build": "vite build && node scripts/size.mjs",
+    "dev": "vite build --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "size": "node scripts/size.mjs"
+  },
+  "dependencies": {
+    "preact": "^10.27.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^4.0.0"
+  }
+}

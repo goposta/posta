@@ -43,6 +43,11 @@ var WebhookEvents = []WebhookEventDef{
 	{"message.spam", "Fired when a web form submission is quarantined or rejected by scanning", MessageWebhookEvent{}},
 	{"message.replied", "Fired when an operator replies to a web form message from the dashboard", MessageReplyWebhookEvent{}},
 	{"message.reply_received", "Fired when the sender answers a web form thread by email", MessageReplyWebhookEvent{}},
+	// Live chat — the conversation, and the message for message events.
+	{"chat.conversation.started", "Fired when a visitor starts a chat and the first message passes scanning", ChatWebhookEvent{}},
+	{"chat.message.created", "Fired when a visitor or an agent sends a chat message (typing and read receipts are not events)", ChatWebhookEvent{}},
+	{"chat.conversation.assigned", "Fired when a chat's assignee changes", ChatWebhookEvent{}},
+	{"chat.conversation.closed", "Fired when a chat is closed", ChatWebhookEvent{}},
 	// Campaign lifecycle — {event, campaign_id, name, timestamp} payload.
 	{"campaign.started", "Fired when a campaign begins sending", CampaignWebhookEvent{}},
 	{"campaign.completed", "Fired when a campaign finishes sending", CampaignWebhookEvent{}},
