@@ -156,7 +156,8 @@ func TestCheckBody(t *testing.T) {
 
 func TestAcquireStreamCapsStreams(t *testing.T) {
 	s := &Service{cfg: Config{MaxStreams: 2}}
-	if !s.AcquireStream() || !s.AcquireStream() {
+	first, second := s.AcquireStream(), s.AcquireStream()
+	if !first || !second {
 		t.Fatal("streams under the cap were refused")
 	}
 	if s.AcquireStream() {

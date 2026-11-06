@@ -641,7 +641,7 @@ func readUpload(c *okapi.Context) (chat.Upload, error) {
 	if err != nil {
 		return chat.Upload{}, chat.ErrAttachmentType
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(io.LimitReader(file, chat.MaxAttachmentBytes+1))
 	if err != nil {
 		return chat.Upload{}, err
@@ -667,7 +667,7 @@ func serveAttachment(c *okapi.Context, svc *chat.Service, repo *repositories.Cha
 	if err != nil {
 		return c.AbortNotFound("file not found")
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	hdr := c.ResponseWriter().Header()
 	hdr.Set("Content-Type", att.ContentType)
 	hdr.Set("X-Content-Type-Options", "nosniff")
@@ -675,7 +675,7 @@ func serveAttachment(c *okapi.Context, svc *chat.Service, repo *repositories.Cha
 	hdr.Set("Cache-Control", "private, max-age=3600")
 	disposition := "inline"
 	if !strings.HasPrefix(att.ContentType, "image/") {
-		disposition = "attachment"
+		disposition = dispositionAttachment
 	}
 	hdr.Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": att.Filename}))
 	c.ResponseWriter().WriteHeader(http.StatusOK)

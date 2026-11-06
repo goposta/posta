@@ -489,7 +489,7 @@ func (h *ChatConversationHandler) Stream(c *okapi.Context) error {
 	c.ResponseWriter().Header().Set("X-Accel-Buffering", "no")
 
 	out := make(chan okapi.Message, 8)
-	out <- okapi.Message{Event: "system.info", Data: okapi.M{"workspace_id": ws, "timestamp": time.Now().UTC().Format(time.RFC3339)}}
+	out <- okapi.Message{Event: sseEventSystemInfo, Data: okapi.M{"workspace_id": ws, "timestamp": time.Now().UTC().Format(time.RFC3339)}}
 	go func() {
 		defer close(out)
 		for {

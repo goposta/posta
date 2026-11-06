@@ -86,7 +86,7 @@ func (h *InboundHandler) Stream(c *okapi.Context) error {
 
 	msgCh := make(chan okapi.Message, 4)
 	msgCh <- okapi.Message{
-		Event: "system.info",
+		Event: sseEventSystemInfo,
 		Data: okapi.M{
 			"user_id":   scope.UserID,
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
@@ -133,7 +133,7 @@ func contentDisposition(filename string) string {
 		return r
 	}, filename)
 	if ascii == "" {
-		ascii = "attachment"
+		ascii = dispositionAttachment
 	}
 	return `attachment; filename="` + ascii + `"; filename*=UTF-8''` + urlPathEscape(filename)
 }

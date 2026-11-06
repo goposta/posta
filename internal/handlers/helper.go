@@ -35,6 +35,11 @@ import (
 // planSourceGlobalSettings stands in for a missing plan; the dashboard branches on this exact value.
 const planSourceGlobalSettings = "global_settings"
 
+const (
+	sseEventSystemInfo    = "system.info"
+	dispositionAttachment = "attachment"
+)
+
 var errForbidden = errors.New("insufficient workspace permissions: editor role or higher required")
 
 // 1x1 transparent GIF
