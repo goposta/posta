@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/goposta/posta/internal/services/chat"
 	"github.com/goposta/posta/internal/services/messages"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/logger"
@@ -73,4 +74,53 @@ func (h *WorkspaceDataHandler) DeleteMessages(c *okapi.Context, req *GDPRDeleteM
 		Deleted: deleted,
 		Message: fmt.Sprintf("%d messages and their replies deleted", deleted),
 	})
+}
+
+type GDPRChatsRequest struct {
+	Body struct {
+		Email string `json:"email" required:"true" doc:"Address a visitor gave, typed or verified"`
+	} `json:"body"`
+}
+
+// SetChat enables the chat data subject endpoints.
+func (h *WorkspaceDataHandler) SetChat(svc *chat.Service) { h.chat = svc }
+
+// ExportChats returns every chat conversation, with its messages, of
+// visitors who gave this address.
+func (h *WorkspaceDataHandler) ExportChats(c *okapi.Context, req *GDPRChatsRequest) error {
+	wsID := uint(c.GetInt("workspace_id"))
+	email := messages.NormalizeEmail(req.Body.Email)
+	if wsID == 0 || h.chat == nil || !strings.Contains(email, "@") {
+		return c.AbortBadRequest("live chat and a valid email address are required")
+	}
+	items, err := h.chat.Repo().ExportChatsByEmail(wsID, email)
+	if err != nil {
+		return c.AbortInternalServerError("failed to export chats")
+	}
+	if h.audit != nil {
+		h.audit.LogCtxScoped(c, wsID, "gdpr.chats_exported",
+			fmt.Sprintf("Exported %d chat conversations for a data subject", len(items)), map[string]any{"count": len(items)})
+	}
+	return ok(c, items)
+}
+
+// DeleteChats erases every chat conversation of visitors who gave this
+// address, their messages and files, and the visitors.
+func (h *WorkspaceDataHandler) DeleteChats(c *okapi.Context, req *GDPRChatsRequest) error {
+	wsID := uint(c.GetInt("workspace_id"))
+	email := messages.NormalizeEmail(req.Body.Email)
+	if wsID == 0 || h.chat == nil || !strings.Contains(email, "@") {
+		return c.AbortBadRequest("live chat and a valid email address are required")
+	}
+	deleted, keys, err := h.chat.Repo().EraseChatsByEmail(wsID, email)
+	if err != nil {
+		return c.AbortInternalServerError("failed to delete chats")
+	}
+	h.chat.DeleteBlobs(context.Background(), keys)
+	if h.audit != nil {
+		// The erased address is deliberately not logged.
+		h.audit.LogCtxScoped(c, wsID, "gdpr.chats_deleted",
+			fmt.Sprintf("Erased %d chat conversations for a data subject", deleted), map[string]any{"deleted": deleted})
+	}
+	return ok(c, GDPRDeleteResult{Deleted: deleted, Message: fmt.Sprintf("%d chat conversations deleted", deleted)})
 }

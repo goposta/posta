@@ -23,6 +23,7 @@ package routes
 const (
 	tagAdmin                 = "Admin"
 	tagCampaigns             = "Campaigns"
+	tagChat                  = "Live Chat"
 	tagForms                 = "Forms"
 	tagInbound               = "Inbound"
 	tagLanguages             = "Languages"

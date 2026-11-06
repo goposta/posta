@@ -143,6 +143,20 @@ func (c *Config) securityProblems() []secretProblem {
 			false,
 		})
 	}
+	if c.ChatEnabled && c.ChatIPRateLimit <= 0 {
+		problems = append(problems, secretProblem{
+			"POSTA_CHAT_IP_RATE_LIMIT",
+			"is disabled while live chat is enabled, leaving its public endpoints open to flooding",
+			false,
+		})
+	}
+	if c.ChatEnabled && (!c.InboundEnabled || c.MessagesInboundDomain == "") {
+		problems = append(problems, secretProblem{
+			"POSTA_MESSAGES_INBOUND_DOMAIN",
+			"is unset or inbound email is off, so visitors who leave a live chat can read agents' replies by email but cannot answer them by email",
+			false,
+		})
+	}
 
 	return problems
 }
@@ -183,6 +197,13 @@ func (c *Config) workerProblems() []secretProblem {
 		problems = append(problems, secretProblem{
 			"POSTA_SYSTEM_SMTP_HOST",
 			"is unset while web form messages are enabled, so the worker cannot deliver the notification for a submission",
+			false,
+		})
+	}
+	if c.ChatEnabled && !c.SystemSMTP.IsConfigured() {
+		problems = append(problems, secretProblem{
+			"POSTA_SYSTEM_SMTP_HOST",
+			"is unset while live chat is enabled, so the worker cannot email admins about a new conversation",
 			false,
 		})
 	}

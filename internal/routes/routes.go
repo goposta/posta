@@ -33,6 +33,7 @@ import (
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/auth"
 	"github.com/goposta/posta/internal/services/cache"
+	"github.com/goposta/posta/internal/services/chat"
 	"github.com/goposta/posta/internal/services/directory"
 	"github.com/goposta/posta/internal/services/email"
 	"github.com/goposta/posta/internal/services/emailverify"
@@ -143,6 +144,11 @@ type routerHandlers struct {
 	formRule         *handlers.FormRuleHandler
 	team             *handlers.TeamHandler
 	formIngest       *handlers.FormIngestHandler
+	chatWidget       *handlers.ChatWidgetHandler
+	chatConversation *handlers.ChatConversationHandler
+	chatVisitor      *handlers.ChatVisitorHandler
+	chatSnippet      *handlers.ChatSnippetHandler
+	unifiedInbox     *handlers.UnifiedInboxHandler
 	license          *handlers.LicenseHandler
 	ldapAdmin        *handlers.LDAPAdminHandler
 }
@@ -198,22 +204,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	dispatcher.OnDeliverySuccess(func() { metrics.IncrementWebhookDelivery("success") })
 	dispatcher.OnDeliveryFailed(func() { metrics.IncrementWebhookDelivery("failed") })
 	dispatcher.OnDeliveryDone(metrics.ObserveWebhookDeliveryDuration)
-	emailService := email.NewService(emailRepo, smtpRepo, templateRepo, suppressionRepo, limiter, dispatcher, cfg.DevMode)
-	emailService.SetSettings(settingsProvider)
-	emailService.SetPlanLimits(&emailPlanAdapter{planService})
-	emailService.SetVersionRepos(versionRepo, localizationRepo)
-	emailService.SetContactRepo(contactRepo)
-	emailService.SetUnsubscribeListRepo(unsubListRepo)
-	emailService.SetDomainVerification(domainRepo, userRepo, workspaceSettingRepo)
-	if producer != nil {
-		emailService.SetEnqueuer(producer)
-	}
-	if blobStore != nil {
-		emailService.SetBlobStore(blobStore)
-	}
-	emailService.OnSent(metrics.IncrementEmailSent)
-	emailService.OnFailed(metrics.IncrementEmailFailed)
-	emailService.OnQueued(metrics.IncrementEmailQueued)
+	emailService := buildEmailService(db, cfg, limiter, dispatcher, settingsProvider, planService, producer, blobStore)
 
 	statsCache := cache.New(redisClient)
 
@@ -342,6 +333,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		Messages: cfg.MessagesEnabled,
 		Inbound:  cfg.InboundEnabled,
 		Relay:    cfg.SMTPRelayEnabled,
+		Chat:     cfg.ChatEnabled,
 	})
 	r.h.dashboard.SetInbox(inboxService)
 
@@ -414,13 +406,24 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			inboundSvc.SetEnqueuer(producer)
 		}
 		inboundSvc.SetEventBus(bus)
+		var routers inbound.ThreadRouters
 		if cfg.MessagesEnabled && cfg.MessagesInboundDomain != "" {
 			router := messages.NewThreadRouter(repositories.NewMessageRepository(db), cfg.MessagesInboundDomain)
 			router.SetRealtime(realtime.NewRedis(redisClient))
 			if producer != nil {
 				router.SetEnqueuer(producer)
 			}
-			inboundSvc.SetThreadRouter(router)
+			routers = append(routers, router)
+		}
+		if cfg.ChatEnabled && cfg.MessagesInboundDomain != "" {
+			chatRouter := NewChatService(db, cfg)
+			if producer != nil {
+				chatRouter.SetEnqueuer(producer)
+			}
+			routers = append(routers, chatRouter)
+		}
+		if len(routers) > 0 {
+			inboundSvc.SetThreadRouter(routers)
 		}
 		inboundSvc.OnReceived(func(src models.InboundSource) { metrics.IncrementInboundReceived(string(src)) })
 		inboundSvc.OnRejected(metrics.IncrementInboundRejected)
@@ -469,7 +472,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 			metrics.IncrementMessageReceived(string(status))
 		})
 
-		r.h.form = handlers.NewFormHandler(formRepo, messageRepo, domainRepo, auditLogger, cfg.ApiBaseURL)
+		r.h.form = handlers.NewFormHandler(formRepo, messageRepo, domainRepo, auditLogger, cfg.PublicAPIURL())
 		r.h.form.SetKeyCache(messageSvc)
 		r.h.form.SetEdition(edition)
 		r.h.message = handlers.NewMessageHandler(messageRepo, formRepo, messageFilterRepo, messageSvc, auditLogger)
@@ -507,6 +510,9 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		subscriberRepo, subscriberListRepo,
 	)
 	r.h.workspaceData.SetAuditLogger(auditLogger)
+	if r.chatSvc != nil {
+		r.h.workspaceData.SetChat(r.chatSvc)
+	}
 	if blobStore != nil {
 		r.h.workspaceData.SetBlobStore(blobStore)
 	}
@@ -583,6 +589,13 @@ func (r *Router) registerRoutes() {
 		r.app.Register(r.formIngestRoutes()...)
 		r.app.Register(r.messageWorkspaceRoutes()...)
 	}
+	if r.cfg.ChatEnabled && r.h.chatVisitor != nil {
+		r.app.Register(r.chatPublicRoutes()...)
+		r.app.Register(r.chatWorkspaceRoutes()...)
+	}
+	if r.h.unifiedInbox != nil {
+		r.app.Register(r.unifiedInboxRoutes()...)
+	}
 	r.app.Register(r.adminSSERoutes()...)
 	r.app.Register(r.adminRoutes()...)
 	r.app.Register(r.licenseRoutes()...)
@@ -596,4 +609,65 @@ func (r *Router) registerRoutes() {
 	} else {
 		r.app.WebFS("/", web.Assets, okapi.WebConfig{Root: "dist", MaxAge: time.Hour})
 	}
+}
+
+// NewChatService builds the live chat service from configuration. The
+// server, the worker and every inbound mail parser each build their own; they
+// share state only through Postgres and Redis.
+func NewChatService(db *gorm.DB, cfg *config.Config) *chat.Service {
+	chatCfg := chat.DefaultConfig()
+	chatCfg.MaxStreams = cfg.ChatMaxStreams
+	chatCfg.UnansweredAfter = time.Duration(cfg.ChatUnansweredMinutes) * time.Minute
+	chatCfg.InboundDomain = cfg.MessagesInboundDomain
+	return chat.NewService(
+		repositories.NewChatRepository(db),
+		repositories.NewMessageFilterRepository(db),
+		repositories.NewSuppressionRepository(db),
+		cfg.Redis.Client,
+		[]byte(cfg.JWTSecret),
+		chatCfg,
+	)
+}
+
+// buildEmailService wires an email.Service the way every process that sends
+// mail needs it: verified-domain checks, suppression, plan limits, templates,
+// and the queue. Its link generator is set separately.
+func buildEmailService(db *gorm.DB, cfg *config.Config, limiter *ratelimit.RedisLimiter, dispatcher *webhook.Dispatcher,
+	settingsProvider *settings.Provider, planService *planpkg.Service, producer *worker.Producer, blobStore blob.Store) *email.Service {
+	svc := email.NewService(
+		repositories.NewEmailRepository(db),
+		repositories.NewSMTPRepository(db),
+		repositories.NewTemplateRepository(db),
+		repositories.NewSuppressionRepository(db),
+		limiter, dispatcher, cfg.DevMode,
+	)
+	svc.SetSettings(settingsProvider)
+	svc.SetPlanLimits(&emailPlanAdapter{planService})
+	svc.SetVersionRepos(repositories.NewTemplateVersionRepository(db), repositories.NewTemplateLocalizationRepository(db))
+	svc.SetContactRepo(repositories.NewContactRepository(db))
+	svc.SetUnsubscribeListRepo(repositories.NewUnsubscribeListRepository(db))
+	svc.SetDomainVerification(repositories.NewDomainRepository(db), repositories.NewUserRepository(db), repositories.NewWorkspaceSettingRepository(db))
+	if producer != nil {
+		svc.SetEnqueuer(producer)
+	}
+	if blobStore != nil {
+		svc.SetBlobStore(blobStore)
+	}
+	svc.OnSent(metrics.IncrementEmailSent)
+	svc.OnFailed(metrics.IncrementEmailFailed)
+	svc.OnQueued(metrics.IncrementEmailQueued)
+	return svc
+}
+
+// NewEmailService builds an email.Service for a process outside the HTTP
+// server, such as the worker, which sends chat follow-up emails as the agent
+// who wrote them.
+func NewEmailService(db *gorm.DB, cfg *config.Config, dispatcher *webhook.Dispatcher, producer *worker.Producer, blobStore blob.Store) *email.Service {
+	settingsProvider := settings.NewProvider(repositories.NewSettingRepository(db))
+	limiter := ratelimit.NewRedisLimiter(cfg.Redis.Client, cfg.RateLimitHourly, cfg.RateLimitDaily)
+	limiter.SetSettings(settingsProvider)
+	planService := planpkg.NewService(repositories.NewPlanRepository(db), settingsProvider)
+	svc := buildEmailService(db, cfg, limiter, dispatcher, settingsProvider, planService, producer, blobStore)
+	svc.SetLinkGenerator(tracking.NewService(repositories.NewTrackingRepository(db), cfg.AppWebURL, []byte(cfg.JWTSecret)))
+	return svc
 }

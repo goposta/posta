@@ -85,4 +85,10 @@ export const workspaceApi = {
   deleteMessages(email: string) {
     return api.post<ApiResponse<GDPRDeleteResult>>('/workspaces/current/gdpr/delete-messages', { email })
   },
+  exportChats(email: string) {
+    return api.post<ApiResponse<unknown[]>>('/workspaces/current/gdpr/export-chats', { email })
+  },
+  deleteChats(email: string) {
+    return api.post<ApiResponse<GDPRDeleteResult>>('/workspaces/current/gdpr/delete-chats', { email })
+  },
 }

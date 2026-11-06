@@ -26,6 +26,7 @@ import (
 	"github.com/goposta/posta/internal/config"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
+	"github.com/goposta/posta/internal/services/chat"
 	"github.com/goposta/posta/internal/storage/blob"
 	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
@@ -33,6 +34,7 @@ import (
 )
 
 type WorkspaceDataHandler struct {
+	chat               *chat.Service
 	db                 *gorm.DB
 	workspaceRepo      *repositories.WorkspaceRepository
 	templateRepo       *repositories.TemplateRepository

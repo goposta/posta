@@ -275,7 +275,7 @@ flowchart LR
 Running the API without a dedicated worker works for evaluation, but production
 deployments should split them so sending, retries, campaigns, and scheduled jobs scale
 independently of request traffic — see
-[`examples/compose/docker-compose-full.yml`](examples/compose/docker-compose-full.yml).
+[`deploy/compose/docker-compose-full.yml`](deploy/compose/docker-compose-full.yml).
 
 Object storage is optional (dashed above). With `POSTA_BLOB_PROVIDER` unset, attachments
 and raw inbound messages stay in the database; point it at `s3` or `fs` to move them out.
@@ -494,7 +494,7 @@ Contributions are welcome. Please open an issue before submitting a pull request
 Posta is free and open-source software licensed under the
 GNU Affero General Public License v3.0 or later ([AGPL-3.0-or-later](LICENSE)).
 
-Commercial support and hosted Posta services may be offered separately.
+Enterprise features are built with the `enterprise` tag and require a valid commercial license. [LICENSING.md](./LICENSING.md) has the full breakdown.
 
 ## Copyright
 

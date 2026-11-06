@@ -30,11 +30,15 @@ import (
 )
 
 type MessageFilterHandler struct {
+	chatRepo    *repositories.ChatRepository
 	repo        *repositories.MessageFilterRepository
 	messageRepo *repositories.MessageRepository
 	formRepo    *repositories.FormRepository
 	scanner     *messagescan.Scanner
 }
+
+// SetChatWidgets lets filters be scoped to a chat widget.
+func (h *MessageFilterHandler) SetChatWidgets(r *repositories.ChatRepository) { h.chatRepo = r }
 
 func NewMessageFilterHandler(
 	repo *repositories.MessageFilterRepository,
@@ -48,6 +52,7 @@ func NewMessageFilterHandler(
 type CreateMessageFilterRequest struct {
 	Body struct {
 		FormID        *uint    `json:"form_id"`
+		WidgetID      *uint    `json:"widget_id" doc:"Scope the filter to one chat widget instead of a form"`
 		Kind          string   `json:"kind" required:"true" enum:"keyword,phrase,regex,email,domain,ip"`
 		Pattern       string   `json:"pattern" required:"true"`
 		Action        string   `json:"action" enum:"score,flag,quarantine,reject,allowlist"`
@@ -123,6 +128,17 @@ func (h *MessageFilterHandler) Create(c *okapi.Context, req *CreateMessageFilter
 		return c.AbortBadRequest("invalid filter action")
 	}
 
+	if req.Body.FormID != nil && req.Body.WidgetID != nil {
+		return c.AbortBadRequest("a filter applies to one form or one chat widget, not both")
+	}
+	if req.Body.WidgetID != nil {
+		if h.chatRepo == nil {
+			return c.AbortBadRequest("live chat is not enabled")
+		}
+		if _, err := h.chatRepo.FindWidgetForScope(scope, *req.Body.WidgetID); err != nil {
+			return c.AbortBadRequest("chat widget not found in this workspace")
+		}
+	}
 	if req.Body.FormID != nil {
 		if _, err := h.formRepo.FindByIDForScope(scope, *req.Body.FormID); err != nil {
 			return c.AbortBadRequest("form not found in this workspace")
@@ -137,6 +153,7 @@ func (h *MessageFilterHandler) Create(c *okapi.Context, req *CreateMessageFilter
 	filter := &models.MessageFilter{
 		WorkspaceID:   scope.WorkspaceID,
 		FormID:        req.Body.FormID,
+		WidgetID:      req.Body.WidgetID,
 		Kind:          kind,
 		Pattern:       pattern,
 		Action:        action,

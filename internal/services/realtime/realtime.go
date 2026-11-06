@@ -30,7 +30,10 @@ type Event struct {
 	Type        string `json:"type"`
 	WorkspaceID uint   `json:"workspace_id"`
 	Topic       string `json:"topic"`
-	Data        any    `json:"data,omitempty"`
+	// Seq orders events that stand for a stored record, such as a chat
+	// message, so a subscriber can tell what it missed. Zero for the rest.
+	Seq  int64 `json:"seq,omitempty"`
+	Data any   `json:"data,omitempty"`
 }
 
 type Bus interface {

@@ -35,7 +35,7 @@ func TestOpenAPIDocumentIsValid(t *testing.T) {
 	})
 	r := &Router{
 		app: app,
-		cfg: &config.Config{InboundEnabled: true, MessagesEnabled: true},
+		cfg: &config.Config{InboundEnabled: true, MessagesEnabled: true, ChatEnabled: true},
 		v1:  app.Group("/api/v1"),
 	}
 	app.Register(r.healthRoutes()...)
@@ -53,6 +53,9 @@ func TestOpenAPIDocumentIsValid(t *testing.T) {
 	app.Register(r.inboundWorkspaceRoutes()...)
 	app.Register(r.formIngestRoutes()...)
 	app.Register(r.messageWorkspaceRoutes()...)
+	app.Register(r.chatPublicRoutes()...)
+	app.Register(r.chatWorkspaceRoutes()...)
+	app.Register(r.unifiedInboxRoutes()...)
 	app.Register(r.adminSSERoutes()...)
 	app.Register(r.adminRoutes()...)
 

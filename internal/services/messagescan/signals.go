@@ -43,6 +43,14 @@ var builtinSignals = []signal{
 	signalBotUserAgent,
 }
 
+// lightSignals look at a message's content only. They score the later lines
+// of a chat, where the sender is already known and a line of "ok" is normal.
+var lightSignals = []signal{
+	signalLinkCount,
+	signalShortener,
+	signalMarkup,
+}
+
 func signalSuppressed(s *Scanner, in Input) (float64, string) {
 	if s.lookup == nil || in.SenderEmail == "" {
 		return 0, ""

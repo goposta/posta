@@ -41,6 +41,7 @@ type UserSetting struct {
 	NotifyAPIKeyExpiry      bool `json:"notify_api_key_expiry" gorm:"default:true"`
 	NotifyWorkspaceActivity bool `json:"notify_workspace_activity" gorm:"default:true"`
 	NotifyNewMessage        bool `json:"notify_new_message" gorm:"default:true"`
+	NotifyNewChat           bool `json:"notify_new_chat" gorm:"default:true"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

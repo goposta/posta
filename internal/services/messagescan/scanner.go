@@ -93,6 +93,9 @@ type Input struct {
 	UserAgent   string
 	HoneypotHit bool
 	NonceFailed bool
+	// Light skips the signals about the sender (address, IP, user agent,
+	// repeats, length) and scores the content only: filters, links, markup.
+	Light bool
 }
 
 type Scanner struct {
@@ -154,7 +157,11 @@ func (s *Scanner) Scan(in Input) Verdict {
 		}
 	}
 
-	for _, sig := range builtinSignals {
+	signals := builtinSignals
+	if in.Light {
+		signals = lightSignals
+	}
+	for _, sig := range signals {
 		score, reason := sig(s, in)
 		if score == 0 && reason == "" {
 			continue

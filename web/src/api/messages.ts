@@ -86,6 +86,8 @@ export interface MessageListParams {
 
 export interface FilterPayload {
   form_id?: number | null
+  /** One chat widget instead of a form; never both. */
+  widget_id?: number | null
   kind?: string
   pattern?: string
   action?: string

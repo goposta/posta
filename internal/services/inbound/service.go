@@ -59,6 +59,20 @@ type ThreadRouter interface {
 	RouteReply(ctx context.Context, rec *models.InboundEmail, recipients []string) (bool, error)
 }
 
+// ThreadRouters tries each router in turn, for deployments with more than
+// one kind of conversation (form threads, live chat).
+type ThreadRouters []ThreadRouter
+
+func (rs ThreadRouters) RouteReply(ctx context.Context, rec *models.InboundEmail, recipients []string) (bool, error) {
+	for _, r := range rs {
+		routed, err := r.RouteReply(ctx, rec, recipients)
+		if err != nil || routed {
+			return routed, err
+		}
+	}
+	return false, nil
+}
+
 type Service struct {
 	repo            *repositories.InboundEmailRepository
 	domainRepo      *repositories.DomainRepository

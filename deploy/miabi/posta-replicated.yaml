@@ -134,9 +134,14 @@ spec:
           POSTA_ENV: production
           POSTA_WEB_URL: "https://posta.example.com"
 
-          # Miabi renders postgres://user:pass@host:port/db (no TLS on the
-          # workspace network, hence sslmode=disable).
-          POSTA_DB_URL: "{{ .databases.posta-db.uri }}?sslmode=disable"
+          # The database's own settings, so nothing has to be appended to a URL.
+          # No TLS on the workspace's private network.
+          POSTA_DB_HOST: "{{ .databases.posta-db.host }}"
+          POSTA_DB_PORT: "{{ .databases.posta-db.port }}"
+          POSTA_DB_NAME: "{{ .databases.posta-db.name }}"
+          POSTA_DB_USER: "{{ .databases.posta-db.user }}"
+          POSTA_DB_PASSWORD: "{{ .databases.posta-db.password }}"
+          POSTA_DB_SSL_MODE: disable
 
           # redis://:password@host:port
           POSTA_REDIS_URL: "{{ .databases.posta-redis.uri }}"
@@ -169,7 +174,7 @@ spec:
           # POSTA_SYSTEM_SMTP_FROM: notifications@example.com
           # POSTA_SYSTEM_SMTP_ENCRYPTION: starttls
         secretEnv:
-          - POSTA_DB_URL
+          - POSTA_DB_PASSWORD
           - POSTA_REDIS_URL
           - POSTA_JWT_SECRET
           - POSTA_ENCRYPTION_KEY
@@ -217,9 +222,14 @@ spec:
           POSTA_ENV: production
           POSTA_WEB_URL: "https://posta.example.com"   # base for tracking and unsubscribe links
 
-          # Miabi renders postgres://user:pass@host:port/db (no TLS on the
-          # workspace network, hence sslmode=disable).
-          POSTA_DB_URL: "{{ .databases.posta-db.uri }}?sslmode=disable"
+          # The database's own settings, so nothing has to be appended to a URL.
+          # No TLS on the workspace's private network.
+          POSTA_DB_HOST: "{{ .databases.posta-db.host }}"
+          POSTA_DB_PORT: "{{ .databases.posta-db.port }}"
+          POSTA_DB_NAME: "{{ .databases.posta-db.name }}"
+          POSTA_DB_USER: "{{ .databases.posta-db.user }}"
+          POSTA_DB_PASSWORD: "{{ .databases.posta-db.password }}"
+          POSTA_DB_SSL_MODE: disable
 
           # redis://:password@host:port
           POSTA_REDIS_URL: "{{ .databases.posta-redis.uri }}"
@@ -242,7 +252,7 @@ spec:
           POSTA_WORKER_HEALTH_PORT: "9000"
           POSTA_METRICS_ENABLED: "true"
         secretEnv:
-          - POSTA_DB_URL
+          - POSTA_DB_PASSWORD
           - POSTA_REDIS_URL
           - POSTA_JWT_SECRET
           - POSTA_ENCRYPTION_KEY

@@ -8,6 +8,7 @@ import type { Workspace, Plan, OAuthProviderInfo, WorkspaceSSOConfig, WorkspaceS
 import { useNotificationStore } from '../../stores/notification'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useConfirm } from '../../composables/useConfirm'
+import { useChatStore } from '../../stores/chat'
 import { timezoneOptions } from '../../composables/timezones'
 import NameField from '../../components/NameField.vue'
 
@@ -74,6 +75,10 @@ const wsSettingsSaving = ref(false)
 const gdprEmail = ref('')
 const gdprDays = ref(90)
 const gdprMessagesEmail = ref('')
+const chat = useChatStore()
+const gdprChatsEmail = ref('')
+const exportingChats = ref(false)
+const deletingChats = ref(false)
 const deletingMessages = ref(false)
 const deletingContacts = ref(false)
 const deletingEmails = ref(false)
@@ -224,6 +229,49 @@ async function deleteWorkspaceMessages() {
     notify.error(e.response?.data?.error?.message || 'Failed to delete messages')
   } finally {
     deletingMessages.value = false
+  }
+}
+
+async function exportWorkspaceChats() {
+  const target = gdprChatsEmail.value.trim()
+  if (!target) return
+  exportingChats.value = true
+  try {
+    const res = await withWorkspace(() => workspaceApi.exportChats(target))
+    const items = res.data.data || []
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `posta-chats-${target.replace(/[^a-zA-Z0-9@._-]/g, '_')}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    notify.success(`${items.length} chat conversation${items.length === 1 ? '' : 's'} exported`)
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to export chats')
+  } finally {
+    exportingChats.value = false
+  }
+}
+
+async function deleteWorkspaceChats() {
+  const target = gdprChatsEmail.value.trim()
+  if (!target) return
+  const confirmed = await confirm({
+    title: 'Delete Chat Data',
+    message: `Erase every live chat conversation of visitors who gave "${target}", with messages, files and the visitors themselves? This cannot be undone.`,
+    confirmText: 'Delete',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+  deletingChats.value = true
+  try {
+    const res = await withWorkspace(() => workspaceApi.deleteChats(target))
+    notify.success(res.data.data.message)
+    gdprChatsEmail.value = ''
+  } catch (e: any) {
+    notify.error(e.response?.data?.error?.message || 'Failed to delete chats')
+  } finally {
+    deletingChats.value = false
   }
 }
 
@@ -484,6 +532,18 @@ watch(activeTab, (value) => {
                       <td>{{ formatLimit(currentPlan.max_smtp_servers) }}</td>
                     </tr>
                     <tr>
+                      <td style="font-weight: 600">Chat Widgets</td>
+                      <td>{{ formatLimit(currentPlan.max_chat_widgets) }}</td>
+                    </tr>
+                    <tr>
+                      <td style="font-weight: 600">Chat Agents Online</td>
+                      <td>{{ formatLimit(currentPlan.max_chat_agents) }}</td>
+                    </tr>
+                    <tr>
+                      <td style="font-weight: 600">Chats per Month</td>
+                      <td>{{ formatLimit(currentPlan.monthly_conversation_limit) }}</td>
+                    </tr>
+                    <tr>
                       <td style="font-weight: 600">Workspaces</td>
                       <td>{{ formatLimit(currentPlan.max_workspaces) }}</td>
                     </tr>
@@ -660,6 +720,22 @@ watch(activeTab, (value) => {
               <input v-model="gdprMessagesEmail" type="email" class="form-input" placeholder="email@example.com" style="flex: 1" />
               <button class="btn btn-danger" :disabled="deletingMessages || !gdprMessagesEmail.trim()" @click="deleteWorkspaceMessages">
                 {{ deletingMessages ? 'Deleting...' : 'Delete' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="chat.enabled" style="margin-top: 24px;">
+            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Live Chat Data</h4>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+              Export or erase every live chat conversation of visitors who gave an address, typed or verified, with messages, files and the visitors themselves.
+            </p>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input v-model="gdprChatsEmail" type="email" class="form-input" placeholder="email@example.com" style="flex: 1" />
+              <button class="btn btn-secondary" :disabled="exportingChats || !gdprChatsEmail.trim()" @click="exportWorkspaceChats">
+                {{ exportingChats ? 'Exporting...' : 'Export' }}
+              </button>
+              <button class="btn btn-danger" :disabled="deletingChats || !gdprChatsEmail.trim()" @click="deleteWorkspaceChats">
+                {{ deletingChats ? 'Deleting...' : 'Delete' }}
               </button>
             </div>
           </div>

@@ -26,6 +26,7 @@ import (
 	"github.com/goposta/posta/internal/handlers"
 	"github.com/goposta/posta/internal/middlewares"
 	"github.com/goposta/posta/internal/models"
+	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
 
@@ -319,6 +320,30 @@ func (r *Router) workspaceRoutes() []okapi.RouteDefinition {
 			Summary:     "Delete a person's web form messages (GDPR)",
 			Description: "Erase every web form message submitted from an address, with its thread replies, the inbound emails those replies arrived as, and all stored attachments.",
 			Request:     &handlers.GDPRDeleteMessagesRequest{},
+			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/gdpr/export-chats",
+			Handler:     okapi.H(r.h.workspaceData.ExportChats),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Export a person's chats (GDPR)",
+			Description: "Every live chat conversation, with its messages, of visitors who gave this address, typed or verified.",
+			Request:     &handlers.GDPRChatsRequest{},
+			Response:    &dto.Response[[]repositories.ChatExport]{},
+			Options:     []okapi.RouteOption{workspaceHeaderRequired},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/gdpr/delete-chats",
+			Handler:     okapi.H(r.h.workspaceData.DeleteChats),
+			Group:       wsGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireWorkspaceRole(models.WorkspaceRoleAdmin)},
+			Summary:     "Delete a person's chats (GDPR)",
+			Description: "Erase every live chat conversation of visitors who gave this address, with messages, files and the visitors themselves.",
+			Request:     &handlers.GDPRChatsRequest{},
 			Response:    &dto.Response[handlers.GDPRDeleteResult]{},
 			Options:     []okapi.RouteOption{workspaceHeaderRequired},
 		},

@@ -66,37 +66,43 @@ func NewPlanHandler(
 
 type CreatePlanRequest struct {
 	Body struct {
-		Name                  string `json:"name" required:"true"`
-		Description           string `json:"description"`
-		IsDefault             bool   `json:"is_default"`
-		DailyRateLimit        int    `json:"daily_rate_limit"`
-		HourlyRateLimit       int    `json:"hourly_rate_limit"`
-		MaxAttachmentSizeMB   int    `json:"max_attachment_size_mb"`
-		MaxBatchSize          int    `json:"max_batch_size"`
-		MaxAPIKeys            int    `json:"max_api_keys"`
-		MaxDomains            int    `json:"max_domains"`
-		MaxSMTPServers        int    `json:"max_smtp_servers"`
-		MaxWorkspaces         int    `json:"max_workspaces"`
-		EmailLogRetentionDays int    `json:"email_log_retention_days"`
+		Name                     string `json:"name" required:"true"`
+		Description              string `json:"description"`
+		IsDefault                bool   `json:"is_default"`
+		DailyRateLimit           int    `json:"daily_rate_limit"`
+		HourlyRateLimit          int    `json:"hourly_rate_limit"`
+		MaxAttachmentSizeMB      int    `json:"max_attachment_size_mb"`
+		MaxBatchSize             int    `json:"max_batch_size"`
+		MaxAPIKeys               int    `json:"max_api_keys"`
+		MaxDomains               int    `json:"max_domains"`
+		MaxSMTPServers           int    `json:"max_smtp_servers"`
+		MaxChatWidgets           int    `json:"max_chat_widgets"`
+		MaxChatAgents            int    `json:"max_chat_agents" doc:"Agents online or away at once"`
+		MonthlyConversationLimit int    `json:"monthly_conversation_limit" doc:"Chats a workspace can start per calendar month; past it the widget takes messages offline"`
+		MaxWorkspaces            int    `json:"max_workspaces"`
+		EmailLogRetentionDays    int    `json:"email_log_retention_days"`
 	} `json:"body"`
 }
 
 type UpdatePlanRequest struct {
 	ID   int `param:"id"`
 	Body struct {
-		Name                  *string `json:"name"`
-		Description           *string `json:"description"`
-		IsDefault             *bool   `json:"is_default"`
-		IsActive              *bool   `json:"is_active"`
-		DailyRateLimit        *int    `json:"daily_rate_limit"`
-		HourlyRateLimit       *int    `json:"hourly_rate_limit"`
-		MaxAttachmentSizeMB   *int    `json:"max_attachment_size_mb"`
-		MaxBatchSize          *int    `json:"max_batch_size"`
-		MaxAPIKeys            *int    `json:"max_api_keys"`
-		MaxDomains            *int    `json:"max_domains"`
-		MaxSMTPServers        *int    `json:"max_smtp_servers"`
-		MaxWorkspaces         *int    `json:"max_workspaces"`
-		EmailLogRetentionDays *int    `json:"email_log_retention_days"`
+		Name                     *string `json:"name"`
+		Description              *string `json:"description"`
+		IsDefault                *bool   `json:"is_default"`
+		IsActive                 *bool   `json:"is_active"`
+		DailyRateLimit           *int    `json:"daily_rate_limit"`
+		HourlyRateLimit          *int    `json:"hourly_rate_limit"`
+		MaxAttachmentSizeMB      *int    `json:"max_attachment_size_mb"`
+		MaxBatchSize             *int    `json:"max_batch_size"`
+		MaxAPIKeys               *int    `json:"max_api_keys"`
+		MaxDomains               *int    `json:"max_domains"`
+		MaxSMTPServers           *int    `json:"max_smtp_servers"`
+		MaxChatWidgets           *int    `json:"max_chat_widgets"`
+		MaxChatAgents            *int    `json:"max_chat_agents"`
+		MonthlyConversationLimit *int    `json:"monthly_conversation_limit"`
+		MaxWorkspaces            *int    `json:"max_workspaces"`
+		EmailLogRetentionDays    *int    `json:"email_log_retention_days"`
 	} `json:"body"`
 }
 
@@ -138,19 +144,22 @@ func (h *PlanHandler) Create(c *okapi.Context, req *CreatePlanRequest) error {
 	userID := uint(c.GetInt("user_id"))
 
 	plan := &models.Plan{
-		Name:                  req.Body.Name,
-		Description:           req.Body.Description,
-		IsDefault:             req.Body.IsDefault,
-		IsActive:              true,
-		DailyRateLimit:        req.Body.DailyRateLimit,
-		HourlyRateLimit:       req.Body.HourlyRateLimit,
-		MaxAttachmentSizeMB:   req.Body.MaxAttachmentSizeMB,
-		MaxBatchSize:          req.Body.MaxBatchSize,
-		MaxAPIKeys:            req.Body.MaxAPIKeys,
-		MaxDomains:            req.Body.MaxDomains,
-		MaxSMTPServers:        req.Body.MaxSMTPServers,
-		MaxWorkspaces:         req.Body.MaxWorkspaces,
-		EmailLogRetentionDays: req.Body.EmailLogRetentionDays,
+		Name:                     req.Body.Name,
+		Description:              req.Body.Description,
+		IsDefault:                req.Body.IsDefault,
+		IsActive:                 true,
+		DailyRateLimit:           req.Body.DailyRateLimit,
+		HourlyRateLimit:          req.Body.HourlyRateLimit,
+		MaxAttachmentSizeMB:      req.Body.MaxAttachmentSizeMB,
+		MaxBatchSize:             req.Body.MaxBatchSize,
+		MaxAPIKeys:               req.Body.MaxAPIKeys,
+		MaxDomains:               req.Body.MaxDomains,
+		MaxSMTPServers:           req.Body.MaxSMTPServers,
+		MaxChatWidgets:           req.Body.MaxChatWidgets,
+		MaxChatAgents:            req.Body.MaxChatAgents,
+		MonthlyConversationLimit: req.Body.MonthlyConversationLimit,
+		MaxWorkspaces:            req.Body.MaxWorkspaces,
+		EmailLogRetentionDays:    req.Body.EmailLogRetentionDays,
 	}
 
 	if plan.IsDefault {
@@ -230,6 +239,15 @@ func (h *PlanHandler) Update(c *okapi.Context, req *UpdatePlanRequest) error {
 	}
 	if req.Body.MaxSMTPServers != nil {
 		plan.MaxSMTPServers = *req.Body.MaxSMTPServers
+	}
+	if req.Body.MaxChatWidgets != nil {
+		plan.MaxChatWidgets = *req.Body.MaxChatWidgets
+	}
+	if req.Body.MaxChatAgents != nil {
+		plan.MaxChatAgents = *req.Body.MaxChatAgents
+	}
+	if req.Body.MonthlyConversationLimit != nil {
+		plan.MonthlyConversationLimit = *req.Body.MonthlyConversationLimit
 	}
 	if req.Body.MaxWorkspaces != nil {
 		plan.MaxWorkspaces = *req.Body.MaxWorkspaces

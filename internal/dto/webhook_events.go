@@ -119,3 +119,51 @@ type MessageWebhookField struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+
+// ChatWebhookEvent is the payload for the chat.* events. Message is set for
+// chat.message.created, and for chat.conversation.started with the
+// visitor's first message.
+type ChatWebhookEvent struct {
+	Event        string              `json:"event"`
+	Timestamp    string              `json:"timestamp"`
+	Conversation ChatWebhookConv     `json:"conversation"`
+	Message      *ChatWebhookMessage `json:"message,omitempty"`
+}
+
+type ChatWebhookConv struct {
+	ID           string             `json:"id"`
+	WidgetID     string             `json:"widget_id"`
+	WidgetName   string             `json:"widget_name"`
+	State        string             `json:"state"`
+	Status       string             `json:"status" doc:"Scan verdict on the first message: received or flagged"`
+	AssignedToID *uint              `json:"assigned_to_id,omitempty"`
+	StartPageURL string             `json:"start_page_url,omitempty"`
+	Visitor      ChatWebhookVisitor `json:"visitor"`
+	CreatedAt    string             `json:"created_at"`
+}
+
+type ChatWebhookVisitor struct {
+	ID            string         `json:"id"`
+	Name          string         `json:"name,omitempty"`
+	Email         string         `json:"email,omitempty"`
+	EmailVerified bool           `json:"email_verified" doc:"True only when the customer's server signed the identity; a typed email is never verified"`
+	ExternalID    string         `json:"external_id,omitempty"`
+	Attributes    map[string]any `json:"attributes,omitempty"`
+}
+
+type ChatWebhookMessage struct {
+	ID          string                  `json:"id"`
+	Seq         int64                   `json:"seq"`
+	AuthorKind  string                  `json:"author_kind" doc:"visitor, agent or system"`
+	AuthorID    *uint                   `json:"author_id,omitempty"`
+	Body        string                  `json:"body"`
+	Channel     string                  `json:"channel" doc:"chat, or email for a visitor's emailed answer"`
+	Attachments []ChatWebhookAttachment `json:"attachments,omitempty"`
+	CreatedAt   string                  `json:"created_at"`
+}
+
+type ChatWebhookAttachment struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        int64  `json:"size"`
+}

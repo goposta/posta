@@ -69,6 +69,9 @@ type MessageFilter struct {
 	ID          uint  `json:"id" gorm:"primaryKey"`
 	WorkspaceID *uint `json:"workspace_id,omitempty" gorm:"index;not null"`
 	FormID      *uint `json:"form_id,omitempty" gorm:"index"`
+	// WidgetID scopes the filter to one chat widget. With neither FormID nor
+	// WidgetID it covers every form and widget of the workspace.
+	WidgetID *uint `json:"widget_id,omitempty" gorm:"index"`
 
 	Kind          FilterKind     `json:"kind" gorm:"type:varchar(16);not null"`
 	Pattern       string         `json:"pattern" gorm:"not null"`

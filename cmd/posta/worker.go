@@ -177,7 +177,7 @@ func runWorker() error {
 		inboundHandler := worker.NewInboundProcessHandler(
 			repositories.NewInboundEmailRepository(db),
 			newWebhookDispatcher(db, cfg),
-			cfg.ApiBaseURL,
+			cfg.PublicAPIURL(),
 			[]byte(cfg.JWTSecret),
 		)
 		inboundHandler.OnForwarded(metrics.IncrementInboundForwarded)

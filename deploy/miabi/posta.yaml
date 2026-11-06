@@ -1,13 +1,19 @@
-# Posta on Miabi (single instance, embedded worker)
-# ==================================================
+# Posta on Miabi (server + dedicated worker, one node)
+# ===================================================
 # A complete Posta deployment as one miabi.io/v1 Project: a managed PostgreSQL
-# database, a dedicated Redis, generated secrets, a volume for attachments, the
-# Posta server (HTTP API + web UI with the worker embedded), and a public HTTPS
-# route with automatic TLS.
+# database, a dedicated Redis, generated secrets, a volume for attachments, and
+# a `posta` stack holding two applications, plus a public HTTPS route with
+# automatic TLS.
 #
-# This is the Miabi equivalent of ../compose/compose.yml. It suits small and
-# medium installations; for replicas and a dedicated worker see
-# posta-replicated.yaml.
+#   posta          HTTP API + web UI
+#   posta-worker   queue consumer (sending, retries, campaigns)
+#
+# Both mount the same posta-data volume, so they run on the volume's node.
+# This suits small and medium installations; for replicas across a cluster,
+# with attachments on S3, see posta-replicated.yaml.
+#
+# A manifest Stack groups its members but carries no env of its own, so each
+# application lists its settings. Keep the two env blocks in step.
 #
 # Before applying, replace posta.example.com (three places) with your hostname.
 #
@@ -22,7 +28,7 @@ kind: Project
 metadata:
   name: posta
 spec:
-  description: Posta transactional email platform, with Postgres, Redis, server and route.
+  description: Posta transactional email platform, with Postgres, Redis, server, worker and route.
   resources:
     # Secrets are generated once at create time and never change on re-apply.
     # POSTA_JWT_SECRET signs sessions: anyone who knows it can forge one.
@@ -68,20 +74,30 @@ spec:
         version: "8-alpine"
         instance: dedicated
 
-    # Attachments and inbound mail bodies. A single instance can keep them on a
-    # volume; replicas need S3 instead (see posta-replicated.yaml).
+    # Attachments and inbound mail bodies, written by the server and read by
+    # the worker. A volume lives on one node; replicas need S3 instead (see
+    # posta-replicated.yaml).
     - apiVersion: miabi.io/v1
       kind: Volume
       metadata: { name: posta-data }
       spec:
         size: 5Gi
 
+    # Members share a network and are deployed together.
+    - apiVersion: miabi.io/v1
+      kind: Stack
+      metadata: { name: posta }
+      spec:
+        description: Posta server and worker.
+
+    # ── API server ──────────────────────────────────────────────────────────
     - apiVersion: miabi.io/v1
       kind: Application
       metadata: { name: posta }
       spec:
         image: jkaninda/posta
         tag: "latest"            # pin a release tag in production
+        stack: posta
         ports:
           - container: 9000
             scheme: http
@@ -98,9 +114,14 @@ spec:
           POSTA_ENV: production
           POSTA_WEB_URL: "https://posta.example.com"   # must match the route host
 
-          # Miabi renders postgres://user:pass@host:port/db (no TLS on the
-          # workspace network, hence sslmode=disable).
-          POSTA_DB_URL: "{{ .databases.posta-db.uri }}?sslmode=disable"
+          # The database's own settings, so nothing has to be appended to a URL.
+          # No TLS on the workspace's private network.
+          POSTA_DB_HOST: "{{ .databases.posta-db.host }}"
+          POSTA_DB_PORT: "{{ .databases.posta-db.port }}"
+          POSTA_DB_NAME: "{{ .databases.posta-db.name }}"
+          POSTA_DB_USER: "{{ .databases.posta-db.user }}"
+          POSTA_DB_PASSWORD: "{{ .databases.posta-db.password }}"
+          POSTA_DB_SSL_MODE: disable
 
           # redis://:password@host:port
           POSTA_REDIS_URL: "{{ .databases.posta-redis.uri }}"
@@ -117,9 +138,8 @@ spec:
           # install set one (see /etc/miabi/miabi.yaml, networking.proxy).
           POSTA_TRUSTED_PROXIES: "10.63.0.0/16"
 
-          POSTA_EMBEDDED_WORKER: "true"
-          POSTA_WORKER_CONCURRENCY: "10"
-          POSTA_WORKER_MAX_RETRIES: "5"
+          # Delivery belongs to posta-worker.
+          POSTA_EMBEDDED_WORKER: "false"
 
           POSTA_BLOB_PROVIDER: filesystem
           POSTA_BLOB_FS_PATH: /data/attachments
@@ -133,7 +153,7 @@ spec:
           # POSTA_SYSTEM_SMTP_FROM: notifications@example.com
           # POSTA_SYSTEM_SMTP_ENCRYPTION: starttls
         secretEnv:
-          - POSTA_DB_URL
+          - POSTA_DB_PASSWORD
           - POSTA_REDIS_URL
           - POSTA_JWT_SECRET
           - POSTA_ENCRYPTION_KEY
@@ -155,6 +175,65 @@ spec:
         #     publish: true
         #     hostPort: 25
 
+    # ── Queue worker ────────────────────────────────────────────────────────
+    # Same database, Redis, secrets and attachments as the server: the worker
+    # signs tracking links with the JWT secret, decrypts SMTP passwords with
+    # the encryption key, and reads attachments from the volume.
+    - apiVersion: miabi.io/v1
+      kind: Application
+      metadata: { name: posta-worker }
+      spec:
+        image: jkaninda/posta
+        tag: "latest"            # keep in lockstep with the server's tag
+        command: ["worker"]
+        stack: posta
+        security:
+          runAsUser: "100:101"
+        # The worker serves /healthz, /readyz and /metrics on this port.
+        healthcheck:
+          type: http
+          path: /healthz
+          port: 9000
+          startPeriodSeconds: 20
+        ports:
+          - container: 9000
+            scheme: http
+        env:
+          POSTA_ENV: production
+          POSTA_WEB_URL: "https://posta.example.com"   # base for tracking and unsubscribe links
+
+          POSTA_DB_HOST: "{{ .databases.posta-db.host }}"
+          POSTA_DB_PORT: "{{ .databases.posta-db.port }}"
+          POSTA_DB_NAME: "{{ .databases.posta-db.name }}"
+          POSTA_DB_USER: "{{ .databases.posta-db.user }}"
+          POSTA_DB_PASSWORD: "{{ .databases.posta-db.password }}"
+          POSTA_DB_SSL_MODE: disable
+
+          POSTA_REDIS_URL: "{{ .databases.posta-redis.uri }}"
+
+          POSTA_JWT_SECRET: "{{ .secrets.posta-jwt-secret }}"
+          POSTA_ENCRYPTION_KEY: "{{ .secrets.posta-encryption-key }}"
+
+          POSTA_BLOB_PROVIDER: filesystem
+          POSTA_BLOB_FS_PATH: /data/attachments
+
+          POSTA_WORKER_CONCURRENCY: "10"
+          POSTA_WORKER_MAX_RETRIES: "5"
+          POSTA_WORKER_HEALTH_ENABLED: "true"
+          POSTA_WORKER_HEALTH_PORT: "9000"
+        secretEnv:
+          - POSTA_DB_PASSWORD
+          - POSTA_REDIS_URL
+          - POSTA_JWT_SECRET
+          - POSTA_ENCRYPTION_KEY
+        mounts:
+          - volume: posta-data
+            path: /data
+        resources:
+          memory: 512Mi
+          cpu: "1"
+
+    # ── Public route ────────────────────────────────────────────────────────
     - apiVersion: miabi.io/v1
       kind: Domain
       metadata: { name: posta.example.com }

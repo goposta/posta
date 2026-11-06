@@ -600,6 +600,7 @@ export interface DashboardFeatures {
   messages: boolean
   inbound: boolean
   relay: boolean
+  chat: boolean
 }
 
 export interface DailyVolume {
@@ -809,6 +810,7 @@ export interface UserSettings {
   notify_api_key_expiry: boolean
   notify_workspace_activity: boolean
   notify_new_message: boolean
+  notify_new_chat: boolean
   created_at: string
   updated_at: string
 }
@@ -1176,6 +1178,9 @@ export interface Plan {
   max_api_keys: number
   max_domains: number
   max_smtp_servers: number
+  max_chat_widgets: number
+  max_chat_agents: number
+  monthly_conversation_limit: number
   max_workspaces: number
   email_log_retention_days: number
   created_at: string
@@ -1204,6 +1209,9 @@ export interface PlanInput {
   max_api_keys: number
   max_domains: number
   max_smtp_servers: number
+  max_chat_widgets: number
+  max_chat_agents: number
+  monthly_conversation_limit: number
   max_workspaces: number
   email_log_retention_days: number
 }
@@ -1393,6 +1401,8 @@ export interface MessageFilterRule {
   id: number
   workspace_id?: number | null
   form_id?: number | null
+  /** Scopes the filter to one chat widget. */
+  widget_id?: number | null
   kind: FilterKind
   pattern: string
   action: FilterAction
@@ -1586,4 +1596,221 @@ export interface TeamInput {
   name: string
   email?: string
   user_ids: number[]
+}
+
+// Live chat
+
+export type ChatWidgetStatus = 'active' | 'paused' | 'archived'
+export type ChatState = 'open' | 'pending' | 'closed' | 'spam'
+export type ChatAuthorKind = 'visitor' | 'agent' | 'system'
+export type ChatPresenceStatus = 'online' | 'away' | 'offline'
+export type ChatOfflineMode = 'email' | 'hide'
+
+/** A staffed range on one weekday: day 0 is Sunday, times are HH:MM. */
+export interface ChatHoursRange {
+  day: number
+  from: string
+  to: string
+}
+
+/** Weekly staffed hours in one time zone. No days means always. */
+export interface ChatBusinessHours {
+  timezone?: string
+  days?: ChatHoursRange[]
+}
+
+export interface ChatWidget {
+  id: number
+  uuid: string
+  workspace_id?: number
+  name: string
+  display_name: string
+  public_key: string
+  status: ChatWidgetStatus
+  allowed_origins: string[] | null
+  strict_origin: boolean
+  title: string
+  greeting: string
+  accent_color: string
+  position: 'left' | 'right'
+  avatar_url: string
+  show_agent_names: boolean
+  require_email: boolean
+  require_name: boolean
+  business_hours: ChatBusinessHours | null
+  offline_mode: ChatOfflineMode
+  offline_greeting: string
+  reply_from: string
+  reply_from_name: string
+  scan_enabled: boolean
+  flag_threshold: number
+  quarantine_threshold: number
+  reject_threshold: number
+  max_message_bytes: number
+  allow_attachments: boolean
+  auto_assign: boolean
+  max_open_per_agent: number
+  retention_days: number
+  has_identity_secret: boolean
+  last_edited_by_id?: number
+  created_at: string
+  updated_at?: string
+  last_edited_by?: { id: number; name: string }
+}
+
+export interface ChatWidgetSnippet {
+  public_key: string
+  script_url: string
+  html: string
+}
+
+export interface ChatVisitor {
+  id: number
+  uuid: string
+  widget_id: number
+  name: string
+  email: string
+  first_seen_ip: string
+  last_seen_ip: string
+  user_agent: string
+  last_page_url: string
+  last_seen_at: string
+  created_at: string
+  /** Set only by a signed identity from the customer's server. */
+  email_verified?: boolean
+  external_id?: string
+  attributes?: Record<string, string | number | boolean> | null
+  banned_at?: string | null
+}
+
+export interface ChatAttachment {
+  filename: string
+  content_type: string
+  size: number
+}
+
+export interface ChatVisitorContext {
+  visitor: ChatVisitor | null
+  history: ChatConversation[]
+  contact?: { id: number; email: string; name: string } | null
+}
+
+export interface ChatSnippet {
+  id: number
+  shortcut: string
+  title: string
+  body: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ChatAnalytics {
+  conversations: number
+  open: number
+  closed: number
+  spam: number
+  messages: number
+  unanswered: number
+  first_response_avg: number | null
+  first_response_median: number | null
+  resolution_avg: number | null
+  resolution_median: number | null
+  by_day: { day: string; conversations: number }[]
+}
+
+export interface ChatConversation {
+  id: number
+  uuid: string
+  workspace_id?: number
+  widget_id: number
+  visitor_id: number
+  state: ChatState
+  status: 'received' | 'flagged' | 'quarantined' | 'rejected'
+  spam_score: number
+  scan_reasons?: string[] | null
+  assigned_to_id?: number | null
+  visitor_read_seq: number
+  agent_read_seq: number
+  emailed_through_seq: number
+  /** Computed on GET: the visitor's widget is connected now. */
+  visitor_live?: boolean
+  /** Computed on GET: a reply now would reach the visitor by email. */
+  reply_by_email?: boolean
+  last_seq: number
+  last_author_kind: ChatAuthorKind | ''
+  last_message_preview: string
+  last_message_at: string
+  last_visitor_msg_at?: string
+  first_response_at?: string
+  closed_at?: string | null
+  start_page_url: string
+  created_at: string
+  updated_at?: string
+  visitor?: ChatVisitor
+  widget?: { id: number; name: string; display_name: string }
+  assigned_to?: { id: number; name: string } | null
+}
+
+export interface ChatMessage {
+  /** The message's UUID. */
+  id: string
+  seq: number
+  author_kind: ChatAuthorKind
+  author_id?: number
+  body: string
+  client_msg_id?: string
+  /** "email" for a visitor's emailed answer. */
+  channel?: 'chat' | 'email'
+  /** Set on agent messages delivered to a visitor who left, by email. */
+  email_uuid?: string
+  attachments?: ChatAttachment[] | null
+  created_at: string
+  author?: { id: number; name: string }
+}
+
+export interface ChatSummary {
+  awaiting_reply: number
+}
+
+/** Data of a chat.message event on the dashboard stream. */
+export interface ChatMessageEvent {
+  conversation_id: string
+  message: ChatMessage
+}
+
+/** Data of a chat.conversation event on the dashboard stream. */
+export interface ChatConversationEvent {
+  conversation_id: string
+  started?: boolean
+  state: ChatState
+  assigned_to_id: number | null
+  last_seq: number
+  visitor_name?: string
+  preview?: string
+}
+
+/** One agent's status, from GET /chat/presence or a chat.presence event. */
+export interface ChatAgentPresence {
+  user_id: number
+  status: ChatPresenceStatus
+}
+
+/** Data of a chat.typing event: the visitor is writing. */
+export interface ChatTypingEvent {
+  conversation_id: string
+  author: ChatAuthorKind
+  name?: string
+}
+
+/** Data of a chat.read event: how far the visitor has read. */
+export interface ChatReadEvent {
+  conversation_id: string
+  reader: ChatAuthorKind
+  seq: number
+}
+
+/** Data of a chat.visitor event: whether the visitor's widget is connected. */
+export interface ChatVisitorEvent {
+  conversation_id: string
+  live: boolean
 }

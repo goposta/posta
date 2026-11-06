@@ -65,11 +65,12 @@ const form = ref<Partial<UserSettings>>({
   notify_api_key_expiry: true,
   notify_workspace_activity: true,
   notify_new_message: true,
+  notify_new_chat: true,
 })
 
 // Security alerts are always on, so they are shown separately as informational.
 const notificationTypes: {
-  key: 'daily_report' | 'notify_bounce_alerts' | 'notify_api_key_expiry' | 'notify_workspace_activity' | 'notify_new_message'
+  key: 'daily_report' | 'notify_bounce_alerts' | 'notify_api_key_expiry' | 'notify_workspace_activity' | 'notify_new_message' | 'notify_new_chat'
   label: string
   hint: string
 }[] = [
@@ -77,6 +78,7 @@ const notificationTypes: {
   { key: 'notify_api_key_expiry', label: 'API key expiry reminders', hint: 'Remind me before an API key expires.' },
   { key: 'notify_workspace_activity', label: 'Workspace updates', hint: 'Notify me about role changes and workspace activity.' },
   { key: 'notify_new_message', label: 'Web form messages', hint: 'Notify me when a website form receives a new message.' },
+  { key: 'notify_new_chat', label: 'Live chat', hint: 'Email me about new chats when no agent is online (owners and admins), and about chats waiting for a reply.' },
   { key: 'daily_report', label: 'Daily report', hint: 'Receive a daily email summary of send statistics.' },
 ]
 
@@ -104,6 +106,7 @@ onMounted(async () => {
       notify_api_key_expiry: u.notify_api_key_expiry,
       notify_workspace_activity: u.notify_workspace_activity,
       notify_new_message: u.notify_new_message,
+      notify_new_chat: u.notify_new_chat,
     }
   } catch {
     notify.error('Failed to load settings')

@@ -50,6 +50,7 @@ type UpdateUserSettingsRequest struct {
 		NotifyAPIKeyExpiry      *bool `json:"notify_api_key_expiry"`
 		NotifyWorkspaceActivity *bool `json:"notify_workspace_activity"`
 		NotifyNewMessage        *bool `json:"notify_new_message"`
+		NotifyNewChat           *bool `json:"notify_new_chat"`
 	} `json:"body"`
 }
 
@@ -112,6 +113,9 @@ func (h *UserSettingHandler) UpdateSettings(c *okapi.Context, req *UpdateUserSet
 	}
 	if req.Body.NotifyNewMessage != nil {
 		settings.NotifyNewMessage = *req.Body.NotifyNewMessage
+	}
+	if req.Body.NotifyNewChat != nil {
+		settings.NotifyNewChat = *req.Body.NotifyNewChat
 	}
 	if req.Body.NotifyWorkspaceActivity != nil {
 		settings.NotifyWorkspaceActivity = *req.Body.NotifyWorkspaceActivity

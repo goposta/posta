@@ -330,15 +330,29 @@ func newInboundServiceForWorker(db *gorm.DB,
 
 // Every process that parses inbound mail needs this, or replies to msg+<token>@ addresses are handled as loose mail.
 func attachThreadRouter(svc *inbound.Service, db *gorm.DB, cfg *config.Config, producer *worker.Producer) {
-	if !cfg.MessagesEnabled || cfg.MessagesInboundDomain == "" {
+	if cfg.MessagesInboundDomain == "" {
 		return
 	}
-	router := messages.NewThreadRouter(repositories.NewMessageRepository(db), cfg.MessagesInboundDomain)
-	router.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
-	if producer != nil {
-		router.SetEnqueuer(producer)
+	var routers inbound.ThreadRouters
+	if cfg.MessagesEnabled {
+		router := messages.NewThreadRouter(repositories.NewMessageRepository(db), cfg.MessagesInboundDomain)
+		router.SetRealtime(realtime.NewRedis(cfg.Redis.Client))
+		if producer != nil {
+			router.SetEnqueuer(producer)
+		}
+		routers = append(routers, router)
 	}
-	svc.SetThreadRouter(router)
+	if cfg.ChatEnabled {
+		// chat+<token>@ answers to a live chat's follow-up email.
+		chatSvc := routes.NewChatService(db, cfg)
+		if producer != nil {
+			chatSvc.SetEnqueuer(producer)
+		}
+		routers = append(routers, chatSvc)
+	}
+	if len(routers) > 0 {
+		svc.SetThreadRouter(routers)
+	}
 }
 
 func startInboundSMTPServer(
@@ -529,7 +543,7 @@ func startEmbeddedWorker(db *gorm.DB,
 		inboundHandler := worker.NewInboundProcessHandler(
 			repositories.NewInboundEmailRepository(db),
 			newWebhookDispatcher(db, cfg),
-			cfg.ApiBaseURL,
+			cfg.PublicAPIURL(),
 			[]byte(cfg.JWTSecret),
 		)
 		inboundHandler.OnForwarded(metrics.IncrementInboundForwarded)
@@ -563,6 +577,10 @@ func startEmbeddedWorker(db *gorm.DB,
 		})
 		mux.HandleFunc(worker.TypeMessageProcess, messageHandler.ProcessTask)
 		mux.HandleFunc(worker.TypeMessageReply, messageHandler.ProcessReplyTask)
+	}
+
+	if cfg.ChatEnabled {
+		registerChatTasks(mux, db, cfg, notifier, blobStore)
 	}
 
 	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
@@ -630,6 +648,13 @@ func initCronManager(
 			repositories.NewCampaignMessageRepository(db),
 			producer,
 		))
+	}
+	if cfg.ChatEnabled {
+		chatSvc := routes.NewChatService(db, cfg)
+		if blobStore != nil {
+			chatSvc.SetBlobStore(blobStore)
+		}
+		manager.Register(jobs.NewChatRetentionJob(chatSvc, cfg.ChatRetentionDays))
 	}
 	retentionJob.SetNotificationRepo(repositories.NewNotificationRepository(db))
 	if cfg.MessagesEnabled {
@@ -714,4 +739,22 @@ func webhookConfig(cfg *config.Config) webhook.Config {
 		ProxyURL:   cfg.WebhookProxyURL,
 		Network:    cfg.WebhookNetwork,
 	}
+}
+
+// registerChatTasks handles live chat's background work: the new-chat
+// notification, the follow-up email to a visitor who left (sent through the
+// email service, as the agent who wrote), and the unanswered alert.
+func registerChatTasks(mux *asynq.ServeMux, db *gorm.DB, cfg *config.Config, notifier *notification.Service, blobStore blob.Store) {
+	producer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
+	mailer := routes.NewEmailService(db, cfg, newWebhookDispatcher(db, cfg), producer, blobStore)
+	chatSvc := routes.NewChatService(db, cfg)
+	chatSvc.SetMailer(mailer, repositories.NewUserRepository(db))
+
+	h := worker.NewChatNotifyHandler(repositories.NewChatRepository(db), notifier, cfg.AppWebURL)
+	h.SetChat(chatSvc, cfg.Redis.Client)
+	mux.HandleFunc(worker.TypeChatNotify, h.ProcessTask)
+	mux.HandleFunc(worker.TypeChatOfflineEmail, h.ProcessOfflineEmail)
+	mux.HandleFunc(worker.TypeChatUnanswered, h.ProcessUnanswered)
+	h.SetDispatcher(newWebhookDispatcher(db, cfg))
+	mux.HandleFunc(worker.TypeChatWebhook, h.ProcessWebhook)
 }
