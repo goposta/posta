@@ -37,8 +37,7 @@ func withPasswordFlag(cfg *models.LDAPConfig) *models.LDAPConfig {
 	return cfg
 }
 
-// FindAll lists every directory with its group mappings, oldest first: the
-// order sign-in tries them in.
+// FindAll lists directories with their group mappings oldest first, the order sign-in tries them in.
 func (r *LDAPRepository) FindAll() ([]models.LDAPConfig, error) {
 	var cfgs []models.LDAPConfig
 	if err := r.db.Preload("Mappings", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).
@@ -89,7 +88,6 @@ func (r *LDAPRepository) Update(cfg *models.LDAPConfig) error {
 	return r.db.Omit("Mappings").Save(cfg).Error
 }
 
-// Delete removes a directory and its group mappings.
 func (r *LDAPRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("ldap_config_id = ?", id).Delete(&models.LDAPGroupMapping{}).Error; err != nil {

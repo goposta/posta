@@ -1,4 +1,3 @@
-// API Response types
 export interface ApiResponse<T> {
   success: boolean
   data: T
@@ -25,7 +24,6 @@ export interface PaginatedResponse<T> {
   pageable: Pageable
 }
 
-// Models
 export interface User {
   id: number
   name: string
@@ -204,11 +202,7 @@ export interface TemplateInput {
   description?: string
 }
 
-/**
- * A template being created or edited in the dashboard. Creating one sends the
- * name as typed and the server derives the identifier; editing one sends its
- * name unchanged.
- */
+/** A template being created or edited: creating sends the typed name and the server derives the identifier. */
 export type TemplateDraft = TemplateInput & { name: string }
 
 export interface TemplateExportLocalization {
@@ -427,8 +421,6 @@ export interface DnsRecord {
   name: string
   value: string
 }
-
-// ---- Admin domains (platform-wide) ----
 
 export interface AdminDomainRow {
   id: number
@@ -705,7 +697,6 @@ export interface UserDetailMetrics {
   webhook_deliveries: WebhookDeliveryStats | null
 }
 
-// Analytics
 export interface DailyCount {
   date: string
   count: number
@@ -765,7 +756,6 @@ export interface ProviderBreakdownResponse {
   providers: ProviderBreakdownPoint[]
 }
 
-// Contact Lists
 export interface ContactList {
   id: number
   user_id: number
@@ -787,7 +777,6 @@ export interface ContactListMember {
   created_at: string
 }
 
-// Settings
 export interface AdminSetting {
   id: number
   key: string
@@ -824,7 +813,6 @@ export interface UserSettings {
   updated_at: string
 }
 
-// Cron Jobs
 export interface CronJob {
   name: string
   schedule: string
@@ -834,7 +822,6 @@ export interface CronJob {
   next_run_at: string | null
 }
 
-// Result of the daily release check. Admin-only.
 export interface UpdateInfo {
   current_version: string
   latest_version?: string
@@ -848,13 +835,11 @@ export interface UpdateInfo {
   last_error?: string
 }
 
-// 2FA
 export interface Setup2FAResponse {
   secret: string
   url: string
 }
 
-// User Profile (extended)
 export interface UserProfile extends User {
   require_verified_domain: boolean
   scheduled_deletion_at: string | null
@@ -862,7 +847,6 @@ export interface UserProfile extends User {
   default_workspace_id: number | null
 }
 
-// User Data Export/Import
 export interface ExportStyleSheet {
   name: string
   css: string
@@ -920,7 +904,6 @@ export interface GDPRDeleteResult {
   message: string
 }
 
-// Workspace Data Export/Import
 export interface WorkspaceDataExport {
   posta_version?: string
   exported_at?: string
@@ -973,7 +956,6 @@ export interface ExportSubscriberList {
   filter_rules?: { field: string; operator: string; value: unknown }[]
 }
 
-// Workspaces
 export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer'
 
 export interface Workspace {
@@ -987,8 +969,6 @@ export interface Workspace {
   created_at: string
 }
 
-// Operational settings that live on the workspace (not the user). Personal
-// notification preferences stay on UserSettings.
 export interface WorkspaceSettings {
   id: number
   workspace_id: number
@@ -1036,7 +1016,6 @@ export interface InviteMemberInput {
   role: WorkspaceRole
 }
 
-// OAuth
 export interface OAuthProviderInfo {
   id: number
   name: string
@@ -1097,7 +1076,6 @@ export interface WorkspaceSSOConfig {
   allowed_domains: string
 }
 
-// Subscribers
 export type SubscriberStatus = 'subscribed' | 'unsubscribed' | 'bounced' | 'complained'
 
 export interface Subscriber {
@@ -1139,7 +1117,6 @@ export interface BulkImportResult {
   invalid_timezones?: number
 }
 
-// Campaigns
 export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'paused' | 'cancelled'
 
 export interface CampaignStats {
@@ -1186,7 +1163,6 @@ export interface CampaignMessage {
   subscriber?: Subscriber
 }
 
-// Plans
 export interface Plan {
   id: number
   name: string

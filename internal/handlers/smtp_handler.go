@@ -78,8 +78,7 @@ func NewSMTPHandler(repo *repositories.SMTPRepository, domainRepo *repositories.
 	return &SMTPHandler{repo: repo, domainRepo: domainRepo, sender: email.NewSMTPSender(), audit: audit}
 }
 
-// validateAllowedEmails checks that each allowed email's domain belongs to the user's/workspace's domains.
-// If no domains are configured, all emails are allowed.
+// validateAllowedEmails requires each address's domain to be one of the scope's; no domains allows all.
 func (h *SMTPHandler) validateAllowedEmails(scope repositories.ResourceScope, emails []string) error {
 	if len(emails) == 0 {
 		return nil
@@ -90,7 +89,6 @@ func (h *SMTPHandler) validateAllowedEmails(scope repositories.ResourceScope, em
 		return fmt.Errorf("failed to load domains")
 	}
 
-	// If user has no domains, skip validation
 	if len(domains) == 0 {
 		return nil
 	}
@@ -113,7 +111,6 @@ func (h *SMTPHandler) validateAllowedEmails(scope repositories.ResourceScope, em
 	return nil
 }
 
-// SetQuota sets the quota checker for plan-based resource limits.
 func (h *SMTPHandler) SetQuota(q QuotaChecker, db *gorm.DB) {
 	h.quota = q
 	h.db = db
@@ -152,7 +149,6 @@ func (h *SMTPHandler) Create(c *okapi.Context, req *CreateSMTPRequest) error {
 		AllowedEmails: req.Body.AllowedEmails,
 	}
 
-	// Validate SMTP connection before saving
 	now := time.Now()
 	server.ValidatedAt = &now
 	if err := h.sender.TestConnection(server); err != nil {
@@ -190,7 +186,6 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 		return c.AbortNotFound("SMTP server not found")
 	}
 
-	// Track whether connection-related fields changed
 	connectionChanged := false
 
 	if req.Body.Host != "" && req.Body.Host != server.Host {
@@ -223,14 +218,12 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 		server.AllowedEmails = *req.Body.AllowedEmails
 	}
 
-	// Handle status changes
 	if req.Body.Status != "" {
 		switch req.Body.Status {
 		case models.SMTPStatusDisabled:
 			server.Status = models.SMTPStatusDisabled
 			server.ValidationError = ""
 		case models.SMTPStatusEnabled:
-			// Re-validate before enabling
 			now := time.Now()
 			server.ValidatedAt = &now
 			if err := h.sender.TestConnection(server); err != nil {
@@ -242,7 +235,6 @@ func (h *SMTPHandler) Update(c *okapi.Context, req *UpdateSMTPRequest) error {
 			}
 		}
 	} else if connectionChanged {
-		// Connection fields changed — re-validate automatically
 		now := time.Now()
 		server.ValidatedAt = &now
 		if err := h.sender.TestConnection(server); err != nil {
@@ -282,8 +274,7 @@ func (h *SMTPHandler) Delete(c *okapi.Context, req *DeleteSMTPRequest) error {
 	if err != nil || !ownsResource(c, server.UserID, server.WorkspaceID) {
 		return c.AbortNotFound("SMTP server not found")
 	}
-	// Provisioned from configuration, and the platform's own mail depends on it.
-	// Deleting it would be undone on the next restart anyway.
+	// Provisioned from configuration for the platform's own mail; a restart would recreate it anyway.
 	if server.IsSystem {
 		return c.AbortConflict("the system SMTP server is provisioned from POSTA_SYSTEM_SMTP_* and cannot be deleted")
 	}
@@ -308,7 +299,6 @@ func (h *SMTPHandler) Test(c *okapi.Context, req *TestSMTPRequest) error {
 
 	now := time.Now()
 	if err := h.sender.TestConnection(server); err != nil {
-		// Update validation state on test failure
 		// Workspace members read this: the reason, not the network details.
 		reason := email.DescribeSMTPError(err)
 		_ = h.repo.SetStatus(server.ID, models.SMTPStatusInvalid, reason)
@@ -320,7 +310,6 @@ func (h *SMTPHandler) Test(c *okapi.Context, req *TestSMTPRequest) error {
 		})
 	}
 
-	// Update validation state on test success
 	_ = h.repo.SetStatus(server.ID, models.SMTPStatusEnabled, "")
 	return ok(c, okapi.M{
 		"success":      true,

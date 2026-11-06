@@ -28,8 +28,7 @@ import (
 	gl "gorm.io/gorm/logger"
 )
 
-// TestMigrateSmoke runs the full schema migration against a scratch database.
-// It is skipped unless MIGRATION_SMOKE_DSN is set.
+// TestMigrateSmoke is skipped unless MIGRATION_SMOKE_DSN is set.
 func TestMigrateSmoke(t *testing.T) {
 	dsn := os.Getenv("MIGRATION_SMOKE_DSN")
 	if dsn == "" {

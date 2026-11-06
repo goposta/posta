@@ -43,9 +43,7 @@ func get(t *testing.T, h *HealthServer, path string) (*httptest.ResponseRecorder
 	return rec, body
 }
 
-// Liveness must not depend on anything else. A probe that fails when the
-// database blips gets the worker restarted, which loses in-flight work and does
-// not fix the database.
+// A liveness probe failing on a database blip restarts the worker, losing in-flight work without fixing the DB.
 func TestHealthzIsIndependentOfDependencies(t *testing.T) {
 	h := NewHealthServer(":0", nil, nil)
 
@@ -57,8 +55,7 @@ func TestHealthzIsIndependentOfDependencies(t *testing.T) {
 		t.Errorf("expected status ok, got %q", body.Status)
 	}
 
-	// Liveness reports only its own status. Empty database and redis fields
-	// would read as failed checks rather than checks that were never made.
+	// Empty database and redis fields would read as failed checks rather than checks never made.
 	var raw map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
@@ -85,8 +82,7 @@ func TestReadyzFailsWithoutDependencies(t *testing.T) {
 	}
 }
 
-// A process that answers pings but has stopped consuming is not ready: work
-// routed to it would sit in the queue behind a worker that looks healthy.
+// A process that answers pings but stopped consuming is not ready: work would queue behind a healthy-looking worker.
 func TestReadyzRequiresProcessing(t *testing.T) {
 	h := NewHealthServer(":0", nil, nil)
 
@@ -157,7 +153,6 @@ func TestStartAndStop(t *testing.T) {
 	defer cancel()
 	stop(ctx)
 
-	// A second shutdown is a no-op rather than a panic; deferred cleanup can run
-	// twice on some exit paths.
+	// A second shutdown is a no-op, not a panic: deferred cleanup can run twice on some exit paths.
 	stop(ctx)
 }

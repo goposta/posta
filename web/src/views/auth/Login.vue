@@ -32,8 +32,7 @@ const showPassword = ref(false)
 const emailInput = ref<HTMLInputElement | null>(null)
 const codeInput = ref<HTMLInputElement | null>(null)
 
-// Surface a Caps Lock warning while typing the password — a common cause of
-// "invalid credentials" on the first try.
+// Warn about Caps Lock: a common cause of "invalid credentials" on the first try.
 const capsOn = ref(false)
 function onCaps(e: KeyboardEvent) {
   capsOn.value = e.getModifierState?.('CapsLock') ?? false
@@ -142,7 +141,6 @@ async function handleLogin() {
       notification.info('Please enter your two-factor authentication code.')
       return
     }
-    // Check for 2FA required response (401 with requires_2fa flag)
     if (err?.response?.status === 401 && err?.response?.data?.data?.requires_2fa) {
       requires2FA.value = true
       notification.info('Please enter your two-factor authentication code.')
@@ -167,7 +165,6 @@ function resetLogin() {
 
 <template>
   <AuthLayout :title="heading" :subtitle="subheading">
-    <!-- Error surfaced via redirect (OAuth failure, session revoked, etc.) -->
     <div v-if="loginError" class="auth-alert" role="alert">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <span>{{ loginError.replace(/_/g, ' ') }}</span>
@@ -275,7 +272,6 @@ function resetLogin() {
       </button>
     </form>
 
-    <!-- OAuth Providers -->
     <div v-if="oauthProviders.length > 0 && !requires2FA && !ssoMode" class="oauth-section">
       <div class="oauth-divider">
         <span>or</span>

@@ -39,32 +39,22 @@ import (
 )
 
 var (
-	// ErrUnverifiedDomain is returned when none of the recipient domains match an
-	// ownership-verified domain. Maps to SMTP 550.
+	// ErrUnverifiedDomain maps to SMTP 550.
 	ErrUnverifiedDomain = errors.New("recipient domain is not verified")
-	// ErrSizeExceeded is returned when the raw message exceeds the configured limit.
-	// Maps to SMTP 552.
-	ErrSizeExceeded = errors.New("message size exceeds limit")
-	// ErrAttachmentTooLarge is returned when a single attachment is larger than
-	// the configured per-attachment limit.
+	// ErrSizeExceeded maps to SMTP 552.
+	ErrSizeExceeded       = errors.New("message size exceeds limit")
 	ErrAttachmentTooLarge = errors.New("attachment exceeds per-attachment size limit")
-	// ErrDuplicate is returned when a message with the same Message-ID already
-	// exists for the resolved user. Callers should treat this as success (idempotent).
-	ErrDuplicate = errors.New("duplicate message-id")
-	// ErrSenderSuppressed is returned when the sender is on the recipient's
-	// suppression list.
+	// ErrDuplicate should be treated as success, since ingestion is idempotent.
+	ErrDuplicate        = errors.New("duplicate message-id")
 	ErrSenderSuppressed = errors.New("sender is suppressed")
 )
 
-// Enqueuer enqueues inbound-processing tasks. Satisfied by worker.Producer.
 type Enqueuer interface {
 	EnqueueInboundProcess(inboundEmailID uint) error
 	EnqueueInboundParse(inboundEmailID uint) error
 }
 
-// ThreadRouter attaches an inbound email to an existing conversation (a web
-// form thread) when one of its recipients is that conversation's reply
-// address. It reports false when no recipient matched.
+// ThreadRouter reports false when no recipient is a conversation's reply address.
 type ThreadRouter interface {
 	RouteReply(ctx context.Context, rec *models.InboundEmail, recipients []string) (bool, error)
 }
@@ -85,7 +75,6 @@ type Service struct {
 	onIngestMs      func(float64)
 }
 
-// Config holds runtime configuration for the inbound service.
 type Config struct {
 	MaxMessageSize    int64
 	MaxAttachmentSize int64
@@ -106,24 +95,16 @@ func NewService(
 	}
 }
 
-// SetBlobStore configures the blob store for attachment persistence.
-// When nil, attachment content is stored inline (base64) on the InboundEmail record.
+// Without a blob store, attachment content is stored inline as base64 on the record.
 func (s *Service) SetBlobStore(bs blob.Store) { s.blobStore = bs }
 
-// SetEnqueuer configures the worker-task enqueuer.
 func (s *Service) SetEnqueuer(eq Enqueuer) { s.producer = eq }
 
-// SetEventBus configures the event bus used to publish inbound.received events.
 func (s *Service) SetEventBus(b *eventbus.EventBus) { s.bus = b }
 
-// SetThreadRouter enables routing replies to thread addresses onto their
-// conversation instead of the generic inbound pipeline.
 func (s *Service) SetThreadRouter(r ThreadRouter) { s.threadRouter = r }
 
-// RouteThread offers rec to the thread router. When the email is attached to a
-// thread it is marked forwarded and the caller must not run the generic
-// email.inbound processing for it. A router failure is logged and the email
-// falls back to ordinary inbound handling, so it is never lost.
+// When true the caller must skip generic inbound processing; router failures fall back to it so mail is never lost.
 func (s *Service) RouteThread(ctx context.Context, rec *models.InboundEmail, candidates ...[]string) bool {
 	if s.threadRouter == nil || rec == nil {
 		return false
@@ -159,28 +140,20 @@ func uniqueAddresses(lists ...[]string) []string {
 	return out
 }
 
-// OnReceived sets a callback invoked after each successfully ingested inbound message.
 func (s *Service) OnReceived(fn func(source models.InboundSource)) { s.onReceived = fn }
 
-// OnRejected sets a callback invoked after each rejected inbound message.
 func (s *Service) OnRejected(fn func(reason string)) { s.onRejected = fn }
 
-// OnBytes sets a callback invoked with the total inbound byte count.
 func (s *Service) OnBytes(fn func(int64)) { s.onBytes = fn }
 
-// OnIngestDuration sets a callback invoked with ingestion duration in seconds.
 func (s *Service) OnIngestDuration(fn func(float64)) { s.onIngestMs = fn }
 
-// computeDedupHash derives a stable hash for messages without a Message-ID, used
-// on the webhook path to reject near-duplicate retries.
+// computeDedupHash lets the webhook path reject near-duplicate retries that lack a Message-ID.
 func computeDedupHash(sender string, recipients []string, subject string, size int64) string {
 	return "fh-" + fmt.Sprintf("%s|%s|%s|%d", strings.ToLower(sender), strings.ToLower(strings.Join(recipients, ",")), subject, size)
 }
 
-// Ingest is the single entry point for both SMTP and webhook paths.
-// It resolves a verified tenant domain from the recipient list, persists the
-// record (and attachments to blob storage when configured), and enqueues an
-// async task to dispatch the email.inbound webhook.
+// Ingest is the single entry point for both the SMTP and webhook paths.
 func (s *Service) Ingest(ctx context.Context, p *ParsedEmail, source models.InboundSource) (*models.InboundEmail, error) {
 	start := time.Now()
 	defer func() {
@@ -200,7 +173,6 @@ func (s *Service) Ingest(ctx context.Context, p *ParsedEmail, source models.Inbo
 		return nil, err
 	}
 
-	// Suppression check — skip delivery (record as rejected) if sender is suppressed.
 	if s.suppressionRepo != nil && p.From != "" {
 		scope := repositories.ResourceScope{UserID: domain.UserID, WorkspaceID: domain.WorkspaceID}
 		if yes, _ := s.suppressionRepo.IsSuppressed(scope, strings.ToLower(p.From)); yes {
@@ -495,9 +467,7 @@ func (s *Service) ApplyParsed(ctx context.Context, rec *models.InboundEmail, p *
 	return nil
 }
 
-// LoadRaw returns the raw RFC 5322 bytes for a stored inbound record, reading
-// from the inline RawContent column first and falling back to the blob store
-// when the row has already been promoted.
+// LoadRaw falls back to the blob store once the row's raw content has been promoted.
 func (s *Service) LoadRaw(ctx context.Context, rec *models.InboundEmail) ([]byte, error) {
 	if len(rec.RawContent) > 0 {
 		return rec.RawContent, nil
@@ -517,8 +487,7 @@ func (s *Service) LoadRaw(ctx context.Context, rec *models.InboundEmail) ([]byte
 	return raw, nil
 }
 
-// persistRejectedRaw records a synchronous-time rejection from IngestRaw where
-// only envelope information is known — no parsed headers, no subject.
+// persistRejectedRaw records an IngestRaw rejection where only the envelope is known.
 func (s *Service) persistRejectedRaw(raw []byte, sender string, recipients []string, domain *models.Domain, source models.InboundSource, reason string) *models.InboundEmail {
 	rec := &models.InboundEmail{
 		UserID:       domain.UserID,
@@ -539,8 +508,6 @@ func (s *Service) persistRejectedRaw(raw []byte, sender string, recipients []str
 	return rec
 }
 
-// resolveDomain walks the recipient list and returns the first ownership-verified
-// tenant domain that matches. Returns ErrUnverifiedDomain if none match.
 func (s *Service) resolveDomain(recipients []string) (*models.Domain, string, error) {
 	for _, r := range recipients {
 		addr := strings.ToLower(strings.TrimSpace(r))
@@ -557,10 +524,7 @@ func (s *Service) resolveDomain(recipients []string) (*models.Domain, string, er
 	return nil, "", ErrUnverifiedDomain
 }
 
-// persistAttachments stores attachment content in blob storage (or inline when
-// no store is configured). Returns attachment metadata plus the list of blob keys
-// that were successfully uploaded — the caller uses the keys to clean up on
-// later failure.
+// persistAttachments returns the uploaded blob keys so the caller can clean up on later failure.
 func (s *Service) persistAttachments(ctx context.Context, uuid string, atts []ParsedAttachment) ([]models.InboundAttachmentMeta, []string, error) {
 	if len(atts) == 0 {
 		return nil, nil, nil

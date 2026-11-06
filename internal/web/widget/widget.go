@@ -17,8 +17,6 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package widget embeds the scripts that websites load from Posta, served
-// under /widget/v1/.
 package widget
 
 import (
@@ -27,13 +25,9 @@ import (
 	"encoding/hex"
 )
 
-// FormScript is the website form widget, served at /widget/v1/posta-form.js.
-//
 //go:embed posta-form.js
 var FormScript []byte
 
-// FormScriptETag is a strong ETag over FormScript, so a cached copy is
-// revalidated with a 304 until the script changes.
 var FormScriptETag = func() string {
 	sum := sha256.Sum256(FormScript)
 	return `"` + hex.EncodeToString(sum[:12]) + `"`

@@ -23,7 +23,6 @@ const suppressingEmail = ref('')
 const search = ref('')
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 
-// Add to list modal
 const showAddToListModal = ref(false)
 const addToListContact = ref<Contact | null>(null)
 const contactLists = ref<ContactListWithCount[]>([])
@@ -181,7 +180,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Add to Contact List Modal -->
     <div v-if="showAddToListModal" class="modal-overlay" @mousedown="watchClickStart" 
       @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>

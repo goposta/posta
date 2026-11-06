@@ -26,10 +26,8 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// recordTypeTXT is the DNS record type every verification check reads.
 const recordTypeTXT = "TXT"
 
-// VerificationResult holds the outcome of DNS record checks.
 type VerificationResult struct {
 	OwnershipVerified bool   `json:"ownership_verified"`
 	SPFVerified       bool   `json:"spf_verified"`
@@ -40,7 +38,6 @@ type VerificationResult struct {
 	DMARCRecord       string `json:"dmarc_record,omitempty"`
 }
 
-// DNSRecords returns the DNS records a user needs to configure for a domain.
 type DNSRecords struct {
 	Verification DNSRecord `json:"verification"`
 	SPF          DNSRecord `json:"spf"`
@@ -54,7 +51,6 @@ type DNSRecord struct {
 	Value string `json:"value"`
 }
 
-// RequiredRecords returns the DNS records the user must add.
 func RequiredRecords(d *models.Domain) *DNSRecords {
 	return &DNSRecords{
 		Verification: DNSRecord{
@@ -80,12 +76,9 @@ func RequiredRecords(d *models.Domain) *DNSRecords {
 	}
 }
 
-// Verify performs DNS lookups to check SPF, DKIM, and DMARC records.
-// It also checks the verification TXT record for domain ownership.
 func Verify(d *models.Domain) (*VerificationResult, error) {
 	result := &VerificationResult{}
 
-	// Check domain ownership via TXT record
 	ownershipVerified := false
 	txtRecords, err := net.LookupTXT(d.Domain)
 	if err == nil {
@@ -106,14 +99,12 @@ func Verify(d *models.Domain) (*VerificationResult, error) {
 		return result, nil
 	}
 
-	// Check DKIM
 	dkimHost := "posta._domainkey." + d.Domain
 	dkimRecords, err := net.LookupTXT(dkimHost)
 	if err == nil && len(dkimRecords) > 0 {
 		result.DKIMVerified = true
 		result.DKIMRecord = dkimRecords[0]
 	}
-	// Also check CNAME
 	if !result.DKIMVerified {
 		cname, err := net.LookupCNAME(dkimHost)
 		if err == nil && cname != "" {
@@ -122,7 +113,6 @@ func Verify(d *models.Domain) (*VerificationResult, error) {
 		}
 	}
 
-	// Check DMARC
 	dmarcHost := "_dmarc." + d.Domain
 	dmarcRecords, err := net.LookupTXT(dmarcHost)
 	if err == nil {

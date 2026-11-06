@@ -44,8 +44,7 @@ func (d digestDir) Team(id uint) (*models.Team, error) {
 	return nil, errors.New("not found")
 }
 
-// Two rules sending to two teams give each team its own digest, and the
-// default route keeps everything unless a rule suppresses it.
+// Each rule's team gets its own digest; the default route keeps everything unless a rule suppresses it.
 func TestDigestTargetsFollowRules(t *testing.T) {
 	ws := uint(5)
 	form := &models.Form{ID: 1, WorkspaceID: &ws, Fields: models.FieldDefs{

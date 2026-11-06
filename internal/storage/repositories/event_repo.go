@@ -38,7 +38,6 @@ func (r *EventRepository) Create(event *models.Event) error {
 	return r.db.Create(event).Error
 }
 
-// FindByID returns a single event by its primary key.
 func (r *EventRepository) FindByID(id uint) (*models.Event, error) {
 	var event models.Event
 	if err := r.db.First(&event, id).Error; err != nil {
@@ -47,8 +46,7 @@ func (r *EventRepository) FindByID(id uint) (*models.Event, error) {
 	return &event, nil
 }
 
-// withoutWorkspaceAudit leaves out the workspace audit trails, which Posta
-// Community records but does not show platform-wide.
+// withoutWorkspaceAudit hides workspace audit trails, which Posta Community records but does not show platform-wide.
 func withoutWorkspaceAudit(q *gorm.DB) *gorm.DB {
 	return q.Where("NOT (category = ? AND workspace_id IS NOT NULL)", models.EventCategoryAudit)
 }
@@ -95,8 +93,7 @@ func (r *EventRepository) FindPersonalByActorAndCategory(actorID uint, category 
 	return events, total, nil
 }
 
-// FindByCategory lists events of a category; hideWorkspaceAudit leaves out
-// workspace audit trails.
+// FindByCategory lists events of a category; hideWorkspaceAudit leaves out workspace audit trails.
 func (r *EventRepository) FindByCategory(category models.EventCategory, search string, hideWorkspaceAudit bool, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
@@ -123,7 +120,6 @@ func (r *EventRepository) FindByCategory(category models.EventCategory, search s
 	return events, total, nil
 }
 
-// FindByWorkspaceID returns paginated events for a workspace.
 func (r *EventRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64
@@ -139,8 +135,7 @@ func (r *EventRepository) FindByWorkspaceID(workspaceID uint, limit, offset int)
 	return events, total, nil
 }
 
-// FindByWorkspaceAndCategory returns paginated events for a workspace filtered
-// by category, created at or after since (all of them when since is zero).
+// FindByWorkspaceAndCategory returns events created at or after since, or all of them when since is zero.
 func (r *EventRepository) FindByWorkspaceAndCategory(workspaceID uint, category models.EventCategory, since time.Time, limit, offset int) ([]models.Event, int64, error) {
 	var events []models.Event
 	var total int64

@@ -21,9 +21,7 @@ package models
 
 import "time"
 
-// SuppressionKind classifies why an address is suppressed. It makes the global
-// vs list-scoped distinction explicit (rather than inferring it from list_id)
-// and powers per-reason analytics and a future preference center.
+// SuppressionKind makes global vs list-scoped explicit instead of inferring it from list_id.
 type SuppressionKind string
 
 const (
@@ -39,8 +37,7 @@ type Suppression struct {
 	UserID      uint   `json:"user_id" gorm:"index;not null"`
 	WorkspaceID *uint  `json:"workspace_id,omitempty" gorm:"index"`
 	Email       string `json:"email" gorm:"not null"`
-	// ListID nil = global block (bounces, complaints, manual, "unsubscribe from
-	// everything"); set = opt-out of that UnsubscribeList only.
+	// ListID nil is a global block; set, it opts out of that UnsubscribeList only.
 	ListID    *uint           `json:"list_id,omitempty" gorm:"index"`
 	Kind      SuppressionKind `json:"kind" gorm:"type:varchar(20);default:'hard';not null"`
 	Reason    string          `json:"reason"`

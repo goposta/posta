@@ -13,13 +13,7 @@ const notify = useNotificationStore()
 const wsStore = useWorkspaceStore()
 const loading = ref(true)
 
-// The default workspace is saved through its own endpoint, not the debounced
-// settings form above, so it is kept out of `form` deliberately.
-// Two refs on purpose. `savedWorkspaceId` is the server's answer; `selected` is
-// what the control shows. Reverting a failed save has to move `selected`, which
-// the user already changed — writing the old value back to a ref that never
-// changed would not re-render, and the select would keep showing a choice that
-// was never saved.
+// Two refs on purpose: reverting a failed save must move `selected`, since rewriting an unchanged ref would not re-render.
 const savedWorkspaceId = ref<number | null>(null)
 const selectedWorkspaceId = ref<number | null>(null)
 const savingDefaultWorkspace = ref(false)
@@ -52,8 +46,7 @@ async function saveDefaultWorkspace() {
   }
 }
 
-// Auto-save state. saveStatus drives the header indicator; ready gates the
-// watcher so the initial load doesn't trigger a save.
+// ready gates the watcher so the initial load doesn't trigger a save.
 type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
 const saveStatus = ref<SaveStatus>('idle')
 const ready = ref(false)
@@ -64,9 +57,6 @@ const SAVED_INDICATOR_MS = 2000
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let savedClearTimer: ReturnType<typeof setTimeout> | null = null
 
-// User settings are personal notification preferences only. Operational settings
-// (sending defaults, webhooks, API-key expiry, domain security, data) live on the
-// workspace — see Workspace Settings (workspace-only migration §2c/§5).
 const form = ref<Partial<UserSettings>>({
   email_notifications: true,
   notification_email: '',
@@ -77,9 +67,7 @@ const form = ref<Partial<UserSettings>>({
   notify_new_message: true,
 })
 
-// Per-type notification toggles rendered under the master switch. Security
-// alerts (sign-in, 2FA, password, account deletion) are always on and shown
-// separately as informational.
+// Security alerts are always on, so they are shown separately as informational.
 const notificationTypes: {
   key: 'daily_report' | 'notify_bounce_alerts' | 'notify_api_key_expiry' | 'notify_workspace_activity' | 'notify_new_message'
   label: string
@@ -96,7 +84,6 @@ function toggleType(key: typeof notificationTypes[number]['key']) {
   form.value[key] = !form.value[key]
 }
 
-// Theme
 const themeModes: { value: ThemeMode; label: string; icon: string }[] = [
   { value: 'light', label: 'Light', icon: 'sun' },
   { value: 'dark', label: 'Dark', icon: 'moon' },
@@ -195,7 +182,6 @@ async function autoSave() {
     </div>
 
     <div v-else class="settings-grid">
-      <!-- Notifications -->
       <div class="card">
         <div class="card-header"><h2>Notifications</h2></div>
         <div class="card-body">
@@ -251,7 +237,6 @@ async function autoSave() {
         </div>
       </div>
 
-      <!-- Default workspace -->
       <div class="card">
         <div class="card-header"><h2>Default workspace</h2></div>
         <div class="card-body">
@@ -286,7 +271,6 @@ async function autoSave() {
         </div>
       </div>
 
-      <!-- Theme -->
       <div class="card">
         <div class="card-header"><h2>Theme</h2></div>
         <div class="card-body">

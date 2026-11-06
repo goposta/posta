@@ -205,7 +205,6 @@ func (h *TemplateVersionHandler) Delete(c *okapi.Context, req *DeleteVersionRequ
 		return c.AbortNotFound("version not found")
 	}
 
-	// Prevent deleting the active version
 	if tmpl.ActiveVersionID != nil && *tmpl.ActiveVersionID == v.ID {
 		return c.AbortBadRequest("cannot delete the active version")
 	}

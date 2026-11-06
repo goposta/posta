@@ -81,8 +81,7 @@ func (r *OAuthProviderRepository) FindEnabledForWorkspace(wsID uint) ([]models.O
 	return providers, nil
 }
 
-// HasEnabledHidden reports whether any enabled, hidden provider exists.
-// Drives the visibility of the "Continue with SSO" entry point on the login page.
+// HasEnabledHidden drives whether the login page shows the "Continue with SSO" entry point.
 func (r *OAuthProviderRepository) HasEnabledHidden() (bool, error) {
 	var count int64
 	if err := r.db.Model(&models.OAuthProvider{}).
@@ -92,8 +91,7 @@ func (r *OAuthProviderRepository) HasEnabledHidden() (bool, error) {
 	return count > 0, nil
 }
 
-// FindEnabledByDomain scans enabled providers (including hidden) whose AllowedDomains CSV
-// contains the given domain. Used for email-based SSO discovery.
+// FindEnabledByDomain includes hidden providers, matching their AllowedDomains CSV, for email-based SSO discovery.
 func (r *OAuthProviderRepository) FindEnabledByDomain(domain string) (*models.OAuthProvider, error) {
 	if domain == "" {
 		return nil, gorm.ErrRecordNotFound
@@ -114,7 +112,6 @@ func (r *OAuthProviderRepository) FindEnabledByDomain(domain string) (*models.OA
 	return nil, gorm.ErrRecordNotFound
 }
 
-// FindAll returns all providers (admin).
 func (r *OAuthProviderRepository) FindAll() ([]models.OAuthProvider, error) {
 	var providers []models.OAuthProvider
 	if err := r.db.Order("created_at DESC").Find(&providers).Error; err != nil {

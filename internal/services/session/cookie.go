@@ -27,16 +27,10 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// CookieName holds the user JWT for browser clients. It is HttpOnly (so XSS
-// cannot read it) and SameSite=Strict (so it is never sent cross-site, which
-// blocks CSRF). Non-browser clients (CLI, SDKs, n8n) keep using the
-// Authorization header, so this cookie is additive, not a breaking change.
+// CookieName is HttpOnly (no XSS read) and SameSite=Strict (no CSRF); non-browser clients use the Authorization header.
 const CookieName = "posta_session"
 
-// SetCookie writes the session cookie carrying token, expiring after ttl.
-//
-// okapi's Context.SetCookie cannot express SameSite, so the cookie is written
-// directly. The JWT alphabet (base64url plus '.') needs no escaping.
+// SetCookie writes the header itself since okapi's SetCookie cannot express SameSite; a JWT needs no escaping.
 func SetCookie(c *okapi.Context, token string, ttl time.Duration) {
 	http.SetCookie(c.Response(), &http.Cookie{
 		Name:     CookieName,
@@ -50,8 +44,7 @@ func SetCookie(c *okapi.Context, token string, ttl time.Duration) {
 	})
 }
 
-// ClearCookie expires the session cookie. The attributes other than MaxAge must
-// match SetCookie's or the browser will keep the original cookie.
+// ClearCookie's attributes other than MaxAge must match SetCookie's or the browser keeps the original cookie.
 func ClearCookie(c *okapi.Context) {
 	http.SetCookie(c.Response(), &http.Cookie{
 		Name:     CookieName,
@@ -65,9 +58,7 @@ func ClearCookie(c *okapi.Context) {
 	})
 }
 
-// isHTTPS reports whether the client reached us over TLS, either directly or
-// through a terminating proxy. A Secure cookie is dropped by the browser on a
-// plain-HTTP origin, so this must stay false for local http:// development.
+// isHTTPS must stay false for local http:// dev: browsers drop a Secure cookie on a plain-HTTP origin.
 func isHTTPS(c *okapi.Context) bool {
 	r := c.Request()
 	if r.TLS != nil {

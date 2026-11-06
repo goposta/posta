@@ -24,8 +24,6 @@ import (
 	"time"
 )
 
-// Search operator keys and the DB columns they map to. Kept as constants so the
-// same literals aren't scattered across the parser and the sort whitelist.
 const (
 	opFrom     = "from"
 	opTo       = "to"
@@ -45,7 +43,6 @@ const (
 	colTemplateName = "template_name"
 )
 
-// EmailFilter captures optional list filters for outbound email queries.
 type EmailFilter struct {
 	Sender        string
 	Recipient     string
@@ -61,21 +58,10 @@ type EmailFilter struct {
 	Before        *time.Time
 }
 
-// maxSearchQueryLen bounds the raw search string before parsing so a single
-// request cannot build pathologically large predicates (huge status lists, many
-// wildcards, or very long LIKE terms) against the unindexed email columns.
+// maxSearchQueryLen stops one request building pathologically large predicates against unindexed email columns.
 const maxSearchQueryLen = 512
 
-// ParseSearchQuery turns a Twitter-style search string into an EmailFilter.
-// Supported operators: from: to: subject: template: provider: server: key:
-// status: has:attachment after: before:
-// provider:, server:, key: and status: accept comma-separated lists.
-// Bare words (no known prefix) match the subject or any recipient, or narrow
-// Subject when subject: is given.
-//
-// Example:
-//
-//	from:alice@x.com to:bob subject:"weekly report" has:attachment after:2026-01-01 status:sent invoice
+// ParseSearchQuery turns a Twitter-style query (from: to: subject: status: has:attachment after: ...) into an EmailFilter.
 func ParseSearchQuery(q string) EmailFilter {
 	if len(q) > maxSearchQueryLen {
 		q = q[:maxSearchQueryLen]
@@ -106,7 +92,6 @@ func ParseSearchQuery(q string) EmailFilter {
 		case opKey:
 			f.APIKeys = splitList(val)
 		case opStatus:
-			// Accept a comma-separated list, e.g. status:sent,failed.
 			for _, s := range strings.Split(val, ",") {
 				if s = strings.ToLower(strings.TrimSpace(s)); s != "" {
 					f.Statuses = append(f.Statuses, s)
@@ -122,8 +107,7 @@ func ParseSearchQuery(q string) EmailFilter {
 			}
 		case opBefore:
 			if t, dateOnly, ok := parseSearchDate(val); ok {
-				// A date-only bound covers the whole day (created_at < next
-				// midnight). An explicit RFC3339 instant is used as given.
+				// A date-only bound covers the whole day; an explicit RFC3339 instant is used as given.
 				if dateOnly {
 					t = t.Add(24 * time.Hour)
 				}
@@ -145,7 +129,6 @@ func ParseSearchQuery(q string) EmailFilter {
 	return f
 }
 
-// splitList splits a comma-separated operator value, dropping empty items.
 func splitList(val string) []string {
 	var out []string
 	for _, s := range strings.Split(val, ",") {
@@ -168,10 +151,7 @@ func (f *EmailFilter) appendSubject(s string) {
 	f.Subject += " " + s
 }
 
-// likePattern builds a case-insensitive SQL LIKE pattern from a user term.
-// A `*` acts as a wildcard (mapped to `%`); without one the term matches as a
-// substring. Any real LIKE metacharacters in the input are escaped so they stay
-// literal (Postgres LIKE uses `\` as the default escape).
+// likePattern maps `*` to `%` (else substring match) and escapes real LIKE metacharacters with `\`.
 func likePattern(term string) string {
 	s := strings.ToLower(strings.TrimSpace(term))
 	s = strings.ReplaceAll(s, "\\", "\\\\")
@@ -183,7 +163,6 @@ func likePattern(term string) string {
 	return "%" + s + "%"
 }
 
-// likeAny builds a predicate matching col against any of the terms.
 func likeAny(col string, terms []string) (string, []any) {
 	conds := make([]string, len(terms))
 	args := make([]any, len(terms))
@@ -194,8 +173,7 @@ func likeAny(col string, terms []string) (string, []any) {
 	return "(" + strings.Join(conds, " OR ") + ")", args
 }
 
-// sortColumns whitelists the user-facing sort keys to real, safe column names.
-// ORDER BY is built only from these constants — user input never reaches SQL.
+// sortColumns whitelists sort keys so user input never reaches ORDER BY.
 var sortColumns = map[string]string{
 	colCreatedAt: colCreatedAt,
 	colSentAt:    colSentAt,
@@ -205,9 +183,7 @@ var sortColumns = map[string]string{
 	opStatus:     opStatus,
 }
 
-// orderClause maps an optional sort key to a safe "column DIR" ORDER BY clause.
-// A leading "-" means descending. Empty or unknown input falls back to the
-// default (newest first), so the current behaviour is preserved.
+// orderClause treats a leading "-" as descending; empty or unknown input falls back to newest first.
 func orderClause(sort string) string {
 	const def = "created_at DESC"
 	sort = strings.TrimSpace(sort)
@@ -223,16 +199,14 @@ func orderClause(sort string) string {
 	if !ok {
 		return def
 	}
-	// NULLS LAST keeps rows with a null sort value (e.g. unsent emails when
-	// sorting by sent_at) at the bottom regardless of direction.
+	// NULLS LAST keeps null sort values (e.g. unsent emails by sent_at) at the bottom in either direction.
 	if desc {
 		return col + " DESC NULLS LAST"
 	}
 	return col + " ASC NULLS LAST"
 }
 
-// tokenizeSearch splits a query on whitespace while keeping double-quoted
-// values together (quotes may follow an operator prefix, e.g. subject:"a b").
+// tokenizeSearch keeps double-quoted values together, even after an operator prefix (subject:"a b").
 func tokenizeSearch(q string) []string {
 	var tokens []string
 	var b strings.Builder
@@ -259,9 +233,7 @@ func tokenizeSearch(q string) []string {
 	return tokens
 }
 
-// parseSearchDate accepts a date-only (YYYY-MM-DD) or RFC3339 timestamp. It
-// reports dateOnly=true when the value carried no time component, so callers can
-// apply whole-day rounding only in that case (never to an explicit instant).
+// parseSearchDate reports dateOnly so whole-day rounding never applies to an explicit instant.
 func parseSearchDate(s string) (t time.Time, dateOnly bool, ok bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {

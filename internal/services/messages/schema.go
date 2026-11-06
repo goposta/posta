@@ -48,7 +48,6 @@ var fieldTypes = map[models.FieldType]bool{
 	models.FieldRating: true, models.FieldHidden: true, models.FieldSection: true,
 }
 
-// roleTypes lists the field types each role may sit on.
 var roleTypes = map[models.FieldRole][]models.FieldType{
 	models.RoleSenderEmail: {models.FieldEmail},
 	models.RoleSenderName:  {models.FieldText},
@@ -57,9 +56,7 @@ var roleTypes = map[models.FieldRole][]models.FieldType{
 	models.RoleBody:        {models.FieldTextarea, models.FieldText},
 }
 
-// CheckSchema reports the first problem with a schema about to be saved.
-// previous is the schema currently stored; its keys must all survive, since
-// stored submissions refer to them. A key can be archived instead.
+// Every key in previous must survive since stored submissions refer to it; archive a key instead.
 func CheckSchema(defs models.FieldDefs, previous models.FieldDefs, honeypot string) error {
 	if len(defs) > MaxSchemaFields {
 		return fmt.Errorf("a form can have at most %d fields", MaxSchemaFields)
@@ -116,8 +113,6 @@ func CheckSchema(defs models.FieldDefs, previous models.FieldDefs, honeypot stri
 	return nil
 }
 
-// checkSection rejects question settings on a section, which only has a
-// title, a description (Help) and where its page leads.
 func checkSection(f *models.FieldDef) error {
 	if f.Key == models.GotoSubmit {
 		return fmt.Errorf("%q cannot be a section key: it means \"submit the form\"", f.Key)
@@ -129,10 +124,7 @@ func checkSection(f *models.FieldDef) error {
 	return nil
 }
 
-// checkFlow checks where pages lead. A branch or a section's next must point
-// to a later, active section or to submit, so every respondent moves forward
-// and the form always ends. A page has at most one branching question;
-// with two, which one wins would be invisible in the builder.
+// Targets must lie ahead so the form always ends; one branching question per page keeps the winner visible.
 func checkFlow(defs models.FieldDefs) error {
 	position := map[string]int{}
 	page := 0
@@ -281,7 +273,6 @@ func checkFieldSettings(f *models.FieldDef) error {
 	return nil
 }
 
-// ScaleRange returns a scale field's low and high ends.
 func ScaleRange(f *models.FieldDef) (int, int) {
 	lo, hi := defaultScaleMin, defaultScaleMax
 	if f.Min != nil {
@@ -293,7 +284,6 @@ func ScaleRange(f *models.FieldDef) (int, int) {
 	return lo, hi
 }
 
-// RatingStars returns a rating field's number of stars.
 func RatingStars(f *models.FieldDef) int {
 	if f.Max != nil {
 		return int(*f.Max)
@@ -301,7 +291,6 @@ func RatingStars(f *models.FieldDef) int {
 	return defaultRatingStars
 }
 
-// MaxLen returns the longest accepted value of a text-like field.
 func MaxLen(f *models.FieldDef) int {
 	if f.MaxLen != nil {
 		return *f.MaxLen

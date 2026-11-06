@@ -28,20 +28,14 @@ import (
 )
 
 const (
-	// MinJWTSecretLength is the shortest signing secret considered sound. The
-	// secret signs dashboard sessions, tracking-link HMACs, and the email
-	// stamper, so a guessable value forges all three. Falling below this warns
-	// rather than blocks; see jwtSecretProblem for why.
+	// The JWT secret signs sessions, tracking HMACs and the stamper; being too short warns (see jwtSecretProblem).
 	MinJWTSecretLength = 32
 
-	// MinAdminPasswordLength is the shortest seeded admin password accepted in
-	// production. It only gates the initial seed, never an existing install.
+	// MinAdminPasswordLength only gates the initial production admin seed, never an existing install.
 	MinAdminPasswordLength = 12
 )
 
-// placeholderSecrets are values published in this repository's compose files,
-// .env.example, and installation docs. They are not secrets in any deployment:
-// anyone can read them, so a value matching one is treated as absent.
+// placeholderSecrets are published in this repo's compose files and docs, so a match is treated as absent.
 var placeholderSecrets = map[string]bool{
 	"change-me-in-production": true,
 	"change-me":               true,
@@ -54,17 +48,12 @@ var placeholderSecrets = map[string]bool{
 	"supersecret":             true,
 }
 
-// isPlaceholder reports whether v is a known published placeholder. Comparison
-// is case- and whitespace-insensitive so that "Change-Me-In-Production " does
-// not slip through.
+// Case- and whitespace-insensitive so "Change-Me-In-Production " does not slip through.
 func isPlaceholder(v string) bool {
 	return placeholderSecrets[strings.ToLower(strings.TrimSpace(v))]
 }
 
-// IsProduction reports whether the deployment declares itself production via
-// POSTA_ENV. It defaults to dev, so this is opt-in: an operator who never sets
-// POSTA_ENV keeps the previous quick-start behaviour and gets warnings instead
-// of a refusal to boot.
+// IsProduction is opt-in via POSTA_ENV, so installs that never set it get warnings instead of a boot refusal.
 func (c *Config) IsProduction() bool {
 	switch strings.ToLower(strings.TrimSpace(c.Env)) {
 	case "prod", "production":
@@ -74,14 +63,12 @@ func (c *Config) IsProduction() bool {
 	}
 }
 
-// secretProblem describes one unacceptable configuration value.
 type secretProblem struct {
 	envVar string
 	reason string
 	fatal  bool
 }
 
-// envJWTSecret names the setting these checks report on.
 const envJWTSecret = "POSTA_JWT_SECRET"
 
 func (c *Config) jwtSecretProblem() *secretProblem {
@@ -100,10 +87,7 @@ func (c *Config) jwtSecretProblem() *secretProblem {
 	return nil
 }
 
-// adminPasswordProblem checks the seed password. It is not fatal at config
-// time: an upgraded install has long since changed the password in-app and may
-// not set the variable at all. storage.SeedAdmin re-checks it at the point
-// where it would actually be used, which is the only place it can matter.
+// Not fatal at config time: upgraded installs changed it in-app; storage.SeedAdmin re-checks it when seeding.
 func (c *Config) adminPasswordProblem() *secretProblem {
 	switch {
 	case isPlaceholder(c.AdminPassword):
@@ -114,13 +98,7 @@ func (c *Config) adminPasswordProblem() *secretProblem {
 	return nil
 }
 
-// sharedSecretProblems are the values both binaries depend on.
-//
-// The worker signs tracking links and stamps outgoing mail with the same JWT
-// secret the server uses, and it is the process that decrypts a stored SMTP
-// password at send time. A worker configured differently from its server does
-// not fail loudly; it produces links the server rejects and credentials it
-// cannot read.
+// The worker shares the JWT secret and decrypts SMTP passwords, so a mismatch silently breaks links and sends.
 func (c *Config) sharedSecretProblems() []secretProblem {
 	var problems []secretProblem
 
@@ -137,10 +115,7 @@ func (c *Config) sharedSecretProblems() []secretProblem {
 	return problems
 }
 
-// securityProblems collects every unacceptable value in one pass so an operator
-// fixing their configuration sees the whole list rather than one item per boot.
-// This is the server's set: it includes the values only a process serving HTTP
-// and seeding the first admin can act on.
+// securityProblems collects every problem in one pass so operators see the whole list, not one per boot.
 func (c *Config) securityProblems() []secretProblem {
 	problems := c.sharedSecretProblems()
 
@@ -172,9 +147,7 @@ func (c *Config) securityProblems() []secretProblem {
 	return problems
 }
 
-// workerProblems is the worker's set. It drops the checks the worker cannot
-// act on — it seeds no admin, serves no HTTP, and exposes no form endpoint —
-// and adds the ones that decide whether it will do any work at all.
+// workerProblems drops server-only checks (admin seed, HTTP, forms) and adds whether the worker can work at all.
 func (c *Config) workerProblems() []secretProblem {
 	problems := c.sharedSecretProblems()
 
@@ -216,11 +189,7 @@ func (c *Config) workerProblems() []secretProblem {
 	return problems
 }
 
-// ValidateWorker refuses to start a production worker whose configuration
-// contains a fatal problem, and reports the rest. The two fatal worker checks
-// are fatal everywhere, not only in production: a worker with no queue or no
-// concurrency is not a degraded worker, it is a process that looks healthy and
-// silently does nothing.
+// A worker with no queue or concurrency is fatal everywhere: it looks healthy but silently does nothing.
 func (c *Config) ValidateWorker() error {
 	for _, p := range c.workerProblems() {
 		if !p.fatal {
@@ -234,8 +203,6 @@ func (c *Config) ValidateWorker() error {
 	return nil
 }
 
-// WarnInsecureWorkerConfig logs the worker's advisory problems once the logger
-// exists, mirroring WarnInsecureConfig for the server.
 func (c *Config) WarnInsecureWorkerConfig() {
 	for _, p := range c.workerProblems() {
 		if p.fatal && c.IsProduction() {
@@ -250,9 +217,7 @@ func (c *Config) WarnInsecureWorkerConfig() {
 	}
 }
 
-// ValidateSecurity refuses to start a production deployment whose configuration
-// contains a fatal problem. Non-production deployments never fail here; they are
-// reported through WarnInsecureConfig instead.
+// ValidateSecurity fails only in production; other deployments get WarnInsecureConfig warnings instead.
 func (c *Config) ValidateSecurity() error {
 	if !c.IsProduction() {
 		return nil
@@ -268,10 +233,7 @@ func (c *Config) ValidateSecurity() error {
 	return nil
 }
 
-// WarnInsecureConfig logs every remaining problem after the logger exists. In
-// production the fatal ones have already stopped the boot, so this reports the
-// advisory remainder; outside production it reports everything, which is how an
-// operator learns what to fix before setting POSTA_ENV=production.
+// Outside production this reports everything, which is how operators learn what to fix before going live.
 func (c *Config) WarnInsecureConfig() {
 	for _, p := range c.securityProblems() {
 		if p.fatal && c.IsProduction() {
@@ -286,10 +248,7 @@ func (c *Config) WarnInsecureConfig() {
 	}
 }
 
-// ValidateAdminSeedPassword reports whether the configured seed password is fit
-// to create the first admin user on a production deployment. storage.SeedAdmin
-// calls this only when it is about to create that user, so an existing install
-// whose password was changed in-app is unaffected.
+// storage.SeedAdmin calls this only when creating the first admin, so in-app password changes are unaffected.
 func (c *Config) ValidateAdminSeedPassword() error {
 	if !c.IsProduction() {
 		return nil

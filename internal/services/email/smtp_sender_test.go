@@ -140,8 +140,7 @@ func TestAuthLoginRefusesUnencryptedConnection(t *testing.T) {
 
 var messageIDRe = regexp.MustCompile(`^<[^@<>\s]+@[^@<>\s]+>$`)
 
-// RFC 5322 requires Date and recommends Message-ID. A relay is free to forward
-// a message without adding either, so buildMessage must emit them itself.
+// Relays may forward without Date or Message-ID, so buildMessage must emit them itself.
 func TestBuildMessageAddsDateAndMessageID(t *testing.T) {
 	raw := buildMessage(
 		"Sender <sender@example.com>", []string{"rcpt@example.com"},
@@ -166,15 +165,13 @@ func TestBuildMessageAddsDateAndMessageID(t *testing.T) {
 	if !messageIDRe.MatchString(mid) {
 		t.Fatalf("Message-ID %q is not a well-formed msg-id", mid)
 	}
-	// The right-hand side should be the sender domain, so replies and bounces
-	// can be correlated to the originating domain.
+	// The right-hand side must be the sender domain so replies and bounces correlate to it.
 	if !strings.HasSuffix(mid, "@example.com>") {
 		t.Errorf("Message-ID %q does not use the sender domain", mid)
 	}
 }
 
-// A caller that supplies its own Date or Message-ID (custom headers) must not
-// end up with a duplicate second header.
+// Caller-supplied Date or Message-ID must not end up duplicated.
 func TestBuildMessageKeepsCallerSuppliedDateAndMessageID(t *testing.T) {
 	headers := map[string]string{
 		"Date":       "Fri, 19 Sep 2026 22:33:25 +0000",
@@ -202,8 +199,7 @@ func TestBuildMessageKeepsCallerSuppliedDateAndMessageID(t *testing.T) {
 	}
 }
 
-// Custom-header lookups are case-insensitive: a lowercase "message-id" must
-// also suppress the generated one.
+// Header lookups are case-insensitive: a lowercase "message-id" must also suppress the generated one.
 func TestBuildMessageHeaderLookupIsCaseInsensitive(t *testing.T) {
 	raw := buildMessage(
 		"sender@example.com", []string{"rcpt@example.com"},
@@ -215,8 +211,7 @@ func TestBuildMessageHeaderLookupIsCaseInsensitive(t *testing.T) {
 	}
 }
 
-// Two messages built back to back must not share a Message-ID, and every
-// multipart message must get its own boundary instead of one hard-coded string.
+// Back-to-back messages must not share a Message-ID or a multipart boundary.
 func TestBuildMessageGeneratesUniqueMessageIDsAndBoundaries(t *testing.T) {
 	const layout = "subject"
 
@@ -262,8 +257,7 @@ func TestBuildMessageGeneratesUniqueMessageIDsAndBoundaries(t *testing.T) {
 	}
 }
 
-// A workspace member reads the SMTP test result: a server's reply is shown,
-// but a network failure is reduced to its cause, without addresses or ports.
+// Members see SMTP replies, but network failures are reduced to their cause, without addresses or ports.
 func TestDescribeSMTPError(t *testing.T) {
 	reply := fmt.Errorf("SMTP auth failed: %w", &textproto.Error{Code: 535, Msg: "5.7.8 Authentication failed"})
 	if got := DescribeSMTPError(reply); got != "SMTP auth failed: 535 5.7.8 Authentication failed" {
@@ -277,8 +271,7 @@ func TestDescribeSMTPError(t *testing.T) {
 	}
 }
 
-// With the workspace policy blocking private addresses, a workspace server on
-// loopback is refused, while the operator's system server is not.
+// With private addresses blocked, a loopback workspace server is refused but the system server is not.
 func TestWorkspaceSMTPNetwork(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

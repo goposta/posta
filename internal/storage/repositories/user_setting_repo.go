@@ -60,7 +60,6 @@ func (r *UserSettingRepository) FindByUserID(userID uint) (*models.UserSetting, 
 	return nil, result.Error
 }
 
-// CreateOrUpdate saves or updates the user's settings row.
 func (r *UserSettingRepository) CreateOrUpdate(setting *models.UserSetting) error {
 	return r.db.Save(setting).Error
 }

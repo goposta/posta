@@ -28,8 +28,7 @@ import (
 	"github.com/goposta/posta/internal/services/email"
 )
 
-// smtpErr builds the kind of wrapped *textproto.Error the net/smtp client
-// surfaces, matching how email.sendViaClient wraps RCPT/MAIL/DATA failures.
+// smtpErr mimics how email.sendViaClient wraps net/smtp's *textproto.Error for RCPT/MAIL/DATA failures.
 func smtpErr(stage, recipient string, code int) error {
 	inner := fmt.Errorf("SMTP %s failed: %w", stage, &textproto.Error{Code: code, Msg: "5.1.1 rejected"})
 	return &email.SendError{Stage: stage, Recipient: recipient, Code: code, Msg: "5.1.1 rejected", Err: inner}

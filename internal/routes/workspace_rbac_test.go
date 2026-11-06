@@ -30,10 +30,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// workspaceRouteDefs builds the real route definitions. The handlers are never
-// invoked — only the middleware chain each route carries is exercised — so the
-// zero-value handler set is enough, and this stays a pure wiring test with no
-// database or service dependencies.
+// Handlers are never invoked, only each route's middleware chain, so a zero-value handler set suffices.
 func workspaceRouteDefs(t *testing.T) []okapi.RouteDefinition {
 	t.Helper()
 
@@ -46,9 +43,7 @@ func workspaceRouteDefs(t *testing.T) []okapi.RouteDefinition {
 	return append(r.workspaceRoutes(), r.oauthRoutes()...)
 }
 
-// defBySummary indexes route definitions by their Summary, which is unique
-// across the workspace surface and reads better in failure output than a
-// method/path pair repeated across groups.
+// Summary is unique across the workspace surface and reads better in failures than a method/path pair.
 func defBySummary(t *testing.T, defs []okapi.RouteDefinition, summary string) okapi.RouteDefinition {
 	t.Helper()
 
@@ -61,8 +56,6 @@ func defBySummary(t *testing.T, defs []okapi.RouteDefinition, summary string) ok
 	return okapi.RouteDefinition{}
 }
 
-// seedSessionRole mimics what RequireWorkspaceMiddleware leaves in the context
-// for a dashboard caller who is a member of the active workspace.
 func seedSessionRole(role models.WorkspaceRole) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		c.Set(middlewares.CtxUserID, 1)
@@ -73,9 +66,7 @@ func seedSessionRole(role models.WorkspaceRole) okapi.Middleware {
 	}
 }
 
-// runRouteAs replays a route's own middleware chain against a caller holding
-// the given workspace role and reports the resulting status. 200 means the
-// chain let the request through to the handler.
+// 200 means the route's own middleware chain let the request through to the handler.
 func runRouteAs(t *testing.T, def okapi.RouteDefinition, role models.WorkspaceRole) int {
 	t.Helper()
 
@@ -96,10 +87,7 @@ func runRouteAs(t *testing.T, def okapi.RouteDefinition, role models.WorkspaceRo
 	return rec.Code
 }
 
-// TestWorkspaceAdminRoutesRejectNonAdmins is the regression guard for the
-// missing-RBAC finding: these routes documented themselves as admin/owner only
-// while carrying no role guard at all, so any member — including a viewer —
-// reached the handler.
+// Regression guard: these routes claimed admin/owner only but had no role guard, so even a viewer reached them.
 func TestWorkspaceAdminRoutesRejectNonAdmins(t *testing.T) {
 	defs := workspaceRouteDefs(t)
 
@@ -135,8 +123,7 @@ func TestWorkspaceAdminRoutesRejectNonAdmins(t *testing.T) {
 	}
 }
 
-// TestDeleteWorkspaceIsOwnerOnly pins the stricter tier: the route documented
-// itself as owner-only, but an admin could delete the workspace too.
+// The route claimed owner-only, but an admin could delete the workspace too.
 func TestDeleteWorkspaceIsOwnerOnly(t *testing.T) {
 	def := defBySummary(t, workspaceRouteDefs(t), "Delete workspace")
 
@@ -154,8 +141,7 @@ func TestDeleteWorkspaceIsOwnerOnly(t *testing.T) {
 	}
 }
 
-// TestWorkspaceMemberRoutesStayOpenToMembers guards the other direction: the
-// fix must not lock ordinary members out of the reads they legitimately need.
+// The RBAC fix must not lock ordinary members out of the reads they legitimately need.
 func TestWorkspaceMemberRoutesStayOpenToMembers(t *testing.T) {
 	defs := workspaceRouteDefs(t)
 

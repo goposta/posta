@@ -39,8 +39,7 @@ func NewUpdateCheckJob(svc *updatecheck.Service) *UpdateCheckJob {
 
 func (j *UpdateCheckJob) Name() string { return "update-check" }
 
-// Schedule runs daily. The minute is arbitrary but deliberately not :00 — every
-// Posta in the world sharing one cron minute would stampede the GitHub API.
+// The minute is deliberately not :00 so every Posta install does not stampede the GitHub API at once.
 func (j *UpdateCheckJob) Schedule() string { return "37 4 * * *" }
 
 func (j *UpdateCheckJob) Run(ctx context.Context, _ *asynq.Client) error {

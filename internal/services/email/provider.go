@@ -24,9 +24,7 @@ import (
 	"strings"
 )
 
-// Mailbox provider names, as reported by deliverability analytics. Named so the
-// domain table below cannot drift into "Outlook" in one row and "outlook" in
-// another, which would split one provider into two buckets in the breakdown.
+// Named constants keep one provider from splitting into two analytics buckets through spelling drift.
 const (
 	ProviderAOL             = "AOL"
 	ProviderAppleICloud     = "Apple iCloud"
@@ -43,14 +41,12 @@ const (
 )
 
 var providerByDomain = map[string]string{
-	// Gmail (consumer)
 	"gmail.com":      ProviderGmail,
 	"googlemail.com": ProviderGmail,
 
 	// Google Workspace primary domain
 	"google.com": ProviderGoogleWorkspace,
 
-	// Outlook / Microsoft consumer
 	"outlook.com":   ProviderOutlook,
 	"hotmail.com":   ProviderOutlook,
 	"live.com":      ProviderOutlook,
@@ -62,7 +58,6 @@ var providerByDomain = map[string]string{
 	"outlook.fr":    ProviderOutlook,
 	"live.fr":       ProviderOutlook,
 
-	// Yahoo
 	"yahoo.com":      ProviderYahoo,
 	"yahoo.co.uk":    ProviderYahoo,
 	"yahoo.fr":       ProviderYahoo,
@@ -72,40 +67,32 @@ var providerByDomain = map[string]string{
 	"ymail.com":      ProviderYahoo,
 	"rocketmail.com": ProviderYahoo,
 
-	// Apple iCloud
 	"icloud.com": ProviderAppleICloud,
 	"me.com":     ProviderAppleICloud,
 	"mac.com":    ProviderAppleICloud,
 
-	// Proton
 	"proton.me":      ProviderProton,
 	"protonmail.com": ProviderProton,
 	"pm.me":          ProviderProton,
 
-	// AOL
 	"aol.com": ProviderAOL,
 
-	// GMX / mail.com
 	"gmx.com":  ProviderGMX,
 	"gmx.net":  ProviderGMX,
 	"gmx.de":   ProviderGMX,
 	"mail.com": ProviderGMX,
 
-	// Zoho
 	"zoho.com":     ProviderZoho,
 	"zohomail.com": ProviderZoho,
 
-	// Fastmail
 	"fastmail.com": ProviderFastmail,
 	"fastmail.fm":  ProviderFastmail,
 
-	// Yandex
 	"yandex.ru":  ProviderYandex,
 	"yandex.com": ProviderYandex,
 }
 
-// providerBySuffix catches subdomain-style matches (e.g. "mail.google.com").
-// Entries must begin with "." so we don't accidentally match "googlefoo.com".
+// Entries must begin with "." so "googlefoo.com" never matches.
 var providerBySuffix = []struct {
 	suffix   string
 	provider string
@@ -118,7 +105,6 @@ func NormalizeDomain(addr string) string {
 	if trimmed == "" {
 		return ""
 	}
-	// mail.ParseAddress handles "Name" <a@b>, "<a@b>", and "a@b".
 	parsed, err := mail.ParseAddress(trimmed)
 	if err != nil {
 		if at := strings.LastIndex(trimmed, "@"); at >= 0 {

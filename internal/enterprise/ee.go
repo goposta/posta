@@ -7,16 +7,7 @@
 //
 // SPDX-License-Identifier: LicenseRef-Posta-Enterprise
 
-// Package enterprise is the seam between Posta Community and Posta
-// Enterprise. Core code asks one interface, EE, whether Enterprise features
-// may run. The Community build links a stub that always says no; the
-// Enterprise build (the `enterprise` tag) links the license-verifying
-// implementation. The HTTP layer is the same in both, so a Community binary
-// answers 402 and contains no verification code.
-//
-// Posta has one paid edition. A license is either there or not: there are
-// no tiers and no per-feature flags, and a valid license unlocks every
-// Enterprise feature of the running build.
+// Package enterprise gates EE features: Community links a stub answering 402; one paid edition, no per-feature tiers.
 package enterprise
 
 import (
@@ -27,40 +18,33 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// Product is the product name license tokens are issued for.
 const Product = "posta"
 
-// Editions.
 const (
 	EditionCommunity  = "community"
 	EditionEnterprise = "enterprise"
 )
 
-// States. A license moves from valid to grace to degraded as it expires.
+// A license moves from valid to grace to degraded as it expires.
 const (
 	StateNone            = "none"     // no license: Community
 	StateValid           = "valid"    // within term
 	StateGrace           = "grace"    // past expiry, within the grace days: works, with a warning
 	StateDegraded        = "degraded" // past grace: features run, their settings are read-only
 	StateBindingMismatch = "binding_mismatch"
-	// StateUnknownKey is a stored license signed by a key this build does not
-	// trust, for example after a downgrade. It grants nothing but is reported,
-	// never mistaken for "no license".
+	// A license signed by a key this build does not trust grants nothing, but is never mistaken for "no license".
 	StateUnknownKey = "unknown_signing_key"
 )
 
-// Binding failures, reported in Status.BindingError.
 const (
 	BindingInstallID = "install_id"
 	BindingURL       = "url"
 )
 
-// Status is the installed license as of now.
 type Status struct {
 	Edition string `json:"edition"`
 	State   string `json:"state"`
-	// Build is the edition this binary was built as. A Community build
-	// cannot install a license at all.
+	// A Community build cannot install a license at all.
 	Build        string     `json:"build"`
 	LicenseID    string     `json:"license_id,omitempty"`
 	Customer     string     `json:"customer,omitempty"`
@@ -72,49 +56,30 @@ type Status struct {
 	GraceEnds    *time.Time `json:"grace_ends,omitempty"`
 }
 
-// Licensed reports whether Enterprise features run in this state.
 func (s Status) Licensed() bool {
 	return s.State == StateValid || s.State == StateGrace || s.State == StateDegraded
 }
 
-// Mutable reports whether Enterprise settings may change in this state.
 func (s Status) Mutable() bool {
 	return s.State == StateValid || s.State == StateGrace
 }
 
-// EE gates Enterprise features. Every method is safe on the Community stub.
-//
-// Use Licensed for behaviour (does a routing rule apply?), Mutable or
-// RequireMutable before changing Enterprise settings, and Require before
-// serving an Enterprise endpoint that changes nothing. State is evaluated on
-// every call, so a license that expires or is renewed needs no restart.
+// Licensed gates behaviour, (Require)Mutable guards settings changes; state is re-evaluated per call, no restart.
 type EE interface {
 	Status() Status
 	Licensed() bool
 	Mutable() bool
-	// Require returns nil when Enterprise features may run, otherwise the
-	// gate error explaining why not.
 	Require() error
-	// RequireMutable is Require plus ErrLicenseExpired once the license is
-	// degraded: an expired license keeps Enterprise features running but
-	// freezes their settings until it is renewed.
+	// An expired (degraded) license keeps features running but freezes their settings until renewed.
 	RequireMutable() error
-	// Install verifies a license token and stores it, replacing any other.
-	// requestHost is the host the admin installs from; a license bound to a
-	// URL must match it or the configured web URL.
+	// A URL-bound license must match requestHost or the configured web URL.
 	Install(ctx context.Context, token, requestHost string) (Status, error)
-	// Remove deletes the installed license, reverting to Community.
 	Remove(ctx context.Context) error
-	// LDAP returns the LDAP / Active Directory authenticator, or nil in the
-	// Community build and without a license. Sign-in asks it only after the
-	// local password check fails, so local accounts keep working when the
-	// directory is down.
+	// Nil without a license; sign-in asks it only after the local password fails, so local accounts survive an outage.
 	LDAP() LDAPAuthenticator
 }
 
-// LDAPIdentity is a directory user whose password bound: the mapped email and
-// name, the groups they belong to, and the directory that matched. It is plain
-// data, so this package never touches users or sessions.
+// Plain data, so this package never touches users or sessions.
 type LDAPIdentity struct {
 	Email     string
 	Name      string
@@ -122,44 +87,31 @@ type LDAPIdentity struct {
 	Directory string   // the matched LDAPConfig name
 }
 
-// LDAPTestResult is the outcome of an admin's "Test connection".
 type LDAPTestResult struct {
 	OK      bool   `json:"ok"`
 	Message string `json:"message,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
 
-// LDAPAuthenticator binds sign-in credentials against the configured directories.
 type LDAPAuthenticator interface {
 	Authenticate(ctx context.Context, email, password string) (LDAPIdentity, error)
 	TestConnection(ctx context.Context, cfg *models.LDAPConfig) LDAPTestResult
 }
 
-// ErrLDAPNoMatch means no enabled directory knows the user, so sign-in keeps
-// its local result. It is never shown to the client.
+// ErrLDAPNoMatch keeps sign-in on its local result and is never shown to the client.
 var ErrLDAPNoMatch = errors.New("no matching LDAP directory")
 
-// Options configure New.
 type Options struct {
-	// License is a license token to install at boot when none is stored
-	// (POSTA_LICENSE), and LicenseFile a file holding one
-	// (POSTA_LICENSE_FILE). A stored license wins over both, so a license
-	// pasted in the dashboard is not reverted by a restart.
+	// A stored license wins over POSTA_LICENSE(_FILE), so one pasted in the dashboard survives a restart.
 	License     string
 	LicenseFile string
-	// InstanceURL is this deployment's public web URL, for the URL binding.
 	InstanceURL string
-	// InstallID is this deployment's Install ID, for the install-ID binding.
-	InstallID string
-	// LDAPDirectories lists the enabled directories, in the order sign-in
-	// tries them, and Decrypt reads their stored service passwords. Passed in
-	// so this package imports no repositories or crypto.
+	InstallID   string
+	// Passed in, in sign-in order, so this package imports no repositories or crypto.
 	LDAPDirectories func(ctx context.Context) ([]models.LDAPConfig, error)
 	Decrypt         func(stored string) (string, error)
 }
 
-// GateError is the error a gate returns. Code is the stable API error code
-// and HTTPStatus the response status.
 type GateError interface {
 	error
 	Code() string
@@ -176,7 +128,7 @@ func (e *gateError) Error() string   { return e.msg }
 func (e *gateError) Code() string    { return e.code }
 func (e *gateError) HTTPStatus() int { return e.status }
 
-// Gate errors. They are pointers, so errors.Is matches by identity.
+// Pointers, so errors.Is matches by identity.
 var (
 	ErrLicenseRequired        = &gateError{"LICENSE_REQUIRED", "this feature requires a Posta Enterprise license", 402}
 	ErrLicenseExpired         = &gateError{"LICENSE_EXPIRED", "your Posta Enterprise license has expired; this feature is read-only until it is renewed", 402}
@@ -185,9 +137,7 @@ var (
 	ErrCommunityEdition       = &gateError{"COMMUNITY_EDITION", "this Posta binary was built without Enterprise support, so it cannot install a license", 402}
 )
 
-// community is the answer when Enterprise features may not run: the
-// Community build's only implementation, and the Enterprise build's state
-// before a license is installed.
+// community is also the Enterprise build's state before a license is installed.
 type community struct{}
 
 func (community) Status() Status {
@@ -203,11 +153,9 @@ func (community) Install(context.Context, string, string) (Status, error) {
 	return Status{}, ErrCommunityEdition
 }
 
-// Community returns the Community answer: no Enterprise features. It is the
-// safe default wherever an EE has not been wired in.
+// Community is the safe default wherever an EE has not been wired in.
 func Community() EE { return community{} }
 
-// gate turns a status into the error Require returns.
 func gate(s Status) error {
 	switch s.State {
 	case StateValid, StateGrace, StateDegraded:
@@ -220,7 +168,6 @@ func gate(s Status) error {
 	return ErrLicenseRequired
 }
 
-// gateMutable turns a status into the error RequireMutable returns.
 func gateMutable(s Status) error {
 	if err := gate(s); err != nil {
 		return err

@@ -42,8 +42,7 @@ func TestWidgetConfig(t *testing.T) {
 		}
 		return f
 	}
-	// request builds a request from origin to Posta at posta.test; an origin
-	// of "self-get" is a same-origin GET, which carries no Origin header.
+	// An origin of "self-get" is a same-origin GET, which carries no Origin header.
 	request := func(origin string) *http.Request {
 		r := httptest.NewRequest(http.MethodGet, "https://posta.test/api/v1/f/k/config", nil)
 		switch origin {

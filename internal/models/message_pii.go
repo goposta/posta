@@ -27,31 +27,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// Answers to personal-data questions are encrypted at rest when
-// POSTA_ENCRYPTION_KEY is set and a Posta Enterprise license is installed: in Data, in the FieldsJSON display copy, and
-// in the summary columns a personal-data question fills. SenderEmail stays
-// readable on purpose: replies, threading, suppression, per-sender limits
-// and GDPR erasure all match on it.
-//
-// Values are decrypted when a message is loaded, so everything above the
-// database (rules, summaries, exports, the dashboard) sees plaintext. The
-// database cannot compare them, so they cannot be filtered or searched.
+// PII answers are encrypted at rest; SenderEmail stays plain since replies, threading and erasure match on it.
 
-// piiLicensed reports whether new answers may be encrypted: encryption at
-// rest is a Posta Enterprise feature. The server and the worker set it from
-// the license at boot; until then it says no.
+// piiLicensed is set from the license at boot by server and worker; until then it says no.
 var piiLicensed = func() bool { return false }
 
-// SetPIIEncryptionGate makes EncryptsPII follow the license.
 func SetPIIEncryptionGate(licensed func() bool) {
 	if licensed != nil {
 		piiLicensed = licensed
 	}
 }
 
-// EncryptsPII reports whether new answers to personal-data questions are
-// encrypted at rest: a key is set and the Enterprise license allows it.
-// Answers already encrypted stay encrypted and readable whatever this says.
+// EncryptsPII governs new answers only; answers already encrypted stay encrypted and readable regardless.
 func EncryptsPII() bool { return crypto.Enabled() && piiLicensed() }
 
 // piiSeal records which values of a message are kept encrypted.
@@ -69,10 +56,7 @@ var roleColumn = map[FieldRole]string{
 	RoleBody:        "body",
 }
 
-// SealPII marks the answers to the schema's personal-data questions for
-// encryption when the message is saved. It does nothing without an
-// encryption key (Posta never stores a reversible encoding and calls it
-// encryption) or without an Enterprise license.
+// SealPII is a no-op without a key or Enterprise license; Posta never calls a reversible encoding encryption.
 func (m *Message) SealPII(defs FieldDefs) {
 	if !EncryptsPII() {
 		return
@@ -119,8 +103,7 @@ func (m *Message) column(name string) *string {
 	return nil
 }
 
-// BeforeSave encrypts the sealed values. AfterSave puts the plaintext back,
-// so the caller keeps working with readable values.
+// BeforeSave encrypts the sealed values; AfterSave restores the plaintext so the caller keeps readable values.
 func (m *Message) BeforeSave(*gorm.DB) error {
 	if m.seal == nil || !crypto.Enabled() {
 		return nil
@@ -189,9 +172,7 @@ func (m *Message) AfterSave(*gorm.DB) error {
 	return nil
 }
 
-// AfterFind decrypts what was stored encrypted, and remembers it so a later
-// Save encrypts it again. A value that cannot be decrypted (no key, or a
-// different key) is left as stored.
+// AfterFind decrypts and remembers sealed values for re-encryption; undecryptable values are left as stored.
 func (m *Message) AfterFind(*gorm.DB) error {
 	seal := &piiSeal{keys: map[string]bool{}, columns: map[string]bool{}}
 	for k, v := range m.Data {
@@ -237,8 +218,7 @@ func (m *Message) AfterFind(*gorm.DB) error {
 	return nil
 }
 
-// sealValue encrypts a typed answer as JSON, so a number or a list comes
-// back as the same type.
+// sealValue encrypts a typed answer as JSON so a number or list comes back as the same type.
 func sealValue(v any) (string, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {

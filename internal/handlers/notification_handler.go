@@ -27,11 +27,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// NotificationHandler serves a user's in-app inbox: the header bell, the
-// notifications page, and the alert banner on the workspace dashboard.
-//
-// Everything is scoped to the authenticated user. There is no cross-user read
-// path here at all, so a notification cannot leak between accounts.
+// Everything is scoped to the authenticated user; there is no cross-user read path, so nothing leaks.
 type NotificationHandler struct {
 	repo  *repositories.NotificationRepository
 	inbox *inbox.Service
@@ -47,8 +43,7 @@ type ListNotificationsRequest struct {
 	Category string `query:"category" enum:"domains,deliverability,security,messages,platform"`
 	Before   int    `query:"before" doc:"Keyset cursor: the id of the last row already seen"`
 	Limit    int    `query:"limit" default:"30"`
-	// Scoped restricts the listing to the active workspace. Platform
-	// announcements have no workspace and are always included.
+	// Platform announcements have no workspace and are always included.
 	Scoped bool `query:"scoped" doc:"Restrict to the active workspace"`
 }
 
@@ -58,8 +53,7 @@ type NotificationIDsRequest struct {
 	} `json:"body"`
 }
 
-// NotificationCounts drives the bell badge and tells the dashboard whether the
-// banner has anything to show without fetching it.
+// NotificationCounts tells the dashboard whether the banner has anything to show without fetching it.
 type NotificationCounts struct {
 	Unread int64 `json:"unread"`
 	Open   int64 `json:"open"`
@@ -84,9 +78,7 @@ func (h *NotificationHandler) List(c *okapi.Context, req *ListNotificationsReque
 	return ok(c, items)
 }
 
-// Counts returns the unread badge and how many live items the current workspace
-// has. Unread is deliberately not workspace-scoped: a badge that hid news from
-// another workspace would train people to ignore it.
+// Unread is deliberately not workspace-scoped: a badge hiding other workspaces' news trains people to ignore it.
 func (h *NotificationHandler) Counts(c *okapi.Context) error {
 	scope := getScope(c)
 	unread, open, err := h.repo.Counts(scope.UserID, scope.WorkspaceID)
@@ -96,8 +88,7 @@ func (h *NotificationHandler) Counts(c *okapi.Context) error {
 	return ok(c, NotificationCounts{Unread: unread, Open: open})
 }
 
-// Banner returns what the workspace dashboard shows above the fold: live,
-// undismissed items for this workspace, worst first.
+// Banner returns live, undismissed items for this workspace, worst first.
 func (h *NotificationHandler) Banner(c *okapi.Context) error {
 	scope := getScope(c)
 	items, err := h.repo.Open(scope.UserID, scope.WorkspaceID)
@@ -121,12 +112,7 @@ func (h *NotificationHandler) MarkAllRead(c *okapi.Context) error {
 	return ok(c, dto.MessageData{Message: "all notifications marked read"})
 }
 
-// Dismiss hides items from the dashboard banner.
-//
-// A dismissal is not permanent silence: it is bound to the condition as it
-// stands now, and the next scan re-arms the item if the condition materially
-// changes. Dismissing "3 domains not verified" stays dismissed at three and
-// comes back at four.
+// A dismissal binds to the condition as it stands; the next scan re-arms the item if it materially changes.
 func (h *NotificationHandler) Dismiss(c *okapi.Context, req *NotificationIDsRequest) error {
 	if err := h.repo.Dismiss(getScope(c).UserID, req.Body.IDs); err != nil {
 		return c.AbortInternalServerError("failed to dismiss notifications")
@@ -134,7 +120,6 @@ func (h *NotificationHandler) Dismiss(c *okapi.Context, req *NotificationIDsRequ
 	return ok(c, dto.MessageData{Message: "notifications dismissed"})
 }
 
-// DismissAll clears the whole banner for the active workspace.
 func (h *NotificationHandler) DismissAll(c *okapi.Context) error {
 	scope := getScope(c)
 	if err := h.repo.DismissAll(scope.UserID, scope.WorkspaceID); err != nil {

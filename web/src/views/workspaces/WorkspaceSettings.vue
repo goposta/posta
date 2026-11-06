@@ -21,12 +21,11 @@ const wsId = Number(route.params.id)
 const ws = ref<Workspace | null>(null)
 const loading = ref(true)
 
-// Members and invitations now live on a dedicated page; redirect legacy deep-links.
+// Members and invitations live on their own page; redirect legacy deep-links.
 if (route.query.tab === 'members' || route.query.tab === 'invitations') {
   router.replace(`/workspaces/${wsId}/members?tab=${route.query.tab}`)
 }
 
-// Tabs
 type SettingsTab = 'settings' | 'data' | 'sso' | 'plan'
 const validTabs: SettingsTab[] = ['settings', 'data', 'sso', 'plan']
 function tabFromQuery(value: unknown): SettingsTab {
@@ -42,29 +41,23 @@ watch(() => route.query.tab, (value) => {
   if (value) activeTab.value = tabFromQuery(value)
 })
 
-// Plan
 const currentPlan = ref<Plan | null>(null)
 const planLoading = ref(false)
 const planSource = ref<string | null>(null)
 
-// SSO
 const ssoConfig = ref<WorkspaceSSOConfig | null>(null)
 const ssoProviders = ref<OAuthProviderInfo[]>([])
 const ssoLoading = ref(false)
 const ssoSaving = ref(false)
 const ssoForm = ref({ provider_id: 0, enforce_sso: false, auto_provision: true, allowed_domains: '' })
 
-// Data Export/Import
 const exporting = ref(false)
 const importing = ref(false)
 const importFileRef = ref<HTMLInputElement | null>(null)
 
-// Settings (workspace name/description)
 const editDescription = ref('')
 const saving = ref(false)
 
-// Operational workspace settings (timezone, sender defaults, webhook retries,
-// API-key expiry, bounce auto-suppress) — backed by /workspaces/current/settings.
 const wsSettings = ref<Partial<WorkspaceSettings>>({
   timezone: 'UTC',
   default_sender_name: '',
@@ -78,7 +71,6 @@ const timezones = computed(() => timezoneOptions(wsSettings.value.timezone))
 const wsSettingsLoading = ref(false)
 const wsSettingsSaving = ref(false)
 
-// Data Management (GDPR) — scoped to this workspace.
 const gdprEmail = ref('')
 const gdprDays = ref(90)
 const gdprMessagesEmail = ref('')
@@ -92,9 +84,7 @@ const myRole = computed(() => {
 })
 const isAdminOrOwner = computed(() => myRole.value === 'owner' || myRole.value === 'admin')
 const isOwner = computed(() => myRole.value === 'owner')
-// The system workspace is platform infrastructure and cannot be deleted or
-// renamed (enforced server-side). A user's last workspace cannot be deleted
-// either, since it would leave them with nowhere to work.
+// Neither the system workspace nor a user's last workspace can be deleted (the latter would leave them nowhere to work).
 const isSystem = computed(() => ws.value?.system ?? false)
 const isLastWorkspace = computed(() => wsStore.ownWorkspaces.length <= 1)
 
@@ -408,7 +398,6 @@ watch(activeTab, (value) => {
     </div>
 
     <template v-else>
-      <!-- Tabs -->
       <div class="tabs">
         <button v-if="isAdminOrOwner" :class="['tab', { active: activeTab === 'settings' }]" @click="activeTab = 'settings'">
           Settings
@@ -424,7 +413,6 @@ watch(activeTab, (value) => {
         </button>
       </div>
 
-      <!-- Plan Tab -->
       <div v-if="activeTab === 'plan'">
         <div v-if="planLoading" class="loading-page"><div class="spinner"></div></div>
         <template v-else-if="currentPlan">
@@ -442,7 +430,6 @@ watch(activeTab, (value) => {
           </div>
 
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
-            <!-- Rate Limits -->
             <div class="card">
               <div class="card-header"><h3 style="margin: 0; font-size: 14px">Rate Limits</h3></div>
               <div class="card-body">
@@ -461,7 +448,6 @@ watch(activeTab, (value) => {
               </div>
             </div>
 
-            <!-- Email Constraints -->
             <div class="card">
               <div class="card-header"><h3 style="margin: 0; font-size: 14px">Email Constraints</h3></div>
               <div class="card-body">
@@ -480,7 +466,6 @@ watch(activeTab, (value) => {
               </div>
             </div>
 
-            <!-- Resource Limits -->
             <div class="card">
               <div class="card-header"><h3 style="margin: 0; font-size: 14px">Resource Limits</h3></div>
               <div class="card-body">
@@ -507,7 +492,6 @@ watch(activeTab, (value) => {
               </div>
             </div>
 
-            <!-- Retention -->
             <div class="card">
               <div class="card-header"><h3 style="margin: 0; font-size: 14px">Data Retention</h3></div>
               <div class="card-body">
@@ -531,7 +515,6 @@ watch(activeTab, (value) => {
         </div>
       </div>
 
-      <!-- Settings Tab -->
       <div v-if="activeTab === 'settings' && isAdminOrOwner" class="card">
         <div class="card-header"><span>Workspace Settings</span></div>
         <div class="card-body">
@@ -545,7 +528,6 @@ watch(activeTab, (value) => {
           </button>
         </div>
 
-        <!-- Sending & Operational Settings -->
         <div class="card-body" style="border-top: 1px solid var(--border-primary);">
           <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Sending &amp; Operational Settings</h4>
           <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
@@ -589,7 +571,6 @@ watch(activeTab, (value) => {
           </template>
         </div>
 
-        <!-- Domain Security -->
         <div class="card-body" style="border-top: 1px solid var(--border-primary);">
           <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Domain Security</h4>
           <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
@@ -650,7 +631,6 @@ watch(activeTab, (value) => {
         </div>
       </div>
 
-      <!-- Data Management (GDPR) Tab — admin/owner only -->
       <div v-if="activeTab === 'data' && isAdminOrOwner" class="card">
         <div class="card-header"><span>Data Management (GDPR)</span></div>
         <div class="card-body">
@@ -701,7 +681,6 @@ watch(activeTab, (value) => {
         </div>
       </div>
 
-      <!-- SSO Tab — owners only -->
       <div v-if="activeTab === 'sso' && isOwner" class="card">
         <div class="card-header">
           <span>Single Sign-On (SSO)</span>

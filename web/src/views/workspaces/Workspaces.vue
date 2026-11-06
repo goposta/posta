@@ -122,7 +122,6 @@ if (route.query.create !== undefined) {
     </div>
 
     <template v-else>
-      <!-- Pending Invitations -->
       <div v-if="invitations.length > 0" class="card" style="margin-bottom: 20px;">
         <div class="card-header" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border-primary); font-weight: 600; font-size: 14px;">
           <span>Pending Invitations ({{ invitations.length }})</span>
@@ -154,7 +153,6 @@ if (route.query.create !== undefined) {
         </div>
       </div>
 
-      <!-- Workspaces List -->
       <div class="card">
         <div v-if="workspaces.length === 0 && invitations.length === 0" class="empty-state">
           <h3>No workspaces</h3>
@@ -206,7 +204,6 @@ if (route.query.create !== undefined) {
       </div>
     </template>
 
-    <!-- Create Workspace Modal -->
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal">
         <div class="modal-header">

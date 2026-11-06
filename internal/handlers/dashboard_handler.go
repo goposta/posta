@@ -80,7 +80,6 @@ type DashboardStats struct {
 
 	Features DashboardFeatures `json:"features"`
 
-	// Webhook delivery stats
 	WebhookDeliveries *repositories.WebhookDeliveryStats `json:"webhook_deliveries"`
 }
 
@@ -96,18 +95,10 @@ func NewDashboardHandler(db *gorm.DB, c *cache.Cache, whDeliveryRepo *repositori
 
 func (h *DashboardHandler) SetFeatures(f DashboardFeatures) { h.features = f }
 
-// SetInbox wires the in-app inbox so the dashboard read can reconcile the
-// workspace's health alerts. It is optional: without it the dashboard still
-// works, it just stops maintaining the banner.
+// SetInbox is optional: without it the dashboard still works but stops maintaining the health banner.
 func (h *DashboardHandler) SetInbox(s *inbox.Service) { h.inbox = s }
 
-// syncInbox reconciles the health alerts for the requesting member against the
-// snapshot that was just computed.
-//
-// It runs only when the stats were computed fresh, not on a cache hit, so the
-// banner is exactly as current as the numbers printed above it and the write
-// happens at most once per cache window. A failure here is not the user's
-// problem: the dashboard is still correct without the banner.
+// syncInbox runs only on fresh stats so the banner matches the numbers; its failures are not the user's problem.
 func (h *DashboardHandler) syncInbox(c *okapi.Context, scope repositories.ResourceScope, stats *DashboardStats) {
 	if h.inbox == nil || scope.WorkspaceID == nil {
 		return
@@ -134,7 +125,6 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 	scope := getScope(c)
 	ctx := c.Request().Context()
 
-	// Try cache first
 	scopeKey := int(scope.UserID)
 	if scope.WorkspaceID != nil {
 		scopeKey = int(*scope.WorkspaceID) + 1000000
@@ -149,7 +139,6 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 		return repositories.ApplyScope(h.db.Model(model), scope)
 	}
 
-	// Email counts by status
 	applyScope(&models.Email{}).Count(&stats.TotalEmails)
 	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusQueued).Count(&stats.QueuedEmails)
 	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusProcessing).Count(&stats.ProcessingEmails)
@@ -157,12 +146,10 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusFailed).Count(&stats.FailedEmails)
 	applyScope(&models.Email{}).Where("status = ?", models.EmailStatusSuppressed).Count(&stats.SuppressedEmails)
 
-	// Infrastructure counts
 	applyScope(&models.Domain{}).Count(&stats.TotalDomains)
 	applyScope(&models.Domain{}).Where("ownership_verified = false").Count(&stats.UnverifiedDomains)
 	applyScope(&models.SMTPServer{}).Count(&stats.TotalSmtpServers)
 
-	// API keys
 	now := time.Now()
 	applyScope(&models.APIKey{}).Count(&stats.TotalAPIKeys)
 	applyScope(&models.APIKey{}).Where("revoked = false AND (expires_at IS NULL OR expires_at > ?)", now).Count(&stats.ActiveAPIKeys)
@@ -170,23 +157,19 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 		Where("revoked = false AND expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?", now, now.AddDate(0, 0, 7)).
 		Count(&stats.ExpiringAPIKeys)
 
-	// Contacts & deliverability
 	applyScope(&models.Contact{}).Count(&stats.TotalContacts)
 	applyScope(&models.Bounce{}).Count(&stats.TotalBounces)
 	applyScope(&models.Suppression{}).Count(&stats.TotalSuppressions)
 	applyScope(&models.Webhook{}).Count(&stats.TotalWebhooks)
 
-	// Inbound email counts
 	applyScope(&models.InboundEmail{}).Count(&stats.TotalInbound)
 	applyScope(&models.InboundEmail{}).Where("status = ?", models.InboundStatusForwarded).Count(&stats.ForwardedInbound)
 	applyScope(&models.InboundEmail{}).Where("status = ?", models.InboundStatusFailed).Count(&stats.FailedInbound)
 
-	// Content and audience counts
 	applyScope(&models.Template{}).Count(&stats.TotalTemplates)
 	applyScope(&models.Campaign{}).Count(&stats.TotalCampaigns)
 	applyScope(&models.Subscriber{}).Count(&stats.TotalSubscriber)
 
-	// Web form messages
 	if h.features.Messages {
 		applyScope(&models.Form{}).Count(&stats.TotalForms)
 		applyScope(&models.Message{}).
@@ -202,7 +185,6 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 			Count(&stats.SpamMessages)
 	}
 
-	// Failure and bounce rates
 	if stats.TotalEmails > 0 {
 		stats.FailureRate = float64(stats.FailedEmails) / float64(stats.TotalEmails) * 100
 		stats.BounceRate = float64(stats.TotalBounces) / float64(stats.TotalEmails) * 100
@@ -210,12 +192,10 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 
 	stats.Features = h.features
 
-	// Webhook delivery stats
 	if whStats, err := h.whDeliveryRepo.StatsByScope(scope); err == nil {
 		stats.WebhookDeliveries = whStats
 	}
 
-	// Daily send volume (last 14 days)
 	since := time.Now().AddDate(0, 0, -13).Truncate(24 * time.Hour)
 	type dailyRow struct {
 		Date   string
@@ -230,7 +210,6 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 		Order("date").
 		Find(&rows)
 
-	// Build a map for easy lookup and fill all 14 days
 	volumeMap := make(map[string]*DailyVolume)
 	for i := 0; i < 14; i++ {
 		d := since.AddDate(0, 0, i).Format("2006-01-02")
@@ -253,7 +232,6 @@ func (h *DashboardHandler) Stats(c *okapi.Context) error {
 		stats.DailyVolume = append(stats.DailyVolume, *volumeMap[d])
 	}
 
-	// Store in cache
 	h.cache.Set(ctx, cacheKey, stats, cache.DashboardStatsTTL)
 
 	h.syncInbox(c, scope, &stats)

@@ -8,3 +8,6 @@ bin/
 # `go build` works on a clean checkout.
 /internal/web/dist/*
 !/internal/web/dist/.gitkeep
+widget/node_modules
+internal/widget/node_modules
+

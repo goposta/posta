@@ -65,8 +65,7 @@ func reload(t *testing.T, tx *gorm.DB, id uint) models.Notification {
 	return got
 }
 
-// A condition that persists unchanged must fold into the existing row rather
-// than adding one on every dashboard load.
+// A condition that persists unchanged must fold into its row, not add one on every dashboard load.
 func TestUpsertFoldsRepeatedCondition(t *testing.T) {
 	db := notificationDB(t)
 	tx := db.Begin()
@@ -90,8 +89,7 @@ func TestUpsertFoldsRepeatedCondition(t *testing.T) {
 	}
 }
 
-// Dismissal is bound to the condition as it stood. An unchanged condition stays
-// dismissed: this is what stops the banner reappearing on every page load.
+// An unchanged condition stays dismissed, which stops the banner reappearing on every page load.
 func TestDismissSurvivesUnchangedCondition(t *testing.T) {
 	db := notificationDB(t)
 	tx := db.Begin()
@@ -117,8 +115,7 @@ func TestDismissSurvivesUnchangedCondition(t *testing.T) {
 	}
 }
 
-// The other half of the same rule: a condition that materially worsens re-arms
-// the item, so dismissing once does not silence it forever.
+// A materially worse condition re-arms the item, so one dismissal does not silence it forever.
 func TestDismissResurfacesOnChangedCondition(t *testing.T) {
 	db := notificationDB(t)
 	tx := db.Begin()
@@ -147,8 +144,7 @@ func TestDismissResurfacesOnChangedCondition(t *testing.T) {
 	}
 }
 
-// A condition that clears is resolved, leaves the banner, and stays in the
-// inbox as history.
+// A cleared condition is resolved, leaves the banner, and stays in the inbox as history.
 func TestResolveExceptClosesClearedConditions(t *testing.T) {
 	db := notificationDB(t)
 	tx := db.Begin()
@@ -184,8 +180,7 @@ func TestResolveExceptClosesClearedConditions(t *testing.T) {
 	}
 }
 
-// The banner is workspace-scoped, but platform announcements have no workspace
-// and must reach the user wherever they are.
+// Platform announcements have no workspace and must reach the user in every workspace's banner.
 func TestOpenIncludesPlatformItemsAndExcludesOtherWorkspaces(t *testing.T) {
 	db := notificationDB(t)
 	tx := db.Begin()
@@ -252,8 +247,7 @@ func TestInboxIsScopedToTheUser(t *testing.T) {
 	}
 }
 
-// Pruning keeps live conditions whatever their age; an unresolved alert is
-// still true however long it has been open.
+// Pruning keeps live conditions whatever their age.
 func TestPruneKeepsOpenItems(t *testing.T) {
 	db := notificationDB(t)
 	tx := db.Begin()

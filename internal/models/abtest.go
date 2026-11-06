@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 )
 
-// ABTestVariant represents a single variant in an A/B test campaign.
 type ABTestVariant struct {
 	Name            string `json:"name"`
 	Subject         string `json:"subject"`

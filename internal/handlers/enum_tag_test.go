@@ -62,8 +62,7 @@ func walkEnumTags(t *testing.T, typ reflect.Type, path string) {
 	}
 }
 
-// enumCheckedRequests are the request structs the binding guards walk. Add new
-// request types here.
+// enumCheckedRequests are the request structs the binding guards walk; add new request types here.
 var enumCheckedRequests = []any{
 	CreateFormRequest{},
 	UpdateFormRequest{},
@@ -90,13 +89,7 @@ func TestRequestEnumTagsOnlyOnStrings(t *testing.T) {
 	}
 }
 
-// okapi resolves a request's body by looking for a field named Body or tagged
-// json:"body", then calls Bind on that field — which applies the same rule to
-// the body's own fields. A payload with a field called "body" therefore binds as
-// an empty struct: no JSON is decoded, and the failure surfaces as every
-// required field being missing rather than as anything pointing at the cause.
-//
-// This walks the same request structs and fails on the shape that triggers it.
+// okapi binds a field named Body or json:"body" as the body envelope, so a payload field "body" decodes nothing.
 func TestRequestBodiesHaveNoBodyField(t *testing.T) {
 	for _, req := range enumCheckedRequests {
 		typ := reflect.TypeOf(req)

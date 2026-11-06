@@ -189,7 +189,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Create/Edit Language Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" 
       @mouseup="confirmClickEnd">
       <div class="modal" style="max-width: 480px;" @mousedown.stop @mouseup.stop>

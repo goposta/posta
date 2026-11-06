@@ -67,7 +67,6 @@ func (r *SMTPRepository) FindByUserID(userID uint, limit, offset int) ([]models.
 	return servers, total, nil
 }
 
-// FindAllWithRetries returns all enabled SMTP servers that have max_retries > 0.
 func (r *SMTPRepository) FindAllWithRetries() ([]models.SMTPServer, error) {
 	var servers []models.SMTPServer
 	if err := r.db.Where("max_retries > 0 AND status = ?", models.SMTPStatusEnabled).Find(&servers).Error; err != nil {
@@ -76,7 +75,6 @@ func (r *SMTPRepository) FindAllWithRetries() ([]models.SMTPServer, error) {
 	return servers, nil
 }
 
-// FindFirstByUserID returns the first enabled SMTP server for a user.
 func (r *SMTPRepository) FindFirstByUserID(userID uint) (*models.SMTPServer, error) {
 	var server models.SMTPServer
 	if err := r.db.Where("user_id = ? AND status = ? AND workspace_id IS NULL", userID, models.SMTPStatusEnabled).First(&server).Error; err != nil {
@@ -115,7 +113,6 @@ func (r *SMTPRepository) FindByScope(scope ResourceScope, limit, offset int) ([]
 	return items, total, nil
 }
 
-// FindFirstByWorkspaceID returns the first enabled SMTP server for a workspace.
 func (r *SMTPRepository) FindFirstByWorkspaceID(workspaceID uint) (*models.SMTPServer, error) {
 	var server models.SMTPServer
 	if err := r.db.Where("workspace_id = ? AND status = ?", workspaceID, models.SMTPStatusEnabled).First(&server).Error; err != nil {
@@ -124,12 +121,7 @@ func (r *SMTPRepository) FindFirstByWorkspaceID(workspaceID uint) (*models.SMTPS
 	return &server, nil
 }
 
-// FindSystem returns the server provisioned from POSTA_SYSTEM_SMTP_*.
-//
-// Status is deliberately not filtered: the platform's own mail is password
-// resets and security alerts, and a dashboard toggle must not be able to lock
-// an operator out of their installation. Whether the platform sends at all is
-// governed by whether POSTA_SYSTEM_SMTP_* is configured.
+// FindSystem ignores status: a dashboard toggle must not lock operators out of password resets and security alerts.
 func (r *SMTPRepository) FindSystem() (*models.SMTPServer, error) {
 	var server models.SMTPServer
 	if err := r.db.Where("is_system = ?", true).Order("id").First(&server).Error; err != nil {
@@ -138,7 +130,6 @@ func (r *SMTPRepository) FindSystem() (*models.SMTPServer, error) {
 	return &server, nil
 }
 
-// SetStatus updates the status, validation error, and validated_at timestamp for a server.
 func (r *SMTPRepository) SetStatus(id uint, status, validationError string) error {
 	return r.db.Model(&models.SMTPServer{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":           status,

@@ -46,13 +46,11 @@ type WorkspaceHandler struct {
 	seeder        workspaceSeeder
 }
 
-// workspaceSeeder fills a new workspace with the default templates, stylesheet,
-// and languages. Optional: without one, workspaces are simply created empty.
+// workspaceSeeder is optional: without one, workspaces are simply created empty.
 type workspaceSeeder interface {
 	SeedWorkspaceDefaults(workspaceID, userID uint, userName string)
 }
 
-// planService is an optional interface for resolving workspace plans and quotas.
 type planService interface {
 	EffectivePlan(workspaceID *uint) *models.Plan
 	CheckWorkspaceQuota(db *gorm.DB, userID uint) error
@@ -66,8 +64,7 @@ func NewWorkspaceHandler(workspaceRepo *repositories.WorkspaceRepository, userRe
 	}
 }
 
-// SetSeeder enables starter content on newly created workspaces. Without one,
-// workspaces are created empty and the seed_defaults flag has no effect.
+// Without a seeder the seed_defaults flag has no effect.
 func (h *WorkspaceHandler) SetSeeder(s workspaceSeeder) { h.seeder = s }
 
 type CreateWorkspaceRequest struct {
@@ -77,11 +74,7 @@ type CreateWorkspaceRequest struct {
 		Slug            string `json:"slug,omitempty" doc:"Deprecated: the identifier before 0.18, now name."`
 		Description     string `json:"description"`
 		DefaultLanguage string `json:"default_language"`
-		// SeedDefaults fills the new workspace with starter templates, a
-		// stylesheet, and languages. Omitted means yes: an empty workspace has
-		// nothing to send and nothing to look at, which is rarely what someone
-		// creating one wants. Send false for a workspace you intend to populate
-		// from an export or the API.
+		// Omitted means yes: an empty workspace is rarely wanted; send false to populate from an export or the API.
 		SeedDefaults *bool `json:"seed_defaults" doc:"Seed starter templates and a stylesheet. Defaults to true."`
 	} `json:"body"`
 }
@@ -133,8 +126,7 @@ type WorkspaceResponse struct {
 	OwnerID     uint   `json:"owner_id"`
 	Role        string `json:"role"`
 	System      bool   `json:"system"`
-	// Deprecated: the personal workspace type was removed; always false. Kept for
-	// one minor release so an older dashboard build keeps parsing the response.
+	// Deprecated: the personal workspace type was removed; always false, kept one release for older dashboards.
 	IsPersonal bool      `json:"is_personal"`
 	CreatedAt  time.Time `json:"created_at"`
 }
@@ -196,7 +188,6 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 		return c.AbortInternalServerError("failed to create workspace")
 	}
 
-	// Add creator as owner
 	member := &models.WorkspaceMember{
 		WorkspaceID: ws.ID,
 		UserID:      uint(userID),
@@ -208,9 +199,7 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 
 	seeded := shouldSeedWorkspace(req.Body.SeedDefaults)
 	if seeded && h.seeder != nil {
-		// Best effort and after the audit-relevant work: a workspace that exists
-		// but has no starter content is a far better outcome than a create call
-		// that fails once the row is already committed.
+		// Best effort: a workspace without starter content beats failing after the row is already committed.
 		h.seeder.SeedWorkspaceDefaults(ws.ID, uint(userID), h.ownerName(uint(userID)))
 	}
 
@@ -230,16 +219,12 @@ func (h *WorkspaceHandler) Create(c *okapi.Context, req *CreateWorkspaceRequest)
 	})
 }
 
-// shouldSeedWorkspace reads the opt-out. Absent means yes: a client that
-// predates the flag, or one that simply does not care, gets the starter content
-// rather than an empty workspace.
+// Absent means yes, so clients that predate the flag get starter content rather than an empty workspace.
 func shouldSeedWorkspace(flag *bool) bool {
 	return flag == nil || *flag
 }
 
-// ownerName resolves the creator's name for the seeded templates' sample data.
-// An empty result is fine: the seeder greets generically rather than naming
-// somebody.
+// An empty result is fine: the seeder greets generically.
 func (h *WorkspaceHandler) ownerName(userID uint) string {
 	if h.userRepo == nil {
 		return ""
@@ -423,7 +408,6 @@ func (h *WorkspaceHandler) UpdateMemberRole(c *okapi.Context, req *UpdateMemberR
 		fmt.Sprintf("Member role changed from %s to %s", oldRole, req.Body.Role),
 		map[string]any{"member_user_id": req.MemberID, "old_role": string(oldRole), "new_role": string(req.Body.Role)})
 
-	// Send role change notification (best-effort)
 	if h.notifier != nil && req.Body.Role != oldRole {
 		ws, _ := h.workspaceRepo.FindByID(uint(wsID))
 		changer, _ := h.userRepo.FindByID(uint(c.GetInt("user_id")))
@@ -480,12 +464,10 @@ func (h *WorkspaceHandler) InviteMember(c *okapi.Context, req *InviteMemberReque
 
 	email := strings.TrimSpace(strings.ToLower(req.Body.Email))
 
-	// Validate role
 	if req.Body.Role == models.WorkspaceRoleOwner {
 		return c.AbortBadRequest("cannot invite as owner")
 	}
 
-	// Check if user is already a member
 	user, _ := h.userRepo.FindByEmail(email)
 	if user != nil {
 		if _, err := h.workspaceRepo.FindMember(uint(wsID), user.ID); err == nil {
@@ -493,7 +475,6 @@ func (h *WorkspaceHandler) InviteMember(c *okapi.Context, req *InviteMemberReque
 		}
 	}
 
-	// Generate invitation token
 	token, err := generateToken()
 	if err != nil {
 		return c.AbortInternalServerError("failed to generate invitation token")
@@ -506,7 +487,7 @@ func (h *WorkspaceHandler) InviteMember(c *okapi.Context, req *InviteMemberReque
 		Token:       token,
 		Status:      models.InvitationStatusPending,
 		InvitedBy:   uint(inviterID),
-		ExpiresAt:   time.Now().Add(7 * 24 * time.Hour), // 7 days
+		ExpiresAt:   time.Now().Add(7 * 24 * time.Hour),
 	}
 
 	if err := h.workspaceRepo.CreateInvitation(inv); err != nil {
@@ -594,10 +575,7 @@ func (h *WorkspaceHandler) DeleteInvitation(c *okapi.Context, req *DeleteInvitat
 		return c.AbortNotFound("invitation not found")
 	}
 
-	// Invitation IDs are global and guessable, so an ID alone does not authorize
-	// the revocation: it must belong to the workspace the caller is acting in.
-	// Report it as missing rather than forbidden so the endpoint cannot be used
-	// to probe which invitation IDs exist in other workspaces.
+	// Invitation IDs are guessable: require this workspace, and answer not-found so other workspaces can't be probed.
 	if inv.WorkspaceID != uint(wsID) {
 		return c.AbortNotFound("invitation not found")
 	}
@@ -663,14 +641,12 @@ func (h *WorkspaceHandler) AcceptInvitation(c *okapi.Context, req *AcceptInvitat
 		return c.AbortForbidden("invitation is for a different email address")
 	}
 
-	// Check not already a member
 	if _, err := h.workspaceRepo.FindMember(inv.WorkspaceID, uint(userID)); err == nil {
 		inv.Status = models.InvitationStatusAccepted
 		_ = h.workspaceRepo.UpdateInvitation(inv)
 		return c.AbortConflict("you are already a member of this workspace")
 	}
 
-	// Add as member
 	member := &models.WorkspaceMember{
 		WorkspaceID: inv.WorkspaceID,
 		UserID:      uint(userID),
@@ -700,7 +676,6 @@ type DeclineInvitationByIDRequest struct {
 	ID int `param:"id"`
 }
 
-// AcceptInvitationByID accepts an invitation by its ID (for logged-in users viewing their invitations).
 func (h *WorkspaceHandler) AcceptInvitationByID(c *okapi.Context, req *AcceptInvitationByIDRequest) error {
 	userID := c.GetInt("user_id")
 
@@ -727,7 +702,6 @@ func (h *WorkspaceHandler) AcceptInvitationByID(c *okapi.Context, req *AcceptInv
 		return c.AbortForbidden("invitation is for a different email address")
 	}
 
-	// Check not already a member
 	if _, err := h.workspaceRepo.FindMember(inv.WorkspaceID, uint(userID)); err == nil {
 		inv.Status = models.InvitationStatusAccepted
 		_ = h.workspaceRepo.UpdateInvitation(inv)
@@ -755,7 +729,6 @@ func (h *WorkspaceHandler) AcceptInvitationByID(c *okapi.Context, req *AcceptInv
 	})
 }
 
-// DeclineInvitationByID declines an invitation by its ID.
 func (h *WorkspaceHandler) DeclineInvitationByID(c *okapi.Context, req *DeclineInvitationByIDRequest) error {
 	userID := c.GetInt("user_id")
 
@@ -807,12 +780,10 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// SetPlanService sets the plan service for workspace plan resolution.
 func (h *WorkspaceHandler) SetPlanService(ps planService) {
 	h.planService = ps
 }
 
-// SetNotifier sets the notification service for sending invitation and role change emails.
 func (h *WorkspaceHandler) SetNotifier(n *notification.Service, appURL string) {
 	h.notifier = n
 	h.appURL = appURL
@@ -829,7 +800,6 @@ func (h *WorkspaceHandler) logAudit(c *okapi.Context, workspaceID uint, action, 
 	h.audit.LogCtxScoped(c, workspaceID, action, message, metadata)
 }
 
-// GetPlan returns the effective plan for the current workspace.
 func (h *WorkspaceHandler) GetPlan(c *okapi.Context) error {
 	wsID := uint(c.GetInt("workspace_id"))
 	if h.planService == nil {

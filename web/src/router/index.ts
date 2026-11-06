@@ -102,15 +102,13 @@ const routes = [
       { path: 'about', name: 'about', component: () => import('../views/about/About.vue'), meta: { title: 'About' } },
       { path: 'profile', name: 'profile', component: () => import('../views/auth/Profile.vue'), meta: { title: 'Profile' } },
       { path: 'change-password', redirect: '/profile' },
-      // Admin
       { path: 'notifications', name: 'notifications', component: () => import('../views/Notifications.vue'), meta: { title: 'Notifications' } },
       // The platform console's home, so the switcher and bookmarks have a stable entry point.
       { path: 'admin', redirect: '/admin/dashboard' },
       { path: 'admin/users', name: 'admin-users', component: () => import('../views/admin/Users.vue'), meta: { admin: true, title: 'Admin · Users' } },
       { path: 'admin/users/:id', name: 'admin-user-detail', component: () => import('../views/admin/UserDetail.vue'), meta: { admin: true, title: 'Admin · User' } },
       { path: 'admin/dashboard', name: 'admin-dashboard', component: () => import('../views/admin/Dashboard.vue'), meta: { admin: true, title: 'Admin · Dashboard' } },
-      // The page was called Metrics until it grew a health summary and quick
-      // links; keep the old path working for bookmarks and muscle memory.
+      // Old path from when the page was called Metrics; kept for bookmarks.
       { path: 'admin/metrics', redirect: '/admin/dashboard' },
       { path: 'admin/announcements', name: 'admin-announcements', component: () => import('../views/admin/Announcements.vue'), meta: { admin: true, title: 'Admin · Announcements' } },
       { path: 'admin/workspaces', name: 'admin-workspaces', component: () => import('../views/admin/Workspaces.vue'), meta: { admin: true, title: 'Admin · Workspaces' } },
@@ -156,11 +154,7 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // Resolve the active workspace before any authenticated view mounts, so the
-  // X-Posta-Workspace-Id header is set on its first scoped request. Without
-  // this, on a fresh login the dashboard's stats/emails calls race the
-  // (unawaited) fetchWorkspaces() and go out header-less. Runs once — later
-  // navigations reuse the already-loaded store.
+  // Resolve the active workspace before any authenticated view mounts, or the first scoped requests race fetchWorkspaces() and go out without the header.
   if (to.meta.auth && auth.isAuthenticated) {
     const ws = useWorkspaceStore()
     if (ws.workspaces.length === 0) {

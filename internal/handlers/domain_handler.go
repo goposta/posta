@@ -58,7 +58,6 @@ func NewDomainHandler(repo *repositories.DomainRepository) *DomainHandler {
 	return &DomainHandler{repo: repo}
 }
 
-// SetQuota sets the quota checker for plan-based resource limits.
 func (h *DomainHandler) SetQuota(q QuotaChecker, db *gorm.DB) {
 	h.quota = q
 	h.db = db

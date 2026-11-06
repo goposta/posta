@@ -28,7 +28,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// RuleMatch says whether a rule needs all of its conditions or any one.
 type RuleMatch string
 
 const (
@@ -36,16 +35,14 @@ const (
 	RuleMatchAny RuleMatch = "any"
 )
 
-// RuleCondition tests one answer, or one built-in fact named with a leading
-// $ ($origin, $referer, $sender_email, $spam_score, $status).
+// RuleCondition tests one answer or a $-prefixed fact: $origin, $referer, $sender_email, $spam_score, $status.
 type RuleCondition struct {
 	Field string `json:"field"`
 	Op    string `json:"op"`
 	Value any    `json:"value,omitempty"`
 }
 
-// Rule action types. None of them reads a destination from submission data:
-// every address, member, team and webhook is chosen by an admin.
+// No rule action reads a destination from submission data: every target is chosen by an admin.
 const (
 	ActionNotifyEmails    = "notify_emails"
 	ActionNotifyMembers   = "notify_members"
@@ -104,9 +101,7 @@ func (r *RuleActions) Scan(value any) error {
 	return json.Unmarshal(raw, r)
 }
 
-// FormRule routes a form's submissions: when its conditions hold, its
-// actions apply. Rules run in Position order and every match applies, unless
-// a matching rule has Stop set.
+// Rules run in Position order and every match applies, unless a matching rule has Stop set.
 type FormRule struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	UUID        string         `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
@@ -130,8 +125,7 @@ type FormRule struct {
 	Form *Form `json:"-" gorm:"foreignKey:FormID;constraint:OnDelete:CASCADE"`
 }
 
-// Team is a named group of workspace members that rules can notify or
-// assign submissions to, with an optional shared address.
+// Team is a named group of workspace members that rules notify or assign to, with an optional shared address.
 type Team struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	UUID        string         `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
@@ -145,15 +139,13 @@ type Team struct {
 	Members []TeamMember `json:"members,omitempty" gorm:"foreignKey:TeamID;constraint:OnDelete:CASCADE"`
 }
 
-// TeamMember puts a workspace member on a team. Removing someone from the
-// workspace removes their team memberships with it.
+// Removing someone from the workspace removes their team memberships with it.
 type TeamMember struct {
 	TeamID uint      `json:"team_id" gorm:"primaryKey"`
 	UserID uint      `json:"user_id" gorm:"primaryKey"`
 	User   *ActorRef `json:"user,omitempty" gorm:"->;foreignKey:UserID;references:ID;constraint:false"`
 }
 
-// TeamRef is the small view of a team embedded in a message.
 type TeamRef struct {
 	ID   uint   `json:"id"`
 	Name string `json:"name"`
@@ -161,11 +153,9 @@ type TeamRef struct {
 
 func (TeamRef) TableName() string { return "teams" }
 
-// RuleRef names a rule that routed a submission.
 type RuleRef struct {
 	UUID string `json:"uuid"`
 	Name string `json:"name"`
 }
 
-// RuleUUIDs is a message's matched rules.
 type RuleUUIDs = pq.StringArray

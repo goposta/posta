@@ -47,8 +47,7 @@ type DeleteWebhookRequest struct {
 	ID int `param:"id"`
 }
 
-// NewWebhookHandler takes the policy deliveries are sent under, so a URL that
-// could never be delivered to is refused when it is saved.
+// NewWebhookHandler takes the delivery policy so a URL that could never be delivered to is refused on save.
 func NewWebhookHandler(repo *repositories.WebhookRepository, audit *audit.Logger, network netguard.Policy) *WebhookHandler {
 	return &WebhookHandler{repo: repo, audit: audit, network: network}
 }
@@ -59,13 +58,11 @@ func (h *WebhookHandler) Create(c *okapi.Context, req *CreateWebhookRequest) err
 	}
 	scope := getScope(c)
 
-	// Deliveries are checked again as they connect; this gives the error at
-	// once instead of a failed delivery later.
+	// Deliveries are checked again as they connect; this gives the error at once instead of a failed delivery.
 	if err := h.network.CheckURL(c.Request().Context(), req.Body.URL); err != nil {
 		return c.AbortBadRequest("webhook URL not allowed: " + err.Error())
 	}
 
-	// Generate a random signing secret for HMAC webhook signatures
 	secretBytes := make([]byte, 32)
 	if _, err := rand.Read(secretBytes); err != nil {
 		return c.AbortInternalServerError("failed to generate webhook secret", err)

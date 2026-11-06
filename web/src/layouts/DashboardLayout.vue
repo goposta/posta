@@ -47,9 +47,7 @@ const toggleSidebar = () => {
   localStorage.setItem('posta_sidebar_collapsed', String(sidebarCollapsed.value))
 }
 
-// New-release notice (platform admins only). Dismissal is stored server-side
-// against the version, not in localStorage: it must survive a browser change and
-// it must come back when the *next* version lands.
+// Dismissal is stored server-side per version: it must survive a browser change and return when the next version lands.
 const update = ref<UpdateInfo | null>(null)
 const showUpdateBanner = computed(() => auth.isAdmin && update.value?.update_available === true)
 
@@ -62,8 +60,6 @@ async function loadUpdate() {
   }
 }
 
-// License warnings (platform admins only): expiring, expired, or bound to
-// another installation. Each links to the License page.
 const licenseWarnings = ref<string[]>([])
 const LICENSE_WARNINGS: Record<string, { title: string; text: string; variant: string }> = {
   nearing_expiry: {
@@ -159,7 +155,6 @@ interface NavItem {
   workspaceSubpath?: string
   /** Additional route path prefixes that should keep this item highlighted (grouped tab pages). */
   matchPaths?: string[]
-  /** Nested items shown indented under this entry. */
   children?: NavItem[]
 }
 
@@ -173,8 +168,6 @@ interface NavSection {
   defaultOpen?: boolean
 }
 
-// The workspace console's navigation. Platform administration is a separate
-// console with its own sections (adminNavSections), entered from the switcher.
 const workspaceNavSections: NavSection[] = [
   {
     id: 'overview',
@@ -270,9 +263,7 @@ const workspaceNavSections: NavSection[] = [
   },
 ]
 
-// The platform console's navigation. Grouped rather than one flat "Admin" list
-// appended to the workspace menu, so a tenant's resources and the whole
-// server's never share a sidebar.
+// Its own console so a tenant's resources and the whole server's never share a sidebar.
 const adminNavSections: NavSection[] = [
   {
     id: 'admin-overview',
@@ -319,8 +310,7 @@ const adminNavSections: NavSection[] = [
   },
 ]
 
-// Which console the current route belongs to. The router decides access
-// (meta.admin); this only picks the sidebar and the switcher's identity.
+// The router decides access (meta.admin); this only picks the sidebar and the switcher's identity.
 const ADMIN_HOME = '/admin'
 const isAdminConsole = computed(() => route.path === ADMIN_HOME || route.path.startsWith(ADMIN_HOME + '/'))
 const consoleHome = computed(() => (isAdminConsole.value ? ADMIN_HOME : '/'))
@@ -369,8 +359,7 @@ const visibleSections = computed(() =>
   })
 )
 
-// Where each console was last left, so switching back lands there rather than
-// on its home. Per device by design: "where was I", not a preference.
+// Where each console was last left; per device by design ("where was I", not a preference).
 const RETURN_KEYS = { workspace: 'posta_return_workspace', admin: 'posta_return_admin' } as const
 
 function rememberRoute(key: string, path: string) {
@@ -419,7 +408,6 @@ function sectionItems(section: NavSection): NavItem[] {
   })
 }
 
-/** Resolve the effective target of an item (handles workspace tab deep-links). */
 function itemTo(item: NavItem): string {
   if (item.workspaceSubpath) {
     return `/workspaces/${wsStore.currentWorkspaceId}/${item.workspaceSubpath}`
@@ -445,8 +433,7 @@ function isItemActive(item: NavItem): boolean {
       (route.query.tab || 'settings') === item.workspaceTab
     )
   }
-  // "Manage Workspaces…" should only highlight on the list page itself,
-  // not on a workspace detail/tab page.
+  // "Manage Workspaces…" highlights only on the list page itself, not on a workspace detail/tab page.
   if (item.path === '/workspaces') return route.path === '/workspaces'
   if (item.matchPaths?.some((p) => route.path === p || route.path.startsWith(p + '/'))) return true
   return isActive(item.path)
@@ -540,7 +527,6 @@ function getIcon(name: string): string {
           </button>
 
         </div>
-        <!-- Workspace Switcher -->
         <div class="ws-switcher">
           <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
             <div class="ws-switcher-current">
@@ -572,8 +558,6 @@ function getIcon(name: string): string {
               <span class="nav-icon" v-html="getIcon('briefcase')"></span>
               <span>Manage workspaces…</span>
             </div>
-            <!-- The platform is not a workspace, so it sits below its own rule
-                 rather than as one more row in the list above. -->
             <template v-if="auth.isAdmin">
               <div class="ws-switcher-divider"></div>
               <div v-if="isAdminConsole" class="ws-switcher-action" @click="leaveAdmin">
@@ -626,7 +610,6 @@ function getIcon(name: string): string {
     <div class="main-wrapper">
       <header class="topbar">
         <div class="topbar-left">
-          <!-- Mobile menu button -->
           <button class="mobile-menu-btn" @click="mobileOpen = true">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -729,8 +712,6 @@ function getIcon(name: string): string {
       </header>
       <main class="main-content">
         <EmailVerificationBanner />
-        <!-- A newer Posta release exists (platform admins). Links to the release
-             notes; it never upgrades anything on its own. -->
         <div v-if="showUpdateBanner" class="app-banner app-banner--success">
           <svg class="app-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -782,12 +763,10 @@ function getIcon(name: string): string {
         </div>
       </footer>
     </div>
-    <!-- Mobile sidebar overlay -->
     <Transition name="overlay-fade">
       <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false" />
     </Transition>
 
-    <!-- Mobile sidebar -->
     <Transition name="sidebar-slide">
       <aside v-if="mobileOpen" class="sidebar sidebar-mobile">
         <div class="sidebar-header">
@@ -802,7 +781,6 @@ function getIcon(name: string): string {
           </button>
         </div>
 
-        <!-- ws Switcher (mobile) -->
         <div class="ws-switcher">
           <div class="ws-switcher-toggle" @click="wsSwitcherOpen = !wsSwitcherOpen">
             <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
@@ -903,7 +881,6 @@ function getIcon(name: string): string {
   background: var(--bg-secondary);
 }
 
-/* ─── Sidebar ─── */
 .sidebar {
   position: fixed;
   top: 0;
@@ -921,10 +898,7 @@ function getIcon(name: string): string {
   width: 64px;
 }
 
-/* The platform console's sidebar carries a Signal Purple wash (the brand
-   accent) so the console you are in reads at a glance: deleting a workspace's
-   template and deleting a user look alike otherwise, and only one of them is
-   scoped to a single tenant. */
+/* The platform console is tinted so you can tell at a glance which scope a destructive action hits. */
 .console-admin .sidebar {
   background:
     linear-gradient(to bottom,
@@ -1029,7 +1003,6 @@ function getIcon(name: string): string {
   z-index: 999;
 }
 
-/* ─── Navigation ─── */
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
@@ -1116,7 +1089,6 @@ function getIcon(name: string): string {
   overflow: hidden;
 }
 
-/* Banners above the page (new release, license) keep clear of its heading. */
 .main-content > .app-banner {
   margin-bottom: 20px;
 }
@@ -1171,7 +1143,6 @@ function getIcon(name: string): string {
   padding: 9px;
 }
 
-/* ─── Main wrapper ─── */
 .main-wrapper {
   flex: 1;
   margin-left: 240px;
@@ -1185,7 +1156,6 @@ function getIcon(name: string): string {
   margin-left: 64px;
 }
 
-/* ─── Top bar ─── */
 .topbar {
   position: sticky;
   top: 0;
@@ -1230,7 +1200,6 @@ function getIcon(name: string): string {
   margin-left: auto;
 }
 
-/* Workspace Switcher */
 .ws-switcher {
   padding: 0 8px 8px;
   position: relative;
@@ -1383,7 +1352,6 @@ function getIcon(name: string): string {
   line-height: 1;
 }
 
-/* ─── User menu ─── */
 .user-menu {
   position: relative;
 }
@@ -1436,7 +1404,6 @@ function getIcon(name: string): string {
   white-space: nowrap;
 }
 
-/* ─── User dropdown ─── */
 .user-dropdown {
   position: absolute;
   top: calc(100% + 6px);
@@ -1513,7 +1480,6 @@ function getIcon(name: string): string {
   color: var(--danger-700);
 }
 
-/* ─── Theme switcher ─── */
 .user-dropdown-theme {
   padding: 10px 16px;
   display: flex;
@@ -1558,7 +1524,6 @@ function getIcon(name: string): string {
   box-shadow: var(--shadow-sm);
 }
 
-/* ─── Main content ─── */
 .main-content {
   flex: 1;
   padding: 28px;
@@ -1569,7 +1534,6 @@ function getIcon(name: string): string {
   color: var(--warning-600);
 }
 
-/* ─── Footer ─── */
 .main-footer {
   display: flex;
   align-items: center;
@@ -1608,7 +1572,6 @@ function getIcon(name: string): string {
   color: var(--text-primary);
 }
 
-/* ─── Mobile overlay ─── */
 .sidebar-overlay {
   position: fixed;
   inset: 0;
@@ -1769,7 +1732,6 @@ function getIcon(name: string): string {
   transform: translateX(-100%);
 }
 
-/* ─── Responsive ─── */
 @media (max-width: 1024px) {
   .sidebar:not(.sidebar-mobile) {
     display: none;
@@ -1811,7 +1773,6 @@ function getIcon(name: string): string {
   }
 }
 
-/* ─── ws Switcher ─── */
 .ws-switcher {
   padding: 0 8px 8px;
   position: relative;

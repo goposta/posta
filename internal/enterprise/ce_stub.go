@@ -13,7 +13,5 @@ package enterprise
 
 import "gorm.io/gorm"
 
-// New returns the Community stub: every Enterprise feature is refused and no
-// license-verification code is linked. This is the only implementation
-// compiled without the `enterprise` build tag.
+// New is the only implementation without the enterprise tag: it refuses everything and links no verifier.
 func New(*gorm.DB, Options) EE { return community{} }

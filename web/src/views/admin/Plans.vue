@@ -21,8 +21,7 @@ const plans = ref<Plan[]>([])
 const loading = ref(true)
 const currentPage = ref(0)
 
-// Posta Community configures three plans; more need Enterprise. A search
-// filters the page total, so the unfiltered count is kept apart.
+// A search filters the page total, so the unfiltered count is kept apart for the Community three-plan limit.
 const COMMUNITY_PLANS = 3
 const planTotal = ref(0)
 const atCommunityLimit = computed(() => !license.mutable && planTotal.value >= COMMUNITY_PLANS)
@@ -65,7 +64,6 @@ const { pageable, goToPage } = usePagination(async (page) => {
   }
 })
 
-// Debounce keystrokes, then reset to the first page of results.
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => goToPage(0), 300)
@@ -265,7 +263,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Create/Edit Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop style="max-width: 640px">
         <div class="modal-header">

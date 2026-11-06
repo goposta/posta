@@ -76,7 +76,6 @@ func NewEmailHandler(service *email.Service, emailRepo *repositories.EmailReposi
 
 func (h *EmailHandler) SetSettings(s *settings.Provider) { h.settings = s }
 
-// redactContent returns true if email body content should be hidden.
 func (h *EmailHandler) redactContent() bool {
 	if h.settings != nil && h.settings.EmailContentVisibility() {
 		return false
@@ -143,7 +142,6 @@ func (h *EmailHandler) Send(c *okapi.Context, req *SendEmailRequest) error {
 	resp, err := h.service.Send(c.Request().Context(), uint(userID), uint(apiKeyID), scope.WorkspaceID, userEmail, &req.Body)
 	if err != nil {
 		if resp := mapUnsubscribeError(c, err); resp != nil {
-			// Call abort here
 			return resp
 		}
 		if isRateLimitError(err) {
@@ -155,7 +153,6 @@ func (h *EmailHandler) Send(c *okapi.Context, req *SendEmailRequest) error {
 		return c.AbortInternalServerError(err.Error())
 	}
 
-	// Invalidate dashboard and metrics caches after queuing
 	h.cache.InvalidateUser(c.Request().Context(), userID)
 	h.cache.InvalidateAnalytics(c.Request().Context())
 
@@ -319,7 +316,6 @@ func (h *EmailHandler) Get(c *okapi.Context, req *GetEmailRequest) error {
 		return c.AbortNotFound("email not found")
 	}
 
-	// Surface the name of the API key used to send this email (if still linked).
 	if em.APIKeyID != nil {
 		em.APIKeyName = em.APIKey.Name
 	}
@@ -331,7 +327,6 @@ func (h *EmailHandler) Get(c *okapi.Context, req *GetEmailRequest) error {
 	return ok(c, em)
 }
 
-// EmailStatusResponse is a lightweight view of an email's delivery status.
 type EmailStatusResponse struct {
 	ID           string             `json:"id"`
 	Status       models.EmailStatus `json:"status"`
@@ -341,7 +336,6 @@ type EmailStatusResponse struct {
 	SentAt       *string            `json:"sent_at,omitempty"`
 }
 
-// GetStatus returns only the delivery status of an email (owner only).
 func (h *EmailHandler) GetStatus(c *okapi.Context, req *GetEmailRequest) error {
 	em, err := h.emailRepo.FindByUUID(req.ID)
 	if err != nil || !ownsResource(c, em.UserID, em.WorkspaceID) {
@@ -363,7 +357,6 @@ func (h *EmailHandler) GetStatus(c *okapi.Context, req *GetEmailRequest) error {
 	return ok(c, resp)
 }
 
-// Retry re-enqueues a failed email for another delivery attempt.
 func (h *EmailHandler) Retry(c *okapi.Context, req *GetEmailRequest) error {
 	userID := c.GetInt("user_id")
 	scope := getScope(c)
@@ -377,7 +370,6 @@ func (h *EmailHandler) Retry(c *okapi.Context, req *GetEmailRequest) error {
 	return ok(c, resp)
 }
 
-// Dev mode handlers
 func (h *EmailHandler) DevList(c *okapi.Context, req *ListRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 

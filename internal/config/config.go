@@ -51,8 +51,7 @@ type Config struct {
 	RateLimitDaily       int
 	AuthRateLimitEnabled bool
 
-	// Email verification (POST /api/v1/emails/verify). Results are cached in
-	// Redis to avoid re-checking the same address/domain on every call.
+	// Email verification results are cached in Redis per address/domain to avoid re-checking.
 	EmailVerifyEnabled         bool
 	EmailVerifyCacheTTLHours   int
 	EmailVerifyMXCacheTTLHours int
@@ -60,76 +59,49 @@ type Config struct {
 	AdminEmail                 string
 	AdminPassword              string
 	OpenAPIDocs                bool
-	// AllowDowngrade lets the server boot even when the binary's version is
-	// older than the version recorded in the database. Off by default.
+	// AllowDowngrade lets the server boot on a binary older than the version recorded in the database.
 	AllowDowngrade  bool
 	securitySchemes okapi.SecuritySchemes
 
 	MetricsEnabled bool
 
-	// UpdateCheck enables the daily "is there a newer release?" query to GitHub.
-	// It only ever reads a public release list and reports the answer to platform
-	// admins; it never upgrades anything and sends nothing about this install.
+	// UpdateCheck only reads GitHub's public release list; it never upgrades and sends nothing about this install.
 	UpdateCheck bool
 
 	PlanEnforcement bool
 
-	// WebDir overrides where the dashboard is served from. The UI is normally
-	// embedded in the binary (internal/web); setting POSTA_WEB_DIR serves it from
-	// this directory instead, for frontend development or a customized build.
+	// WebDir (POSTA_WEB_DIR) serves the dashboard from disk instead of the embedded UI.
 	WebDir     string
 	AppWebURL  string
 	ApiBaseURL string
-	// CORSOrigins is POSTA_CORS_ORIGINS as given. When empty, the allowed
-	// origins are derived from AppWebURL and ApiBaseURL; see AllowedCORSOrigins.
+	// CORSOrigins left empty derives the allowed origins from AppWebURL and ApiBaseURL; see AllowedCORSOrigins.
 	CORSOrigins string
 
-	// TrustedProxies lists the CIDR blocks or addresses of the reverse proxies
-	// in front of Posta. X-Forwarded-For and X-Real-IP are honoured only on
-	// connections from one of them. Left empty, the headers are trusted from
-	// any peer, so a client can choose the IP that rate limits, API key IP
-	// allow-lists and the audit log see.
+	// Forwarded IP headers are honoured only from TrustedProxies; empty trusts any peer, letting clients spoof their IP.
 	TrustedProxies []string
 
-	// Worker settings
 	EmbeddedWorker    bool
 	WorkerConcurrency int
 	WorkerMaxRetries  int
-	// WorkerHealthEnabled and WorkerHealthPort control the probe and metrics
-	// listener a dedicated worker exposes. It is on by default: a worker with no
-	// probes cannot be health-checked by an orchestrator, which is the reason
-	// the listener exists.
-	//
-	// The port defaults to POSTA_PORT, the same one the server uses. Server and
-	// worker run as separate containers, so there is nothing to collide with,
-	// and one port means one health check command and one EXPOSE for both.
+	// The probe listener defaults to POSTA_PORT: server and worker run in separate containers, so nothing collides.
 	WorkerHealthEnabled bool
 	WorkerHealthPort    int
 
-	// AutoSuppressOnReject adds a recipient to the suppression list when an
-	// outbound send is permanently rejected (5xx at RCPT TO, e.g. 550 user
-	// unknown), and stops retrying that message.
+	// AutoSuppressOnReject suppresses the recipient and stops retrying on a permanent 5xx RCPT TO rejection.
 	AutoSuppressOnReject bool
 
-	// Webhook settings
 	WebhookMaxRetries  int
 	WebhookTimeoutSecs int
 	WebhookProxyURL    string
-	// WebhookNetwork decides which addresses webhook URLs may reach: by
-	// default not private or reserved ones (POSTA_WEBHOOK_ALLOW_PRIVATE_NETWORKS,
-	// POSTA_WEBHOOK_ALLOWED_NETWORKS).
+	// WebhookNetwork blocks private and reserved addresses for webhook URLs by default.
 	WebhookNetwork netguard.Policy
-	// SMTPNetwork does the same for workspace SMTP servers, which may reach
-	// private addresses by default, a relay on the same host being common
-	// (POSTA_SMTP_ALLOW_PRIVATE_NETWORKS, POSTA_SMTP_ALLOWED_NETWORKS).
+	// SMTPNetwork allows private addresses by default, since a relay on the same host is common.
 	SMTPNetwork netguard.Policy
 
-	// OAuth settings
 	GoogleOAuthClientID     string
 	GoogleOAuthClientSecret string
 	OAuthCallbackBaseURL    string
 
-	// System SMTP for platform notifications (daily reports, invitations, etc.)
 	SystemSMTP SystemSMTPConfig
 
 	EmailVerificationRequired bool
@@ -137,12 +109,10 @@ type Config struct {
 	// Encryption key for SMTP password encryption (if empty, base64 encoding is used)
 	EncryptionKey string
 
-	// Posta Enterprise license to install at boot when none is stored: the
-	// token itself, or a file holding it.
+	// License is installed at boot when none is stored: the token itself, or a file holding it.
 	License     string
 	LicenseFile string
 
-	// Blob storage settings (S3-compatible or filesystem)
 	BlobProvider    string
 	BlobS3Endpoint  string
 	BlobS3Region    string
@@ -153,7 +123,6 @@ type Config struct {
 	BlobS3PathStyle bool
 	BlobFSPath      string
 
-	// Inbound email settings
 	InboundEnabled        bool
 	InboundSMTPHost       string
 	InboundSMTPPort       int
@@ -167,7 +136,6 @@ type Config struct {
 	InboundSMTPRateLimit  int // per-IP max sessions per window; 0 disables
 	InboundSMTPRateWindow int // rate-limit window in seconds
 
-	// Web form message settings
 	MessagesEnabled           bool
 	MessagesMaxBodyBytes      int64
 	MessagesMaxAttachSize     int64
@@ -178,7 +146,6 @@ type Config struct {
 	MessagesPerWorkspaceDaily int
 	MessagesInboundDomain     string
 
-	// SMTP Relay settings.
 	SMTPRelayEnabled        bool
 	SMTPRelayHost           string
 	SMTPRelayPort           int
@@ -225,8 +192,7 @@ type RedisConfig struct {
 	TLSConfig *tls.Config
 }
 
-// newRedisConfig reads Redis settings from the env; POSTA_REDIS_URL, if set,
-// is parsed and overrides the discrete POSTA_REDIS_* vars (mirrors POSTA_DB_URL).
+// POSTA_REDIS_URL, if set, overrides the discrete POSTA_REDIS_* vars (mirrors POSTA_DB_URL).
 func newRedisConfig() RedisConfig {
 	rc := RedisConfig{
 		Addr:     goutils.Env("POSTA_REDIS_ADDR", "localhost:6379"),
@@ -249,7 +215,6 @@ func newRedisConfig() RedisConfig {
 	return rc
 }
 
-// RedisOptions returns the go-redis client options.
 func (r RedisConfig) RedisOptions() *redis.Options {
 	return &redis.Options{
 		Addr:      r.Addr,
@@ -260,7 +225,6 @@ func (r RedisConfig) RedisOptions() *redis.Options {
 	}
 }
 
-// AsynqRedisOpt returns the Asynq Redis connection options.
 func (r RedisConfig) AsynqRedisOpt() asynq.RedisClientOpt {
 	return asynq.RedisClientOpt{
 		Addr:      r.Addr,
@@ -405,8 +369,7 @@ func New() *Config {
 	}
 }
 
-// removedEnvVars are settings that no longer do anything. Setting one is not an
-// error, but it is worth telling the operator so they can clean up.
+// removedEnvVars no longer do anything; setting one only warns so the operator can clean up.
 var removedEnvVars = map[string]string{
 	"POSTA_WORKSPACE_ONLY_MODE": "every resource is workspace-scoped unconditionally; the flag no longer does anything",
 }
@@ -443,8 +406,7 @@ func (c *Config) validate() error {
 			return fmt.Errorf("unsupported POSTA_SMTP_RELAY_TLS_MODE %q (use none or starttls)", c.SMTPRelayTLSMode)
 		}
 	}
-	// okapi drops an invalid list and trusts no proxy, which would quietly
-	// collapse every client onto the proxy's address. Refuse to start instead.
+	// okapi drops an invalid list and trusts no proxy, collapsing every client onto the proxy IP, so refuse to start.
 	for _, entry := range c.TrustedProxies {
 		if !validProxyEntry(entry) {
 			return fmt.Errorf("invalid POSTA_TRUSTED_PROXIES entry %q (expected a CIDR block or IP address)", entry)
@@ -457,8 +419,7 @@ func (c *Config) validateWorker() error {
 	return c.ValidateWorker()
 }
 
-// OpenAPISecuritySchemes are the security schemes the API documentation
-// declares. Routes reference them by name with WithSecurity.
+// OpenAPISecuritySchemes are referenced by name from routes via WithSecurity.
 func OpenAPISecuritySchemes() okapi.SecuritySchemes {
 	return okapi.SecuritySchemes{
 		// Dashboard / JWT-authenticated endpoints.
@@ -484,14 +445,11 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	if err := c.validate(); err != nil {
 		return err
 	}
-	// Initialize global logger
 	l := c.initLogger()
 	c.WarnInsecureConfig()
-	// Dev mode
 	if c.DevMode {
 		app.WithDebug()
 	}
-	// Set Port
 	app.WithPort(c.Port)
 	app.WithLogger(l.Logger)
 	app.WithTrustedProxies(c.TrustedProxies...)
@@ -537,15 +495,12 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	return nil
 }
 func (c *Config) InitWorker() error {
-	// Initialize global logger
 	c.initLogger()
 	c.WarnInsecureWorkerConfig()
 	return c.validateWorker()
 }
 
-// networkPolicy reads a netguard policy from the environment, stopping on an
-// allowed network that does not parse rather than running with a policy
-// other than the one configured.
+// networkPolicy stops on an unparseable allowed network rather than run with a policy other than the configured one.
 func networkPolicy(prefix string, allowPrivate bool) netguard.Policy {
 	p, err := netguard.FromEnv(prefix, allowPrivate)
 	if err != nil {
@@ -582,9 +537,7 @@ func (c *Config) InitStorage() {
 
 }
 
-// AllowedCORSOrigins returns POSTA_CORS_ORIGINS when set, otherwise the origins
-// of POSTA_WEB_URL and POSTA_API_URL. With none of them set the list is empty
-// and only same-origin requests (the embedded dashboard) are served.
+// AllowedCORSOrigins falls back to the POSTA_WEB_URL/POSTA_API_URL origins; empty means same-origin only.
 func (c *Config) AllowedCORSOrigins() []string {
 	if origins := splitList(c.CORSOrigins); len(origins) > 0 {
 		return origins
@@ -603,12 +556,9 @@ func (c *Config) AllowedCORSOrigins() []string {
 	return origins
 }
 
-// maxRequestBody caps JSON request bodies. okapi's 8 MB default is below what
-// the send API accepts: email.DefaultMaxTotalSize allows 25 MB of attachments,
-// which arrive base64-encoded (~33 MB), plus the message bodies themselves.
+// okapi's 8 MB default is too small: 25 MB of attachments arrive base64-encoded (~33 MB) plus the bodies.
 const maxRequestBody = 40 << 20
 
-// splitList parses a comma-separated env value, dropping blank entries.
 func splitList(raw string) []string {
 	var out []string
 	for _, part := range strings.Split(raw, ",") {

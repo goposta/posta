@@ -25,10 +25,8 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// SeedDefaultSettings creates default platform settings if they don't already exist.
 func SeedDefaultSettings(repo *repositories.SettingRepository) {
-	// Content-retention windows default to the record retention so that an upgrade
-	// never starts scrubbing content earlier than emails were already kept.
+	// Content retention defaults to record retention so an upgrade never scrubs content earlier than before.
 	retentionDays := "30"
 	if s, err := repo.FindByKey("retention_days"); err == nil && s.Value != "" {
 		retentionDays = s.Value

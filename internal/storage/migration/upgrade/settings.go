@@ -27,8 +27,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// readVersion returns the stored app version. The fresh flag is true when no
-// app.version row exists yet
+// readVersion reports fresh when no app.version row exists yet.
 func readVersion(db *gorm.DB) (version string, fresh bool, err error) {
 	var s models.Setting
 	err = db.Where("key = ?", KeyAppVersion).First(&s).Error
@@ -41,9 +40,7 @@ func readVersion(db *gorm.DB) (version string, fresh bool, err error) {
 	return s.Value, false, nil
 }
 
-// writeVersion updates the app.version and app.last_started_at settings rows
-// in a single transaction. It also creates app.first_started_at on first
-// successful boot.
+// writeVersion also creates app.first_started_at on the first successful boot.
 func writeVersion(db *gorm.DB, version string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	return db.Transaction(func(tx *gorm.DB) error {
@@ -57,7 +54,6 @@ func writeVersion(db *gorm.DB, version string) error {
 	})
 }
 
-// upsertSetting writes a string value, replacing any existing row for the key.
 func upsertSetting(tx *gorm.DB, key, value string) error {
 	var existing models.Setting
 	err := tx.Where("key = ?", key).First(&existing).Error
@@ -72,7 +68,6 @@ func upsertSetting(tx *gorm.DB, key, value string) error {
 	return tx.Save(&existing).Error
 }
 
-// ensureSetting inserts the row only if it does not already exist.
 func ensureSetting(tx *gorm.DB, key, value string) error {
 	var existing models.Setting
 	err := tx.Where("key = ?", key).First(&existing).Error

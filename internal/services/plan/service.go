@@ -29,7 +29,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Resource type constants for quota enforcement.
 const (
 	ResourceAPIKey     = "api_keys"
 	ResourceDomain     = "domains"
@@ -37,8 +36,7 @@ const (
 	ResourceWorkspace  = "workspaces"
 )
 
-// Limits holds the effective limits for a given scope.
-// A value of 0 means unlimited.
+// Limits holds the effective limits for a scope; a value of 0 means unlimited.
 type Limits struct {
 	HourlyRateLimit       int
 	DailyRateLimit        int
@@ -51,13 +49,11 @@ type Limits struct {
 	EmailLogRetentionDays int
 }
 
-// Service resolves effective plan limits and enforces resource quotas.
 type Service struct {
 	planRepo *repositories.PlanRepository
 	settings *settings.Provider
 }
 
-// NewService creates a new plan service.
 func NewService(planRepo *repositories.PlanRepository, settings *settings.Provider) *Service {
 	return &Service{
 		planRepo: planRepo,
@@ -65,8 +61,7 @@ func NewService(planRepo *repositories.PlanRepository, settings *settings.Provid
 	}
 }
 
-// EffectiveLimits resolves the limits for a given workspace.
-// Priority: workspace plan -> default plan -> global settings.
+// EffectiveLimits resolves the workspace plan, then the default plan, then global settings.
 func (s *Service) EffectiveLimits(workspaceID *uint) *Limits {
 	if workspaceID != nil {
 		plan, err := s.planRepo.FindByWorkspaceID(*workspaceID)
@@ -75,18 +70,15 @@ func (s *Service) EffectiveLimits(workspaceID *uint) *Limits {
 		}
 	}
 
-	// Try the default plan.
 	plan, err := s.planRepo.FindDefault()
 	if err == nil {
 		return limitsFromPlan(plan)
 	}
 
-	// Fallback to global settings.
 	return s.limitsFromSettings()
 }
 
-// EffectivePlan returns the plan assigned to the workspace, the default plan,
-// or nil if no plan applies.
+// EffectivePlan returns the workspace's plan, else the default plan, else nil.
 func (s *Service) EffectivePlan(workspaceID *uint) *models.Plan {
 	if workspaceID != nil {
 		plan, err := s.planRepo.FindByWorkspaceID(*workspaceID)
@@ -101,8 +93,7 @@ func (s *Service) EffectivePlan(workspaceID *uint) *models.Plan {
 	return nil
 }
 
-// EffectiveUserPlan returns the plan assigned to the user, the default plan,
-// or nil if no plan applies.
+// EffectiveUserPlan returns the user's plan, else the default plan, else nil.
 func (s *Service) EffectiveUserPlan(userID uint) *models.Plan {
 	plan, err := s.planRepo.FindByUserID(userID)
 	if err == nil && plan.IsActive {
@@ -115,26 +106,22 @@ func (s *Service) EffectiveUserPlan(userID uint) *models.Plan {
 	return nil
 }
 
-// EffectiveLimitsForUser resolves the limits for a given user.
-// Priority: user plan -> default plan -> global settings.
+// EffectiveLimitsForUser resolves the user plan, then the default plan, then global settings.
 func (s *Service) EffectiveLimitsForUser(userID uint) *Limits {
 	plan, err := s.planRepo.FindByUserID(userID)
 	if err == nil && plan.IsActive {
 		return limitsFromPlan(plan)
 	}
 
-	// Try the default plan.
 	plan, err = s.planRepo.FindDefault()
 	if err == nil {
 		return limitsFromPlan(plan)
 	}
 
-	// Fallback to global settings.
 	return s.limitsFromSettings()
 }
 
-// CheckQuota verifies that creating one more resource of the given type
-// would not exceed the plan limit. Returns nil if within limit.
+// CheckQuota fails when one more resource of the given type would exceed the plan limit.
 func (s *Service) CheckQuota(db *gorm.DB, userID uint, workspaceID *uint, resource string) error {
 	limits := s.EffectiveLimits(workspaceID)
 
@@ -176,8 +163,7 @@ func (s *Service) CheckQuota(db *gorm.DB, userID uint, workspaceID *uint, resour
 	return nil
 }
 
-// CheckWorkspaceQuota verifies that the user has not exceeded their max_workspaces limit.
-// This counts all workspaces owned by the user and checks against the user's plan.
+// CheckWorkspaceQuota counts every workspace the user owns against the user's plan.
 func (s *Service) CheckWorkspaceQuota(db *gorm.DB, userID uint) error {
 	limits := s.EffectiveLimitsForUser(userID)
 
@@ -185,8 +171,7 @@ func (s *Service) CheckWorkspaceQuota(db *gorm.DB, userID uint) error {
 		return nil // unlimited
 	}
 
-	// The system workspace is platform infrastructure, not tenant capacity, so it
-	// never counts against the admin who happens to own it.
+	// The system workspace is platform infrastructure, so it never counts against the admin who owns it.
 	var count int64
 	if err := db.Model(&models.Workspace{}).
 		Where("owner_id = ? AND system = ?", userID, false).
@@ -233,5 +218,4 @@ func (s *Service) limitsFromSettings() *Limits {
 	}
 }
 
-// ErrPlanLimitReached is returned when a resource quota is exceeded.
 var ErrPlanLimitReached = errors.New("plan limit reached")

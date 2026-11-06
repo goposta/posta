@@ -32,8 +32,7 @@ const TABS = [
   { key: "embed", label: "Share & embed" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
-// ?tab=responses opens a tab directly (digest emails and the inbox link here),
-// and the open tab is kept there so a refresh or a shared link lands on it.
+// ?tab= opens a tab directly (digest emails and the inbox link here), and stays in sync so a refresh or shared link lands on it.
 function tabFromQuery(value: unknown): Tab | undefined {
   return TABS.find((t) => t.key === value)?.key;
 }
@@ -47,8 +46,7 @@ watch(
   },
 );
 
-// A tab's own query (the Responses view, page and filters) does not carry
-// over to another tab.
+// A tab's own query (the Responses view, page and filters) does not carry over to another tab.
 function selectTab(t: Tab) {
   if (t === tab.value) return;
   tab.value = t;
@@ -200,8 +198,7 @@ const hasQuestions = computed(() => (form.value?.fields || []).some((f) => !f.ar
 
 const endpoint = computed(() => snippet.value?.endpoint || "");
 
-// Website widget builder. Options become data attributes on the placeholder;
-// nothing is saved to the form.
+// Widget options become data attributes on the placeholder; nothing is saved to the form.
 const optionalWidgetFields = ["name", "phone", "subject"] as const;
 const widget = ref({
   fields: ["name"] as string[],

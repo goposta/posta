@@ -44,7 +44,6 @@ func visibleSettings(settings []models.Setting) []models.Setting {
 	return out
 }
 
-// SettingHandler handles admin management of platform settings.
 type SettingHandler struct {
 	repo  *repositories.SettingRepository
 	audit *audit.Logger

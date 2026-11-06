@@ -27,36 +27,30 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// summarySamples is how many recent text answers a question's summary shows.
 const summarySamples = 20
 
-// OptionCount is how many responses chose one value.
 type OptionCount struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
 	Count int    `json:"count"`
 }
 
-// FieldSummary aggregates the answers to one question.
 type FieldSummary struct {
 	Key      string           `json:"key"`
 	Label    string           `json:"label"`
 	Type     models.FieldType `json:"type"`
 	PII      bool             `json:"pii,omitempty"`
 	Answered int              `json:"answered"`
-	// Options counts each value of a choice, checkbox, scale or rating
-	// question, in the schema's order, then any value the schema no longer has.
+	// Options follow schema order, then any value the schema no longer has.
 	Options []OptionCount `json:"options,omitempty"`
 	Mean    *float64      `json:"mean,omitempty"`
 	Min     *float64      `json:"min,omitempty"`
 	Max     *float64      `json:"max,omitempty"`
-	// Samples are the latest text answers, newest first. SamplesHidden says
-	// they were withheld because the question is personal data.
+	// SamplesHidden means samples were withheld because the question is personal data.
 	Samples       []string `json:"samples,omitempty"`
 	SamplesHidden bool     `json:"samples_hidden,omitempty"`
 }
 
-// SubmissionSummary is a form's responses reduced to per-question figures.
 type SubmissionSummary struct {
 	Total     int            `json:"total"`
 	Truncated bool           `json:"truncated"`
@@ -72,15 +66,14 @@ type fieldAgg struct {
 	nums   int
 }
 
-// Summarizer builds a SubmissionSummary from submissions fed newest first.
+// Summarizer expects submissions newest first.
 type Summarizer struct {
 	fields  []*fieldAgg
 	total   int
 	showPII bool
 }
 
-// NewSummarizer summarizes the active questions of defs. Without showPII, the
-// text answers of personal-data questions are counted but not quoted.
+// Without showPII, text answers of personal-data questions are counted but not quoted.
 func NewSummarizer(defs models.FieldDefs, showPII bool) *Summarizer {
 	s := &Summarizer{showPII: showPII}
 	for _, f := range defs.Active() {
@@ -96,7 +89,6 @@ func NewSummarizer(defs models.FieldDefs, showPII bool) *Summarizer {
 	return s
 }
 
-// Add counts one submission's answers.
 func (s *Summarizer) Add(data models.SubmissionData) {
 	s.total++
 	for _, a := range s.fields {
@@ -156,7 +148,6 @@ func (a *fieldAgg) known(value string) bool {
 	return false
 }
 
-// choices lists the values a question offers, in display order.
 func (a *fieldAgg) choices() []OptionCount {
 	f := &a.def
 	switch f.Type {
@@ -187,8 +178,6 @@ func (a *fieldAgg) choices() []OptionCount {
 	return nil
 }
 
-// Result returns the summary. truncated reports that only the newest
-// submissions were read.
 func (s *Summarizer) Result(truncated bool) SubmissionSummary {
 	out := SubmissionSummary{Total: s.total, Truncated: truncated, Fields: make([]FieldSummary, 0, len(s.fields))}
 	for _, a := range s.fields {
@@ -213,8 +202,6 @@ func (s *Summarizer) Result(truncated bool) SubmissionSummary {
 	return out
 }
 
-// ExportValue renders an answer for a spreadsheet cell: choices by their
-// labels, booleans as yes or no, several values joined with "; ".
 func ExportValue(f *models.FieldDef, v any) string {
 	if v == nil {
 		return ""

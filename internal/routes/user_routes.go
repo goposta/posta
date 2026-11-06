@@ -28,7 +28,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// userRoutes returns route definitions for all authenticated user endpoints.
 func (r *Router) userRoutes() []okapi.RouteDefinition {
 	userGroup := r.v1.Group("/users/me", r.mw.jwtOnly, r.mw.optionalWorkspace).WithTagInfo(okapi.GroupTag{
 		Name:        tagUser,
@@ -144,7 +143,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/sessions/{id:int}",
+			Path:        "/sessions/{id}",
 			Handler:     okapi.H(r.h.session.Revoke),
 			Group:       userGroup,
 			Summary:     "Revoke session",
@@ -217,9 +216,7 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Response:    &dto.Response[models.UserSetting]{},
 		},
 
-		// In-app inbox. These sit under /users/me because a notification is
-		// addressed to a person, not to a workspace: read and dismissed state
-		// follow the user across every workspace they belong to.
+		// Under /users/me because a notification is addressed to a person: its state follows them across workspaces.
 		{
 			Method:      http.MethodGet,
 			Path:        pathNotifications,

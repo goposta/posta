@@ -19,36 +19,27 @@
 
 package dto
 
-// WebhookEventDef describes one event a webhook can subscribe to.
 type WebhookEventDef struct {
 	Name        string
 	Description string
 	Payload     any
 }
 
-// WebhookEvents is the single list of subscribable webhook events. The API
-// docs are generated from it, and a test pins the webhook request's enum tag
-// to it, so an event cannot be documented but unsubscribable or the reverse.
+// Single list of subscribable events: API docs are generated from it and a test pins the enum tag to it.
 var WebhookEvents = []WebhookEventDef{
-	// Email lifecycle — generic {event, email_id, timestamp} payload.
 	{"email.sent", "Fired when a message is accepted by the destination MTA", WebhookEvent{}},
 	{"email.failed", "Fired when a message permanently fails after retries", WebhookEvent{}},
-	// Inbound mail — full parsed message.
 	{"email.inbound", "Fired when an inbound email is received and parsed", InboundWebhookEvent{}},
-	// Reputation signals — richer recipient-scoped payloads.
 	{"email.unsubscribed", "Fired when a recipient opts out via one-click unsubscribe", UnsubscribeWebhookEvent{}},
 	{"email.complained", "Fired when a recipient marks a message as spam", ComplaintWebhookEvent{}},
-	// Web form messages — full submission plus the scan verdict, and thread replies.
 	{"message.received", "Fired when a web form submission passes scanning", MessageWebhookEvent{}},
 	{"message.spam", "Fired when a web form submission is quarantined or rejected by scanning", MessageWebhookEvent{}},
 	{"message.replied", "Fired when an operator replies to a web form message from the dashboard", MessageReplyWebhookEvent{}},
 	{"message.reply_received", "Fired when the sender answers a web form thread by email", MessageReplyWebhookEvent{}},
-	// Campaign lifecycle — {event, campaign_id, name, timestamp} payload.
 	{"campaign.started", "Fired when a campaign begins sending", CampaignWebhookEvent{}},
 	{"campaign.completed", "Fired when a campaign finishes sending", CampaignWebhookEvent{}},
 }
 
-// WebhookEventNames returns the subscribable event names in registry order.
 func WebhookEventNames() []string {
 	names := make([]string, len(WebhookEvents))
 	for i, e := range WebhookEvents {

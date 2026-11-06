@@ -57,11 +57,9 @@ func runWorker() error {
 		}
 	}()
 
-	// Initialize SMTP password encryption
 	crypto.Init(cfg.EncryptionKey)
 	edition := newEdition(db, cfg)
 
-	// Initialize blob storage for attachment retrieval
 	var blobStore blob.Store
 	if cfg.BlobProvider != "" {
 		bs, err := blob.New(blob.Config{
@@ -138,7 +136,6 @@ func runWorker() error {
 		},
 	)
 
-	// Campaign processor
 	campaignProducer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 	trackingRepo := repositories.NewTrackingRepository(db)
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
@@ -157,7 +154,6 @@ func runWorker() error {
 		campaignDispatcher,
 	)
 
-	// Notification service + daily report handler
 	notifier := notification.NewService(
 		cfg.SystemSMTP, "Posta", cfg.AppWebURL,
 		repositories.NewUserRepository(db),
@@ -232,7 +228,6 @@ func runWorker() error {
 		mux.HandleFunc(worker.TypeMessageReply, messageHandler.ProcessReplyTask)
 	}
 
-	// Publish worker's build info
 	workermon.StartHeartbeat(context.Background(), cfg.Redis.Client, config.Version, config.CommitID)
 
 	var healthSrv *worker.HealthServer
@@ -254,9 +249,7 @@ func runWorker() error {
 		"concurrency", cfg.WorkerConcurrency,
 	)
 
-	// Readiness flips before Run blocks and back once it returns, so a draining
-	// or stopped worker stops advertising itself as ready and an orchestrator
-	// routes nothing new at it.
+	// Readiness flips back when Run returns, so a draining worker stops advertising itself as ready.
 	if healthSrv != nil {
 		healthSrv.SetProcessing(true)
 		defer healthSrv.SetProcessing(false)

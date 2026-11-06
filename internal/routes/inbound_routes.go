@@ -28,7 +28,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// Protected by opaque secret/token — no JWT.
+// Authenticated by an opaque secret/token, never a JWT.
 func (r *Router) inboundWebhookRoutes() []okapi.RouteDefinition {
 	inboundGroup := r.app.Group("/api/v1/inbound").WithTagInfo(okapi.GroupTag{
 		Name:        tagInbound,
@@ -46,7 +46,7 @@ func (r *Router) inboundWebhookRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/attachments/{uuid}/{idx:int}",
+			Path:    "/attachments/{uuid}/{idx}",
 			Handler: okapi.H(r.h.inbound.ServeAttachment),
 			Group:   inboundGroup,
 			Summary: "Download an inbound email attachment (signed token)",
@@ -56,9 +56,7 @@ func (r *Router) inboundWebhookRoutes() []okapi.RouteDefinition {
 }
 
 func (r *Router) inboundWorkspaceRoutes() []okapi.RouteDefinition {
-	// The SSE stream shares this group: EventSource cannot set an Authorization
-	// header, but it does send the session cookie, which r.mw.auth reads. Machine
-	// clients may stream with an API key via `?token=psk_…`.
+	// SSE shares this group: EventSource sends the session cookie but no header; machine clients use ?token=psk_….
 	userGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspaceQuery).WithTagInfo(okapi.GroupTag{
 		Name:        tagInbound,
 		Description: "Inbound email ingestion and retrieval: receive messages from upstream providers, browse history, and stream live events. Public ingest endpoints use opaque secrets; user endpoints use a dashboard session or an API key.",
@@ -114,7 +112,7 @@ func (r *Router) inboundWorkspaceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/inbound-emails/{id}/attachments/{idx:int}",
+			Path:    "/inbound-emails/{id}/attachments/{idx}",
 			Handler: okapi.H(r.h.inbound.DownloadAttachmentAuthed),
 			Group:   userGroup,
 			Summary: "Download an inbound email attachment (authenticated)",

@@ -232,7 +232,6 @@ onMounted(() => {
       </template>
     </div>
 
-    <!-- Create Credential Modal -->
     <div v-if="showCreateModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
@@ -270,7 +269,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Show Credential Modal -->
     <div v-if="showCredentialModal" class="modal-overlay">
       <div class="modal">
         <div class="modal-header">

@@ -26,11 +26,8 @@ import (
 
 var styleBlockRegex = regexp.MustCompile(`(?is)<style[^>]*>(.*?)</style>`)
 
-// extractStyleAndBody extracts CSS from <style> blocks and returns the cleaned HTML body.
-// If the HTML contains a <body> tag, only the body content is returned.
-// All <style> blocks and stylesheet <link> tags are removed from the returned HTML.
+// extractStyleAndBody also strips stylesheet <link> tags and returns only the <body> content when present.
 func extractStyleAndBody(htmlContent string) (css string, body string) {
-	// Extract all <style> block contents
 	var cssBlocks []string
 	matches := styleBlockRegex.FindAllStringSubmatch(htmlContent, -1)
 	for _, m := range matches {
@@ -43,11 +40,9 @@ func extractStyleAndBody(htmlContent string) (css string, body string) {
 	}
 	css = strings.Join(cssBlocks, "\n\n")
 
-	// Remove <style> blocks and stylesheet <link> tags from HTML
 	cleaned := styleBlockRegex.ReplaceAllString(htmlContent, "")
 	cleaned = stripStyleSheetLinks(cleaned)
 
-	// Extract <body> content if present
 	body = extractBody(cleaned)
 
 	return css, body
@@ -59,15 +54,12 @@ var (
 	hrefAttrRegex = regexp.MustCompile(`(?is)\bhref\s*=\s*["']([^"']+)["']`)
 )
 
-// isStyleSheetLink reports whether a <link ...> tag references a stylesheet.
 func isStyleSheetLink(tag string) bool {
 	rel := relAttrRegex.FindStringSubmatch(tag)
 	return len(rel) >= 2 && strings.Contains(strings.ToLower(rel[1]), "stylesheet")
 }
 
-// extractStyleSheetLinks returns the stylesheet names referenced by
-// <link rel="stylesheet" href="..."> tags, derived from each href's basename
-// without its .css extension (e.g. "css/styles.css?v=2" -> "styles").
+// Names are each href's basename without .css, e.g. "css/styles.css?v=2" -> "styles".
 func extractStyleSheetLinks(htmlContent string) []string {
 	var names []string
 	for _, tag := range linkTagRegex.FindAllString(htmlContent, -1) {
@@ -109,8 +101,7 @@ func styleSheetNameFromHref(href string) string {
 
 var bodyRegex = regexp.MustCompile(`(?is)<body[^>]*>(.*)</body>`)
 
-// extractBody extracts the inner content of the <body> tag.
-// If no <body> tag is found, returns the full HTML (trimmed).
+// extractBody returns the trimmed full HTML when there is no <body> tag.
 func extractBody(html string) string {
 	m := bodyRegex.FindStringSubmatch(html)
 	if len(m) >= 2 {
@@ -119,7 +110,6 @@ func extractBody(html string) string {
 	return strings.TrimSpace(html)
 }
 
-// extractTitle extracts the content of the <title> tag, if present.
 func extractTitle(html string) string {
 	re := regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
 	m := re.FindStringSubmatch(html)

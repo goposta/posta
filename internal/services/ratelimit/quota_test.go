@@ -97,9 +97,7 @@ func TestQuotasSkipUnsetQuotas(t *testing.T) {
 	}
 }
 
-// TestRedisCounterAlwaysSetsTTL runs only against a real Redis 7+, set via
-// POSTA_TEST_REDIS_URL. It covers the bug this counter fixes: a key left
-// without a TTL by a lost EXPIRE stayed over its limit forever.
+// TestRedisCounterAlwaysSetsTTL needs a real Redis 7+ via POSTA_TEST_REDIS_URL.
 func TestRedisCounterAlwaysSetsTTL(t *testing.T) {
 	url := os.Getenv("POSTA_TEST_REDIS_URL")
 	if url == "" {
@@ -115,7 +113,7 @@ func TestRedisCounterAlwaysSetsTTL(t *testing.T) {
 	key := "posta:test:quota:" + time.Now().Format("150405.000000")
 	defer rdb.Del(ctx, key)
 
-	// Simulate a key stranded by the old INCR-then-EXPIRE code.
+	// Simulate a key stranded without a TTL.
 	if err := rdb.Set(ctx, key, 50, 0).Err(); err != nil {
 		t.Fatal(err)
 	}

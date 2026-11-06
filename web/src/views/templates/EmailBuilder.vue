@@ -65,14 +65,12 @@ function initGrapesJS() {
     },
   })
 
-  // Load existing content
   if (localization.value) {
     if (localization.value.builder_json) {
       try {
         const projectData = JSON.parse(localization.value.builder_json)
         editor.loadProjectData(projectData)
       } catch {
-        // Fall back to loading raw HTML
         if (localization.value.html_template) {
           editor.setComponents(localization.value.html_template)
         }
@@ -82,7 +80,6 @@ function initGrapesJS() {
     }
   }
 
-  // Track changes
   editor.on('change:changesCount', () => {
     hasChanges.value = true
   })
@@ -192,7 +189,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="builder-page">
-    <!-- Header -->
     <div class="builder-header">
       <div class="builder-header-left">
         <button class="btn btn-secondary btn-sm" @click="goBack">
@@ -222,15 +218,12 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Loading -->
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
     </div>
 
-    <!-- GrapesJS Editor -->
     <div v-else-if="template && localization" ref="editorContainer" class="builder-editor"></div>
 
-    <!-- Not found -->
     <div v-else class="empty-state">
       <h3>Not found</h3>
       <p>The template, version, or localization was not found.</p>
@@ -289,7 +282,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-/* GrapesJS overrides for theme integration */
 .builder-editor :deep(.gjs-one-bg) {
   background-color: var(--bg-secondary);
 }

@@ -49,28 +49,21 @@ type MessageFilterQuery struct {
 	// Tags keeps messages carrying every listed tag; Priority one priority.
 	Tags     []string
 	Priority string
-	// TeamID keeps one team's submissions. Mine keeps what is assigned to
-	// Mine.UserID or routed to one of Mine.TeamIDs: the "My teams" view.
+	// Mine keeps what is assigned to Mine.UserID or routed to one of Mine.TeamIDs: the "My teams" view.
 	TeamID uint
 	Mine   *MineFilter
-	// InboxOnly leaves out collect-mode forms, whose responses are read as a
-	// table on the form rather than worked as conversations.
+	// InboxOnly leaves out collect-mode forms, whose responses are read as a table rather than worked as conversations.
 	InboxOnly bool
 
-	// SubmissionsOnly leaves out quarantined and rejected messages unless
-	// Status asks for one: spam is not a response.
+	// SubmissionsOnly leaves out quarantined and rejected messages unless Status asks for one: spam is not a response.
 	SubmissionsOnly bool
-	// DataEquals matches typed answers by containment (data @> ...), so it is
-	// served by the GIN index. A multiselect value is a one-element array.
+	// DataEquals matches by containment (data @> ...) so the GIN index serves it; a multiselect value is a one-element array.
 	DataEquals map[string]any
-	// DataRanges bound answers from below or above. Keys are checked against
-	// the form schema by the caller and always bound as parameters.
+	// DataRanges keys are checked against the form schema by the caller and always bound as parameters.
 	DataRanges []DataRange
 }
 
-// DataRange is one bound on a typed answer. Numeric compares numbers and
-// skips answers that are not numbers; otherwise the text is compared, which
-// orders YYYY-MM-DD dates and HH:MM times correctly.
+// DataRange compares text, which orders YYYY-MM-DD dates and HH:MM times; Numeric skips answers that are not numbers.
 type DataRange struct {
 	Key     string
 	Op      string // gte | lte
@@ -78,7 +71,6 @@ type DataRange struct {
 	Numeric bool
 }
 
-// applyMessageFilter narrows q to the messages f selects.
 func applyMessageFilter(q *gorm.DB, scope ResourceScope, f MessageFilterQuery) *gorm.DB {
 	q = ApplyWorkspaceScope(q, scope)
 	if f.FormID > 0 {
@@ -163,15 +155,12 @@ func (r *MessageRepository) Create(m *models.Message) error {
 	return r.db.Create(m).Error
 }
 
-// Update writes every column of m. It must not be used after a slow operation
-// (sending mail, calling out): the row may have changed in the meantime, and a
-// full-row save would silently undo those changes. Use UpdateFields instead.
+// Update saves every column; never use it after a slow operation, it would undo concurrent changes (use UpdateFields).
 func (r *MessageRepository) Update(m *models.Message) error {
 	return r.db.Omit(clause.Associations).Save(m).Error
 }
 
-// UpdateFields writes only the given columns, so concurrent changes to other
-// columns of the same message survive.
+// UpdateFields writes only the given columns, so concurrent changes to other columns survive.
 func (r *MessageRepository) UpdateFields(id uint, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
@@ -179,9 +168,7 @@ func (r *MessageRepository) UpdateFields(id uint, fields map[string]any) error {
 	return r.db.Model(&models.Message{}).Where("id = ?", id).Updates(fields).Error
 }
 
-// RecordReply applies the effects of an operator reply atomically: it bumps the
-// reply count, stamps replied_at, marks the message read if it was not, and
-// moves it to replied unless an operator has already closed it.
+// RecordReply atomically bumps the count, stamps replied_at, marks read, and moves to replied unless already closed.
 func (r *MessageRepository) RecordReply(id uint, at time.Time) error {
 	return r.db.Model(&models.Message{}).Where("id = ?", id).Updates(map[string]any{
 		"replied_at":  at,
@@ -193,8 +180,7 @@ func (r *MessageRepository) RecordReply(id uint, at time.Time) error {
 	}).Error
 }
 
-// MarkRead stamps read_at if unset and moves a new message to open, without
-// touching any other column.
+// MarkRead stamps read_at if unset and moves a new message to open, touching no other column.
 func (r *MessageRepository) MarkRead(id uint, at time.Time) error {
 	return r.db.Model(&models.Message{}).Where("id = ? AND read_at IS NULL", id).Updates(map[string]any{
 		"read_at": at,
@@ -203,16 +189,14 @@ func (r *MessageRepository) MarkRead(id uint, at time.Time) error {
 	}).Error
 }
 
-// SetRootMessageID records the Message-ID of a thread's first reply. It only
-// writes when none is set, so two concurrent first replies cannot both claim it.
+// SetRootMessageID writes only when unset, so two concurrent first replies cannot both claim it.
 func (r *MessageRepository) SetRootMessageID(id uint, messageID string) error {
 	return r.db.Model(&models.Message{}).
 		Where("id = ? AND (root_message_id IS NULL OR root_message_id = '')", id).
 		Update("root_message_id", messageID).Error
 }
 
-// ReplyMessageIDs returns the Message-ID headers of a thread's replies, oldest
-// first, skipping replies recorded before Message-IDs were stored.
+// ReplyMessageIDs returns replies oldest first, skipping those recorded before Message-IDs were stored.
 func (r *MessageRepository) ReplyMessageIDs(messageID uint) ([]string, error) {
 	var ids []string
 	err := r.db.Model(&models.MessageReply{}).
@@ -274,10 +258,7 @@ func (r *MessageRepository) FindByScopeFiltered(scope ResourceScope, f MessageFi
 	return items, total, nil
 }
 
-// EachMessage walks the messages f selects, newest first, handing them to fn
-// in batches. It pages by id rather than offset, so submissions arriving
-// during an export neither repeat nor shift rows. It stops after max messages
-// (0 means no limit) and reports whether it stopped early.
+// EachMessage pages by id, not offset, so arrivals mid-export neither repeat nor shift rows; max 0 means no limit.
 func (r *MessageRepository) EachMessage(scope ResourceScope, f MessageFilterQuery, batch, max int, fn func([]models.Message) error) (bool, error) {
 	if batch <= 0 {
 		batch = 500
@@ -334,8 +315,7 @@ func (r *MessageRepository) Delete(id uint) error {
 // notCollectForm keeps messages whose form is in inbox mode.
 const notCollectForm = "NOT EXISTS (SELECT 1 FROM forms WHERE forms.id = messages.form_id AND forms.mode = 'collect')"
 
-// CountByScope counts the inbox: total and unread leave out collect-mode
-// forms, as the inbox list does; spam counts every form.
+// CountByScope's total and unread skip collect-mode forms, as the inbox list does; spam counts every form.
 func (r *MessageRepository) CountByScope(scope ResourceScope) (total, unread, spam int64) {
 	ApplyWorkspaceScope(r.db.Model(&models.Message{}), scope).
 		Where("status <> ?", models.MessageStatusRejected).Where(notCollectForm).Count(&total)
@@ -347,14 +327,12 @@ func (r *MessageRepository) CountByScope(scope ResourceScope) (total, unread, sp
 	return
 }
 
-// TagCount is one tag in use and how many messages carry it.
 type TagCount struct {
 	Tag   string `json:"tag"`
 	Count int64  `json:"count"`
 }
 
-// RecentTags lists the tags on the newest tagged messages, most used first,
-// for suggestions. It reads a bounded window so a large workspace stays cheap.
+// RecentTags reads a bounded window of the newest tagged messages so a large workspace stays cheap.
 func (r *MessageRepository) RecentTags(scope ResourceScope, window, limit int) ([]TagCount, error) {
 	recent := ApplyWorkspaceScope(r.db.Model(&models.Message{}), scope).
 		Select("tags").Where("tags IS NOT NULL AND cardinality(tags) > 0").
@@ -403,9 +381,7 @@ func (r *MessageRepository) AddReply(reply *models.MessageReply) error {
 	return r.db.Create(reply).Error
 }
 
-// AddInboundReply stores an inbound reply unless the same inbound email is
-// already attached (the unique index on inbound_email_id), so a retried parse
-// task cannot add it twice. It reports whether a row was created.
+// AddInboundReply relies on the inbound_email_id unique index so a retried parse task cannot add a reply twice.
 func (r *MessageRepository) AddInboundReply(reply *models.MessageReply) (bool, error) {
 	if err := r.db.Create(reply).Error; err != nil {
 		if IsDuplicateName(err) {
@@ -443,8 +419,7 @@ func (r *MessageRepository) DeleteSpamOlderThan(before time.Time) (int64, error)
 	return result.RowsAffected, result.Error
 }
 
-// DeleteByFormOlderThan hard-deletes one form's messages received before the
-// cutoff; replies go with them through the ON DELETE CASCADE foreign key.
+// DeleteByFormOlderThan hard-deletes; replies go with the messages through the ON DELETE CASCADE foreign key.
 func (r *MessageRepository) DeleteByFormOlderThan(formID uint, before time.Time) (int64, error) {
 	result := r.db.Unscoped().Where("form_id = ? AND created_at < ?", formID, before).Delete(&models.Message{})
 	return result.RowsAffected, result.Error

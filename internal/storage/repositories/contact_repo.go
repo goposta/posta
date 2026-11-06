@@ -35,9 +35,7 @@ func NewContactRepository(db *gorm.DB) *ContactRepository {
 	return &ContactRepository{db: db}
 }
 
-// RecordSent upserts contacts for the given recipients, incrementing sent_count.
-// Recipients may use RFC 5322 format ("Display Name <email>"), in which case
-// the name and bare email are extracted.
+// RecordSent upserts contacts and bumps sent_count; recipients may be RFC 5322 "Display Name <email>".
 func (r *ContactRepository) RecordSent(userID uint, workspaceID *uint, recipients []string) {
 	now := time.Now()
 	for _, raw := range recipients {
@@ -51,7 +49,6 @@ func (r *ContactRepository) RecordSent(userID uint, workspaceID *uint, recipient
 	}
 }
 
-// RecordFailed upserts contacts for the given recipients, incrementing fail_count.
 func (r *ContactRepository) RecordFailed(userID uint, workspaceID *uint, recipients []string) {
 	for _, raw := range recipients {
 		addr, name := parseRecipient(raw)
@@ -71,9 +68,7 @@ func nameUpdateClause(name string) string {
 	return ""
 }
 
-// parseRecipient extracts the bare email and display name from a recipient
-// string. It supports RFC 5322 format ("Display Name <email@example.com>").
-// If parsing fails, the original string is returned as the email with no name.
+// parseRecipient falls back to the raw string as the email, with no name, when RFC 5322 parsing fails.
 func parseRecipient(raw string) (email, name string) {
 	addr, err := mail.ParseAddress(raw)
 	if err != nil {

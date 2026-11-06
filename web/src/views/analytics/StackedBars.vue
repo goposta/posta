@@ -2,9 +2,7 @@
 import { computed, ref } from "vue";
 import { axisLabels, formatNumber, heightPct, niceMax, shortDate } from "./chart";
 
-// One stacked-bar chart shared by every trend on the page, so they scale, label
-// and behave identically. Series are given bottom-up: the first entry sits at the
-// base of the stack.
+// Series are given bottom-up: the first entry sits at the base of the stack.
 export interface Series {
   key: string;
   label: string;

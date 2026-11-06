@@ -40,21 +40,16 @@ import (
 	"time"
 )
 
-// ErrBlocked is returned for a destination that is not on the public internet.
 var ErrBlocked = errors.New("destination is a private or reserved address")
 
-// Policy decides which addresses outbound connections may reach.
 type Policy struct {
 	// AllowPrivate turns the guard off: any address may be reached.
 	AllowPrivate bool
-	// Allowed are networks reachable even though they are not public, such
-	// as the subnet of an internal automation service.
+	// Allowed networks are reachable though not public, such as an internal automation service's subnet.
 	Allowed []netip.Prefix
 }
 
-// nonPublic are the ranges a connection must not reach unless allowed. The
-// unspecified address and the other special-purpose ranges are blocked too:
-// 0.0.0.0 reaches the local host on most systems.
+// Special-purpose ranges are blocked too: 0.0.0.0 reaches the local host on most systems.
 var nonPublic = mustPrefixes(
 	"0.0.0.0/8",       // "this network"; 0.0.0.0 is the local host
 	"10.0.0.0/8",      // private
@@ -88,7 +83,6 @@ func mustPrefixes(cidrs ...string) []netip.Prefix {
 	return out
 }
 
-// Check reports whether ip may be reached.
 func (p Policy) Check(ip netip.Addr) error {
 	if p.AllowPrivate {
 		return nil
@@ -108,8 +102,7 @@ func (p Policy) Check(ip netip.Addr) error {
 	return nil
 }
 
-// control is a net.Dialer Control function: it runs once the address has been
-// resolved, just before connecting, for every address the dialer tries.
+// Runs after resolution, just before connecting, for every address the dialer tries, so DNS tricks cannot bypass it.
 func (p Policy) control(_, address string, _ syscall.RawConn) error {
 	ap, err := netip.ParseAddrPort(address)
 	if err != nil {
@@ -118,19 +111,15 @@ func (p Policy) control(_, address string, _ syscall.RawConn) error {
 	return p.Check(ap.Addr())
 }
 
-// Dialer returns a dialer that refuses addresses the policy blocks.
 func (p Policy) Dialer(timeout time.Duration) *net.Dialer {
 	return &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second, Control: p.control}
 }
 
-// DialContext is the policy's dialer as an http.Transport DialContext.
 func (p Policy) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	return p.Dialer(30*time.Second).DialContext(ctx, network, addr)
 }
 
-// CheckURL checks a URL before it is saved: http or https, a host, and a host
-// that does not resolve to a blocked address. It gives a clear error early;
-// the dialer still decides at send time, when DNS may answer differently.
+// CheckURL only gives an early error at save time; the dialer still decides at send time, when DNS may differ.
 func (p Policy) CheckURL(ctx context.Context, raw string) error {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
@@ -149,9 +138,7 @@ func (p Policy) CheckURL(ctx context.Context, raw string) error {
 	return p.CheckHost(ctx, host)
 }
 
-// CheckHost resolves host and refuses it when any of its addresses is
-// blocked. A host that does not resolve is accepted: it may exist later, and
-// the dialer checks again then.
+// A host that does not resolve is accepted: it may exist later, and the dialer checks again then.
 func (p Policy) CheckHost(ctx context.Context, host string) error {
 	if p.AllowPrivate {
 		return nil
@@ -174,9 +161,7 @@ func (p Policy) CheckHost(ctx context.Context, host string) error {
 	return nil
 }
 
-// FromEnv reads a policy from <prefix>_ALLOW_PRIVATE_NETWORKS (a boolean) and
-// <prefix>_ALLOWED_NETWORKS (comma-separated CIDRs or single addresses).
-// Entries that do not parse are returned as an error alongside the rest.
+// Unparseable entries are returned as an error alongside the rest of the policy.
 func FromEnv(prefix string, defaultAllowPrivate bool) (Policy, error) {
 	p := Policy{AllowPrivate: defaultAllowPrivate}
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(prefix + "_ALLOW_PRIVATE_NETWORKS"))) {
@@ -207,9 +192,7 @@ func FromEnv(prefix string, defaultAllowPrivate bool) (Policy, error) {
 	return p, nil
 }
 
-// Describe turns a connection error into a short reason fit to show a
-// workspace member: what went wrong, without the addresses and ports a raw
-// network error carries, which would map the server's network.
+// Describe omits addresses and ports so errors shown to workspace members cannot map the server's network.
 func Describe(err error) string {
 	if err == nil {
 		return ""

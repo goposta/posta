@@ -27,9 +27,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// UnsubscribeListHandler is the scoped CRUD API for transactional unsubscribe
-// lists. A send references one of these by id so Posta can mint a one-click link
-// whose click suppresses the recipient on that list only.
+// A send references a list by id so its one-click link suppresses the recipient on that list only.
 type UnsubscribeListHandler struct {
 	repo *repositories.UnsubscribeListRepository
 }

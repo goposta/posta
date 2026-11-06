@@ -32,18 +32,15 @@ import (
 
 const TypeDailyReport = "cron:daily-report"
 
-// DailyReportPayload is the Asynq task payload for a per-workspace daily report.
 type DailyReportPayload struct {
 	WorkspaceID uint `json:"workspace_id"`
 }
 
-// DailyReportJob enqueues a report task for each workspace. The processed report
-// is delivered to the workspace's owners and admins.
+// DailyReportJob enqueues one report task per workspace, delivered to its owners and admins.
 type DailyReportJob struct {
 	workspaceRepo *repositories.WorkspaceRepository
 }
 
-// dailyReportTask implements cron.Job for enqueueing a single workspace's report.
 type dailyReportTask struct {
 	workspaceID uint
 }
@@ -56,7 +53,7 @@ func NewDailyReportJob(workspaceRepo *repositories.WorkspaceRepository) *DailyRe
 }
 
 func (j *DailyReportJob) Name() string     { return "daily-report" }
-func (j *DailyReportJob) Schedule() string { return "0 7 * * *" } // daily at 07:00 UTC
+func (j *DailyReportJob) Schedule() string { return "0 7 * * *" }
 
 func (j *DailyReportJob) Run(_ context.Context, client *asynq.Client) error {
 	workspaces, err := j.workspaceRepo.FindAll()
@@ -78,7 +75,6 @@ func (j *DailyReportJob) Run(_ context.Context, client *asynq.Client) error {
 	return nil
 }
 
-// NewDailyReportTask creates an Asynq task for processing a daily report.
 func NewDailyReportTask(workspaceID uint, opts ...asynq.Option) (*asynq.Task, error) {
 	payload, err := json.Marshal(DailyReportPayload{WorkspaceID: workspaceID})
 	if err != nil {

@@ -28,13 +28,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Service maintains the in-app inbox: the health alerts Posta derives for a
-// workspace, and the announcements a platform administrator broadcasts.
-//
-// It is deliberately separate from services/notification, which sends email.
-// The two answer different questions — email is a push into somebody's day, the
-// inbox is what the product says about itself when you open it — and a condition
-// worth a banner is usually not worth a mail.
+// Service is separate from services/notification on purpose: a condition worth a banner is rarely worth a mail.
 type Service struct {
 	db   *gorm.DB
 	repo *repositories.NotificationRepository
@@ -44,13 +38,7 @@ func NewService(db *gorm.DB, repo *repositories.NotificationRepository) *Service
 	return &Service{db: db, repo: repo}
 }
 
-// SyncWorkspaceHealth reconciles one member's alerts for one workspace against
-// the current snapshot: firing rules are upserted, and anything that was firing
-// and no longer is gets resolved.
-//
-// It runs on the dashboard read rather than on a timer because the snapshot is
-// already in hand there, and because a banner that lags the numbers printed next
-// to it would be worse than no banner.
+// SyncWorkspaceHealth runs on the dashboard read, not a timer, so a banner never lags the numbers beside it.
 func (s *Service) SyncWorkspaceHealth(userID uint, workspaceID uint, role models.WorkspaceRole, snap Snapshot) error {
 	ws := workspaceID
 	firing := evaluate(snap)
@@ -58,8 +46,7 @@ func (s *Service) SyncWorkspaceHealth(userID uint, workspaceID uint, role models
 	keep := make([]string, 0, len(firing))
 	for _, r := range firing {
 		if roleRank(role) < roleRank(r.minRole) {
-			// A viewer cannot verify a domain or rotate a key. Telling them is
-			// noise they have no way to clear.
+			// Viewers cannot verify a domain or rotate a key, so the alert is noise they cannot clear.
 			continue
 		}
 		keep = append(keep, r.dedupKey)
@@ -84,12 +71,7 @@ func (s *Service) SyncWorkspaceHealth(userID uint, workspaceID uint, role models
 	return s.repo.ResolveExcept(userID, &ws, keep)
 }
 
-// Announce broadcasts a platform notice to every user who can sign in, and
-// records how many deliveries it produced.
-//
-// Fan-out writes one row per user rather than a single shared row so that read
-// and dismissed state stay per-person, which is the whole point of the inbox.
-// Posta is self-hosted and user counts are small; the insert is batched.
+// Announce writes one row per user so read and dismissed state stay per person.
 func (s *Service) Announce(a *models.Announcement) error {
 	var users []models.User
 	if err := s.db.Model(&models.User{}).Select("id").Where("active = ?", true).Find(&users).Error; err != nil {
@@ -123,9 +105,6 @@ func (s *Service) Announce(a *models.Announcement) error {
 	return nil
 }
 
-// Retract removes an announcement and the deliveries it made. An operator who
-// broadcast the wrong thing should be able to take it back, not just append a
-// correction to everyone's inbox.
 func (s *Service) Retract(id uint) error {
 	if _, err := s.repo.DeleteForAnnouncement(AnnouncementKey(id)); err != nil {
 		return err
@@ -133,8 +112,7 @@ func (s *Service) Retract(id uint) error {
 	return s.db.Delete(&models.Announcement{}, id).Error
 }
 
-// Deliver posts a single item to one user. Cron jobs that already email a user
-// about a condition use it so the same news is waiting in the UI.
+// Deliver lets cron jobs that email a user about a condition leave the same news in the UI.
 func (s *Service) Deliver(userID uint, workspaceID *uint, n models.Notification) error {
 	n.UserID = userID
 	n.WorkspaceID = workspaceID
@@ -144,6 +122,5 @@ func (s *Service) Deliver(userID uint, workspaceID *uint, n models.Notification)
 	return s.repo.Upsert(&n)
 }
 
-// AnnouncementKey is the dedup key every delivery of one announcement shares,
-// which is also how a retraction finds them again.
+// AnnouncementKey is shared by every delivery of one announcement, which is how a retraction finds them.
 func AnnouncementKey(id uint) string { return fmt.Sprintf("announcement:%d", id) }

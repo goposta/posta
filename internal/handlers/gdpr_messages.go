@@ -36,9 +36,7 @@ type GDPRDeleteMessagesRequest struct {
 	} `json:"body"`
 }
 
-// DeleteMessages (GDPR) erases every web form message a person submitted to
-// the workspace, the thread replies on them, the inbound emails those replies
-// came from, and all of their stored attachments.
+// DeleteMessages also erases thread replies, the inbound emails they came from, and all stored attachments.
 func (h *WorkspaceDataHandler) DeleteMessages(c *okapi.Context, req *GDPRDeleteMessagesRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))
 	if wsID == 0 {

@@ -44,7 +44,6 @@ type EmailSendPayload struct {
 	EmailID uint `json:"email_id"`
 }
 
-// NewEmailSendTask creates an Asynq task to send an email.
 func NewEmailSendTask(emailID uint, opts ...asynq.Option) (*asynq.Task, error) {
 	payload, err := json.Marshal(EmailSendPayload{EmailID: emailID})
 	if err != nil {
@@ -77,8 +76,6 @@ type InboundProcessPayload struct {
 	InboundEmailID uint `json:"inbound_email_id"`
 }
 
-// NewInboundProcessTask creates an Asynq task to dispatch an inbound email's
-// email.inbound webhook to subscribers.
 func NewInboundProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	payload, err := json.Marshal(InboundProcessPayload{InboundEmailID: id})
 	if err != nil {
@@ -91,8 +88,6 @@ type InboundParsePayload struct {
 	InboundEmailID uint `json:"inbound_email_id"`
 }
 
-// NewInboundParseTask creates an Asynq task that parses a previously-received
-// raw inbound message into its structured form.
 func NewInboundParseTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	payload, err := json.Marshal(InboundParsePayload{InboundEmailID: id})
 	if err != nil {
@@ -113,8 +108,7 @@ func NewMessageProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	return asynq.NewTask(TypeMessageProcess, payload, opts...), nil
 }
 
-// MessageReplyPayload names one thread reply, outbound or inbound, whose
-// webhook (and, for inbound replies, notification) is still to be sent.
+// MessageReplyPayload names a reply whose webhook (and, for inbound, notification) is still to be sent.
 type MessageReplyPayload struct {
 	ReplyID uint `json:"reply_id"`
 }

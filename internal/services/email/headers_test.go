@@ -24,8 +24,7 @@ import (
 	"testing"
 )
 
-// System headers carry form-reply threading. They must survive with custom
-// headers disabled (the default), or every queued reply loses its Reply-To.
+// System headers carry form-reply threading, so they must survive with custom headers disabled.
 func TestOutboundHeadersKeepSystemHeadersWhenCustomDisabled(t *testing.T) {
 	req := &SendRequest{
 		Headers:       map[string]string{"X-Custom": "1"},

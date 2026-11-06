@@ -38,7 +38,6 @@ import (
 	"github.com/lib/pq"
 )
 
-// CampaignProcessor handles campaign:start and campaign:batch tasks.
 type CampaignProcessor struct {
 	campaignRepo     *repositories.CampaignRepository
 	messageRepo      *repositories.CampaignMessageRepository
@@ -83,7 +82,6 @@ func NewCampaignProcessor(
 
 const campaignBatchSize = 100
 
-// HandleCampaignStart processes a campaign:start task.
 func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task) error {
 	var payload CampaignPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -100,7 +98,6 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 		return nil
 	}
 
-	// Resolve subscribers from the list
 	list, err := p.listRepo.FindByID(campaign.ListID)
 	if err != nil {
 		return fmt.Errorf("subscriber list not found: %w", err)
@@ -110,13 +107,11 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 	scope := repositories.ResourceScope{UserID: campaign.UserID, WorkspaceID: campaign.WorkspaceID}
 
 	if list.Type == models.SubscriberListTypeDynamic {
-		// Dynamic list: resolve via filter rules
 		subscribers, _, err = p.subscriberRepo.FindByFilterRules(scope, list.FilterRules, -1, 0)
 		if err != nil {
 			return fmt.Errorf("failed to resolve dynamic list: %w", err)
 		}
 	} else {
-		// Static list: get all members
 		subscribers, _, err = p.listRepo.ListMembers(list.ID, -1, 0)
 		if err != nil {
 			return fmt.Errorf("failed to list members: %w", err)
@@ -135,7 +130,6 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 		suppressed = nil
 	}
 
-	// Create campaign messages in bulk
 	messages := make([]models.CampaignMessage, 0, len(subscribers))
 	for _, sub := range subscribers {
 		if sub.Status != models.SubscriberStatusSubscribed {
@@ -157,7 +151,6 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 		return nil
 	}
 
-	// Assign A/B test variants if enabled
 	if campaign.ABTestEnabled && len(campaign.ABTestVariants) > 0 {
 		rand.Shuffle(len(messages), func(i, j int) {
 			messages[i], messages[j] = messages[j], messages[i]
@@ -193,14 +186,10 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 	logger.Info("campaign messages created, starting batch processing",
 		"campaign_id", campaign.ID, "messages", len(messages))
 
-	// For timezone-aware campaigns, compute initial delay per timezone group
 	if campaign.SendAtLocalTime && campaign.ScheduledAt != nil {
-		// Group subscribers by timezone and enqueue separate delayed batches
-		// The batch processor will handle the actual sending
 		logger.Info("campaign with timezone-aware scheduling", "campaign_id", campaign.ID)
 	}
 
-	// Enqueue the first batch
 	if err := p.producer.EnqueueCampaignBatch(campaign.ID, 0); err != nil {
 		return err
 	}
@@ -210,8 +199,6 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 	return nil
 }
 
-// HandleCampaignBatch processes a campaign:batch task.
-// It loads a batch of pending messages, creates Email records, and enqueues them.
 func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task) error {
 	var payload CampaignPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -228,14 +215,12 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 		return nil
 	}
 
-	// Get pending messages with subscribers preloaded
 	pendingMessages, err := p.messageRepo.FindPendingByCampaign(campaign.ID, campaignBatchSize)
 	if err != nil {
 		return fmt.Errorf("failed to get pending messages: %w", err)
 	}
 
 	if len(pendingMessages) == 0 {
-		// No more pending messages: mark campaign as sent
 		logger.Info("campaign sending complete", "id", campaign.ID)
 		if err := p.campaignRepo.UpdateStatus(campaign.ID, models.CampaignStatusSent); err != nil {
 			return err
@@ -246,7 +231,6 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 		return nil
 	}
 
-	// Resolve template name once so it can be stamped on each email record.
 	var templateName string
 	if tmpl, err := p.templateRepo.FindByID(campaign.TemplateID); err == nil && tmpl != nil {
 		templateName = tmpl.Name
@@ -271,7 +255,6 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 		return c
 	}
 
-	// Pre-resolve default content for the campaign language
 	defaultContent := resolveForLang(campaign.Language)
 	if defaultContent == nil {
 		return fmt.Errorf("failed to resolve template content for campaign %d", campaign.ID)
@@ -288,7 +271,6 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 			}
 		}
 
-		// A/B variant subject override
 		if campaign.ABTestEnabled && msg.Variant != "" {
 			for _, v := range campaign.ABTestVariants {
 				if v.Name == msg.Variant && v.Subject != "" {
@@ -301,14 +283,12 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 			}
 		}
 
-		// Format sender with display name
 		sender := campaign.FromEmail
 		if campaign.FromName != "" {
 			sender = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
 		}
 
-		// Create email record. Assign the UUID up front so the per-recipient web
-		// view link can be built before persisting.
+		// The UUID is assigned up front so the per-recipient web view link can be built before persisting.
 		em := &models.Email{
 			UUID:         uuid.NewString(),
 			UserID:       campaign.UserID,
@@ -329,16 +309,13 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 		}
 
 		if p.trackingService != nil {
-			// Resolve reserved {{ posta_* }} system links for this recipient. The
-			// generated /t/ URLs are skipped by ProcessHTML's click rewriter, so
-			// substitute before it runs.
+			// ProcessHTML's click rewriter skips the generated /t/ URLs, so substitute posta_* links before it runs.
 			webViewURL := p.trackingService.WebViewURL(em.UUID)
 			unsubscribeURL := p.trackingService.UnsubscribeURL(msg.ID)
 			em.HTMLBody = email.SubstituteSystemLinks(em.HTMLBody, webViewURL, unsubscribeURL)
 			em.TextBody = email.SubstituteSystemLinks(em.TextBody, webViewURL, unsubscribeURL)
 			em.Subject = email.SubstituteSystemLinks(em.Subject, webViewURL, unsubscribeURL)
 
-			// Rewrite links for click tracking and inject open pixel
 			if em.HTMLBody != "" {
 				em.HTMLBody = p.trackingService.ProcessHTML(em.HTMLBody, campaign.ID, msg.ID)
 			}
@@ -347,17 +324,14 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 			_ = p.emailRepo.Update(em)
 		}
 
-		// Link email to campaign message
 		_ = p.messageRepo.SetEmailID(msg.ID, em.ID)
 		_ = p.messageRepo.UpdateStatus(msg.ID, models.CampaignMsgQueued, "")
 
-		// Enqueue email for sending
 		if err := p.producer.EnqueueEmailSend(em.ID, QueueBulk); err != nil {
 			_ = p.messageRepo.UpdateStatus(msg.ID, models.CampaignMsgFailed, "failed to enqueue email: "+err.Error())
 		}
 	}
 
-	// Check if there are more pending messages
 	remaining, err := p.messageRepo.CountPending(campaign.ID)
 	if err != nil {
 		return fmt.Errorf("failed to count remaining messages: %w", err)
@@ -372,7 +346,6 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 		return p.producer.EnqueueCampaignBatch(campaign.ID, delay)
 	}
 
-	// All done
 	logger.Info("campaign sending complete", "id", campaign.ID)
 	if err := p.campaignRepo.UpdateStatus(campaign.ID, models.CampaignStatusSent); err != nil {
 		return err
@@ -383,14 +356,12 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 	return nil
 }
 
-// resolvedContent holds the rendered template content for a campaign email.
 type resolvedContent struct {
 	Subject  string
 	HTMLBody string
 	TextBody string
 }
 
-// resolveTemplateContent looks up the template, renders it with campaign data, and injects CSS.
 func (p *CampaignProcessor) resolveTemplateContent(campaign *models.Campaign, language string) *resolvedContent {
 	tmpl, err := p.templateRepo.FindByID(campaign.TemplateID)
 	if err != nil {
@@ -434,13 +405,11 @@ func (p *CampaignProcessor) resolveTemplateContent(campaign *models.Campaign, la
 		}
 	}
 
-	// Get CSS from stylesheet
 	var css string
 	if v.StyleSheet != nil {
 		css = v.StyleSheet.CSS
 	}
 
-	// Render templates with campaign data
 	renderer := email.NewTemplateRenderer()
 	renderer.MissingKeyBehavior = "zero" // don't fail on missing keys in campaigns
 
@@ -448,9 +417,7 @@ func (p *CampaignProcessor) resolveTemplateContent(campaign *models.Campaign, la
 	if campaign.TemplateData != nil {
 		data = okapi.M(campaign.TemplateData)
 	}
-	// Inject reserved {{ posta_* }} variables as sentinels. The campaign render is
-	// shared across recipients, so the real per-recipient URLs are substituted
-	// later in the per-message loop.
+	// Sentinels only: the render is shared, so per-recipient posta_* URLs are substituted in the message loop.
 	data = okapi.M(email.WithSystemVars(data))
 
 	rendered, err := renderer.Render(&email.RenderInput{
@@ -461,7 +428,6 @@ func (p *CampaignProcessor) resolveTemplateContent(campaign *models.Campaign, la
 	}, data)
 	if err != nil {
 		logger.Error("campaign: template render failed", "error", err, "campaign_id", campaign.ID)
-		// Fall back to raw content
 		return &resolvedContent{
 			Subject:  campaign.Subject,
 			HTMLBody: loc.HTMLTemplate,

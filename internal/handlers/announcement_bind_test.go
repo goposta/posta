@@ -28,10 +28,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// The announcement payload has to survive okapi's body resolution. It did not
-// once: the message field was called "body", which okapi read as another body
-// envelope, so nothing was decoded and every request came back reporting the
-// title missing. This binds the real struct through a real request.
+// A field named "body" makes okapi treat it as a body envelope and decode nothing, so bind through a real request.
 func TestCreateAnnouncementRequestBinds(t *testing.T) {
 	app := okapi.New()
 

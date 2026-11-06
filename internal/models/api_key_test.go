@@ -42,8 +42,7 @@ func TestAPIKeyHasScope(t *testing.T) {
 		{"multi grants both", []string{ScopeSend, ScopeWebhooks}, ScopeWebhooks, true},
 		{"multi denies missing", []string{ScopeSend, ScopeWebhooks}, ScopeRead, false},
 
-		// write and admin are workspace-level scopes, covered by the wildcard like
-		// any other. Neither confers platform administration.
+		// write and admin are workspace-level scopes covered by the wildcard; neither confers platform administration.
 		{"wildcard grants write", []string{ScopeAll}, ScopeWrite, true},
 		{"wildcard grants admin", []string{ScopeAll}, ScopeAdmin, true},
 		{"explicit write grants write", []string{ScopeWrite}, ScopeWrite, true},

@@ -30,10 +30,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// scopedTables are the tables whose rows must all carry a workspace_id before
-// the workspace lock in repositories.ApplyScope can be enabled. A row left with
-// a NULL workspace_id becomes permanently unreachable, so this is checked rather
-// than assumed.
+// A row with a NULL workspace_id becomes unreachable once repositories.ApplyScope is enforced, so this is checked.
 var scopedTables = []string{
 	"api_keys", "templates", "style_sheets", "languages", "domains",
 	"smtp_servers", "webhooks", "contacts", "subscribers", "subscriber_lists",

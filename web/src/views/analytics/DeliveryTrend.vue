@@ -31,8 +31,6 @@ const byDate = computed(() => {
   return map;
 });
 
-// The worst day is the one worth naming: an average delivery rate hides the
-// afternoon a route broke.
 const worst = computed(() => {
   let found: DeliveryRatePoint | null = null;
   for (const p of props.points) {

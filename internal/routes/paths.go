@@ -19,13 +19,7 @@
 
 package routes
 
-// Route paths registered by more than one definition, typically the GET, PUT,
-// and DELETE of a single resource. They are named rather than repeated so a
-// change to one method's path cannot leave the others behind, which would turn
-// into a 404 on exactly one verb.
-//
-// They live together because goconst counts occurrences per package, not per
-// file, and several are shared across route files.
+// Paths shared by several methods are named so one verb's path cannot drift into a 404; goconst counts per package.
 const (
 	pathBounces       = "/bounces"
 	pathNotifications = "/notifications"
@@ -36,18 +30,19 @@ const (
 	pathWebhooks      = "/webhooks"
 	pathWorkspaces    = "/workspaces"
 
-	pathByID                  = "/{id:int}"
-	pathAnnouncementByID      = "/announcements/{id:int}"
-	pathCampaignByID          = "/campaigns/{id:int}"
-	pathDomainByID            = "/domains/{id:int}"
-	pathFormByID              = "/forms/{id:int}"
-	pathPlanByID              = "/plans/{id:int}"
-	pathServerByID            = "/servers/{id:int}"
-	pathSMTPServerByID        = "/smtp-servers/{id:int}"
-	pathSubscriberByID        = "/subscribers/{id:int}"
-	pathSubscriberListByID    = "/subscriber-lists/{id:int}"
-	pathSubscriberListMembers = "/subscriber-lists/{id:int}/members"
-	pathTeamByID              = "/teams/{id:int}"
-	pathUnsubscribeListByID   = "/unsubscribe-lists/{id:int}"
-	pathWorkspaceByID         = "/workspaces/{id:int}"
+	pathByID                  = "/{id}"
+	pathAnnouncementByID      = "/announcements/{id}"
+	pathCampaignByID          = "/campaigns/{id}"
+	pathDomainByID            = "/domains/{id}"
+	pathFormByID              = "/forms/{id}"
+	pathPlanByID              = "/plans/{id}"
+	pathServerByID            = "/servers/{id}"
+	pathSMTPServerByID        = "/smtp-servers/{id}"
+	pathSubscriberByID        = "/subscribers/{id}"
+	pathSubscriberListByID    = "/subscriber-lists/{id}"
+	pathSubscriberListMembers = "/subscriber-lists/{id}/members"
+	pathTeamByID              = "/teams/{id}"
+	pathTemplateByID          = "/templates/{id}"
+	pathUnsubscribeListByID   = "/unsubscribe-lists/{id}"
+	pathWorkspaceByID         = "/workspaces/{id}"
 )

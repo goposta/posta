@@ -16,16 +16,12 @@ import type {
   SubmissionSummary,
 } from "../../api/types";
 
-// A form's responses: a per-question summary and a table, over one set of
-// filters, with CSV and JSON export of exactly what is shown.
-
 const props = defineProps<{ form: Form; shareUrl?: string }>();
 const notify = useNotificationStore();
 const route = useRoute();
 const router = useRouter();
 
-// The view, page and filters live in the query, so a refresh or a shared
-// link shows the same responses. Field filters stay in the page.
+// The view, page and filters live in the query so a refresh or shared link shows the same responses; field filters stay in the page.
 function queryString(key: string): string {
   const v = route.query[key];
   return typeof v === "string" ? v : "";
@@ -130,8 +126,6 @@ function goPage(p: number) {
   load();
 }
 
-// ─── Field filters ────────────────────────────────────────────────────────
-
 function addFilter() {
   const first = filterable.value.find((f) => !f.archived && f.type !== "hidden") || filterable.value[0];
   if (!first) return;
@@ -180,8 +174,6 @@ const filtered = computed(
 function exportUrl(format: "csv" | "json") {
   return formSubmissionsApi.exportUrl(props.form.id, format, query());
 }
-
-// ─── Display ──────────────────────────────────────────────────────────────
 
 function labelOf(field: FormField | undefined, value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -240,7 +232,6 @@ onMounted(async () => {
 
 <template>
   <div>
-    <!-- Filters: one row above the views, applied to summary, table and export alike. -->
     <div class="card" style="margin-bottom: 16px">
       <div class="card-body">
         <div class="rf-row">
@@ -343,7 +334,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- ─── Summary ─── -->
     <template v-else-if="summary && view === 'summary'">
       <div class="rs-head">
         <div class="rs-total">{{ summary.total.toLocaleString() }}</div>
@@ -366,7 +356,6 @@ onMounted(async () => {
             <span v-if="s.answered < summary.total"> · {{ summary.total - s.answered }} skipped</span>
           </div>
 
-          <!-- Choices: horizontal bars, labelled with count and share. -->
           <div v-if="isChoice(s) && s.options" class="rs-bars">
             <div
               v-for="o in s.options"
@@ -385,7 +374,6 @@ onMounted(async () => {
             <p v-if="s.type === 'multiselect'" class="rs-note">Respondents could pick more than one, so shares add up past 100%.</p>
           </div>
 
-          <!-- Scale and rating: a histogram anchored to the baseline, plus the mean. -->
           <div v-else-if="isHistogram(s) && s.options" class="rs-hist-wrap">
             <div class="rs-mean">
               <span class="rs-mean-value">{{ fmt(s.mean) }}</span>
@@ -407,14 +395,12 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Numbers: the figures themselves, no chart. -->
           <div v-else-if="s.type === 'number'" class="rs-stats">
             <div><span class="rs-stat">{{ fmt(s.mean) }}</span><span class="muted">average</span></div>
             <div><span class="rs-stat">{{ fmt(s.min) }}</span><span class="muted">lowest</span></div>
             <div><span class="rs-stat">{{ fmt(s.max) }}</span><span class="muted">highest</span></div>
           </div>
 
-          <!-- Text: the latest answers. -->
           <template v-else>
             <p v-if="s.samples_hidden" class="rs-note">
               Personal data: answers are shown to workspace admins only. Open a response to see it.
@@ -430,7 +416,6 @@ onMounted(async () => {
       </div>
     </template>
 
-    <!-- ─── Table ─── -->
     <div v-else-if="summary && view === 'table'" class="card rt-card">
       <div class="rt-scroll">
         <table class="rt">
@@ -481,8 +466,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* Single-series charts: one brand hue, validated against both surfaces
-   (#9333EA on light, #A855F7 on dark). Text stays in text tokens. */
 .rs-card,
 .rt-scroll {
   --rs-mark: #9333ea;
@@ -732,8 +715,7 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 
-/* A wide table scrolls inside its card instead of widening the page:
-   inline-size containment keeps the content from sizing the card. */
+/* inline-size containment stops a wide table from sizing its card, so it scrolls inside instead of widening the page. */
 .rt-card {
   contain: inline-size;
 }

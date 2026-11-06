@@ -25,9 +25,7 @@ import (
 	"strings"
 )
 
-// Workspaces, forms, OAuth providers, templates and stylesheets share one
-// naming scheme: Name is the identifier the API and URLs use, like
-// "contact-form"; DisplayName is the label people read.
+// Shared naming scheme: Name is the API/URL identifier ("contact-form"); DisplayName is the label people read.
 
 var identifierPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
@@ -35,8 +33,7 @@ var identifierSeparators = regexp.MustCompile(`[^a-z0-9]+`)
 
 const MaxIdentifierLength = 63
 
-// ToIdentifier derives an identifier from a label: "Contact form" becomes
-// "contact-form". It is empty when the label has no letters or digits.
+// ToIdentifier turns "Contact form" into "contact-form"; it is empty when the label has no letters or digits.
 func ToIdentifier(label string) string {
 	v := identifierSeparators.ReplaceAllString(strings.ToLower(strings.TrimSpace(label)), "-")
 	v = strings.Trim(v, "-")

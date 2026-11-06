@@ -36,8 +36,7 @@ async function load() {
   }
 }
 
-// refresh reloads the thread in place when a live event names this message,
-// keeping whatever the operator has typed in the composer.
+// Reloads in place on a live event, keeping whatever the operator has typed in the composer.
 async function refresh() {
   try {
     const res = await messagesApi.get(uuid);
@@ -249,8 +248,7 @@ async function copyValue(value: string) {
   }
 }
 
-// A collect-mode form's submissions are responses to read, not conversations:
-// no reply composer and no state to work through.
+// A collect-mode form's submissions are responses to read: no reply composer and no state to work through.
 const collect = computed(() => message.value?.form?.mode === "collect");
 const backTo = computed(() =>
   collect.value && message.value?.form

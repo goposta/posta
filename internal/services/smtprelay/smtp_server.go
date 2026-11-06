@@ -28,7 +28,6 @@ import (
 	"github.com/emersion/go-smtp"
 )
 
-// SMTPConfig holds configuration for the built-in SMTP Relay listener.
 type SMTPConfig struct {
 	Host           string
 	Port           int

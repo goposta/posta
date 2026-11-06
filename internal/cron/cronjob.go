@@ -25,7 +25,6 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-// CronJob defines a recurring job that enqueues work on a cron schedule.
 type CronJob interface {
 	Name() string
 	// cron expression

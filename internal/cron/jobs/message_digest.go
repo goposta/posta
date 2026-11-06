@@ -68,9 +68,7 @@ func NewMessageDigestJob(
 	}
 }
 
-// SetRouting groups digests by the recipients routing rules chose, so a team
-// is sent its own submissions rather than everyone everything. Rules are a
-// Posta Enterprise feature: without a license, the form's recipients get all.
+// SetRouting groups digests by rule-chosen recipients; without an Enterprise license the form's recipients get all.
 func (j *MessageDigestJob) SetRouting(edition enterprise.EE, rules *repositories.FormRuleRepository, dir formrules.Directory) {
 	j.ruleRepo, j.directory, j.edition = rules, dir, edition
 }
@@ -124,8 +122,7 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 			dir = &formrules.CachedDirectory{Next: j.directory}
 		}
 
-		// Each recipient gets the submissions routed to them: the form's
-		// default route, or an address or member a rule added.
+		// Each recipient gets what is routed to them: the form's default route, or a rule-added address or member.
 		groups := map[digestTarget][]digestItem{}
 		var order []digestTarget
 		ids := make([]uint, 0, len(pending))
@@ -185,9 +182,7 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 				failed = true
 			}
 		}
-		// A failed send keeps the submissions pending for the next run; the
-		// recipients that did get theirs may then get them twice, which
-		// beats someone never hearing of them.
+		// A failed send keeps submissions pending; recipients already sent may get them twice, which beats never.
 		if failed {
 			continue
 		}
@@ -198,16 +193,14 @@ func (j *MessageDigestJob) runMode(mode models.NotifyMode, since time.Time, labe
 	return sent
 }
 
-// digestTarget is one recipient of a digest: the form's default route, an
-// address, or a member.
+// digestTarget is one digest recipient: the form's default route, an address, or a member.
 type digestTarget struct {
 	Default bool
 	Email   string
 	UserID  uint
 }
 
-// targets is where one submission is reported. Without rules, that is the
-// form's default route, as before.
+// targets is where one submission is reported; without rules, that is the form's default route.
 func (j *MessageDigestJob) targets(form *models.Form, rules []models.FormRule, dir formrules.Directory, m *models.Message) []digestTarget {
 	if len(rules) == 0 || dir == nil || !formrules.Routable(m.Status) {
 		return []digestTarget{{Default: true}}
@@ -270,8 +263,7 @@ func (j *MessageDigestJob) deliver(form *models.Form, subject string, data map[s
 	return j.notifier.SendToWorkspaceAdmins(*form.WorkspaceID, subject, notification.TemplateMessageDigest, data)
 }
 
-// inboxURL opens the form's responses for a collect form and the inbox,
-// filtered to the form, otherwise.
+// inboxURL opens a collect form's responses, otherwise the inbox filtered to the form.
 func (j *MessageDigestJob) inboxURL(form *models.Form) string {
 	if j.appURL == "" {
 		return ""

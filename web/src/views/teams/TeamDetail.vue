@@ -10,9 +10,6 @@ import { apiMessage } from "../../composables/apiError";
 import EnterpriseLock from "../../components/EnterpriseLock.vue";
 import type { TeamDetail, WorkspaceMember } from "../../api/types";
 
-// One team: who is on it, which routing rules send work to it, and how much
-// work it holds. Owners and admins change it; every member can read it.
-
 const route = useRoute();
 const router = useRouter();
 const notify = useNotificationStore();

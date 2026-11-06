@@ -28,8 +28,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// normalizeEmail extracts the bare email address from a string that may be in
-// RFC 5322 format like "Display Name <user@example.com>" and lowercases it.
+// normalizeEmail lowercases the bare address of an RFC 5322 "Display Name <user@example.com>" string.
 func normalizeEmail(raw string) string {
 	addr, err := mail.ParseAddress(raw)
 	if err != nil {
@@ -51,15 +50,12 @@ func (r *SuppressionRepository) Create(suppression *models.Suppression) error {
 	return r.db.Create(suppression).Error
 }
 
-// Upsert adds a suppression idempotently. If a row already exists for the same
-// (user_id, workspace_id, email), the existing row is kept and no error is
-// returned. Intended for automated paths (bounces, one-click unsubscribe).
+// Upsert keeps an existing (user_id, workspace_id, email) row without error, for automated paths like bounces.
 func (r *SuppressionRepository) Upsert(suppression *models.Suppression) error {
 	suppression.Email = normalizeEmail(suppression.Email)
 	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(suppression).Error
 }
 
-// Delete removes a suppression for an email within scope.
 func (r *SuppressionRepository) Delete(scope ResourceScope, email string, listID *uint) error {
 	q := ApplyScope(r.db, scope).Where("email = ?", normalizeEmail(email))
 	if listID != nil {
@@ -70,9 +66,7 @@ func (r *SuppressionRepository) Delete(scope ResourceScope, email string, listID
 	return q.Delete(&models.Suppression{}).Error
 }
 
-// applyListPredicate scopes a suppression query to what blocks a send for the
-// given list. listID nil ⇒ only global rows apply (list_id IS NULL). A set listID
-// ⇒ a global block OR that list's opt-out applies (a global block always wins).
+// applyListPredicate applies global rows, plus that list's opt-out when listID is set; a global block always wins.
 func applyListPredicate(db *gorm.DB, listID *uint) *gorm.DB {
 	if listID != nil {
 		// Explicit parens so the OR can't bind loosely against the scope/email ANDs.
@@ -126,7 +120,6 @@ func (r *SuppressionRepository) FindByScope(scope ResourceScope, limit, offset i
 	return items, total, nil
 }
 
-// IsSuppressed reports whether email is suppressed at the global scope (no list).
 func (r *SuppressionRepository) FindByScopeFiltered(scope ResourceScope, listID *uint, limit, offset int) ([]models.Suppression, int64, error) {
 	var items []models.Suppression
 	var total int64
@@ -163,8 +156,7 @@ func (r *SuppressionRepository) FilterSuppressed(scope ResourceScope, emails []s
 	return r.FilterSuppressedForList(scope, emails, nil)
 }
 
-// FilterSuppressedForList drops recipients blocked for the given list (global
-// block, or that list's opt-out when listID is set).
+// FilterSuppressedForList drops recipients blocked globally or opted out of listID.
 func (r *SuppressionRepository) FilterSuppressedForList(scope ResourceScope, emails []string, listID *uint) ([]string, error) {
 	if len(emails) == 0 {
 		return emails, nil

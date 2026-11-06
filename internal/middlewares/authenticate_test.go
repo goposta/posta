@@ -47,9 +47,7 @@ func testJWT(t *testing.T, role string) string {
 	return tok
 }
 
-// jwtOnlyServer mounts Authenticate with nil API-key collaborators. That is safe
-// precisely because a credential without the psk_ prefix must never reach the
-// API-key path — if it did, these tests would panic rather than quietly pass.
+// Nil API-key collaborators are safe: a non-psk_ credential reaching the key path would panic, not pass.
 func jwtOnlyServer(t *testing.T) *okapi.TestServer {
 	t.Helper()
 	cfg := &config.Config{JWTSecret: testSecret}
@@ -89,8 +87,7 @@ func TestAuthenticate_JWT(t *testing.T) {
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			// The whole point of dropping query:token — a JWT in the URL must not
-			// authenticate, even though it is otherwise a perfectly valid token.
+			// A JWT in the URL must never authenticate, even when the token itself is valid.
 			name:       "valid jwt in query is refused",
 			apply:      func(r *http.Request) { r.URL.RawQuery = "token=" + token },
 			wantStatus: http.StatusUnauthorized,
@@ -115,8 +112,7 @@ func TestAuthenticate_JWT(t *testing.T) {
 	}
 }
 
-// An expired or revoked cookie must not fall through to "authentication
-// required" — it has to be rejected as an invalid session.
+// An expired or revoked cookie must be rejected as an invalid session, not fall through to "auth required".
 func TestAuthenticate_RejectsExpiredCookie(t *testing.T) {
 	expired, err := okapi.GenerateJwtToken([]byte(testSecret), map[string]any{
 		"sub": 1, "aud": "posta", "jti": "jti-1",
@@ -136,9 +132,7 @@ func TestAuthenticate_RejectsExpiredCookie(t *testing.T) {
 	}
 }
 
-// A token with no jti cannot be checked against the revocation list, so it is
-// not a usable session. It must read as unauthenticated (401), not as a
-// permissions problem (403) — okapi's default for a ValidateClaims failure.
+// No jti means no revocation check, so it must be a 401, not okapi's default 403 for a ValidateClaims failure.
 func TestAuthenticate_RejectsTokenWithoutJTI(t *testing.T) {
 	noJTI, err := okapi.GenerateJwtToken([]byte(testSecret), map[string]any{
 		"sub": 1, "aud": "posta", "role": "user",
@@ -158,9 +152,7 @@ func TestAuthenticate_RejectsTokenWithoutJTI(t *testing.T) {
 	}
 }
 
-// A psk_ credential must never be parsed as a JWT, wherever it arrives. With nil
-// API-key collaborators the API-key path panics, which is what we assert: it
-// proves dispatch reached that branch rather than silently 401ing as a bad JWT.
+// The asserted panic proves a psk_ credential reached the API-key path instead of being parsed as a JWT.
 func TestAuthenticate_RoutesAPIKeyPrefixToKeyPath(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -219,8 +211,7 @@ func TestJWTAdminAuth_RejectsNonAdmin(t *testing.T) {
 	}
 }
 
-// The lookup order and contents are load-bearing: header for CLI/SDK, cookie for
-// the browser, and no query source at all.
+// The lookup order is load-bearing: header for CLI/SDK, cookie for the browser, and no query source at all.
 func TestTokenLookup(t *testing.T) {
 	if want := "header:Authorization,cookie:posta_session"; tokenLookup != want {
 		t.Errorf("tokenLookup = %q, want %q", tokenLookup, want)

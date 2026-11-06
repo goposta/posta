@@ -29,7 +29,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// BounceWebhookHandler processes inbound bounce notifications.
 type BounceWebhookHandler struct {
 	subscriberRepo *repositories.SubscriberRepository
 	emailRepo      *repositories.EmailRepository
@@ -75,7 +74,6 @@ func (h *BounceWebhookHandler) HandleBounce(c *okapi.Context, req *BounceNotific
 
 	action := "recorded"
 
-	// Mark subscriber as bounced for hard bounces
 	if bounceType == "hard" {
 		// Find all subscribers with this email (across all scopes)
 		var subscribers []models.Subscriber
@@ -92,7 +90,6 @@ func (h *BounceWebhookHandler) HandleBounce(c *okapi.Context, req *BounceNotific
 		}
 	}
 
-	// Update campaign message if email UUID is provided
 	if req.Body.EmailUUID != "" {
 		em, err := h.emailRepo.FindByUUID(req.Body.EmailUUID)
 		if err == nil {

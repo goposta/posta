@@ -17,13 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package upgrade tracks the app version stored in the database and applies
-// one-shot data migrations recorded in the in-tree step registry. It runs at
-// server start, after the GORM schema AutoMigrate.
-//
-// Schema migrations live in internal/storage/migration. This package only
-// handles versioned data migrations and the version pin used to refuse
-// downgrades. See step.go for the registry contract.
+// Package upgrade applies one-shot versioned data migrations after AutoMigrate at start, and refuses downgrades.
 package upgrade
 
 import (
@@ -37,31 +31,25 @@ import (
 	"gorm.io/gorm"
 )
 
-// Settings keys persisted in the platform `settings` table.
 const (
 	KeyAppVersion        = "app.version"
 	KeyAppFirstStartedAt = "app.first_started_at"
 	KeyAppLastStartedAt  = "app.last_started_at"
 )
 
-// ErrDowngrade is returned when the binary version is older than the version
-// recorded in the database. Callers may choose to allow it via AllowDowngrade.
+// ErrDowngrade is returned when the binary is older than the stored version, unless AllowDowngrade is set.
 var ErrDowngrade = errors.New("upgrade: binary is older than the database version (downgrade)")
 
-// Options tunes the upgrade run. Zero value is the safe default.
+// Options tunes the upgrade run; the zero value is the safe default.
 type Options struct {
-	// AllowDowngrade lets the boot proceed even when the binary is older than
-	// the stored version. Intended for emergencies; logs a loud warning.
+	// AllowDowngrade lets boot proceed on an older binary; for emergencies only, and it logs a loud warning.
 	AllowDowngrade bool
 
-	// PlanEnforcement mirrors config.PlanEnforcement. It is consumed by data
-	// steps that provision plan-bearing rows (the personal-workspace backfill).
+	// PlanEnforcement mirrors config.PlanEnforcement for steps that provision plan-bearing rows.
 	PlanEnforcement bool
 }
 
-// runOptions holds the Options for the in-progress run so registry steps — whose
-// Apply signature takes only a *gorm.DB — can read runtime configuration. Access
-// is safe: Run holds the advisory lock for the entire run, serializing it.
+// runOptions exposes Options to registry steps; safe because Run holds the advisory lock for the whole run.
 var runOptions Options
 
 func Run(ctx context.Context, db *gorm.DB, binaryVersion string, opts Options) error {

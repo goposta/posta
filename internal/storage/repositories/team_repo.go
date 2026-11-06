@@ -47,8 +47,7 @@ func (r *TeamRepository) FindForWorkspace(workspaceID, id uint) (*models.Team, e
 	return &team, nil
 }
 
-// FindByID loads a team with its member IDs, whatever the workspace; the
-// worker checks the workspace itself.
+// FindByID ignores the workspace; the worker checks it itself.
 func (r *TeamRepository) FindByID(id uint) (*models.Team, error) {
 	var team models.Team
 	if err := r.db.Preload("Members").First(&team, id).Error; err != nil {
@@ -57,8 +56,7 @@ func (r *TeamRepository) FindByID(id uint) (*models.Team, error) {
 	return &team, nil
 }
 
-// MessageCounts counts the submissions routed to a team: those still to handle
-// (new or open) and all of them.
+// MessageCounts counts a team's routed submissions still to handle (new or open) and in total.
 func (r *TeamRepository) MessageCounts(teamID uint) (open, total int64, err error) {
 	q := func() *gorm.DB { return r.db.Model(&models.Message{}).Where("team_id = ?", teamID) }
 	if err = q().Count(&total).Error; err != nil {
@@ -82,8 +80,7 @@ func (r *TeamRepository) Update(team *models.Team) error {
 	return r.db.Omit(clause.Associations).Save(team).Error
 }
 
-// Delete removes a team and its memberships. Submissions routed to it stay
-// where they are, without a team.
+// Delete keeps the submissions routed to the team, now without a team.
 func (r *TeamRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("team_id = ?", id).Delete(&models.TeamMember{}).Error; err != nil {
@@ -96,7 +93,6 @@ func (r *TeamRepository) Delete(id uint) error {
 	})
 }
 
-// SetMembers replaces a team's members.
 func (r *TeamRepository) SetMembers(teamID uint, userIDs []uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("team_id = ?", teamID).Delete(&models.TeamMember{}).Error; err != nil {
@@ -128,8 +124,7 @@ func (r *TeamRepository) IDs(workspaceID uint) ([]uint, error) {
 	return ids, err
 }
 
-// RoutingDirectory answers the lookups routing rules expand recipients
-// with (formrules.Directory).
+// RoutingDirectory answers the recipient lookups routing rules expand (formrules.Directory).
 type RoutingDirectory struct {
 	Workspaces *WorkspaceRepository
 	Teams      *TeamRepository

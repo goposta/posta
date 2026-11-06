@@ -13,7 +13,6 @@ const notify = useNotificationStore()
 const { confirm } = useConfirm()
 const router = useRouter()
 
-// Profile
 const name = ref('')
 const email = ref('')
 const profileLoading = ref(false)
@@ -21,11 +20,9 @@ const twoFactorEnabled = ref(false)
 const scheduledDeletionAt = ref<string | null>(null)
 const deletionLoading = ref(false)
 
-// Plan
 const userPlan = ref<Plan | null>(null)
 const planLoading = ref(false)
 
-// Linked OAuth Accounts
 const linkedAccounts = ref<OAuthLinkedAccount[]>([])
 const oauthProviders = ref<OAuthProviderInfo[]>([])
 const oauthLoading = ref(false)
@@ -43,14 +40,12 @@ function formatLimit(val: number): string {
 onMounted(async () => {
   name.value = auth.user?.name || ''
   email.value = auth.user?.email || ''
-  // Fetch fresh profile to get 2FA status and deletion status
   try {
     const res = await authApi.me()
     twoFactorEnabled.value = res.data.data.two_factor_enabled
     scheduledDeletionAt.value = res.data.data.scheduled_deletion_at
   } catch { /* ignore */ }
 
-  // Fetch user plan
   planLoading.value = true
   try {
     const res = await authApi.getMyPlan()
@@ -58,7 +53,6 @@ onMounted(async () => {
   } catch { /* ignore */ }
   finally { planLoading.value = false }
 
-  // Fetch linked OAuth accounts and available providers
   oauthLoading.value = true
   try {
     const [accountsRes, providersRes] = await Promise.all([
@@ -91,7 +85,6 @@ async function handleProfileUpdate() {
   }
 }
 
-// OAuth account management
 async function unlinkOAuthAccount(account: OAuthLinkedAccount) {
   const confirmed = await confirm({
     title: 'Unlink Account',
@@ -118,7 +111,6 @@ function linkOAuthProvider(provider: string) {
   window.location.href = `/api/v1/auth/oauth/${provider}/authorize`
 }
 
-// Password
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -152,7 +144,6 @@ async function handlePasswordChange() {
   }
 }
 
-// 2FA
 const show2FASetup = ref(false)
 const tfaSecret = ref('')
 const tfaURL = ref('')
@@ -226,7 +217,6 @@ function cancel2FASetup() {
   tfaURL.value = ''
 }
 
-// Sessions
 const sessions = ref<Session[]>([])
 const sessionsLoading = ref(false)
 const revokingSession = ref<number | null>(null)
@@ -288,7 +278,6 @@ async function revokeOtherSessions() {
 
 function parseUserAgent(ua: string): string {
   if (!ua) return 'Unknown'
-  // Extract browser name
   if (ua.includes('Firefox')) return 'Firefox'
   if (ua.includes('Edg/')) return 'Edge'
   if (ua.includes('Chrome')) return 'Chrome'
@@ -297,14 +286,12 @@ function parseUserAgent(ua: string): string {
   return ua.slice(0, 30) + (ua.length > 30 ? '...' : '')
 }
 
-// sessionLabel prefers the server-parsed label, falling back to the local
-// User-Agent parser for sessions created before the server enriched them.
+// Falls back to the local User-Agent parser for sessions created before the server enriched them.
 function sessionLabel(s: Session): string {
   if (s.label && s.label !== 'Unknown device') return s.label
   return parseUserAgent(s.user_agent)
 }
 
-// sessionDevice returns a short form-factor hint (e.g. "Mobile") when known.
 function sessionDevice(s: Session): string {
   return s.device && s.device !== 'Unknown' ? s.device : ''
 }
@@ -316,7 +303,6 @@ function formatSessionDate(dateStr: string): string {
   })
 }
 
-// Account Deletion
 async function requestAccountDeletion() {
   const confirmed = await confirm({
     title: 'Delete Account',
@@ -367,7 +353,6 @@ function formatDeletionDate(dateStr: string): string {
   })
 }
 
-// Load sessions on mount
 onMounted(() => { loadSessions() })
 </script>
 
@@ -378,7 +363,6 @@ onMounted(() => { loadSessions() })
     </div>
 
     <div class="profile-grid">
-      <!-- My Profile -->
       <div class="card">
         <div class="card-header"><h2>My Profile</h2></div>
         <div class="card-body">
@@ -399,7 +383,6 @@ onMounted(() => { loadSessions() })
         </div>
       </div>
 
-      <!-- My Plan -->
       <div class="card">
         <div class="card-header"><h2>My Plan</h2></div>
         <div class="card-body">
@@ -438,7 +421,6 @@ onMounted(() => { loadSessions() })
         </div>
       </div>
 
-      <!-- Two-Factor Authentication -->
       <div class="card">
         <div class="card-header">
           <h2>Two-Factor Authentication</h2>
@@ -446,7 +428,6 @@ onMounted(() => { loadSessions() })
           <span v-else class="badge badge-secondary">Disabled</span>
         </div>
         <div class="card-body">
-          <!-- 2FA Not Enabled -->
           <template v-if="!twoFactorEnabled && !show2FASetup">
             <p class="tfa-description">Add an extra layer of security to your account by requiring a code from your authenticator app.</p>
             <button class="btn btn-primary" :disabled="tfaLoading" @click="startSetup2FA">
@@ -454,7 +435,6 @@ onMounted(() => { loadSessions() })
             </button>
           </template>
 
-          <!-- 2FA Setup Flow -->
           <template v-if="show2FASetup">
             <div class="tfa-setup">
               <p class="tfa-description">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):</p>
@@ -490,13 +470,11 @@ onMounted(() => { loadSessions() })
             </div>
           </template>
 
-          <!-- 2FA Enabled -->
           <template v-if="twoFactorEnabled && !show2FADisable">
             <p class="tfa-description">Two-factor authentication is currently enabled on your account.</p>
             <button class="btn btn-danger" @click="show2FADisable = true">Disable 2FA</button>
           </template>
 
-          <!-- 2FA Disable Flow -->
           <template v-if="show2FADisable">
             <form @submit.prevent="disable2FA" class="profile-form">
               <p class="tfa-description">Enter a code from your authenticator app to confirm disabling 2FA.</p>
@@ -524,7 +502,6 @@ onMounted(() => { loadSessions() })
         </div>
       </div>
 
-      <!-- Linked OAuth Accounts -->
       <div class="card" v-if="oauthProviders.length > 0 || linkedAccounts.length > 0">
         <div class="card-header"><h2>Linked Accounts</h2></div>
         <div class="card-body">
@@ -569,7 +546,6 @@ onMounted(() => { loadSessions() })
         </div>
       </div>
 
-      <!-- Active Sessions -->
       <div class="card">
         <div class="card-header">
           <h2>Active Sessions</h2>
@@ -620,7 +596,6 @@ onMounted(() => { loadSessions() })
         </div>
       </div>
 
-      <!-- Change Password -->
       <div class="card">
         <div class="card-header"><h2>Change Password</h2></div>
         <div class="card-body">
@@ -644,11 +619,9 @@ onMounted(() => { loadSessions() })
         </div>
       </div>
 
-      <!-- Danger Zone -->
       <div class="card danger-card" v-if="!auth.isAdmin">
         <div class="card-header"><h2>Danger Zone</h2></div>
         <div class="card-body">
-          <!-- Deletion already scheduled -->
           <template v-if="scheduledDeletionAt">
             <div class="deletion-notice">
               <p class="deletion-warning">Your account is scheduled for permanent deletion on <strong>{{ formatDeletionDate(scheduledDeletionAt) }}</strong>.</p>
@@ -659,7 +632,6 @@ onMounted(() => { loadSessions() })
             </div>
           </template>
 
-          <!-- No deletion scheduled -->
           <template v-else>
             <p class="tfa-description">
               Permanently delete your account and all associated data. Your account will be deactivated immediately and permanently deleted after 7 days. This gives you time to change your mind.

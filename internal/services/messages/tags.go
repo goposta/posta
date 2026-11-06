@@ -27,15 +27,11 @@ import (
 )
 
 const (
-	// MaxTags is how many tags one message may carry.
-	MaxTags = 20
-	// MaxTagLen is the longest tag, in characters.
+	MaxTags   = 20
 	MaxTagLen = 32
 )
 
-// NormalizeTag lowercases a tag and collapses its whitespace, so "VIP " and
-// "vip" are one tag. It rejects empty tags, control characters, and commas,
-// which would split the tag in a CSV export.
+// Commas are rejected because they would split the tag in a CSV export.
 func NormalizeTag(raw string) (string, error) {
 	tag := strings.ToLower(strings.Join(strings.Fields(raw), " "))
 	if tag == "" {
@@ -52,9 +48,7 @@ func NormalizeTag(raw string) (string, error) {
 	return tag, nil
 }
 
-// ApplyTags returns current with add appended and remove taken out, in a
-// stable order: existing tags keep their place, new ones follow in the order
-// given. Removing wins over adding the same tag.
+// Existing tags keep their place, and removing wins over adding the same tag.
 func ApplyTags(current, add, remove []string) ([]string, error) {
 	drop := map[string]bool{}
 	for _, raw := range remove {

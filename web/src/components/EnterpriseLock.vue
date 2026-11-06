@@ -4,14 +4,8 @@ import { ENTERPRISE_URL } from '../api/license'
 import { useAuthStore } from '../stores/auth'
 import { useLicenseStore } from '../stores/license'
 
-// Wraps a Posta Enterprise feature. With a license it shows the feature; once
-// the license has expired past its grace period it still shows it, under a
-// notice that its settings are read-only. Without a license it shows what the
-// feature does and how to get it: an explanation, not a nag.
 defineProps<{
-  /** The feature's name, e.g. "Routing rules". */
   feature: string
-  /** One or two sentences on what it does. */
   description: string
 }>()
 

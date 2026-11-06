@@ -25,6 +25,7 @@ import (
 	"html/template"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,9 +36,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// openPixelRe matches the open-tracking pixel injected by tracking.ProcessHTML so
-// it can be stripped from the hosted "view in browser" page — rendering a stored
-// campaign body in a browser would otherwise re-fire the open and inflate metrics.
+// Stripped from "view in browser" pages, which would otherwise re-fire the open and inflate metrics.
 var openPixelRe = regexp.MustCompile(`(?i)<img[^>]+src=["'][^"']*/t/o/[^"']*["'][^>]*>`)
 
 type TrackingHandler struct {
@@ -77,8 +76,9 @@ func NewTrackingHandler(
 }
 
 type TrackingOpenRequest struct {
-	MessageID int    `param:"message_id"`
-	Sig       string `query:"sig"`
+	// The router only matches whole segments, so the pixel arrives as "<message id>.gif".
+	Pixel string `param:"pixel"`
+	Sig   string `query:"sig"`
 }
 
 type TrackingClickRequest struct {
@@ -95,16 +95,16 @@ type TrackingWebViewRequest struct {
 	Token string `param:"token"`
 }
 
-// OpenPixel serves a 1x1 transparent GIF and records the open event.
-// Signature is mandatory; unsigned or bad-sig requests get 404.
+// Signature is mandatory: unsigned or bad-signature requests get 404.
 func (h *TrackingHandler) OpenPixel(c *okapi.Context, req *TrackingOpenRequest) error {
-	if req.Sig == "" || !h.trackingService.VerifyOpenSig(uint(req.MessageID), req.Sig) {
+	messageID, err := strconv.ParseUint(strings.TrimSuffix(req.Pixel, ".gif"), 10, 0)
+	if err != nil || req.Sig == "" || !h.trackingService.VerifyOpenSig(uint(messageID), req.Sig) {
 		return c.AbortNotFound("not found")
 	}
 
 	ua := c.Request().UserAgent()
 	if !isBotUA(ua) {
-		go h.recordOpen(uint(req.MessageID), c.RealIP(), ua)
+		go h.recordOpen(uint(messageID), c.RealIP(), ua)
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "image/gif")
@@ -114,7 +114,6 @@ func (h *TrackingHandler) OpenPixel(c *okapi.Context, req *TrackingOpenRequest) 
 	return nil
 }
 
-// ClickRedirect records the click and redirects to the original URL.
 func (h *TrackingHandler) ClickRedirect(c *okapi.Context, req *TrackingClickRequest) error {
 	if req.Sig == "" || !h.trackingService.VerifyClickSig(uint(req.MessageID), req.Hash, req.Sig) {
 		return c.AbortNotFound("not found")
@@ -139,7 +138,6 @@ func (h *TrackingHandler) ClickRedirect(c *okapi.Context, req *TrackingClickRequ
 	return nil
 }
 
-// UnsubscribePage shows a simple unsubscribe confirmation page.
 func (h *TrackingHandler) UnsubscribePage(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	messageID, err := h.trackingService.VerifyUnsubscribeToken(req.Token)
 	if err != nil {
@@ -166,9 +164,7 @@ func (h *TrackingHandler) UnsubscribePage(c *okapi.Context, req *TrackingUnsubsc
 	})
 }
 
-// TxUnsubscribePage renders a confirmation page for a transactional one-click
-// unsubscribe link. The link is RFC 8058 compliant: the POST variant will
-// opt the recipient out without any further interaction.
+// The link is RFC 8058 compliant: its POST variant opts the recipient out without further interaction.
 func (h *TrackingHandler) TxUnsubscribePage(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	emailID, err := h.trackingService.VerifyTxUnsubscribeToken(req.Token)
 	if err != nil {
@@ -192,9 +188,7 @@ func (h *TrackingHandler) TxUnsubscribePage(c *okapi.Context, req *TrackingUnsub
 	})
 }
 
-// TxUnsubscribeConfirm processes a POST to the transactional unsubscribe link.
-// It is the RFC 8058 one-click endpoint — idempotent and requires no session.
-// All recipients on the email are added to the scoped suppression list.
+// RFC 8058 one-click endpoint: idempotent, needs no session, suppresses every recipient on the email.
 func (h *TrackingHandler) TxUnsubscribeConfirm(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	emailID, err := h.trackingService.VerifyTxUnsubscribeToken(req.Token)
 	if err != nil {
@@ -254,7 +248,6 @@ func (h *TrackingHandler) emitUnsubscribed(em *models.Email, addr string) {
 	h.dispatcher.DispatchJSON(em.UserID, em.WorkspaceID, "email.unsubscribed", body, em.Sender)
 }
 
-// WebView renders a hosted copy of a sent email ("view in browser").
 func (h *TrackingHandler) WebView(c *okapi.Context, req *TrackingWebViewRequest) error {
 	emailUUID, err := h.trackingService.VerifyWebViewToken(req.Token)
 	if err != nil {
@@ -282,7 +275,6 @@ func (h *TrackingHandler) WebView(c *okapi.Context, req *TrackingWebViewRequest)
 	})
 }
 
-// UnsubscribeConfirm processes the unsubscribe action.
 func (h *TrackingHandler) UnsubscribeConfirm(c *okapi.Context, req *TrackingUnsubscribeRequest) error {
 	messageID, err := h.trackingService.VerifyUnsubscribeToken(req.Token)
 	if err != nil {
@@ -299,15 +291,12 @@ func (h *TrackingHandler) UnsubscribeConfirm(c *okapi.Context, req *TrackingUnsu
 		return trackingNotice(c, http.StatusNotFound, "Not found", "We couldn't find the campaign this link points to.", "error")
 	}
 
-	// Suppress this subscriber on the campaign's list
 	if h.listRepo != nil {
 		_ = h.listRepo.SuppressMember(camp.ListID, msg.SubscriberID, "user_unsubscribed")
 	}
 
-	// Mark the campaign message itself.
 	_ = h.messageRepo.UpdateUnsubscribedAt(msg.ID)
 
-	// Record event for analytics.
 	_ = h.trackingRepo.CreateEvent(&models.TrackingEvent{
 		CampaignMessageID: msg.ID,
 		EventType:         models.TrackingEventUnsubscribe,
@@ -363,7 +352,6 @@ func (h *TrackingHandler) recordOpen(messageID uint, ip, userAgent string) {
 		return
 	}
 
-	// Record first open on the campaign message
 	if msg.OpenedAt == nil {
 		now := time.Now()
 		msg.OpenedAt = &now
@@ -385,14 +373,12 @@ func (h *TrackingHandler) recordClick(messageID uint, linkID uint, ip, userAgent
 		return
 	}
 
-	// Record first click on the campaign message
 	if msg.ClickedAt == nil {
 		now := time.Now()
 		msg.ClickedAt = &now
 		_ = h.messageRepo.UpdateClickedAt(msg.ID)
 	}
 
-	// Increment link click count
 	h.trackingRepo.IncrementLinkClickCount(linkID)
 
 	if !h.trackingRepo.HasClickEvent(msg.ID, linkID) {

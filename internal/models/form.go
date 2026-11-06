@@ -45,9 +45,7 @@ const (
 	NotifyModeOff       NotifyMode = "off"
 )
 
-// FormMode decides what the dashboard makes of submissions. An inbox form's
-// submissions are conversations to answer; a collect form's are responses to
-// read as a table (surveys, signups, RSVPs). Both share ingest and storage.
+// Inbox submissions are conversations to answer; collect ones are responses read as a table. Both share ingest.
 type FormMode string
 
 const (
@@ -60,8 +58,7 @@ const (
 	FormPublicKeyLength   = 22
 )
 
-// NewFormPublicKey returns a random key that identifies a form to the
-// browsers that submit it.
+// NewFormPublicKey returns a random key identifying a form to the browsers that submit it.
 func NewFormPublicKey() (string, error) {
 	out := make([]byte, FormPublicKeyLength)
 	max := big.NewInt(int64(len(FormPublicKeyAlphabet)))
@@ -105,8 +102,7 @@ type Form struct {
 	UnknownFields    UnknownFieldsPolicy `json:"unknown_fields" gorm:"type:varchar(8);default:'keep';not null"`
 	ErrorRedirectURL string              `json:"error_redirect_url"`
 
-	// Responses: what visitors see after submitting, and when the form stops
-	// accepting submissions. A paused form is closed too.
+	// What visitors see after submitting, and when the form stops accepting; a paused form is closed too.
 	ConfirmationMessage  string         `json:"confirmation_message"`
 	ClosedMessage        string         `json:"closed_message"`
 	CloseAt              *time.Time     `json:"close_at,omitempty"`
@@ -128,12 +124,9 @@ type Form struct {
 	NotifyMode      NotifyMode     `json:"notify_mode" gorm:"type:varchar(16);default:'immediate';not null"`
 	NotifyOnFlagged bool           `json:"notify_on_flagged" gorm:"default:true;not null"`
 
-	// RedactPIIInWebhooks leaves answers to personal-data questions, and the
-	// summary values they fill, out of this form's webhook payloads.
+	// RedactPIIInWebhooks leaves personal-data answers, and the summary values they fill, out of webhook payloads.
 	RedactPIIInWebhooks bool `json:"redact_pii_in_webhooks" gorm:"default:false;not null"`
-	// PIIEncrypted reports that this deployment encrypts personal-data answers
-	// at rest (POSTA_ENCRYPTION_KEY is set, under an Enterprise license). Not
-	// stored.
+	// PIIEncrypted reports that personal-data answers are encrypted at rest here (key set, Enterprise); not stored.
 	PIIEncrypted bool `json:"pii_encrypted" gorm:"-"`
 
 	ReplyFrom     string `json:"reply_from"`
@@ -154,8 +147,7 @@ type Form struct {
 
 func (f *Form) IsActive() bool { return f.Status == FormStatusActive }
 
-// AfterFind fills PIIEncrypted, so the dashboard can say why personal-data
-// answers cannot be filtered or searched.
+// AfterFind fills PIIEncrypted so the dashboard can say why personal-data answers cannot be searched.
 func (f *Form) AfterFind(*gorm.DB) error {
 	f.PIIEncrypted = EncryptsPII()
 	return nil
@@ -166,9 +158,7 @@ func (f *Form) AfterSave(*gorm.DB) error {
 	return nil
 }
 
-// Closed reports whether the form has stopped accepting submissions: it is
-// paused, its close time has passed, or it has reached its response limit.
-// Spam does not count towards the limit.
+// Closed reports whether the form is paused, past its close time, or at its response limit (spam excluded).
 func (f *Form) Closed(now time.Time) bool {
 	if f.Status == FormStatusPaused {
 		return true
@@ -179,8 +169,7 @@ func (f *Form) Closed(now time.Time) bool {
 	return f.MaxResponses > 0 && f.MessageCount-f.SpamCount >= int64(f.MaxResponses)
 }
 
-// IsCollect reports whether submissions are responses to read, not
-// conversations: they stay out of the inbox and cannot be replied to.
+// IsCollect: submissions are responses to read, kept out of the inbox and not repliable.
 func (f *Form) IsCollect() bool { return f != nil && f.Mode == FormModeCollect }
 
 // HasSchema reports whether submissions are validated against Fields.
@@ -195,18 +184,15 @@ func (f *Form) UnknownFieldsPolicy() UnknownFieldsPolicy {
 	return UnknownFieldsKeep
 }
 
-// ScanSource identifies what a submission arrived through, so the scanner can
-// apply that source's filters and count repeat submissions per source.
+// ScanSource names a submission's channel so the scanner applies its filters and counts repeats per source.
 type ScanSource struct {
 	Kind string `json:"kind"`
 	ID   uint   `json:"id"`
 }
 
-// ScanSourceForm is the ScanSource kind of a web form.
 const ScanSourceForm = "form"
 
-// ScanningEnabled, ScanThresholds, and ScanSource make a Form a
-// messagescan.Policy. A nil Form scans with the defaults.
+// ScanningEnabled, ScanThresholds and ScanSource make a Form a messagescan.Policy; a nil Form uses defaults.
 func (f *Form) ScanningEnabled() bool { return f == nil || f.ScanEnabled }
 
 func (f *Form) ScanThresholds() (flag, quarantine, reject float64) {
@@ -223,8 +209,7 @@ func (f *Form) ScanSource() ScanSource {
 	return ScanSource{Kind: ScanSourceForm, ID: f.ID}
 }
 
-// OriginPolicy returns the origin allowlist and whether a missing Origin is
-// refused, for messages.OriginAllowed and RedirectAllowed.
+// OriginPolicy returns the origin allowlist and whether a missing Origin is refused.
 func (f *Form) OriginPolicy() ([]string, bool) { return f.AllowedOrigins, f.StrictOrigin }
 
 func (f *Form) Honeypot() string {

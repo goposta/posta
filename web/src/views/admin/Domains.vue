@@ -41,9 +41,7 @@ function setStatus(next: typeof status.value) {
   goToPage(0);
 }
 
-// A domain is only usable for sending once ownership is proven; SPF, DKIM and
-// DMARC then decide how well that mail is received. The two are worth showing
-// separately rather than collapsing into one "verified" badge.
+// Ownership and SPF/DKIM/DMARC are shown apart: the first gates sending, the rest decide how well mail is received.
 function ownershipBadge(d: AdminDomainRow) {
   return d.ownership_verified ? "badge badge-success" : "badge badge-warning";
 }

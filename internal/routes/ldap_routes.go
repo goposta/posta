@@ -28,8 +28,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ldapRoutes manage the LDAP / Active Directory directories users sign in
-// through. Platform admins only; a Posta Enterprise license is required.
+// Platform admins only, and a Posta Enterprise license is required.
 func (r *Router) ldapRoutes() []okapi.RouteDefinition {
 	admin := r.v1.Group("/admin/ldap", r.mw.jwtAdminAuth.Middleware).WithTagInfo(okapi.GroupTag{
 		Name:        tagAdmin,
@@ -105,7 +104,7 @@ func (r *Router) ldapRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        pathByID + "/mappings/{mapping_id:int}",
+			Path:        pathByID + "/mappings/{mapping_id}",
 			Handler:     okapi.H(r.h.ldapAdmin.DeleteMapping),
 			Group:       admin,
 			Middlewares: r.licensedToChange(),

@@ -5,8 +5,6 @@ import { formatLatency } from "./chart";
 
 const props = defineProps<{ latency: LatencyPercentiles }>();
 
-// Percentiles read as a shape, not five separate numbers: the gap between p50
-// and p99 is the story. Bars against a shared scale make that gap visible.
 const rows = computed(() => {
   const l = props.latency;
   return [
@@ -25,8 +23,7 @@ function width(value: number): string {
   return `${Math.max((value / scale.value) * 100, value > 0 ? 2 : 0)}%`;
 }
 
-// A long tail relative to the median means a queue that occasionally stalls,
-// which is a different problem from being uniformly slow.
+// A long tail relative to the median means a queue that occasionally stalls, not uniform slowness.
 const tailRatio = computed(() => (props.latency.p50 > 0 ? props.latency.p99 / props.latency.p50 : 0));
 </script>
 

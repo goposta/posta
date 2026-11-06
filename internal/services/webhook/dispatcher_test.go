@@ -43,7 +43,6 @@ func TestSignPayload(t *testing.T) {
 
 	sig := signPayload(secret, body)
 
-	// Verify independently
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
 	want := hex.EncodeToString(mac.Sum(nil))
@@ -246,8 +245,7 @@ func localDispatcher() *Dispatcher {
 	return d
 }
 
-// By default a webhook cannot reach the server's own network, and the reason
-// recorded for the workspace does not name the address it tried.
+// By default a webhook cannot reach private networks, and the recorded reason doesn't name the address.
 func TestDispatcher_BlocksPrivateByDefault(t *testing.T) {
 	var hit atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit.Store(true) }))
@@ -270,8 +268,7 @@ func TestDispatcher_BlocksPrivateByDefault(t *testing.T) {
 	}
 }
 
-// A redirect is not followed: a public URL cannot send the request into the
-// internal network, and a 3xx is not a successful delivery.
+// Redirects aren't followed: a public URL can't bounce into the internal network, and a 3xx isn't success.
 func TestDispatcher_DoesNotFollowRedirects(t *testing.T) {
 	var internalHit atomic.Bool
 	internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { internalHit.Store(true) }))

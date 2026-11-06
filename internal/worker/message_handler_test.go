@@ -96,8 +96,7 @@ func TestNotifiableFieldsSender(t *testing.T) {
 	}
 }
 
-// Answers to personal-data questions never reach a notification email, and
-// neither do the summary values they fill.
+// Personal-data answers, and the summary values they fill, never reach a notification email.
 func TestNotifiableFieldsHidesPII(t *testing.T) {
 	mask := messages.NewPIIMask(models.FieldDefs{
 		{Key: "work_email", Type: models.FieldEmail, Role: models.RoleSenderEmail, PII: true},

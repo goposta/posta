@@ -45,8 +45,7 @@ func TestWorkspaceScopeForMessageRoutes(t *testing.T) {
 		{http.MethodPut, "/api/v1/workspaces/current/forms/1", models.ScopeAdmin},
 		{http.MethodPost, "/api/v1/workspaces/current/forms/1/rotate-key", models.ScopeAdmin},
 
-		// Responses are content, not configuration: reading them needs only read,
-		// even though the form they belong to is admin-only.
+		// Responses are content, not configuration: reading them needs only read, though their form is admin-only.
 		{http.MethodGet, "/api/v1/workspaces/current/form-submissions", models.ScopeRead},
 		{http.MethodGet, "/api/v1/workspaces/current/form-submissions/summary", models.ScopeRead},
 		{http.MethodGet, "/api/v1/workspaces/current/form-submissions/export", models.ScopeRead},
@@ -86,9 +85,7 @@ func TestReadScopeCannotReachFormConfig(t *testing.T) {
 	}
 }
 
-// GDPR erasure is destructive tenant administration. A workspace-bound key
-// resolves as owner, so without the admin scope a write-only key could erase
-// every contact in the workspace.
+// GDPR erasure needs admin: a bound key resolves as owner, so a write-only key could erase every contact.
 func TestGDPRRoutesRequireAdminScope(t *testing.T) {
 	for _, path := range []string{
 		"/api/v1/workspaces/current/gdpr/delete-contacts",

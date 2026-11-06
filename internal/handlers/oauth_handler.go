@@ -58,8 +58,6 @@ type OAuthHandler struct {
 	migrator     *workspaceprovision.Service
 }
 
-// SetMigrator wires the personal-workspace migrator used to provision (and seed)
-// a personal workspace after OAuth user upsert. See §4.
 func (h *OAuthHandler) SetMigrator(db *gorm.DB, m *workspaceprovision.Service) {
 	h.db = db
 	h.migrator = m
@@ -125,7 +123,6 @@ type DiscoverSSOResponse struct {
 	Type        string `json:"type"`
 }
 
-// ListProviders returns enabled OAuth providers for the login page
 func (h *OAuthHandler) ListProviders(c *okapi.Context) error {
 	providers, err := h.providerRepo.FindEnabled()
 	if err != nil {
@@ -147,8 +144,7 @@ func (h *OAuthHandler) ListProviders(c *okapi.Context) error {
 	return ok(c, okapi.M{"providers": result, "sso_available": ssoAvailable})
 }
 
-// DiscoverSSO looks up an enabled OAuth provider whose AllowedDomains matches the
-// email's domain.
+// DiscoverSSO finds an enabled provider whose AllowedDomains match the email's domain.
 func (h *OAuthHandler) DiscoverSSO(c *okapi.Context, req *DiscoverSSORequest) error {
 	email := strings.TrimSpace(req.Body.Email)
 	at := strings.LastIndex(email, "@")
@@ -169,7 +165,6 @@ func (h *OAuthHandler) DiscoverSSO(c *okapi.Context, req *DiscoverSSORequest) er
 	})
 }
 
-// Authorize redirects the user to the OAuth provider's authorization page.
 func (h *OAuthHandler) Authorize(c *okapi.Context) error {
 	providerName := c.Param("provider")
 	provider, err := h.providerRepo.FindByName(providerName)
@@ -184,7 +179,6 @@ func (h *OAuthHandler) Authorize(c *okapi.Context) error {
 	}
 	state := hex.EncodeToString(stateBytes)
 
-	// Store state in Redis with 10-minute TTL
 	stateData, _ := json.Marshal(map[string]string{
 		"provider_slug": provider.Name,
 		"created_at":    time.Now().UTC().Format(time.RFC3339),
@@ -202,7 +196,6 @@ func (h *OAuthHandler) Authorize(c *okapi.Context) error {
 	return nil
 }
 
-// Callback handles the OAuth provider's redirect with authorization code.
 func (h *OAuthHandler) Callback(c *okapi.Context) error {
 	providerName := c.Param("provider")
 	code := c.Query("code")
@@ -221,7 +214,6 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 		return redirect("missing_params")
 	}
 
-	// Validate state
 	ctx := c.Request().Context()
 	stateKey := "oauth:state:" + state
 	stateVal := h.redisClient.Get(ctx, stateKey)
@@ -230,7 +222,6 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 	}
 	h.redisClient.Del(ctx, stateKey)
 
-	// Verify state matches provider
 	var stateData map[string]string
 	if err := json.Unmarshal([]byte(stateVal.Val()), &stateData); err != nil || stateData["provider_slug"] != providerName {
 		return redirect("state_mismatch")
@@ -243,14 +234,12 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 
 	redirectURI := fmt.Sprintf("%s/api/v1/auth/oauth/%s/callback", h.callbackBase, provider.Name)
 
-	// Exchange code for tokens + user info
 	userInfo, token, err := h.oauthService.ExchangeCode(ctx, provider, code, redirectURI)
 	if err != nil {
 		logger.Error("OAuth exchange failed for provider %s: %v", provider.Name, err)
 		return redirect("exchange_failed")
 	}
 
-	// Find or create user
 	user, isNew, err := h.oauthService.FindOrCreateUser(provider, userInfo, token)
 	if err != nil {
 		logger.Error("OAuth account resolution failed for provider %s: %v", provider.Name, err)
@@ -261,21 +250,18 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 		return redirect("account_disabled")
 	}
 
-	// Provision the personal workspace (and seed defaults for new users) before
-	// issuing the JWT. Idempotent: a no-op for already-migrated returning users.
+	// Provisioned before issuing the JWT; idempotent for already-migrated returning users.
 	if h.migrator != nil && h.db != nil {
 		if _, err := h.migrator.EnsureWorkspace(h.db, user.ID); err != nil {
 			logger.Error("failed to provision personal workspace", "user_id", user.ID, "err", err)
 		}
 	}
 
-	// Generate JWT
 	jwtToken, err := h.generateToken(c, user)
 	if err != nil {
 		return redirect("token_generation_failed")
 	}
 
-	// Publish event
 	if h.bus != nil {
 		action := "user.oauth_login"
 		if isNew {
@@ -285,20 +271,16 @@ func (h *OAuthHandler) Callback(c *okapi.Context) error {
 			fmt.Sprintf("User %q authenticated via %s", user.Email, provider.DisplayName), nil)
 	}
 
-	// Update last login
 	now := time.Now()
 	user.LastLoginAt = &now
 	_ = h.userRepo.Update(user)
 
-	// Hand the session to the browser as an HttpOnly cookie rather than a query
-	// parameter, so the JWT never lands in browser history or a Referer header.
-	// The SPA callback route just fetches /users/me to learn who it is.
+	// A cookie, not a query parameter, so the JWT never lands in browser history or a Referer header.
 	sessionpkg.SetCookie(c, jwtToken, jwtTokenTTL)
 	c.Redirect(http.StatusFound, h.appWebURL+"/auth/oauth/callback")
 	return nil
 }
 
-// ListLinkedAccounts returns OAuth accounts linked to the current user.
 func (h *OAuthHandler) ListLinkedAccounts(c *okapi.Context) error {
 	userID := c.GetInt("user_id")
 
@@ -322,7 +304,6 @@ func (h *OAuthHandler) ListLinkedAccounts(c *okapi.Context) error {
 	return ok(c, result)
 }
 
-// UnlinkAccount removes an OAuth provider link from the current user.
 func (h *OAuthHandler) UnlinkAccount(c *okapi.Context, req *UnlinkOAuthRequest) error {
 	userID := c.GetInt("user_id")
 
@@ -337,7 +318,6 @@ func (h *OAuthHandler) UnlinkAccount(c *okapi.Context, req *UnlinkOAuthRequest) 
 		return c.AbortNotFound("linked account not found")
 	}
 
-	// Count remaining OAuth links
 	count, _ := h.accountRepo.CountByUserID(uint(userID))
 	hasPassword := user.PasswordHash != "" && user.AuthMethod != "oauth"
 
@@ -349,7 +329,6 @@ func (h *OAuthHandler) UnlinkAccount(c *okapi.Context, req *UnlinkOAuthRequest) 
 		return c.AbortInternalServerError("failed to unlink account")
 	}
 
-	// Update auth method if no more OAuth links
 	if count <= 1 && hasPassword {
 		user.AuthMethod = "password"
 		_ = h.userRepo.Update(user)
@@ -358,7 +337,6 @@ func (h *OAuthHandler) UnlinkAccount(c *okapi.Context, req *UnlinkOAuthRequest) 
 	return ok(c, okapi.M{"message": "account unlinked"})
 }
 
-// generateToken creates a JWT token for the given user.
 func (h *OAuthHandler) generateToken(c *okapi.Context, user *models.User) (string, error) {
 	jti := uuid.NewString()
 
@@ -373,7 +351,6 @@ func (h *OAuthHandler) generateToken(c *okapi.Context, user *models.User) (strin
 		return "", err
 	}
 
-	// Track session
 	if h.sessionRepo != nil {
 		session := &models.Session{
 			UserID:    user.ID,

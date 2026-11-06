@@ -293,8 +293,7 @@ func TestResolve(t *testing.T) {
 	}
 	out := Outcome{Notify: []Recipient{{TeamID: 10}, {UserID: 3}, {Email: "sales@acme.com"}, {Email: "ops@acme.com"}, {TeamID: 11}}}
 
-	// Default route to the owners and admins: the owner is not added twice,
-	// and user 99 left the workspace.
+	// The owner is not added twice, and user 99 left the workspace.
 	form := &models.Form{WorkspaceID: &ws}
 	res, err := Resolve(form, out, dir)
 	if err != nil {

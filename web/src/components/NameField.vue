@@ -2,9 +2,7 @@
 import { computed } from 'vue'
 import { toIdentifier } from '@/composables/identifier'
 
-// A resource's name. Creating one takes the name as typed, like "Contact
-// form", and the server derives the identifier, contact-form; once the
-// resource exists its name is shown, and cannot change.
+// The server derives the identifier from the typed name; once the resource exists its name cannot change.
 interface Props {
   /** The resource being edited; absent while creating one. */
   existing?: { name: string; display_name?: string } | null

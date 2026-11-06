@@ -24,7 +24,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// UserSettingHandler handles per-user settings.
 type UserSettingHandler struct {
 	repo *repositories.UserSettingRepository
 }

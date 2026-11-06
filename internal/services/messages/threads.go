@@ -32,29 +32,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// threadLocalPrefix is the local-part prefix of a thread address,
-// msg+<token>@<inbound domain>.
+// Thread addresses look like msg+<token>@<inbound domain>.
 const threadLocalPrefix = "msg+"
 
-// threadTokenLength is the length of newThreadToken's output: 16 random bytes
-// in unpadded base32.
+// 16 random bytes in unpadded base32.
 const threadTokenLength = 26
 
-// ThreadStore is the slice of MessageRepository the router needs.
 type ThreadStore interface {
 	FindByThreadToken(token string) (*models.Message, error)
 	AddInboundReply(reply *models.MessageReply) (bool, error)
 	UpdateFields(id uint, fields map[string]any) error
 }
 
-// ReplyEnqueuer schedules the follow-up work (webhook, notification) for a
-// reply attached to a thread.
 type ReplyEnqueuer interface {
 	EnqueueMessageReply(replyID uint) error
 }
 
-// ThreadRouter attaches inbound email sent to a thread address onto the form
-// message it belongs to. It implements inbound.ThreadRouter.
 type ThreadRouter struct {
 	store    ThreadStore
 	domain   string
@@ -62,7 +55,6 @@ type ThreadRouter struct {
 	enqueuer ReplyEnqueuer
 }
 
-// NewThreadRouter returns a router for thread addresses on inboundDomain.
 func NewThreadRouter(store ThreadStore, inboundDomain string) *ThreadRouter {
 	return &ThreadRouter{store: store, domain: strings.ToLower(strings.TrimSpace(inboundDomain))}
 }
@@ -70,8 +62,6 @@ func NewThreadRouter(store ThreadStore, inboundDomain string) *ThreadRouter {
 func (r *ThreadRouter) SetRealtime(b realtime.Bus)  { r.realtime = b }
 func (r *ThreadRouter) SetEnqueuer(e ReplyEnqueuer) { r.enqueuer = e }
 
-// ParseThreadAddress returns the thread token in addr when it is a thread
-// address on domain. It accepts a bare address or a "Name <addr>" form.
 func ParseThreadAddress(addr, domain string) (string, bool) {
 	addr = strings.TrimSpace(addr)
 	if parsed, err := mail.ParseAddress(addr); err == nil {
@@ -98,10 +88,7 @@ func ParseThreadAddress(addr, domain string) (string, bool) {
 	return token, true
 }
 
-// RouteReply attaches rec to a thread when one of recipients is a thread
-// address. It reports false, with no side effects, when no recipient names a
-// thread of rec's own workspace; the caller then handles rec as ordinary
-// inbound mail.
+// RouteReply has no side effects when it reports false; the caller then handles rec as ordinary inbound mail.
 func (r *ThreadRouter) RouteReply(ctx context.Context, rec *models.InboundEmail, recipients []string) (bool, error) {
 	if r == nil || r.domain == "" || rec == nil {
 		return false, nil
@@ -118,8 +105,7 @@ func (r *ThreadRouter) RouteReply(ctx context.Context, rec *models.InboundEmail,
 			}
 			return false, err
 		}
-		// A thread token only routes within its own workspace: mail that reached
-		// workspace A's domain must never write into a workspace B thread.
+		// Mail that reached workspace A's domain must never write into a workspace B thread.
 		if !sameWorkspace(rec.WorkspaceID, msg.WorkspaceID) {
 			logger.Warn("thread reply rejected: workspace mismatch",
 				"inbound_id", rec.UUID, "message_id", msg.UUID)

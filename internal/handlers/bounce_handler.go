@@ -86,8 +86,7 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 
 	metrics.IncrementBounce(req.Body.Type)
 
-	// Auto-suppress on hard bounce or complaint. Kind is set explicitly so the
-	// row is distinguishable from a manual block in the suppression table.
+	// Kind is set explicitly so the row is distinguishable from a manual block in the suppression table.
 	if req.Body.Type == bounceTypeHard || req.Body.Type == bounceTypeComplaint {
 		kind := models.SuppressionKindBounce
 		if req.Body.Type == bounceTypeComplaint {
@@ -106,8 +105,7 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 		}
 	}
 
-	// Complaint webhook: high-value signal for senders to mirror into their own
-	// CRM. Mirrors the email.unsubscribed payload shape.
+	// Complaints mirror the email.unsubscribed payload so senders can sync them into their own CRM.
 	if req.Body.Type == bounceTypeComplaint {
 		h.emitComplained(em, req.Body.Recipient)
 	}
@@ -115,7 +113,6 @@ func (h *BounceHandler) Record(c *okapi.Context, req *RecordBounceRequest) error
 	return created(c, bounce)
 }
 
-// emitComplained fires the email.complained webhook for a recorded complaint.
 func (h *BounceHandler) emitComplained(em *models.Email, addr string) {
 	if h.dispatcher == nil {
 		return

@@ -293,8 +293,7 @@ func (h *CampaignHandler) Delete(c *okapi.Context, req *CampaignActionRequest) e
 	if err != nil {
 		return c.AbortNotFound("campaign not found")
 	}
-	// Block deletion mid-flight so the worker doesn't race against row removal.
-	// Callers should Cancel first, then Delete.
+	// Blocked mid-flight so the worker doesn't race row removal; callers Cancel first, then Delete.
 	if campaign.Status == models.CampaignStatusSending {
 		return c.AbortBadRequest("cancel the campaign before deleting it")
 	}
@@ -318,10 +317,7 @@ func (h *CampaignHandler) Send(c *okapi.Context, req *CampaignActionRequest) err
 		return c.AbortBadRequest("can only send draft campaigns")
 	}
 
-	// Deliverability check: surface unverified sender domains as a warning in
-	// logs rather than blocking, since the SMTP-server/shared-server layer has
-	// its own policy and legitimate setups exist where ownership isn't yet
-	// proven (DNS propagation, shared-server tenants, etc.).
+	// Warn, don't block: the SMTP-server layer owns policy, and ownership may legitimately be unproven yet.
 	h.warnSenderDeliverable(campaign)
 
 	if campaign.ScheduledAt != nil && campaign.ScheduledAt.After(time.Now()) {
@@ -340,8 +336,7 @@ func (h *CampaignHandler) Send(c *okapi.Context, req *CampaignActionRequest) err
 		return c.AbortInternalServerError("background worker is not configured; cannot send campaigns")
 	}
 
-	// Atomically claim the draft -> sending transition. Losing the race returns 409
-	// so a double-click or concurrent Send doesn't double-enqueue.
+	// Atomic draft -> sending claim; losing the race is a 409 so a double Send doesn't double-enqueue.
 	if err := h.campaignRepo.TransitionStatus(
 		campaign.ID,
 		[]models.CampaignStatus{models.CampaignStatusDraft},
@@ -432,8 +427,7 @@ func (h *CampaignHandler) Cancel(c *okapi.Context, req *CampaignActionRequest) e
 	); err != nil {
 		return translateTransitionErr(c, err, "failed to cancel campaign")
 	}
-	// Drain: mark still-pending messages as skipped. Already-queued emails are
-	// filtered at dispatch time by EmailSendHandler checking the campaign status.
+	// Already-queued emails are filtered at dispatch by EmailSendHandler checking the campaign status.
 	_, _ = h.messageRepo.SkipPendingForCampaign(campaign.ID, "campaign cancelled")
 	campaign.Status = models.CampaignStatusCancelled
 	return ok(c, campaign)
@@ -487,17 +481,12 @@ func (h *CampaignHandler) ListMessages(c *okapi.Context, req *ListCampaignMessag
 	return paginated(c, items, total, page, size)
 }
 
-// findScoped centralizes the "find + workspace ownership check" pattern so it
-// can't be forgotten at a callsite.
+// findScoped bundles the lookup with the workspace ownership check so no callsite can forget it.
 func (h *CampaignHandler) findScoped(c *okapi.Context, id uint) (*models.Campaign, error) {
 	return h.campaignRepo.FindByIDForScope(id, getScope(c))
 }
 
-// warnSenderDeliverable logs (but does not block) when the sender domain is
-// registered for this user/workspace but lacks ownership/SPF/DKIM verification.
-// Blocking belongs to the SMTP-server layer, which already enforces per-server
-// policy — here we just give the operator a hint that their bounce rate is
-// about to spike.
+// warnSenderDeliverable only logs: blocking belongs to the SMTP-server layer's per-server policy.
 func (h *CampaignHandler) warnSenderDeliverable(campaign *models.Campaign) {
 	if h.domainRepo == nil {
 		return
@@ -522,7 +511,6 @@ func (h *CampaignHandler) warnSenderDeliverable(campaign *models.Campaign) {
 	}
 }
 
-// snapshotFor captures the pre-deletion stats of a campaign so reports survive.
 func (h *CampaignHandler) snapshotFor(campaign *models.Campaign) models.TemplateData {
 	stats := h.buildStats(campaign.ID)
 	if stats == nil {
@@ -542,9 +530,7 @@ func (h *CampaignHandler) snapshotFor(campaign *models.Campaign) models.Template
 	}
 }
 
-// cloneTemplateData is a shallow copy at the top level; campaign template data
-// is JSON so shared references below the top level would only matter if a
-// caller mutated them, which is not a pattern we use.
+// cloneTemplateData is shallow; nested values stay shared, which is safe because nothing mutates them.
 func cloneTemplateData(src models.TemplateData) models.TemplateData {
 	if src == nil {
 		return nil
@@ -556,8 +542,6 @@ func cloneTemplateData(src models.TemplateData) models.TemplateData {
 	return dst
 }
 
-// translateTransitionErr maps an atomic transition failure to either 409 (on
-// conflict) or 500 (on any other DB error).
 func translateTransitionErr(c *okapi.Context, err error, genericMsg string) error {
 	if errors.Is(err, repositories.ErrStatusConflict) {
 		return c.AbortConflict("campaign is not in a state that allows this action")
@@ -565,7 +549,6 @@ func translateTransitionErr(c *okapi.Context, err error, genericMsg string) erro
 	return c.AbortInternalServerError(genericMsg)
 }
 
-// statsFromCounts projects a status->count map into the CampaignStats shape.
 func statsFromCounts(counts map[models.CampaignMessageStatus]int64) *CampaignStats {
 	if counts == nil {
 		return nil
@@ -589,7 +572,6 @@ func statsFromCounts(counts map[models.CampaignMessageStatus]int64) *CampaignSta
 	return stats
 }
 
-// buildStats computes stats for a campaign from the message counts.
 func (h *CampaignHandler) buildStats(campaignID uint) *CampaignStats {
 	counts, err := h.messageRepo.CountByStatus(campaignID)
 	if err != nil {

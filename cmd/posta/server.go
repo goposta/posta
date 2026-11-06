@@ -103,7 +103,6 @@ func runServer(cli *okapicli.CLI) {
 
 			checkDefaultPlan(res.db, cfg)
 
-			// Initialize SMTP password encryption
 			crypto.Init(cfg.EncryptionKey)
 			res.edition = newEdition(res.db, cfg)
 
@@ -123,7 +122,6 @@ func runServer(cli *okapicli.CLI) {
 				}
 			}
 
-			// Initialize blob storage (S3 or filesystem) for attachments
 			if cfg.BlobProvider != "" {
 				bs, err := blob.New(blob.Config{
 					Provider:          cfg.BlobProvider,
@@ -143,7 +141,6 @@ func runServer(cli *okapicli.CLI) {
 				logger.Info("blob storage initialized", "provider", cfg.BlobProvider)
 			}
 
-			// Notification service
 			userRepo := repositories.NewUserRepository(res.db)
 			userSettingRepo := repositories.NewUserSettingRepository(res.db)
 			appName := "Posta"
@@ -159,9 +156,7 @@ func runServer(cli *okapicli.CLI) {
 				logger.Info("system notification service enabled")
 			}
 
-			// Bus is shared between the embedded worker (parse handler) and the
-			// SMTP server so a single PublishSimple reaches both sets of
-			// in-process subscribers.
+			// Shared by the embedded worker and SMTP server so one PublishSimple reaches both sets of in-process subscribers.
 			var inboundBus *eventbus.EventBus
 			if cfg.InboundEnabled && !cfg.DevMode {
 				inboundBus = eventbus.New(repositories.NewEventRepository(res.db))
@@ -226,8 +221,6 @@ func runServer(cli *okapicli.CLI) {
 	}
 }
 
-// newEdition loads the Posta Enterprise license, if any, and switches on the
-// Enterprise behaviour that lives below the HTTP layer.
 func newEdition(db *gorm.DB, cfg *config.Config) enterprise.EE {
 	installID, err := enterprise.EnsureInstallID(db)
 	if err != nil {
@@ -258,10 +251,8 @@ func checkDefaultPlan(db *gorm.DB, cfg *config.Config) {
 	}
 }
 
-// newSeeder builds the default-content seeder. Cheap to construct: it holds
-// repositories and no state, so callers make one rather than threading it.
+// Cheap to construct (repositories, no state), so callers make one rather than threading it.
 func newSeeder(db *gorm.DB, cfg *config.Config) *seeder.Seeder {
-	// Example forms only where forms exist.
 	var formRepo *repositories.FormRepository
 	if cfg.MessagesEnabled {
 		formRepo = repositories.NewFormRepository(db)
@@ -298,7 +289,6 @@ func seedDefaults(db *gorm.DB, cfg *config.Config) {
 	}
 }
 
-// newWebhookDispatcher creates a configured webhook dispatcher with metrics hooks.
 func newWebhookDispatcher(db *gorm.DB, cfg *config.Config) *webhook.Dispatcher {
 	webhookRepo := repositories.NewWebhookRepository(db)
 	whDeliveryRepo := repositories.NewWebhookDeliveryRepository(db)
@@ -338,10 +328,7 @@ func newInboundServiceForWorker(db *gorm.DB,
 	return svc
 }
 
-// attachThreadRouter routes replies sent to form thread addresses
-// (msg+<token>@POSTA_MESSAGES_INBOUND_DOMAIN) onto their message instead of
-// the generic inbound pipeline. Every inbound service that parses mail needs
-// it; otherwise a reply parsed by that process would be handled as loose mail.
+// Every process that parses inbound mail needs this, or replies to msg+<token>@ addresses are handled as loose mail.
 func attachThreadRouter(svc *inbound.Service, db *gorm.DB, cfg *config.Config, producer *worker.Producer) {
 	if !cfg.MessagesEnabled || cfg.MessagesInboundDomain == "" {
 		return
@@ -354,8 +341,6 @@ func attachThreadRouter(svc *inbound.Service, db *gorm.DB, cfg *config.Config, p
 	svc.SetThreadRouter(router)
 }
 
-// startInboundSMTPServer configures and launches the built-in SMTP receiver.
-// Returns the server so it can be gracefully shut down on exit.
 func startInboundSMTPServer(
 	db *gorm.DB,
 	cfg *config.Config,
@@ -416,9 +401,6 @@ func startInboundSMTPServer(
 	return srv, nil
 }
 
-// startSMTPRelayServer configures and launches the built-in SMTP Relay
-// (AUTH-gated relay) listener. Returns the server so it can be
-// gracefully shut down on exit.
 func startSMTPRelayServer(db *gorm.DB, cfg *config.Config, emailSvc *email.Service) (*smtp.Server, error) {
 	credRepo := repositories.NewSMTPCredentialRepository(db)
 	userRepo := repositories.NewUserRepository(db)
@@ -450,9 +432,7 @@ func startSMTPRelayServer(db *gorm.DB, cfg *config.Config, emailSvc *email.Servi
 	return srv, nil
 }
 
-// startEmbeddedWorker starts an in-process asynq worker for email delivery.
-// The bus argument is used by the inbound parse handler to publish
-// email.inbound.received events; it may be nil when inbound is disabled.
+// bus may be nil when inbound is disabled.
 func startEmbeddedWorker(db *gorm.DB,
 	cfg *config.Config,
 	edition enterprise.EE,
@@ -515,7 +495,6 @@ func startEmbeddedWorker(db *gorm.DB,
 		},
 	)
 
-	// Campaign processor
 	campaignProducer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 	trackingRepo := repositories.NewTrackingRepository(db)
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
@@ -534,7 +513,6 @@ func startEmbeddedWorker(db *gorm.DB,
 		campaignDispatcher,
 	)
 
-	// Daily report handler
 	dailyReportHandler := worker.NewDailyReportHandler(
 		notifier,
 		repositories.NewAnalyticsRepository(db),
@@ -598,7 +576,6 @@ func startEmbeddedWorker(db *gorm.DB,
 	logger.Info("async email delivery enabled (embedded worker)")
 }
 
-// initCronManager creates and registers scheduled jobs.
 func initCronManager(
 	db *gorm.DB,
 	cfg *config.Config,
@@ -625,13 +602,11 @@ func initCronManager(
 		retentionJob.SetBlobStore(blobStore)
 	}
 	manager.Register(retentionJob)
-	// Daily release check. A second Service instance backs the admin handler; the
-	// cached verdict lives in a database row, so they need no shared state.
+	// The admin handler has its own Service; the cached verdict is a database row, so they need no shared state.
 	updateSvc := updatecheck.NewService(db, config.Version, cfg.UpdateCheck)
 	if updateSvc.Enabled() {
 		manager.Register(jobs.NewUpdateCheckJob(updateSvc))
-		// Seed the cache shortly after boot so a fresh install does not wait a day
-		// for its first answer. Off the startup path: never block serving on GitHub.
+		// Seed the cache soon after boot, off the startup path, so serving never blocks on GitHub.
 		go func() {
 			time.Sleep(30 * time.Second)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -676,7 +651,6 @@ func initCronManager(
 	return manager
 }
 
-// startRetryWorker starts the background worker that retries failed emails.
 func startRetryWorker(db *gorm.DB, cfg *config.Config, producer *worker.Producer) {
 	dispatcher := newWebhookDispatcher(db, cfg)
 	retryWorker := retry.NewWorker(
@@ -694,7 +668,6 @@ func startRetryWorker(db *gorm.DB, cfg *config.Config, producer *worker.Producer
 	retryWorker.Start(context.Background())
 }
 
-// shutdownServer gracefully closes all server resources.
 func shutdownServer(res *serverResources) {
 	logger.Info("Posta Server shutting down gracefully...")
 
@@ -734,7 +707,6 @@ func shutdownServer(res *serverResources) {
 	logger.Info("Posta Server shut down complete")
 }
 
-// webhookConfig builds a webhook.Config from the application configuration.
 func webhookConfig(cfg *config.Config) webhook.Config {
 	return webhook.Config{
 		MaxRetries: cfg.WebhookMaxRetries,

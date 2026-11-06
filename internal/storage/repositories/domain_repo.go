@@ -157,7 +157,6 @@ func (r *DomainRepository) FindVerifiedByName(domainName string) (*models.Domain
 	return &d, nil
 }
 
-// IsOwnershipVerified checks whether the given domain is registered and ownership-verified for the user.
 func (r *DomainRepository) IsOwnershipVerified(userID uint, domainName string) bool {
 	var count int64
 	r.db.Model(&models.Domain{}).
@@ -166,8 +165,7 @@ func (r *DomainRepository) IsOwnershipVerified(userID uint, domainName string) b
 	return count > 0
 }
 
-// IsOwnershipVerifiedInWorkspace checks whether the given domain is registered
-// and ownership-verified within the workspace (any member's verified domain).
+// IsOwnershipVerifiedInWorkspace accepts a domain verified by any member of the workspace.
 func (r *DomainRepository) IsOwnershipVerifiedInWorkspace(workspaceID uint, domainName string) bool {
 	var count int64
 	r.db.Model(&models.Domain{}).

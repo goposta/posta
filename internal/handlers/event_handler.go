@@ -49,7 +49,6 @@ func communityAuditSince() time.Time {
 	return time.Now().Add(-CommunityAuditWindow)
 }
 
-// isWorkspaceAudit reports whether e is part of a workspace audit trail.
 func isWorkspaceAudit(e *models.Event) bool {
 	return e.Category == models.EventCategoryAudit && e.WorkspaceID != nil
 }
@@ -78,7 +77,6 @@ func (h *EventHandler) Get(c *okapi.Context, req *EventRequest) error {
 	return ok(c, event)
 }
 
-// List returns paginated historical events.
 func (h *EventHandler) List(c *okapi.Context, req *ListEventsRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
@@ -98,7 +96,6 @@ func (h *EventHandler) List(c *okapi.Context, req *ListEventsRequest) error {
 	return paginated(c, events, total, page, size)
 }
 
-// UserAuditLog returns paginated audit events for the authenticated user.
 func (h *EventHandler) UserAuditLog(c *okapi.Context, req *ListEventsRequest) error {
 	userID := c.GetInt("user_id")
 	page, size, offset := normalizePageParams(req.Page, req.Size)
@@ -131,7 +128,6 @@ type AuditEventRequest struct {
 	ID int `param:"id"`
 }
 
-// WorkspaceAuditLogDetail returns a single audit event scoped to the current workspace.
 func (h *EventHandler) WorkspaceAuditLogDetail(c *okapi.Context, req *AuditEventRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))
 
@@ -140,7 +136,6 @@ func (h *EventHandler) WorkspaceAuditLogDetail(c *okapi.Context, req *AuditEvent
 		return c.AbortNotFound("audit event not found")
 	}
 
-	// Only expose audit events that belong to the current workspace.
 	if event.Category != models.EventCategoryAudit || event.WorkspaceID == nil || *event.WorkspaceID != wsID {
 		return c.AbortNotFound("audit event not found")
 	}
@@ -155,7 +150,6 @@ func (h *EventHandler) WorkspaceAuditLogDetail(c *okapi.Context, req *AuditEvent
 	return ok(c, event)
 }
 
-// Stream sends real-time events to the admin via SSE.
 func (h *EventHandler) Stream(c *okapi.Context) error {
 	ctx := c.Request().Context()
 

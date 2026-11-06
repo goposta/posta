@@ -28,18 +28,14 @@ import (
 )
 
 const (
-	// ServerSecurityModePermissive allows any user whose sender domain matches
-	// allowed_domains to use this server, regardless of domain ownership.
+	// ServerSecurityModePermissive allows any user whose sender domain matches allowed_domains, ownership aside.
 	ServerSecurityModePermissive = "permissive"
 
-	// ServerSecurityModeStrict requires the user to have verified ownership of
-	// the sender domain (via TXT record) before the server is available to them.
+	// ServerSecurityModeStrict requires TXT-verified ownership of the sender domain before the server is offered.
 	ServerSecurityModeStrict = "strict"
 )
 
-// Server represents a shared SMTP server managed by platform administrators.
-// Unlike per-user SMTPServer records, a Server is available across multiple
-// user accounts based on the sender domain.
+// Server is a platform-managed SMTP server shared across accounts by sender domain, unlike per-user SMTPServer.
 type Server struct {
 	ID              uint           `json:"id" gorm:"primaryKey"`
 	Name            string         `json:"name" gorm:"not null"`
@@ -60,13 +56,11 @@ type Server struct {
 	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
-// IsEnabled returns true when the server can be used for delivery.
 func (s *Server) IsEnabled() bool {
 	return s.Status == SMTPStatusEnabled
 }
 
-// BeforeSave encrypts the password before writing to the database.
-// Uses AES-256-GCM if POSTA_ENCRYPTION_KEY is set, otherwise base64.
+// BeforeSave encrypts the password with AES-256-GCM if POSTA_ENCRYPTION_KEY is set, otherwise only base64.
 func (s *Server) BeforeSave(tx *gorm.DB) error {
 	if s.Password == "" || crypto.IsEncrypted(s.Password) {
 		return nil
@@ -79,7 +73,6 @@ func (s *Server) BeforeSave(tx *gorm.DB) error {
 	return nil
 }
 
-// AfterFind decrypts the password after reading from the database.
 func (s *Server) AfterFind(tx *gorm.DB) error {
 	if s.Password == "" {
 		return nil
@@ -92,8 +85,7 @@ func (s *Server) AfterFind(tx *gorm.DB) error {
 	return nil
 }
 
-// ToSMTPServer converts this shared Server into the SMTPServer format used
-// by the SMTP sender, so existing send logic can be reused without modification.
+// ToSMTPServer adapts this Server to the SMTPServer shape the SMTP sender already uses.
 func (s *Server) ToSMTPServer() *SMTPServer {
 	return &SMTPServer{
 		ID:         s.ID,

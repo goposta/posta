@@ -7,9 +7,7 @@ import { useLicenseStore } from "../../stores/license";
 import { apiMessage } from "../../composables/apiError";
 import type { Form, FormField, FormFieldOption, FormFieldRole, FormFieldType } from "../../api/types";
 
-// The question builder. Edits stay local until Save, and the preview on the
-// right is the production widget rendering the unsaved questions, so what you
-// see here is what respondents get.
+// The preview is the production widget rendering the unsaved questions, so what you see is what respondents get.
 
 const props = defineProps<{ form: Form }>();
 const emit = defineEmits<{ saved: [form: Form] }>();
@@ -95,10 +93,7 @@ const active = computed(() => drafts.value.filter((d) => !d.archived));
 const archived = computed(() => drafts.value.filter((d) => d.archived));
 const questionCount = computed(() => active.value.filter((d) => !isSection(d)).length);
 
-// ─── Sections and branching ───────────────────────────────────────────────
-
-// Where a page may lead: a later section, or submit. Mirrors checkFlow in
-// services/messages/schema.go, which only allows moving forward.
+// Mirrors checkFlow in services/messages/schema.go, which only allows moving forward.
 function laterSections(d: Draft) {
   const list = active.value;
   return list.slice(list.indexOf(d) + 1).filter(isSection);
@@ -112,9 +107,7 @@ function pageNumber(d: Draft) {
   return before.filter(isSection).length + (opensWithSection ? 0 : 1);
 }
 
-// Branching is a Posta Enterprise feature. Without a license (or once it has
-// expired past grace) new branches cannot be added; existing ones keep working
-// and can still be removed.
+// Enterprise-gated: without a valid license new branches cannot be added, but existing ones keep working and can be removed.
 const license = useLicenseStore();
 license.load();
 const canBranch = computed(() => license.mutable);
@@ -133,8 +126,7 @@ function toggleBranch(d: Draft, on: boolean) {
   branchUids.value = next;
 }
 
-// A target that is no longer ahead (after a reorder or archive) would be
-// refused on save; say so on the card instead.
+// A target no longer ahead (after a reorder or archive) would be refused on save; say so on the card instead.
 function staleTarget(d: Draft, target?: string) {
   if (!target || target === "submit") return false;
   return !laterSections(d).some((s) => s.key === target);
@@ -147,8 +139,6 @@ function sectionTitle(key?: string) {
   const s = drafts.value.find((d) => d.key === key);
   return s ? s.label || s.key : key;
 }
-
-// ─── Keys and option values ───────────────────────────────────────────────
 
 function slug(text: string, max = 64) {
   const s = text
@@ -201,8 +191,6 @@ function addOption(d: Draft) {
 function removeOption(d: Draft, i: number) {
   d.options = (d.options || []).filter((_, j) => j !== i);
 }
-
-// ─── Questions ────────────────────────────────────────────────────────────
 
 function applyTypeDefaults(d: Draft) {
   if (CHOICE_TYPES.includes(d.type) && !d.options?.length) {
@@ -293,8 +281,7 @@ function move(d: Draft, step: -1 | 1) {
   drafts.value.splice(b, 1, d);
 }
 
-// Drag and drop reorders by the card's handle; the arrow buttons do the same
-// from the keyboard.
+// The arrow buttons reorder too, so reordering works from the keyboard.
 const dragUid = ref<number | null>(null);
 function onDrop(target: Draft) {
   const from = drafts.value.findIndex((x) => x.uid === dragUid.value);
@@ -315,8 +302,6 @@ function requiredNewly(d: Draft) {
 function typeChanged(d: Draft) {
   return d.saved && baseline.value[d.key] && baseline.value[d.key].type !== d.type;
 }
-
-// ─── Save ─────────────────────────────────────────────────────────────────
 
 function num(v: unknown): number | undefined {
   if (v === "" || v === null || v === undefined) return undefined;
@@ -406,16 +391,13 @@ function beforeUnload(e: BeforeUnloadEvent) {
   if (dirty.value) e.preventDefault();
 }
 
-// The parent saves other tabs without touching fields; resync only when the
-// stored schema moved and nothing here is unsaved.
+// The parent saves other tabs without touching fields; resync only when the stored schema moved and nothing here is unsaved.
 watch(
   () => props.form.schema_version,
   () => {
     if (!dirty.value) reset(props.form);
   },
 );
-
-// ─── Live preview ─────────────────────────────────────────────────────────
 
 declare global {
   interface Window {
@@ -619,7 +601,6 @@ onBeforeUnmount(() => {
             <input v-model="d.help" class="form-input" placeholder="Shown under the question" />
           </div>
 
-          <!-- Choices -->
           <div v-if="CHOICE_TYPES.includes(d.type)" class="form-group">
             <label class="form-label">Options</label>
             <div v-for="(o, oi) in d.options" :key="oi" class="qopt">
@@ -679,7 +660,6 @@ onBeforeUnmount(() => {
             </select>
           </div>
 
-          <!-- Scale and rating -->
           <div v-if="d.type === 'scale'" class="qgrid">
             <div class="form-group">
               <label class="form-label">From</label>
@@ -710,7 +690,6 @@ onBeforeUnmount(() => {
             </select>
           </div>
 
-          <!-- Limits -->
           <div v-if="PLACEHOLDER_TYPES.includes(d.type)" class="form-group">
             <label class="form-label">Placeholder <span class="muted">(optional)</span></label>
             <input v-model="d.placeholder" class="form-input" />
@@ -861,7 +840,7 @@ onBeforeUnmount(() => {
 
 .qb-bar {
   position: sticky;
-  top: 56px; /* flush under the topbar, so cards never show through a gap */
+  top: 56px;
   z-index: 5;
   box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
 }
@@ -894,7 +873,6 @@ onBeforeUnmount(() => {
   border-left-color: var(--primary-600);
 }
 
-/* A section starts a page: set it apart from the questions around it. */
 .qcard.section {
   margin-top: 12px;
   background: var(--bg-secondary);

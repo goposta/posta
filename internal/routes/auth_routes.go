@@ -31,7 +31,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// healthRoutes returns route definitions for health check endpoints.
 func (r *Router) healthRoutes() []okapi.RouteDefinition {
 	return []okapi.RouteDefinition{
 		{
@@ -53,11 +52,7 @@ func (r *Router) healthRoutes() []okapi.RouteDefinition {
 	}
 }
 
-// infoRoute returns the route definition for the application info endpoint.
-//
-// Authenticated: the version and commit ID identify the exact build running,
-// which is what an attacker needs to match a deployment against known CVEs.
-// Liveness and readiness probes use /healthz and /readyz, which stay public.
+// Authenticated: version and commit pinpoint the build for CVE matching; probes use the public /healthz and /readyz.
 func (r *Router) infoRoute() okapi.RouteDefinition {
 	return okapi.RouteDefinition{
 		Method:      http.MethodGet,
@@ -72,7 +67,6 @@ func (r *Router) infoRoute() okapi.RouteDefinition {
 	}
 }
 
-// authRoutes returns route definitions for authentication endpoints.
 func (r *Router) authRoutes() []okapi.RouteDefinition {
 	authGroup := r.v1.Group("/auth", r.mw.loginLimiter).WithTagInfo(okapi.GroupTag{
 		Name:        "Auth",
@@ -160,11 +154,9 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 	}
 }
 
-// apiAuthRoutes returns route definitions for API-key authenticated endpoints.
 func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 	apiKeySec := []map[string][]string{{"ApiKeyAuth": {}}}
 
-	// Send/subscriber routes require the `send` scope explicitly.
 	apiAuth := r.v1.Group("", r.mw.apiKey, middlewares.RequireScope(models.ScopeSend)).
 		WithTagInfo(okapi.GroupTag{
 			Name:        "Emails",
@@ -172,7 +164,6 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 		}).
 		WithSecurity(apiKeySec)
 
-	// Read routes (list/get emails, bounces, webhook deliveries) require `read`.
 	apiRead := r.v1.Group("", r.mw.apiKey, middlewares.RequireScope(models.ScopeRead)).
 		WithTagInfo(okapi.GroupTag{
 			Name:        "Read",
@@ -180,7 +171,6 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 		}).
 		WithSecurity(apiKeySec)
 
-	// Webhook management routes require the `webhooks` scope.
 	apiWebhooks := r.v1.Group("", r.mw.apiKey, middlewares.RequireScope(models.ScopeWebhooks)).
 		WithTagInfo(okapi.GroupTag{
 			Name:        "Webhooks",
@@ -292,7 +282,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 
 		{
 			Method:      http.MethodPost,
-			Path:        "/subscriber-lists/{id:int}/unsubscribe",
+			Path:        "/subscriber-lists/{id}/unsubscribe",
 			Handler:     okapi.H(r.h.subscriberList.UnsubscribeByEmail),
 			Group:       apiAuth,
 			Summary:     "Unsubscribe an email from a list",
@@ -306,7 +296,7 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/subscriber-lists/{id:int}/resubscribe",
+			Path:        "/subscriber-lists/{id}/resubscribe",
 			Handler:     okapi.H(r.h.subscriberList.ResubscribeByEmail),
 			Group:       apiAuth,
 			Summary:     "Re-subscribe an email to a list",
@@ -332,7 +322,6 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		//  read scope
 		{
 			Method:      http.MethodGet,
 			Path:        "/emails",
@@ -390,7 +379,6 @@ func (r *Router) apiAuthRoutes() []okapi.RouteDefinition {
 			},
 		},
 
-		// webhooks scope
 		{
 			Method:      http.MethodGet,
 			Path:        pathWebhooks,

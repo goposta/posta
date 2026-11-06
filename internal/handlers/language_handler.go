@@ -57,7 +57,6 @@ func (h *LanguageHandler) Create(c *okapi.Context, req *CreateLanguageRequest) e
 	}
 	scope := getScope(c)
 
-	// If marking as default, clear existing default first
 	if req.Body.IsDefault {
 		_ = h.repo.ClearDefault(scope)
 	}
@@ -93,10 +92,8 @@ func (h *LanguageHandler) Update(c *okapi.Context, req *UpdateLanguageRequest) e
 		l.Name = req.Body.Name
 	}
 
-	// Handle default flag change
 	if req.Body.IsDefault != nil {
 		if *req.Body.IsDefault && !l.IsDefault {
-			// Setting as default — clear others first
 			scope := getScope(c)
 			_ = h.repo.ClearDefault(scope)
 		}

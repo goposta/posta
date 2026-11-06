@@ -55,7 +55,6 @@ const (
 	MessagePriorityUrgent MessagePriority = "urgent"
 )
 
-// ValidPriority reports whether p is one of the four priorities.
 func ValidPriority(p MessagePriority) bool {
 	switch p {
 	case MessagePriorityLow, MessagePriorityNormal, MessagePriorityHigh, MessagePriorityUrgent:
@@ -89,8 +88,7 @@ type Message struct {
 	Body        string `json:"body" gorm:"type:text"`
 
 	FieldsJSON string `json:"-" gorm:"type:text"`
-	// Data holds the typed answers of a form with a schema; FieldsJSON stays
-	// the display copy. SchemaVersion is the form schema it was validated by.
+	// Data holds a schema form's typed answers, FieldsJSON the display copy, SchemaVersion the schema used.
 	Data            SubmissionData `json:"data,omitempty" gorm:"type:jsonb"`
 	SchemaVersion   int            `json:"schema_version" gorm:"default:0;not null"`
 	AttachmentsJSON string         `json:"-" gorm:"type:text"`
@@ -109,9 +107,7 @@ type Message struct {
 	Tags     pq.StringArray  `json:"tags" gorm:"type:text[]"`
 	Priority MessagePriority `json:"priority" gorm:"type:varchar(8);default:'normal';not null"`
 
-	// TeamID is the team the submission is routed to. MatchedRules lists the
-	// rules that routed it (UUIDs), for "why did this go here". RoutedAt
-	// records that the rules ran, so a retried task never applies them twice.
+	// RoutedAt records that the rules ran, so a retried task never applies them twice.
 	TeamID       *uint          `json:"team_id,omitempty" gorm:"index"`
 	MatchedRules pq.StringArray `json:"matched_rules,omitempty" gorm:"type:text[]"`
 	RoutedAt     *time.Time     `json:"-"`
@@ -126,9 +122,7 @@ type Message struct {
 	RepliedAt    *time.Time `json:"replied_at,omitempty"`
 	ReplyCount   int        `json:"reply_count" gorm:"default:0;not null"`
 
-	// WebhookDispatchedAt records that message:process handed the submission to
-	// the webhook dispatcher, so a retried task never fires the webhook twice.
-	// Delivery itself is tracked in webhook_deliveries.
+	// WebhookDispatchedAt keeps a retried message:process from firing the webhook twice.
 	WebhookDispatchedAt *time.Time `json:"-"`
 
 	CreatedAt time.Time      `json:"created_at" gorm:"index"`
@@ -138,9 +132,7 @@ type Message struct {
 	Fields      []MessageField          `json:"fields,omitempty" gorm:"-"`
 	Attachments []InboundAttachmentMeta `json:"attachments,omitempty" gorm:"-"`
 
-	// GORM creates these foreign keys whatever the tag (only "constraint:-"
-	// skips one), so declare the cascade the schema relies on: deleting a form
-	// or a message must take its messages or replies with it.
+	// GORM creates these FKs whatever the tag (only constraint:- skips), so declare the cascade the schema needs.
 	Form       *Form     `json:"form,omitempty" gorm:"foreignKey:FormID;constraint:OnDelete:CASCADE"`
 	AssignedTo *ActorRef `json:"assigned_to,omitempty" gorm:"->;foreignKey:AssignedToID;references:ID;constraint:false"`
 	Team       *TeamRef  `json:"team,omitempty" gorm:"->;foreignKey:TeamID;references:ID;constraint:false"`
@@ -166,8 +158,7 @@ type MessageReply struct {
 	WorkspaceID *uint            `json:"workspace_id,omitempty" gorm:"index;not null"`
 	Kind        MessageReplyKind `json:"kind" gorm:"type:varchar(16);not null"`
 
-	// AuthorID is the operator who wrote an outbound reply; nil for an inbound
-	// reply. It must stay nullable: author_id carries a foreign key to users.
+	// AuthorID is nil for an inbound reply and must stay nullable: author_id has a foreign key to users.
 	AuthorID *uint  `json:"author_id,omitempty" gorm:"index"`
 	FromAddr string `json:"from_addr"`
 	ToAddr   string `json:"to_addr"`
@@ -178,11 +169,9 @@ type MessageReply struct {
 	EmailUUID      string `json:"email_uuid,omitempty" gorm:"index"`
 	InboundEmailID *uint  `json:"inbound_email_id,omitempty" gorm:"index"`
 
-	// MessageIDHeader is the RFC 5322 Message-ID this reply was sent or received
-	// with. Later replies chain to it through In-Reply-To and References.
+	// MessageIDHeader is this reply's RFC 5322 Message-ID; later replies chain to it via In-Reply-To/References.
 	MessageIDHeader string `json:"-"`
-	// SenderMismatch marks an inbound reply whose sender is not the original
-	// submitter: a forward, or a spoof using a leaked thread address.
+	// SenderMismatch marks an inbound reply not from the submitter: a forward, or a spoof via a leaked thread address.
 	SenderMismatch bool `json:"sender_mismatch,omitempty" gorm:"default:false;not null"`
 
 	CreatedAt time.Time `json:"created_at"`

@@ -26,11 +26,7 @@ type Step struct {
 	Apply func(tx *gorm.DB) error
 }
 
-// registry is the in-tree list of upgrade steps, in the order they should be
-// applied. Append-only: new steps go at the end, old steps never move.
-//
-// To register a step, add an entry here and define its Apply func in a sibling
-// file (e.g. steps_2026_05_30_default_plan.go).
+// registry is applied in order and append-only: new steps go at the end, old steps never move.
 var registry = []Step{
 	{
 

@@ -41,7 +41,6 @@ type APIKeyHandler struct {
 	notifier        *notification.Service
 }
 
-// SetNotifier sets the notification service for API key creation alerts.
 func (h *APIKeyHandler) SetNotifier(n *notification.Service) {
 	h.notifier = n
 }
@@ -70,7 +69,6 @@ func NewAPIKeyHandler(service *auth.APIKeyService, repo *repositories.APIKeyRepo
 	}
 }
 
-// SetQuota sets the quota checker for plan-based resource limits.
 func (h *APIKeyHandler) SetQuota(q QuotaChecker, db *gorm.DB) {
 	h.quota = q
 	h.db = db
@@ -93,7 +91,6 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 		}
 	}
 
-	// Determine expiration: use provided value, fall back to user setting default
 	var expiresAt *time.Time
 	if req.Body.ExpiresInDays != nil {
 		days := *req.Body.ExpiresInDays
@@ -103,7 +100,6 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 		}
 		// days == 0 means never expires (expiresAt stays nil)
 	} else {
-		// Use default from user settings
 		setting, err := h.userSettingRepo.FindByUserID(scope.UserID)
 		if err == nil && setting.APIKeyExpiryDays > 0 {
 			t := time.Now().AddDate(0, 0, setting.APIKeyExpiryDays)
@@ -120,7 +116,6 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 		"scopes": []string(key.Scopes),
 	})
 
-	// Send API key created notification
 	if h.notifier != nil {
 		expiresStr := "Never"
 		if key.ExpiresAt != nil {
@@ -198,7 +193,6 @@ func (h *APIKeyHandler) Delete(c *okapi.Context, req *DeleteAPIKeyRequest) error
 		return c.AbortNotFound("API key not found")
 	}
 
-	// Only allow deletion of expired or revoked keys
 	if key.IsValid() {
 		return c.AbortBadRequest("active API keys cannot be deleted — revoke it first")
 	}

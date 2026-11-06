@@ -90,7 +90,6 @@ func (r *PlanRepository) FindDefault() (*models.Plan, error) {
 	return &plan, nil
 }
 
-// FindByWorkspaceID returns the plan assigned to the given workspace.
 func (r *PlanRepository) FindByWorkspaceID(workspaceID uint) (*models.Plan, error) {
 	var ws models.Workspace
 	if err := r.db.First(&ws, workspaceID).Error; err != nil {
@@ -106,18 +105,15 @@ func (r *PlanRepository) FindByWorkspaceID(workspaceID uint) (*models.Plan, erro
 	return &plan, nil
 }
 
-// ClearDefault unsets is_default on all plans. Should be called within a transaction
-// before setting a new default.
+// ClearDefault should run inside a transaction, before setting a new default.
 func (r *PlanRepository) ClearDefault() error {
 	return r.db.Model(&models.Plan{}).Where("is_default = ?", true).Update("is_default", false).Error
 }
 
-// ClearDefaultTx unsets is_default on all plans within the given transaction.
 func (r *PlanRepository) ClearDefaultTx(tx *gorm.DB) error {
 	return tx.Model(&models.Plan{}).Where("is_default = ?", true).Update("is_default", false).Error
 }
 
-// CountWorkspaces returns the number of workspaces assigned to the given plan.
 func (r *PlanRepository) CountWorkspaces(planID uint) (int64, error) {
 	var count int64
 	if err := r.db.Model(&models.Workspace{}).Where("plan_id = ?", planID).Count(&count).Error; err != nil {
@@ -126,22 +122,18 @@ func (r *PlanRepository) CountWorkspaces(planID uint) (int64, error) {
 	return count, nil
 }
 
-// AssignToWorkspace sets the plan_id on the given workspace.
 func (r *PlanRepository) AssignToWorkspace(workspaceID, planID uint) error {
 	return r.db.Model(&models.Workspace{}).Where("id = ?", workspaceID).Update("plan_id", planID).Error
 }
 
-// UnassignFromWorkspace removes the plan assignment from the given workspace.
 func (r *PlanRepository) UnassignFromWorkspace(workspaceID uint) error {
 	return r.db.Model(&models.Workspace{}).Where("id = ?", workspaceID).Update("plan_id", nil).Error
 }
 
-// UnassignAllFromPlan removes plan assignment from all workspaces using the given plan.
 func (r *PlanRepository) UnassignAllFromPlan(planID uint) error {
 	return r.db.Model(&models.Workspace{}).Where("plan_id = ?", planID).Update("plan_id", nil).Error
 }
 
-// FindByUserID returns the plan assigned to the given user.
 func (r *PlanRepository) FindByUserID(userID uint) (*models.Plan, error) {
 	var user models.User
 	if err := r.db.First(&user, userID).Error; err != nil {
@@ -157,17 +149,14 @@ func (r *PlanRepository) FindByUserID(userID uint) (*models.Plan, error) {
 	return &plan, nil
 }
 
-// AssignToUser sets the plan_id on the given user.
 func (r *PlanRepository) AssignToUser(userID, planID uint) error {
 	return r.db.Model(&models.User{}).Where("id = ?", userID).Update("plan_id", planID).Error
 }
 
-// UnassignFromUser removes the plan assignment from the given user.
 func (r *PlanRepository) UnassignFromUser(userID uint) error {
 	return r.db.Model(&models.User{}).Where("id = ?", userID).Update("plan_id", nil).Error
 }
 
-// CountUsers returns the number of users assigned to the given plan.
 func (r *PlanRepository) CountUsers(planID uint) (int64, error) {
 	var count int64
 	if err := r.db.Model(&models.User{}).Where("plan_id = ?", planID).Count(&count).Error; err != nil {
@@ -176,12 +165,10 @@ func (r *PlanRepository) CountUsers(planID uint) (int64, error) {
 	return count, nil
 }
 
-// UnassignAllUsersFromPlan removes plan assignment from all users using the given plan.
 func (r *PlanRepository) UnassignAllUsersFromPlan(planID uint) error {
 	return r.db.Model(&models.User{}).Where("plan_id = ?", planID).Update("plan_id", nil).Error
 }
 
-// DB returns the underlying database connection for use in transactions.
 func (r *PlanRepository) DB() *gorm.DB {
 	return r.db
 }

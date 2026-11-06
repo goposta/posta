@@ -28,9 +28,7 @@ import (
 
 const advisoryLockKey int64 = 0x506F73746155706C // "PostaUpl"
 
-// withLock acquires a Postgres session-level advisory lock for the upgrade
-// flow, runs fn, then releases the lock. Concurrent boots of multiple
-// replicas serialize through this lock so only one runs the registry.
+// withLock serializes concurrent replica boots through a Postgres advisory lock so only one runs the registry.
 func withLock(ctx context.Context, db *gorm.DB, fn func(context.Context) error) error {
 	conn, err := db.DB()
 	if err != nil {

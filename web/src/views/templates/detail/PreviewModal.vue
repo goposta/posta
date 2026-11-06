@@ -13,9 +13,6 @@ const emit = defineEmits<{ (e: "close"): void; (e: "render"): void }>();
 
 const data = defineModel<string>("data", { required: true });
 
-// Most mail is opened on a phone, and a layout that only works at desktop width
-// is the commonest way a template disappoints. The width toggle makes that
-// checkable here instead of after sending a test to yourself.
 const WIDTHS = [
   { key: "desktop", label: "Desktop", px: 0 },
   { key: "mobile", label: "Mobile", px: 375 },
@@ -24,8 +21,6 @@ const width = ref("desktop");
 
 const dataError = ref("");
 
-// Re-render as the sample data is edited, the way the full editor does, so the
-// preview is never quietly stale relative to the JSON above it.
 let timer: ReturnType<typeof setTimeout> | null = null;
 watch(data, (value) => {
   if (timer) clearTimeout(timer);

@@ -22,7 +22,6 @@ const messagesLoading = ref(false)
 const messageStatusFilter = ref('')
 const actionLoading = ref(false)
 
-// Analytics
 const activeTab = ref<'messages' | 'analytics'>('messages')
 const analyticsData = ref<CampaignAnalyticsData | null>(null)
 const analyticsLoading = ref(false)
@@ -84,9 +83,7 @@ function switchMessageStatus(status: string) {
   loadMessages(0)
 }
 
-// runAction wraps a status-changing API call so we (a) always clear the loading
-// flag, (b) surface 409 conflicts clearly and refresh the campaign so the
-// action buttons resync with server state.
+// Always clears the loading flag, and on a 409 refreshes the campaign so the action buttons resync with server state.
 async function runAction(fn: () => Promise<unknown>, successMsg: string, failMsg: string) {
   actionLoading.value = true
   try {
@@ -229,7 +226,6 @@ onMounted(async () => {
     </div>
 
     <template v-else-if="campaign">
-      <!-- Campaign Info -->
       <div class="card" style="margin-bottom: 24px;">
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px;">
           <div>
@@ -267,7 +263,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Stats -->
       <div v-if="campaign.stats && campaign.stats.total > 0" class="card" style="margin-bottom: 24px;">
         <h3 style="margin-bottom: 12px;">Delivery Stats</h3>
         <div style="display: flex; gap: 24px; flex-wrap: wrap;">
@@ -297,7 +292,6 @@ onMounted(async () => {
           </div>
         </div>
 
-        <!-- Progress bar -->
         <div v-if="campaign.stats.total > 0" style="margin-top: 16px;">
           <div style="width: 100%; height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden; display: flex;">
             <div :style="{ width: (campaign.stats.sent / campaign.stats.total * 100) + '%', background: 'var(--success-600)' }"></div>
@@ -307,7 +301,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Tab navigation -->
       <div class="tabs" style="margin-bottom: 16px;">
         <button
           class="btn btn-sm"
@@ -328,7 +321,6 @@ onMounted(async () => {
         </button>
       </div>
 
-      <!-- Messages Tab -->
       <div v-if="activeTab === 'messages'" class="card">
         <h3 style="margin-bottom: 12px;">Messages</h3>
 
@@ -389,14 +381,12 @@ onMounted(async () => {
         </template>
       </div>
 
-      <!-- Analytics Tab -->
       <div v-if="activeTab === 'analytics'">
         <div v-if="analyticsLoading" class="loading-page">
           <div class="spinner"></div>
         </div>
 
         <template v-else-if="analyticsData">
-          <!-- Rate Cards -->
           <div class="card" style="margin-bottom: 24px;">
             <h3 style="margin-bottom: 16px;">Engagement Rates</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px;">
@@ -428,7 +418,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Link Click Table -->
           <div v-if="analyticsData.links && analyticsData.links.length > 0" class="card" style="margin-bottom: 24px;">
             <h3 style="margin-bottom: 12px;">Link Clicks</h3>
             <div class="table-wrapper">
@@ -451,7 +440,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Time Series: Opens -->
           <div v-if="analyticsData.open_series && analyticsData.open_series.length > 0" class="card" style="margin-bottom: 24px;">
             <h3 style="margin-bottom: 12px;">Opens Over Time</h3>
             <div style="display: flex; align-items: flex-end; gap: 2px; height: 120px; padding: 8px 0;">
@@ -475,7 +463,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Time Series: Clicks -->
           <div v-if="analyticsData.click_series && analyticsData.click_series.length > 0" class="card" style="margin-bottom: 24px;">
             <h3 style="margin-bottom: 12px;">Clicks Over Time</h3>
             <div style="display: flex; align-items: flex-end; gap: 2px; height: 120px; padding: 8px 0;">

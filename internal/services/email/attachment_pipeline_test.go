@@ -39,9 +39,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// stubEnqueuer stands in for the Asynq producer: it records the enqueued email id
-// and, crucially, sends nothing itself — exactly like production, where delivery
-// happens later in a worker that has only the stored record to work from.
+// stubEnqueuer only records ids, like production where the worker sees nothing but the stored record.
 type stubEnqueuer struct{ enqueued []uint }
 
 func (s *stubEnqueuer) EnqueueEmailSend(emailID uint, _ string) error {
@@ -86,13 +84,7 @@ func pipelineTestLimiter(t *testing.T) *ratelimit.RedisLimiter {
 	return ratelimit.NewRedisLimiter(client, 100000, 100000)
 }
 
-// Reproduces the production failure behind DashaMail's "Невозможно прочитать файл!":
-// an email submitted with an attachment is queued for the worker, and the worker
-// only ever sees the stored record. If the payload is not recoverable from that
-// record the attachment goes out as a zero-byte file.
-//
-// This is the SMTP relay's only path — the relay always goes through Send, which
-// always enqueues.
+// Regression: a queued attachment must be recoverable from the stored record or it goes out as a zero-byte file.
 func TestQueuedEmailKeepsRecoverableAttachment(t *testing.T) {
 	db := pipelineTestDB(t)
 	tx := db.Begin()
@@ -165,8 +157,7 @@ func TestQueuedEmailKeepsRecoverableAttachment(t *testing.T) {
 	}
 }
 
-// With a blob store the bytes go to the store and the record keeps only the key,
-// so the payload never sits in the database.
+// With a blob store the record keeps only the key, so the payload never sits in the database.
 func TestQueuedEmailStoresAttachmentInBlobStore(t *testing.T) {
 	db := pipelineTestDB(t)
 	tx := db.Begin()
@@ -227,7 +218,6 @@ func TestQueuedEmailStoresAttachmentInBlobStore(t *testing.T) {
 	}
 }
 
-// memBlobStore is an in-memory blob.Store for the blob-backed path.
 type memBlobStore struct{ objects map[string][]byte }
 
 func (m *memBlobStore) Put(_ context.Context, key string, r io.Reader, _ string) error {

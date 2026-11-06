@@ -100,7 +100,6 @@ async function renderPreview() {
     </div>
 
     <template v-else>
-      <!-- Template Selection -->
       <div class="card" style="margin-bottom: 24px;">
         <div class="card-header">
           <h2>Configuration</h2>
@@ -146,12 +145,10 @@ async function renderPreview() {
         </div>
       </div>
 
-      <!-- Error -->
       <div v-if="previewError" class="preview-error" style="margin-bottom: 24px;">
         {{ previewError }}
       </div>
 
-      <!-- Rendered Preview -->
       <template v-if="preview">
         <div class="card" style="margin-bottom: 24px;">
           <div class="card-header"><h2>Rendered Subject</h2></div>

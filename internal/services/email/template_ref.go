@@ -27,8 +27,7 @@ import (
 	"strings"
 )
 
-// TemplateRef names a template by name or by ID. It decodes from a JSON
-// string ("welcome", "42") or a JSON number (42).
+// TemplateRef decodes from a JSON string ("welcome", "42") or a JSON number (42).
 type TemplateRef string
 
 func (r *TemplateRef) UnmarshalJSON(data []byte) error {
@@ -58,7 +57,6 @@ func (r *TemplateRef) UnmarshalJSON(data []byte) error {
 
 func (r TemplateRef) String() string { return string(r) }
 
-// ID returns the template ID r denotes when it is all digits.
 func (r TemplateRef) ID() (uint, bool) {
 	id, err := strconv.ParseUint(string(r), 10, 0)
 	if err != nil || id == 0 {

@@ -9,9 +9,7 @@ import { useConfirm } from '../../composables/useConfirm'
 import { apiMessage } from '../../composables/apiError'
 import EnterpriseLock from '../../components/EnterpriseLock.vue'
 
-// LDAP / Active Directory sign-in. People sign in with their directory email
-// and password; Posta asks the directories only after the local password
-// check fails, so local accounts keep working when a directory is down.
+// Directories are asked only after the local password check fails, so local accounts keep working when a directory is down.
 
 const notify = useNotificationStore()
 const license = useLicenseStore()
@@ -36,8 +34,6 @@ async function load() {
     loading.value = false
   }
 }
-
-// ---- Directory editor ----
 
 const showEditor = ref(false)
 const editing = ref<LDAPDirectory | null>(null)
@@ -138,8 +134,6 @@ async function test(dir: LDAPDirectory) {
     notify.error(apiMessage(e, 'Failed to test the directory'))
   }
 }
-
-// ---- Group mappings ----
 
 const mappingDrafts = ref<Record<number, { group_dn: string; platform_admin: boolean; workspace_id: number | ''; workspace_role: MappableRole }>>({})
 

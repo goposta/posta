@@ -26,7 +26,6 @@ import (
 )
 
 func runConstraints(db *gorm.DB) {
-	// Add FK constraints
 	db.Exec(`DO $$ BEGIN
 		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_template_versions_template') THEN
 			ALTER TABLE template_versions ADD CONSTRAINT fk_template_versions_template
@@ -64,34 +63,27 @@ func runConstraints(db *gorm.DB) {
 
 	rebuildUniqueIndexes(db)
 
-	// Every analytics query filters one workspace over a date range and groups by
-	// day. The single-column workspace index makes the server read every email a
-	// workspace ever sent and discard most of them; these carry the range too.
+	// Analytics queries filter a workspace by date range; the single-column index would read every email it ever sent.
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_emails_workspace_created
 		ON emails (workspace_id, created_at)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_bounces_workspace_created
 		ON bounces (workspace_id, created_at)`)
 
-	// Partial unique index: at most one unresolved notification per user and
-	// condition. It is what makes a recurring condition update the existing
-	// inbox item instead of adding a row on every dashboard load, and it holds
-	// even if two requests race.
+	// At most one unresolved notification per user and condition, so a recurring one updates its row even under races.
 	db.Exec(`DO $$ BEGIN
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_open
 			ON notifications (user_id, workspace_id, dedup_key) WHERE resolved_at IS NULL;
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
-	// Partial unique index: at most one ownership-verified row per domain name
-	// (case-insensitive). Prevents two tenants from both verifying the same domain.
+	// At most one ownership-verified row per domain (case-insensitive), so two tenants cannot both verify it.
 	db.Exec(`DO $$ BEGIN
 		DROP INDEX IF EXISTS idx_verified_domain;
 		CREATE UNIQUE INDEX idx_verified_domain ON domains (LOWER(domain)) WHERE ownership_verified = true;
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
-	// Composite index for fast Message-ID dedup lookups on inbound_emails, scoped
-	// to the workspace (workspace-only migration — replaces the legacy user_id one).
+	// Workspace-scoped Message-ID dedup lookups on inbound_emails; replaces the legacy user_id index.
 	db.Exec(`DO $$ BEGIN
 		DROP INDEX IF EXISTS idx_inbound_user_message_id;
 		CREATE INDEX IF NOT EXISTS idx_inbound_workspace_message_id ON inbound_emails (workspace_id, message_id) WHERE message_id <> '';
@@ -117,8 +109,7 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
-	// Field filters on form submissions are containment queries
-	// (data @> '{"department":"sales"}'), which jsonb_path_ops serves.
+	// Form submission field filters are containment queries (data @> '{"department":"sales"}'), served by jsonb_path_ops.
 	db.Exec(`DO $$ BEGIN
 		CREATE INDEX IF NOT EXISTS idx_messages_data ON messages USING GIN (data jsonb_path_ops) WHERE data IS NOT NULL;
 	EXCEPTION WHEN others THEN NULL;
@@ -130,8 +121,7 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
-	// Routing: a form's rules in order, team names unique per workspace, and
-	// the "My teams" inbox view.
+	// Routing: a form's rules in order, team names unique per workspace, and the "My teams" inbox view.
 	db.Exec(`DO $$ BEGIN
 		CREATE INDEX IF NOT EXISTS idx_form_rules_order ON form_rules (form_id, position);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_team_name ON teams (workspace_id, LOWER(name)) WHERE deleted_at IS NULL;
@@ -139,17 +129,13 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
-	// One thread reply per inbound email, so a retried parse task cannot attach
-	// the same answer twice. Its own block: a failure must not skip the others.
+	// One reply per inbound email so a retried parse cannot attach it twice; own block so a failure skips no others.
 	db.Exec(`DO $$ BEGIN
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_message_replies_inbound ON message_replies (inbound_email_id) WHERE inbound_email_id IS NOT NULL;
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
-	// AutoMigrate used to create fk_messages_form and fk_messages_replies from
-	// the model associations without ON DELETE CASCADE, which made every delete
-	// of a replied message (retention, GDPR erasure) fail. Replace a
-	// non-cascading copy in place; the blocks below then find it present.
+	// Older AutoMigrate made fk_messages_form/replies without ON DELETE CASCADE, breaking deletes; replace them in place.
 	db.Exec(`DO $$ BEGIN
 		IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_messages_replies' AND confdeltype <> 'c') THEN
 			ALTER TABLE message_replies DROP CONSTRAINT fk_messages_replies;
@@ -184,8 +170,7 @@ func runConstraints(db *gorm.DB) {
 	END $$`)
 }
 
-// rebuildUniqueIndexes re-scopes the per-tenant uniqueness constraints to
-// workspace-only.
+// rebuildUniqueIndexes re-scopes the per-tenant uniqueness constraints to workspace-only.
 func rebuildUniqueIndexes(db *gorm.DB) {
 	type indexDef struct {
 		table   string

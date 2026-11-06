@@ -73,13 +73,10 @@ type Lookup interface {
 	ActiveFilters(workspaceID uint, src models.ScanSource) ([]models.MessageFilter, error)
 }
 
-// Policy is the per-endpoint scanning configuration: whether to scan, where
-// the score thresholds sit, and which source's filters apply. *models.Form
-// implements it; a chat widget will too.
+// *models.Form implements Policy; a chat widget will too.
 type Policy interface {
 	ScanningEnabled() bool
-	// ScanThresholds returns the flag, quarantine, and reject scores. A
-	// non-positive value means the default for that rung.
+	// A non-positive threshold means the default for that rung.
 	ScanThresholds() (flag, quarantine, reject float64)
 	ScanSource() models.ScanSource
 }

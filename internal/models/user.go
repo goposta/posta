@@ -46,8 +46,7 @@ type User struct {
 	CreatedAt             time.Time  `json:"created_at"`
 	LastLoginAt           *time.Time `json:"last_login_at"`
 
-	// DefaultWorkspaceID is where a request that names no workspace lands. It is
-	// user-settable and repaired when it points at a workspace the user has left.
+	// DefaultWorkspaceID is where an unscoped request lands; repaired when the user has left that workspace.
 	DefaultWorkspaceID *uint      `json:"default_workspace_id" gorm:"index"`
 	MigratedAt         *time.Time `json:"-"`
 	MigrationError     string     `json:"-" gorm:"type:text"`

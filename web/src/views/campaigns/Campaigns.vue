@@ -30,7 +30,6 @@ const statusTabs: { label: string; value: string }[] = [
   { label: 'Cancelled', value: 'cancelled' },
 ]
 
-// Create modal
 const showModal = ref(false)
 const formName = ref('')
 const formSubject = ref('')
@@ -41,7 +40,6 @@ const formListId = ref<number | null>(null)
 const formSendRate = ref(0)
 const saving = ref(false)
 
-// Lists for the create form
 const lists = ref<SubscriberListItem[]>([])
 const templates = ref<{ id: number; name: string }[]>([])
 
@@ -180,7 +178,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       <button v-if="wsStore.canEdit" class="btn btn-primary" @click="openCreate">Create Campaign</button>
     </div>
 
-    <!-- Status filter tabs -->
     <div class="tabs" style="margin-bottom: 16px;">
       <button v-for="tab in statusTabs" :key="tab.value" class="btn btn-sm"
         :class="statusFilter === tab.value ? 'btn-primary' : 'btn-secondary'" @click="switchStatus(tab.value)"
@@ -238,7 +235,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Create Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

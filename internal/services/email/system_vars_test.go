@@ -54,8 +54,7 @@ func TestRenderThenSubstituteSystemLinks(t *testing.T) {
 	r := NewTemplateRenderer()
 	r.MissingKeyBehavior = "error"
 
-	// missingkey=error must NOT fire for reserved vars because WithSystemVars
-	// always supplies them.
+	// missingkey=error must not fire for reserved vars because WithSystemVars always supplies them.
 	in := &RenderInput{
 		HTMLTemplate: `<a href="{{ posta_web_view_url }}">view</a> <a href="{{ posta_unsubscribe_url }}">unsub</a>`,
 		TextTemplate: `view: {{ posta_mail_web_link }}`,

@@ -21,20 +21,17 @@ package dto
 
 import "time"
 
-// Response is the standard API response envelope with a generic data field.
 type Response[T any] struct {
 	Success bool `json:"success"`
 	Data    T    `json:"data"`
 }
 
-// PageableResponse is the paginated API response envelope.
 type PageableResponse[T any] struct {
 	Success  bool     `json:"success"`
 	Data     []T      `json:"data"`
 	Pageable Pageable `json:"pageable"`
 }
 
-// Pageable holds pagination metadata.
 type Pageable struct {
 	CurrentPage   int   `json:"current_page"`
 	Size          int   `json:"size"`
@@ -50,7 +47,6 @@ type ErrorResponseBody struct {
 	Error   *ErrorInfo `json:"error"`
 }
 
-// ErrorInfo holds error details.
 type ErrorInfo struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

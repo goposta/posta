@@ -144,8 +144,7 @@ func TestOtherFieldsSkipsSchemaAndReserved(t *testing.T) {
 	}
 }
 
-// JSON submissions carry numbers as numbers; they must reach Data and the
-// display copy unchanged. Trimming zeros once turned 30 into 3.
+// JSON numbers must reach Data and the display copy unchanged; trimming zeros would turn 30 into 3.
 func TestStringifyKeepsNumbers(t *testing.T) {
 	for in, want := range map[float64]string{
 		30:     "30",

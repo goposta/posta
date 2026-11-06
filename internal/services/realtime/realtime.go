@@ -17,14 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package realtime fans out live events to SSE subscribers across every Posta
-// process. Unlike eventbus, it does not persist anything and it is not limited
-// to the process that published: the Redis implementation lets the worker
-// publish an event that a dashboard connected to any server replica receives.
-//
-// Delivery is best effort. A subscriber that is not connected when an event is
-// published never sees it, so the database stays the source of truth and an
-// event is only a hint to refetch.
+// Package realtime fans out best-effort live events across processes; the database stays the source of truth.
 package realtime
 
 import (
@@ -33,7 +26,6 @@ import (
 	"sync"
 )
 
-// Event is one live notification.
 type Event struct {
 	Type        string `json:"type"`
 	WorkspaceID uint   `json:"workspace_id"`
@@ -41,23 +33,19 @@ type Event struct {
 	Data        any    `json:"data,omitempty"`
 }
 
-// Bus publishes and subscribes to topics.
 type Bus interface {
 	// Publish sends ev to every current subscriber of ev.Topic, in every process.
 	Publish(ctx context.Context, ev Event) error
-	// Subscribe returns a channel of events on topic and a function that ends
-	// the subscription and closes the channel. The function is safe to call once.
+	// Subscribe's returned func ends the subscription and closes the channel; call it once.
 	Subscribe(ctx context.Context, topic string) (<-chan Event, func())
 }
 
-// WorkspaceTopic is the topic that carries a workspace's dashboard events.
-// Topics are built from database IDs only, never from client input.
+// WorkspaceTopic is built from database IDs only, never from client input.
 func WorkspaceTopic(workspaceID uint) string {
 	return fmt.Sprintf("ws:%d", workspaceID)
 }
 
-// subscriberBuffer is how many undelivered events a subscriber may hold before
-// further events are dropped for it.
+// subscriberBuffer is how many undelivered events a subscriber holds before further ones are dropped.
 const subscriberBuffer = 64
 
 // hub is the in-process fan-out shared by both Bus implementations.
@@ -106,8 +94,7 @@ func (h *hub) remove(topic string, id uint64) bool {
 	return false
 }
 
-// deliver hands ev to every local subscriber of its topic. A subscriber whose
-// buffer is full misses the event rather than stalling everyone else.
+// deliver drops ev for a subscriber whose buffer is full rather than stalling everyone else.
 func (h *hub) deliver(ev Event) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -125,8 +112,7 @@ func (h *hub) topicCount() int {
 	return len(h.topics)
 }
 
-// memoryBus is a single-process Bus, for tests and for deployments that run
-// the worker embedded in the server.
+// memoryBus is a single-process Bus, for tests and for a worker embedded in the server.
 type memoryBus struct {
 	hub *hub
 }
