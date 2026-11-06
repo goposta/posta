@@ -37,8 +37,6 @@ const refreshing = ref(false);
 const dash = ref<DashboardAnalyticsResponse | null>(null);
 const statusRows = ref<StatusBreakdown[]>([]);
 const providers = ref<ProviderBreakdownPoint[]>([]);
-// The same three figures for the window immediately before this one, which is
-// what turns "94% delivered" into "94%, down two points".
 const previous = ref<{ sent: number; failed: number; bounces: number; latency: number } | null>(null);
 
 const updatedAt = ref<Date | null>(null);
@@ -79,10 +77,7 @@ const totals = computed(() => {
     attempts,
     bounces,
     deliveryRate: attempts > 0 ? (sent / attempts) * 100 : 0,
-    // Bounces over everything attempted, which is how the dashboard and the
-    // health alerts already define the bounce rate. Dividing by delivered mail
-    // instead would be defensible on its own, but it would make this page
-    // disagree with the number printed on the dashboard.
+    // Bounces over everything attempted, as the dashboard and health alerts define it, so this page agrees with the dashboard.
     bounceRate: attempts > 0 ? (bounces / attempts) * 100 : 0,
     latency: dash.value?.latency_percentiles?.p90 ?? 0,
   };
@@ -167,8 +162,7 @@ async function load(showSpinner: boolean) {
     providers.value = provRes.data.data.providers || [];
     updatedAt.value = new Date();
 
-    // The comparison is a nicety, not the report. Load it separately so a slow
-    // or failing prior-window query never blocks the numbers people came for.
+    // Loaded separately so a slow or failing prior-window query never blocks the main numbers.
     try {
       const priorRes = await analyticsApi.dashboardAnalytics(prior.from, prior.to);
       const d = priorRes.data.data;

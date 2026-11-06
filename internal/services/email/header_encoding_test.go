@@ -29,9 +29,7 @@ import (
 
 var encodedWordRe = regexp.MustCompile(`=\?[^?\s]+\?[QqBb]\?[^?\s]*\?=`)
 
-// RFC 2047 ignores the whitespace between encoded-words, but some relays keep
-// it, so a subject split mid-word arrives as "subscri ptions". Encoded-words
-// must therefore break only at spaces; such a relay may still double one.
+// Some relays keep the whitespace between encoded-words, so encoded-words must break only at spaces.
 func TestBuildMessageSubjectSplitsBetweenWords(t *testing.T) {
 	for _, subject := range []string{
 		"Your availability alert — new rooms found for 3 subscriptions",
@@ -60,9 +58,7 @@ func TestBuildMessageSubjectSplitsBetweenWords(t *testing.T) {
 	}
 }
 
-// RFC 5322 recommends header lines of at most 78 characters, and RFC 2047
-// limits a line that carries encoded-words to 76, so long subjects must be
-// folded.
+// RFC 2047 limits lines carrying encoded-words to 76 characters, so long subjects must be folded.
 func TestBuildMessageFoldsLongSubject(t *testing.T) {
 	for _, subject := range []string{
 		strings.TrimSpace(strings.Repeat("New rooms found for 3 subscriptions. ", 30)),
@@ -92,9 +88,7 @@ func TestBuildMessageFoldsLongSubject(t *testing.T) {
 	}
 }
 
-// The workspace default sender name is encoded the same way, so a long
-// non-ASCII name must also break only between words and stay within the
-// RFC 2047 line limit.
+// The default sender name must also break only between words and stay within the RFC 2047 line limit.
 func TestBuildMessageDefaultSenderNameSplitsBetweenWords(t *testing.T) {
 	const name = "Акме — компания, которая производит абсолютно всё"
 	from := resolveSenderWithDefault("noreply@example.com", name)
@@ -126,8 +120,7 @@ func TestBuildMessageDefaultSenderNameSplitsBetweenWords(t *testing.T) {
 	}
 }
 
-// A readable UTF-8 sender (as stored for display) is encoded only on the wire,
-// and senders stored pre-encoded by older versions still go out intact.
+// UTF-8 senders are encoded only on the wire; senders stored pre-encoded by older versions still go out intact.
 func TestBuildMessageEncodesNonASCIISender(t *testing.T) {
 	const name = "Санаторий.ру"
 	for _, from := range []string{
@@ -152,8 +145,7 @@ func TestBuildMessageEncodesNonASCIISender(t *testing.T) {
 	}
 }
 
-// Plain text that merely looks like an encoded-word must reach the reader as
-// written, not be decoded by their client.
+// Plain text that merely looks like an encoded-word must reach the reader as written.
 func TestBuildMessageSubjectKeepsLiteralEncodedWordSyntax(t *testing.T) {
 	const subject = "Use =?UTF-8?Q?hi?= in your template"
 	raw := buildMessage("sender@example.com", []string{"rcpt@example.com"},

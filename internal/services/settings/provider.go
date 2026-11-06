@@ -28,9 +28,7 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// Provider gives live access to platform settings with a short cache.
-// It reads from the database and caches values in memory, refreshing
-// periodically so that admin changes take effect without a restart.
+// Provider caches settings briefly so admin changes take effect without a restart.
 type Provider struct {
 	repo     *repositories.SettingRepository
 	mu       sync.RWMutex
@@ -74,7 +72,6 @@ func (p *Provider) ensureFresh() {
 	}
 }
 
-// GetString returns a string setting or the fallback if not found.
 func (p *Provider) GetString(key, fallback string) string {
 	p.ensureFresh()
 	p.mu.RLock()
@@ -85,7 +82,6 @@ func (p *Provider) GetString(key, fallback string) string {
 	return fallback
 }
 
-// GetInt returns an integer setting or the fallback if not found or invalid.
 func (p *Provider) GetInt(key string, fallback int) int {
 	s := p.GetString(key, "")
 	if s == "" {
@@ -98,7 +94,6 @@ func (p *Provider) GetInt(key string, fallback int) int {
 	return v
 }
 
-// GetBool returns a boolean setting or the fallback if not found.
 func (p *Provider) GetBool(key string, fallback bool) bool {
 	s := p.GetString(key, "")
 	if s == "" {
@@ -110,8 +105,6 @@ func (p *Provider) GetBool(key string, fallback bool) bool {
 	}
 	return v
 }
-
-// Convenience accessors for commonly used settings.
 
 func (p *Provider) MaintenanceMode() bool     { return p.GetBool("maintenance_mode", false) }
 func (p *Provider) RegistrationEnabled() bool { return p.GetBool("registration_enabled", false) }
@@ -126,8 +119,7 @@ func (p *Provider) TwoFactorRequired() bool { return p.GetBool("two_factor_requi
 // HostedFormsEnabled reports whether forms get a public share page at /f/{key}.
 func (p *Provider) HostedFormsEnabled() bool { return p.GetBool("hosted_forms_enabled", true) }
 
-// AbuseReportEmail is the contact behind the "Report abuse" link on hosted
-// form pages. Empty falls back to the admin email.
+// AbuseReportEmail backs the hosted forms' "Report abuse" link; empty falls back to the admin email.
 func (p *Provider) AbuseReportEmail() string    { return p.GetString("abuse_report_email", "") }
 func (p *Provider) DefaultRateLimitHourly() int { return p.GetInt("default_rate_limit_hourly", 100) }
 func (p *Provider) DefaultRateLimitDaily() int  { return p.GetInt("default_rate_limit_daily", 1000) }
@@ -137,8 +129,7 @@ func (p *Provider) GlobalBounceThreshold() int  { return p.GetInt("global_bounce
 func (p *Provider) SMTPTimeoutSeconds() int     { return p.GetInt("smtp_timeout_seconds", 30) }
 func (p *Provider) RetentionDays() int          { return p.GetInt("retention_days", 30) }
 
-// EmailBodyRetentionDays / EmailAttachmentRetentionDays default to the record
-// retention so content is purged with the row unless an admin sets a shorter window.
+// Content retention defaults to record retention, so content is purged with the row unless set shorter.
 func (p *Provider) EmailBodyRetentionDays() int {
 	return p.GetInt("email_body_retention_days", p.RetentionDays())
 }

@@ -35,7 +35,6 @@ import (
 //go:embed templates/*.tmpl
 var templateFS embed.FS
 
-// Template names used throughout the notification system.
 const (
 	TemplateDailyReport     = "daily_report"
 	TemplateInvitation      = "workspace_invitation"
@@ -74,7 +73,6 @@ func templateEnabled(templateName string, settings *models.UserSetting) bool {
 	return true
 }
 
-// Service sends platform notification emails via the system SMTP server.
 type Service struct {
 	smtpCfg         config.SystemSMTPConfig
 	appName         string
@@ -87,7 +85,6 @@ type Service struct {
 	templates       map[string]*template.Template
 }
 
-// NewService creates a new notification service.
 func NewService(
 	smtpCfg config.SystemSMTPConfig,
 	appName, appURL string,
@@ -138,12 +135,10 @@ func (s *Service) loadTemplates() {
 	}
 }
 
-// IsConfigured returns true if the system SMTP is configured.
 func (s *Service) IsConfigured() bool {
 	return s.smtpCfg.IsConfigured()
 }
 
-// Send renders a template and sends an email to the given address.
 func (s *Service) Send(to, subject, templateName string, data map[string]any) error {
 	if !s.IsConfigured() {
 		logger.Debug("notification service: system SMTP not configured, skipping", "template", templateName, "to", to)
@@ -175,16 +170,12 @@ func (s *Service) SendToUser(userID uint, subject, templateName string, data map
 	return s.sendToUser(userID, subject, templateName, data, false)
 }
 
-// SendSecurityToUser sends a security-critical notification (sign-in alerts, 2FA
-// changes, password changes, account deletion). It bypasses the user's
-// EmailNotifications preference — these messages must always reach the account
-// owner — but still skips unverified accounts and honors their notification email.
+// SendSecurityToUser ignores the EmailNotifications opt-out: security mail must always reach the owner.
 func (s *Service) SendSecurityToUser(userID uint, subject, templateName string, data map[string]any) error {
 	return s.sendToUser(userID, subject, templateName, data, true)
 }
 
-// sendToUser is the shared implementation behind SendToUser and SendSecurityToUser.
-// When security is true the recipient's EmailNotifications toggle is ignored.
+// sendToUser ignores the recipient's EmailNotifications toggle when security is true.
 func (s *Service) sendToUser(userID uint, subject, templateName string, data map[string]any, security bool) error {
 	if !s.IsConfigured() {
 		return nil
@@ -278,13 +269,7 @@ func (s *Service) render(templateName string, data map[string]any) (string, erro
 	return buf.String(), nil
 }
 
-// systemServer resolves the connection the platform sends its own mail through.
-//
-// The row provisioned into the system workspace from POSTA_SYSTEM_SMTP_* is
-// preferred, so what an operator sees in the dashboard is what the platform
-// actually uses. Configuration remains the fallback: the worker binary builds
-// this service without a repository, and on a first boot the row does not exist
-// until provisioning has run.
+// systemServer prefers the provisioned system row; config is the fallback (worker has no repo, first boot).
 func (s *Service) systemServer() *models.SMTPServer {
 	if s.smtpRepo != nil {
 		if server, err := s.smtpRepo.FindSystem(); err == nil && server.Host != "" {
@@ -300,6 +285,5 @@ func (s *Service) systemServer() *models.SMTPServer {
 	}
 }
 
-// SetSMTPRepo lets the service read the provisioned system SMTP server. Without
-// it the service still works, sending straight from configuration.
+// SetSMTPRepo is optional: without it the service sends straight from configuration.
 func (s *Service) SetSMTPRepo(repo *repositories.SMTPRepository) { s.smtpRepo = repo }

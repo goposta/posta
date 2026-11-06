@@ -17,7 +17,6 @@ const wsId = Number(route.params.id)
 const ws = ref<Workspace | null>(null)
 const loading = ref(true)
 
-// Tabs
 type MembersTab = 'members' | 'invitations'
 const validTabs: MembersTab[] = ['members', 'invitations']
 function tabFromQuery(value: unknown): MembersTab {
@@ -31,7 +30,6 @@ watch(() => route.query.tab, (value) => {
 const members = ref<WorkspaceMember[]>([])
 const invitations = ref<WorkspaceInvitation[]>([])
 
-// Invite modal
 const showInviteModal = ref(false)
 const inviteEmail = ref('')
 const inviteRole = ref<WorkspaceRole>('editor')
@@ -180,7 +178,6 @@ onMounted(async () => {
         </button>
       </div>
 
-      <!-- Members Tab -->
       <div v-if="activeTab === 'members'" class="card">
         <div class="card-header">
           <span>Members</span>
@@ -224,7 +221,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Invitations Tab -->
       <div v-if="activeTab === 'invitations'" class="card">
         <div class="card-header">
           <span>Pending Invitations</span>
@@ -260,7 +256,6 @@ onMounted(async () => {
       </div>
     </template>
 
-    <!-- Invite Modal -->
     <div v-if="showInviteModal" class="modal-overlay" @click.self="showInviteModal = false">
       <div class="modal">
         <div class="modal-header">

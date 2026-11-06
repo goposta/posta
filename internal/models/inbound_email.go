@@ -57,7 +57,7 @@ type InboundEmail struct {
 	AttachmentsJSON string         `json:"attachments_json,omitempty" gorm:"type:text"`
 	HeadersJSON     string         `json:"headers_json,omitempty" gorm:"type:text"`
 	RawStorageKey   string         `json:"raw_storage_key,omitempty"`
-	// RawContent holds the raw RFC 5322 message until the async
+	// RawContent holds the raw message inline only until it is stored in the blob store under RawStorageKey.
 	RawContent   []byte             `json:"-" gorm:"type:bytea"`
 	DedupHash    string             `json:"-" gorm:"index"`
 	Size         int64              `json:"size"`
@@ -74,8 +74,7 @@ type InboundEmail struct {
 	Domain Domain `json:"-" gorm:"foreignKey:DomainID"`
 }
 
-// InboundAttachmentMeta describes one inbound attachment stored in blob storage.
-// Serialized into InboundEmail.AttachmentsJSON.
+// InboundAttachmentMeta is one blob-stored inbound attachment, serialized into InboundEmail.AttachmentsJSON.
 type InboundAttachmentMeta struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`

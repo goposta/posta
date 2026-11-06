@@ -24,9 +24,7 @@ import (
 	"time"
 )
 
-// IPRateLimiter is a minimal in-process rate limiter keyed by remote IP. It is
-// intentionally simple: a fixed-window counter with periodic eviction. Used to
-// shed abusive SMTP clients before they can incur parsing cost.
+// IPRateLimiter sheds abusive SMTP clients with a fixed-window counter before they incur parsing cost.
 type IPRateLimiter struct {
 	mu       sync.Mutex
 	window   time.Duration
@@ -40,8 +38,7 @@ type ipBucket struct {
 	reset time.Time
 }
 
-// NewIPRateLimiter returns a limiter that allows up to maxHits per window per IP.
-// maxHits ≤ 0 disables limiting.
+// maxHits <= 0 disables limiting.
 func NewIPRateLimiter(maxHits int, window time.Duration) *IPRateLimiter {
 	return &IPRateLimiter{
 		window:  window,
@@ -50,8 +47,6 @@ func NewIPRateLimiter(maxHits int, window time.Duration) *IPRateLimiter {
 	}
 }
 
-// Allow returns true if the given IP is under its budget and increments the
-// counter. Disabled limiters always return true.
 func (l *IPRateLimiter) Allow(ip string) bool {
 	if l == nil || l.maxHits <= 0 {
 		return true

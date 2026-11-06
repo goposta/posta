@@ -26,14 +26,12 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// codedError is an error that names its own API error code, such as the
-// Enterprise license gates (LICENSE_REQUIRED); its text is the message.
+// codedError is an error that names its own API error code (e.g. LICENSE_REQUIRED); its text is the message.
 type codedError interface {
 	error
 	Code() string
 }
 
-// CustomErrorHandler returns an okapi.ErrorHandler that formats errors
 func CustomErrorHandler() okapi.ErrorHandler {
 	return func(c *okapi.Context, code int, message string, err error) error {
 		info := &dto.ErrorInfo{Code: httpStatusToCode(code), Message: message}

@@ -17,10 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package passwordreset handles the self-service "forgot password" flow: token
-// issuance, delivery via a notification template, and redemption (which sets a
-// new password). The feature is gated by a platform setting checked at the
-// handler layer; this service is concerned only with token mechanics.
+// Package passwordreset handles reset-token mechanics; the feature gate is checked at the handler layer.
 package passwordreset
 
 import (
@@ -44,7 +41,6 @@ const (
 	resendMaxInWindow = 5
 )
 
-// Service coordinates password-reset token issuance and redemption.
 type Service struct {
 	userRepo  *repositories.UserRepository
 	tokenRepo *repositories.PasswordResetRepository

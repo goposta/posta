@@ -23,7 +23,6 @@ import "strings"
 
 const unknown = "Unknown"
 
-// Client is a parsed, display-oriented view of a User-Agent string.
 type Client struct {
 	Browser string
 	OS      string
@@ -79,8 +78,7 @@ func detectBrowser(ua string) string {
 	}
 }
 
-// detectOS checks OS tokens in priority order. iOS/iPadOS must be matched before
-// macOS, and Android before Linux, because of overlapping substrings.
+// detectOS matches iOS/iPadOS before macOS and Android before Linux because their tokens overlap.
 func detectOS(ua string) string {
 	switch {
 	case strings.Contains(ua, "Windows NT"), strings.Contains(ua, "Windows"):
@@ -100,7 +98,6 @@ func detectOS(ua string) string {
 	}
 }
 
-// detectDevice resolves the form factor.
 func detectDevice(ua string) string {
 	switch {
 	case containsAny(ua, "bot", "Bot", "crawler", "spider", "Go-http-client", "curl/", "python-requests"):

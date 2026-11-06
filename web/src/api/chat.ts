@@ -192,11 +192,7 @@ export const conversationsApi = {
   setPresence(status: ChatPresenceStatus) {
     return api.put<void>('/workspaces/current/chat/presence', { status })
   },
-  /**
-   * Marks the agent offline in one workspace in a way that survives the page
-   * unloading (keepalive), naming the workspace explicitly because the stored
-   * current workspace may already be the next one.
-   */
+  /** Marks the agent offline with keepalive so it survives unload; the workspace is explicit because the stored one may already have changed. */
   goOffline(workspaceId: number) {
     const base = (import.meta.env.VITE_API_URL || '/api/v1') as string
     try {

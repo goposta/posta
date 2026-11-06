@@ -57,7 +57,6 @@ async function resend() {
 </template>
 
 <style scoped>
-/* Layout-only override; visual styling comes from the shared .app-banner system. */
 .verify-banner {
   margin: 12px 16px 0;
 }

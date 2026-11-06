@@ -44,8 +44,7 @@ func (r *UnsubscribeListRepository) FindByID(id uint) (*models.UnsubscribeList, 
 	return &list, nil
 }
 
-// FindByIDForScope returns the list only if it belongs to the given scope.
-// Used at send time to validate + own a referenced list in one place.
+// FindByIDForScope returns the list only if it belongs to scope, validating ownership at send time.
 func (r *UnsubscribeListRepository) FindByIDForScope(id uint, scope ResourceScope) (*models.UnsubscribeList, error) {
 	var list models.UnsubscribeList
 	if err := ApplyScope(r.db, scope).First(&list, id).Error; err != nil {

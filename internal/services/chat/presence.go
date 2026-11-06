@@ -29,7 +29,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Agent presence statuses.
 const (
 	StatusOnline  = "online"
 	StatusAway    = "away"
@@ -37,19 +36,14 @@ const (
 )
 
 const (
-	// presenceTTL is how long a heartbeat counts. The dashboard sends one
-	// every 30 seconds, so a closed tab reads as offline within 75 seconds,
-	// with no cleanup job.
+	// The dashboard heartbeats every 30s, so a closed tab reads as offline within 75s with no cleanup job.
 	presenceTTL = 75 * time.Second
-	// visitorLiveTTL is how long a visitor stream's mark lasts without a
-	// refresh; streams refresh it on every keep-alive.
+	// Visitor streams refresh this mark on every keep-alive.
 	visitorLiveTTL = 60 * time.Second
 	typingThrottle = 3 * time.Second
 )
 
-// Presence tracks which agents are available, in one Redis hash per
-// workspace: field user ID, value "status:unix seconds". Stale entries are
-// ignored on read, so a missed heartbeat simply ages out.
+// Presence keeps one Redis hash per workspace (user ID -> "status:unix"); stale entries age out on read.
 type Presence struct {
 	rdb *redis.Client
 	now func() time.Time
@@ -61,7 +55,6 @@ func NewPresence(rdb *redis.Client) *Presence {
 
 func presenceKey(workspaceID uint) string { return fmt.Sprintf("chat:presence:%d", workspaceID) }
 
-// Set records an agent's status and reports whether it changed.
 func (p *Presence) Set(ctx context.Context, workspaceID, userID uint, status string) (bool, error) {
 	if p == nil || p.rdb == nil {
 		return false, nil
@@ -90,7 +83,6 @@ func (p *Presence) Set(ctx context.Context, workspaceID, userID uint, status str
 	return previous != status, nil
 }
 
-// List returns the agents whose heartbeat is fresh, with their status.
 func (p *Presence) List(ctx context.Context, workspaceID uint) (map[uint]string, error) {
 	out := map[uint]string{}
 	if p == nil || p.rdb == nil {
@@ -103,7 +95,7 @@ func (p *Presence) List(ctx context.Context, workspaceID uint) (map[uint]string,
 	return freshPresence(fields, p.now()), nil
 }
 
-// AnyOnline reports whether at least one agent is online. Away does not count.
+// AnyOnline reports whether at least one agent is online; away does not count.
 func (p *Presence) AnyOnline(ctx context.Context, workspaceID uint) bool {
 	list, err := p.List(ctx, workspaceID)
 	if err != nil {
@@ -136,10 +128,7 @@ func freshPresence(fields map[string]string, now time.Time) map[uint]string {
 
 func visitorLiveKey(conversationID uint) string { return fmt.Sprintf("chat:vlive:%d", conversationID) }
 
-// MarkVisitorLive records that a visitor stream for the conversation is
-// open, and reports whether it was not before. Streams call it on open and
-// on every keep-alive, so a second tab keeps the mark alive after the first
-// closes.
+// Streams re-mark on every keep-alive, so a second tab keeps the mark alive after the first closes.
 func (s *Service) MarkVisitorLive(ctx context.Context, conversationID uint) bool {
 	if s.rdb == nil {
 		return false
@@ -155,14 +144,12 @@ func (s *Service) MarkVisitorLive(ctx context.Context, conversationID uint) bool
 	return set
 }
 
-// ClearVisitorLive records that the visitor's stream closed.
 func (s *Service) ClearVisitorLive(ctx context.Context, conversationID uint) {
 	if s.rdb != nil {
 		s.rdb.Del(ctx, visitorLiveKey(conversationID))
 	}
 }
 
-// VisitorLive reports whether a stream for the conversation is open on any replica.
 func (s *Service) VisitorLive(ctx context.Context, conversationID uint) bool {
 	if s.rdb == nil {
 		return false
@@ -171,8 +158,7 @@ func (s *Service) VisitorLive(ctx context.Context, conversationID uint) bool {
 	return err == nil && n > 0
 }
 
-// allowTyping lets one typing event per side and conversation through every
-// few seconds.
+// allowTyping lets one typing event per side and conversation through every few seconds.
 func (s *Service) allowTyping(ctx context.Context, conversationID uint, side string) bool {
 	if s.rdb == nil {
 		return true

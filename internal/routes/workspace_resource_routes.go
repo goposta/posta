@@ -180,7 +180,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/api-keys/{id:int}/revoke",
+			Path:     "/api-keys/{id}/revoke",
 			Handler:  okapi.H(r.h.apiKey.Revoke),
 			Group:    opsGroup,
 			Summary:  "Revoke API key",
@@ -192,7 +192,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodDelete,
-			Path:     "/api-keys/{id:int}",
+			Path:     "/api-keys/{id}",
 			Handler:  okapi.H(r.h.apiKey.Delete),
 			Group:    opsGroup,
 			Summary:  "Delete API key",
@@ -231,7 +231,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			},
 			okapi.RouteDefinition{
 				Method:   http.MethodGet,
-				Path:     "/smtp-credentials/{id:int}",
+				Path:     "/smtp-credentials/{id}",
 				Handler:  okapi.H(r.h.smtpCredential.Get),
 				Group:    opsGroup,
 				Summary:  "Get an SMTP Relay credential",
@@ -243,7 +243,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			},
 			okapi.RouteDefinition{
 				Method:   http.MethodPost,
-				Path:     "/smtp-credentials/{id:int}/revoke",
+				Path:     "/smtp-credentials/{id}/revoke",
 				Handler:  okapi.H(r.h.smtpCredential.Revoke),
 				Group:    opsGroup,
 				Summary:  "Revoke an SMTP Relay credential",
@@ -256,7 +256,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 			},
 			okapi.RouteDefinition{
 				Method:   http.MethodDelete,
-				Path:     "/smtp-credentials/{id:int}",
+				Path:     "/smtp-credentials/{id}",
 				Handler:  okapi.H(r.h.smtpCredential.Delete),
 				Group:    opsGroup,
 				Summary:  "Delete an SMTP Relay credential",
@@ -295,7 +295,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/templates/{id}",
+			Path:     pathTemplateByID,
 			Handler:  okapi.H(r.h.template.Get),
 			Group:    opsGroup,
 			Summary:  "Get template",
@@ -308,7 +308,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/templates/{id}",
+			Path:     pathTemplateByID,
 			Handler:  okapi.H(r.h.template.Update),
 			Group:    opsGroup,
 			Summary:  "Update template",
@@ -321,7 +321,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/templates/{id:int}",
+			Path:    pathTemplateByID,
 			Handler: okapi.H(r.h.template.Delete),
 			Group:   opsGroup,
 			Tags:    []string{tagUser},
@@ -344,7 +344,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/templates/{id:int}/send-test",
+			Path:        "/templates/{id}/send-test",
 			Handler:     okapi.H(r.h.template.SendTest),
 			Group:       opsGroup,
 			Summary:     "Send test email",
@@ -358,7 +358,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/templates/{id:int}/export",
+			Path:        "/templates/{id}/export",
 			Handler:     okapi.H(r.h.template.Export),
 			Group:       opsGroup,
 			Summary:     "Export template",
@@ -397,7 +397,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/templates/{id:int}/versions",
+			Path:     "/templates/{id}/versions",
 			Handler:  okapi.H(r.h.version.List),
 			Group:    opsGroup,
 			Tags:     []string{tagTemplateVersions},
@@ -410,7 +410,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodPost,
-			Path:    "/templates/{id:int}/versions",
+			Path:    "/templates/{id}/versions",
 			Handler: okapi.H(r.h.version.Create),
 			Group:   opsGroup,
 			Tags:    []string{tagTemplateVersions},
@@ -424,7 +424,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/templates/{id:int}/versions/{versionId:int}",
+			Path:     "/templates/{id}/versions/{versionId}",
 			Handler:  okapi.H(r.h.version.Update),
 			Group:    opsGroup,
 			Tags:     []string{tagTemplateVersions},
@@ -439,7 +439,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/templates/{id:int}/activate/{versionId:int}",
+			Path:     "/templates/{id}/activate/{versionId}",
 			Handler:  okapi.H(r.h.version.Activate),
 			Group:    opsGroup,
 			Tags:     []string{tagTemplateVersions},
@@ -453,7 +453,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/templates/{id:int}/versions/{versionId:int}",
+			Path:    "/templates/{id}/versions/{versionId}",
 			Handler: okapi.H(r.h.version.Delete),
 			Group:   opsGroup,
 			Tags:    []string{tagTemplateVersions},
@@ -467,7 +467,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/templates/{id:int}/versions/{versionId:int}/localizations",
+			Path:     "/templates/{id}/versions/{versionId}/localizations",
 			Handler:  okapi.H(r.h.localization.List),
 			Group:    opsGroup,
 			Tags:     []string{tagTemplateLocalizations},
@@ -481,7 +481,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodPost,
-			Path:    "/templates/{id:int}/versions/{versionId:int}/localizations",
+			Path:    "/templates/{id}/versions/{versionId}/localizations",
 			Handler: okapi.H(r.h.localization.Create),
 			Group:   opsGroup,
 			Tags:    []string{tagTemplateLocalizations},
@@ -497,7 +497,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/localizations/{localizationId:int}",
+			Path:     "/localizations/{localizationId}",
 			Handler:  okapi.H(r.h.localization.Update),
 			Group:    opsGroup,
 			Tags:     []string{tagTemplateLocalizations},
@@ -511,7 +511,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/localizations/{localizationId:int}",
+			Path:    "/localizations/{localizationId}",
 			Handler: okapi.H(r.h.localization.Delete),
 			Group:   opsGroup,
 			Tags:    []string{tagTemplateLocalizations},
@@ -524,7 +524,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/templates/{id:int}/versions/{versionId:int}/preview",
+			Path:        "/templates/{id}/versions/{versionId}/preview",
 			Handler:     okapi.H(r.h.localization.Preview),
 			Group:       opsGroup,
 			Tags:        []string{tagTemplateLocalizations},
@@ -563,7 +563,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/languages/{id:int}",
+			Path:     "/languages/{id}",
 			Handler:  okapi.H(r.h.language.Update),
 			Group:    opsGroup,
 			Tags:     []string{tagLanguages},
@@ -577,7 +577,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/languages/{id:int}",
+			Path:    "/languages/{id}",
 			Handler: okapi.H(r.h.language.Delete),
 			Group:   opsGroup,
 			Tags:    []string{tagLanguages},
@@ -612,7 +612,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPut,
-			Path:     "/stylesheets/{id:int}",
+			Path:     "/stylesheets/{id}",
 			Handler:  okapi.H(r.h.stylesheet.Update),
 			Group:    opsGroup,
 			Summary:  "Update stylesheet",
@@ -625,7 +625,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodDelete,
-			Path:    "/stylesheets/{id:int}",
+			Path:    "/stylesheets/{id}",
 			Handler: okapi.H(r.h.stylesheet.Delete),
 			Group:   opsGroup,
 			Tags:    []string{tagUser},
@@ -698,7 +698,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/smtp-servers/{id:int}/test",
+			Path:     "/smtp-servers/{id}/test",
 			Handler:  okapi.H(r.h.smtp.Test),
 			Group:    opsGroup,
 			Summary:  "Test SMTP server connection",
@@ -733,7 +733,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodDelete,
-			Path:        "/webhooks/{id:int}",
+			Path:        "/webhooks/{id}",
 			Handler:     okapi.H(r.h.webhook.Delete),
 			Group:       opsGroup,
 			Tags:        []string{tagUser},
@@ -936,7 +936,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
-			Path:        "/contacts/{id:int}",
+			Path:        "/contacts/{id}",
 			Handler:     okapi.H(r.h.contact.Get),
 			Group:       opsGroup,
 			Summary:     "Get contact details",
@@ -1110,7 +1110,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/subscriber-lists/{id:int}/unsubscribe",
+			Path:        "/subscriber-lists/{id}/unsubscribe",
 			Handler:     okapi.H(r.h.subscriberList.UnsubscribeByEmail),
 			Group:       opsGroup,
 			Tags:        []string{tagSubscriberLists},
@@ -1123,7 +1123,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodPost,
-			Path:        "/subscriber-lists/{id:int}/resubscribe",
+			Path:        "/subscriber-lists/{id}/resubscribe",
 			Handler:     okapi.H(r.h.subscriberList.ResubscribeByEmail),
 			Group:       opsGroup,
 			Tags:        []string{tagSubscriberLists},
@@ -1186,7 +1186,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/campaigns/{id:int}/send",
+			Path:     "/campaigns/{id}/send",
 			Handler:  okapi.H(r.h.campaign.Send),
 			Group:    opsGroup,
 			Tags:     []string{tagCampaigns},
@@ -1196,7 +1196,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/campaigns/{id:int}/pause",
+			Path:     "/campaigns/{id}/pause",
 			Handler:  okapi.H(r.h.campaign.Pause),
 			Group:    opsGroup,
 			Tags:     []string{tagCampaigns},
@@ -1206,7 +1206,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/campaigns/{id:int}/resume",
+			Path:     "/campaigns/{id}/resume",
 			Handler:  okapi.H(r.h.campaign.Resume),
 			Group:    opsGroup,
 			Tags:     []string{tagCampaigns},
@@ -1216,7 +1216,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/campaigns/{id:int}/cancel",
+			Path:     "/campaigns/{id}/cancel",
 			Handler:  okapi.H(r.h.campaign.Cancel),
 			Group:    opsGroup,
 			Tags:     []string{tagCampaigns},
@@ -1226,7 +1226,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodPost,
-			Path:     "/campaigns/{id:int}/duplicate",
+			Path:     "/campaigns/{id}/duplicate",
 			Handler:  okapi.H(r.h.campaign.Duplicate),
 			Group:    opsGroup,
 			Tags:     []string{tagCampaigns},
@@ -1236,7 +1236,7 @@ func (r *Router) workspaceResourceRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:   http.MethodGet,
-			Path:     "/campaigns/{id:int}/messages",
+			Path:     "/campaigns/{id}/messages",
 			Handler:  okapi.H(r.h.campaign.ListMessages),
 			Group:    opsGroup,
 			Tags:     []string{tagCampaigns},

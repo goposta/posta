@@ -25,29 +25,22 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// Directory looks up the workspace data recipients expand to. The worker
-// and the digest pass the repositories; tests pass a map.
+// The worker and the digest pass repositories; tests pass a map.
 type Directory interface {
-	// Members maps the workspace's members to their roles.
 	Members(workspaceID uint) (map[uint]models.WorkspaceRole, error)
 	Team(id uint) (*models.Team, error)
 }
 
-// Resolved is where one submission's notification goes.
 type Resolved struct {
-	// Default is the form's own route: its notification addresses, or the
-	// workspace owners and admins when it has none.
+	// Default is the form's own route: its notification addresses, or the owners and admins when it has none.
 	Default bool
 	Emails  []string
 	UserIDs []uint
 }
 
-// Empty reports whether nobody is notified.
 func (r Resolved) Empty() bool { return !r.Default && len(r.Emails) == 0 && len(r.UserIDs) == 0 }
 
-// Resolve expands an outcome's recipients for one submission: teams become
-// their members plus their shared address, people who left the workspace are
-// dropped, and anyone the default route already reaches is not added twice.
+// Teams expand to members plus their address, ex-members are dropped, and the default route is not duplicated.
 func Resolve(form *models.Form, out Outcome, dir Directory) (Resolved, error) {
 	res := Resolved{Default: !out.SuppressDefault}
 	if len(out.Notify) == 0 || form.WorkspaceID == nil {

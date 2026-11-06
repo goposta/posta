@@ -23,7 +23,6 @@ import (
 	"github.com/pquerna/otp/totp"
 )
 
-// GenerateSecret creates a new TOTP secret for a user.
 func GenerateSecret(email string) (string, string, error) {
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      "Posta",
@@ -36,7 +35,6 @@ func GenerateSecret(email string) (string, string, error) {
 	return key.Secret(), key.URL(), nil
 }
 
-// ValidateCode verifies a TOTP code against a secret.
 func ValidateCode(secret, code string) bool {
 	return totp.Validate(code, secret)
 }

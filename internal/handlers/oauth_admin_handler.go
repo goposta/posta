@@ -34,8 +34,7 @@ type OAuthAdminHandler struct {
 	edition      enterprise.EE
 }
 
-// CommunityOAuthProviders is how many OAuth providers Posta Community
-// configures. More need a Posta Enterprise license.
+// CommunityOAuthProviders is the Community allowance; more providers need a Posta Enterprise license.
 const CommunityOAuthProviders = 1
 
 // SetEdition gates providers beyond the Community allowance on the license.
@@ -119,8 +118,7 @@ type WorkspaceSSOResponse struct {
 }
 
 func (h *OAuthAdminHandler) CreateProvider(c *okapi.Context, req *CreateOAuthProviderRequest) error {
-	// Installations that already have several providers keep them; only
-	// adding one beyond the allowance needs a license.
+	// Existing providers are kept; only adding one beyond the allowance needs a license.
 	n, err := h.providerRepo.Count()
 	if err != nil {
 		return c.AbortInternalServerError("failed to count providers")

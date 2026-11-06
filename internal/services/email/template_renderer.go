@@ -31,10 +31,8 @@ import (
 	"github.com/vanng822/go-premailer/premailer"
 )
 
-// actionRe matches any {{ ... }} action block, including whitespace-trim variants.
 var actionRe = regexp.MustCompile(`\{\{(-?)\s*(.*?)\s*(-?)\}\}`)
 
-// identRe matches a bare identifier that needs a dot prefix (no leading dot or $).
 var identRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // controlKeywords are Go template control keywords that must never be dot-prefixed.
@@ -70,42 +68,25 @@ var controlKeywords = map[string]struct{}{
 	"ge":       {},
 }
 
-// normalizeTemplate rewrites bare identifiers inside {{ }} actions to their
-// dot-prefixed equivalents so they resolve against the data map instead of
-// being looked up as functions.
-//
-// Rules:
-//   - {{ .varName }}          → untouched (already dotted)
-//   - {{ $var }}              → untouched (template variable)
-//   - {{ varName }}           → {{ .varName }}
-//   - {{ range features }}    → {{ range .features }}
-//   - {{ if active }}         → {{ if .active }}
-//   - {{ end }}, {{ else }}   → untouched (no argument)
-//   - {{- varName -}}         → {{- .varName -}} (trim dashes preserved)
+// normalizeTemplate dot-prefixes bare identifiers in actions so they resolve against data, not as functions.
 func normalizeTemplate(s string) string {
 	return actionRe.ReplaceAllStringFunc(s, func(match string) string {
 		m := actionRe.FindStringSubmatch(match)
 		if m == nil {
 			return match
 		}
-		leftDash := m[1]  // "-" or ""
-		inner := m[2]     // content between {{ and }}
-		rightDash := m[3] // "-" or ""
+		leftDash := m[1]
+		inner := m[2]
+		rightDash := m[3]
 
 		open := "{{" + leftDash
 		close := rightDash + "}}"
 
-		// Rebuild with normalized inner content.
 		normalized := normalizeParts(inner)
 		return open + " " + normalized + " " + close
 	})
 }
 
-// normalizeParts normalizes the inner content of a template action.
-// It handles:
-//   - Single tokens: "varName" → ".varName"
-//   - Keyword + argument: "range features" → "range .features"
-//   - Already-dotted or $-prefixed: left alone
 func normalizeParts(inner string) string {
 	parts := strings.Fields(inner)
 	if len(parts) == 0 {
@@ -118,7 +99,6 @@ func normalizeParts(inner string) string {
 		return dotPrefix(first)
 	}
 
-	// Multi-token: keyword followed by an argument (e.g. "range features")
 	if _, isKeyword := controlKeywords[first]; isKeyword {
 		normalized := make([]string, len(parts))
 		normalized[0] = first
@@ -131,8 +111,6 @@ func normalizeParts(inner string) string {
 	return inner
 }
 
-// dotPrefix adds a "." prefix to a bare identifier.
-// It leaves alone: already-dotted (.foo), variables ($foo), keywords, and "."
 func dotPrefix(token string) string {
 	if token == "." ||
 		strings.HasPrefix(token, ".") ||
@@ -148,7 +126,6 @@ func dotPrefix(token string) string {
 	return token
 }
 
-// Missing-key behaviors for template rendering (Go template "missingkey" option).
 const (
 	missingKeyError   = "error"   // return an error on a missing data key (default)
 	missingKeyZero    = "zero"    // silently use the zero value
@@ -221,8 +198,7 @@ func (r *TemplateRenderer) missingKeyOption() string {
 	}
 }
 
-// injectCSS inserts a <style> block into the rendered HTML and inlines styles
-// using premailer for maximum email client compatibility.
+// injectCSS inlines styles with premailer for email client compatibility.
 func injectCSS(html, css string) string {
 	styleTag := "<style>\n" + css + "\n</style>"
 	htmlLower := strings.ToLower(html)
@@ -276,7 +252,6 @@ func renderText(name, tmplStr string, data okapi.M, missingKey string) (string, 
 	return buf.String(), nil
 }
 
-// renderHTML uses html/template for auto-escaping of HTML content.
 func renderHTML(name, tmplStr string, data okapi.M, missingKey string) (string, error) {
 	t, err := htmltmpl.New(name).
 		Option("missingkey=" + missingKey).

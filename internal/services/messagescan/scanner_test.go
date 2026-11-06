@@ -321,8 +321,7 @@ func TestVerdictStatusMapping(t *testing.T) {
 	}
 }
 
-// Light scans score content only: a short line from a bot-like client with
-// no sender is fine, links still count, and filters still apply.
+// A short line from a bot-like client with no sender passes a light scan; links and filters still count.
 func TestLightScanSkipsSenderSignals(t *testing.T) {
 	s := New(nil)
 	in := Input{Body: "ok", UserAgent: "curl/8", SenderEmail: "not an address", Light: true}

@@ -14,7 +14,6 @@ import { useConfirm } from '../../composables/useConfirm'
 import { useUnsavedChanges } from '../../composables/useUnsavedChanges'
 import { apiMessage } from '../../composables/apiError'
 
-// CodeMirror
 import { EditorView, placeholder as cmPlaceholder } from '@codemirror/view'
 import { Compartment, EditorState } from '@codemirror/state'
 import { html } from '@codemirror/lang-html'
@@ -39,21 +38,18 @@ const loading = ref(true)
 const saving = ref(false)
 const hasChanges = ref(false)
 
-// Editor state
 const activeTab = ref<'html' | 'text' | 'subject'>('html')
 const subjectValue = ref('')
 const htmlValue = ref('')
 const textValue = ref('')
 const sampleDataValue = ref('{\n  "name": "John",\n  "company": "Acme"\n}')
 
-// Preview
 const preview = ref<TemplatePreview | null>(null)
 const previewLoading = ref(false)
 const previewError = ref('')
 const previewTab = ref<'html' | 'text'>('html')
 const showPreviewPanel = ref(true)
 
-// CodeMirror editor refs
 const htmlEditorRef = ref<HTMLElement | null>(null)
 const textEditorRef = ref<HTMLElement | null>(null)
 const subjectEditorRef = ref<HTMLElement | null>(null)
@@ -85,11 +81,7 @@ function createEditor(
   if (lang === 'json') extensions.push(json())
   if (placeholderText) extensions.push(cmPlaceholder(placeholderText))
 
-  // Follow the app's theme. A permanently dark editor on a light page reads as
-  // a foreign widget, and the surrounding chrome already answers the question of
-  // which theme the user wants. A compartment keeps it swappable, so toggling
-  // the theme restyles the editor in place instead of stranding it until you
-  // navigate away and back.
+  // A compartment keeps the editor theme swappable, so toggling the app theme restyles it in place.
   extensions.push(themeCompartment.of(theme.isDark ? oneDark : []))
   extensions.push(editorTheme)
 
@@ -249,7 +241,6 @@ onMounted(async () => {
       return
     }
 
-    // Populate editor values
     subjectValue.value = localization.value.subject_template
     htmlValue.value = localization.value.html_template
     textValue.value = localization.value.text_template
@@ -262,7 +253,6 @@ onMounted(async () => {
 
     loading.value = false
 
-    // Initialize editors after DOM update
     setTimeout(() => {
       initEditors()
       renderPreview()
@@ -300,7 +290,6 @@ function switchToVisualBuilder() {
 
 <template>
   <div class="editor-page">
-    <!-- Header -->
     <div class="editor-header">
       <div class="editor-header-left">
         <button class="btn btn-secondary btn-sm" @click="goBack">
@@ -335,16 +324,12 @@ function switchToVisualBuilder() {
       </div>
     </div>
 
-    <!-- Loading -->
     <div v-if="loading" class="loading-page">
       <div class="spinner"></div>
     </div>
 
-    <!-- Editor Layout -->
     <div v-else-if="template && localization" class="editor-layout" :class="{ 'preview-hidden': !showPreviewPanel }">
-      <!-- Left: Code Editor -->
       <div class="editor-pane">
-        <!-- Tabs -->
         <div class="editor-tabs">
           <button
             class="editor-tab"
@@ -369,14 +354,12 @@ function switchToVisualBuilder() {
           </button>
         </div>
 
-        <!-- Editor panels -->
         <div class="editor-content">
           <div v-show="activeTab === 'html'" ref="htmlEditorRef" class="cm-container"></div>
           <div v-show="activeTab === 'text'" ref="textEditorRef" class="cm-container"></div>
           <div v-show="activeTab === 'subject'" ref="subjectEditorRef" class="cm-container"></div>
         </div>
 
-        <!-- Sample Data (collapsible) -->
         <details class="sample-data-section">
           <summary class="sample-data-header">
             Sample Data (JSON)
@@ -385,7 +368,6 @@ function switchToVisualBuilder() {
         </details>
       </div>
 
-      <!-- Right: Preview -->
       <div v-if="showPreviewPanel" class="preview-pane">
         <div class="preview-header">
           <div class="preview-tabs">
@@ -413,16 +395,13 @@ function switchToVisualBuilder() {
           </button>
         </div>
 
-        <!-- Preview subject -->
         <div v-if="preview?.subject" class="preview-subject">
           <span class="preview-subject-label">Subject:</span>
           {{ preview.subject }}
         </div>
 
-        <!-- Preview error -->
         <div v-if="previewError" class="preview-error">{{ previewError }}</div>
 
-        <!-- Preview content -->
         <div class="preview-content">
           <div v-if="previewTab === 'html'" class="preview-html">
             <iframe
@@ -440,7 +419,6 @@ function switchToVisualBuilder() {
       </div>
     </div>
 
-    <!-- Not found -->
     <div v-else class="empty-state">
       <h3>Not found</h3>
       <p>The template, version, or localization was not found.</p>
@@ -582,7 +560,6 @@ function switchToVisualBuilder() {
   color: var(--text-secondary);
 }
 
-/* Preview pane */
 .preview-pane {
   display: flex;
   flex-direction: column;

@@ -47,7 +47,6 @@ func (r *SubscriberListRepository) FindByID(id uint) (*models.SubscriberList, er
 	return &list, nil
 }
 
-// FindByNameForScope resolves a list by name within the given scope.
 func (r *SubscriberListRepository) FindByNameForScope(scope ResourceScope, name string) (*models.SubscriberList, error) {
 	var list models.SubscriberList
 	if err := ApplyScope(r.db, scope).Where("name = ?", name).First(&list).Error; err != nil {
@@ -116,9 +115,7 @@ func (r *SubscriberListRepository) MemberCount(listID uint) int64 {
 	return count
 }
 
-// IsMember returns true when the subscriber is currently a member of the list.
-// Used by the API Subscribe endpoint to decide whether a call actually added
-// a new member (so the response's member_added flag is accurate).
+// IsMember lets the Subscribe endpoint report member_added accurately.
 func (r *SubscriberListRepository) IsMember(listID, subscriberID uint) bool {
 	var count int64
 	r.db.Model(&models.SubscriberListMember{}).
@@ -142,7 +139,7 @@ func (r *SubscriberListRepository) BulkAddMembers(listID uint, subscriberIDs []u
 	return int(result.RowsAffected), result.Error
 }
 
-// SuppressMember records a list-scoped opt-out (works for static and dynamic
+// SuppressMember records a list-scoped opt-out and drops any static membership.
 func (r *SubscriberListRepository) SuppressMember(listID, subscriberID uint, reason string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		row := models.SubscriberListUnsubscribe{
@@ -160,7 +157,6 @@ func (r *SubscriberListRepository) SuppressMember(listID, subscriberID uint, rea
 	})
 }
 
-// SuppressedSubscriberIDs returns the set of subscriber IDs that have opted
 func (r *SubscriberListRepository) SuppressedSubscriberIDs(listID uint) (map[uint]struct{}, error) {
 	var ids []uint
 	if err := r.db.Model(&models.SubscriberListUnsubscribe{}).
@@ -175,7 +171,6 @@ func (r *SubscriberListRepository) SuppressedSubscriberIDs(listID uint) (map[uin
 	return out, nil
 }
 
-// IsSuppressed checks whether a subscriber has opted out of a specific list.
 func (r *SubscriberListRepository) IsSuppressed(listID, subscriberID uint) bool {
 	var count int64
 	r.db.Model(&models.SubscriberListUnsubscribe{}).

@@ -46,13 +46,9 @@ type Workspace struct {
 	OwnerID         uint   `json:"owner_id" gorm:"index;not null"`
 	PlanID          *uint  `json:"plan_id" gorm:"index"`
 	DefaultLanguage string `json:"default_language" gorm:"size:10;default:'en'"`
-	// System marks the single built-in platform workspace. It owns
-	// platform-managed resources, is created on first boot, cannot be renamed or
-	// deleted, and admits only platform admins.
+	// System marks the one built-in platform workspace: created on first boot, undeletable, platform admins only.
 	System bool `json:"system" gorm:"not null;default:false"`
-	// HostedFormsDisabled lets a platform admin take the workspace's hosted
-	// form pages (/f/{key}) offline, for example when they are used for
-	// phishing. Forms embedded on the workspace's own sites keep working.
+	// HostedFormsDisabled takes hosted /f/{key} pages offline (e.g. for phishing); embedded forms keep working.
 	HostedFormsDisabled bool      `json:"hosted_forms_disabled" gorm:"not null;default:false"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
@@ -88,25 +84,20 @@ type WorkspaceInvitation struct {
 	Inviter   User      `json:"-" gorm:"foreignKey:InvitedBy"`
 }
 
-// IsSystem reports whether this is the built-in platform workspace.
 func (w *Workspace) IsSystem() bool { return w.System }
 
-// CanManageMembers returns true if the role can invite/remove members.
 func (r WorkspaceRole) CanManageMembers() bool {
 	return r == WorkspaceRoleOwner || r == WorkspaceRoleAdmin
 }
 
-// CanEdit returns true if the role can create/modify resources.
 func (r WorkspaceRole) CanEdit() bool {
 	return r == WorkspaceRoleOwner || r == WorkspaceRoleAdmin || r == WorkspaceRoleEditor
 }
 
-// CanView returns true if the role has any access.
 func (r WorkspaceRole) CanView() bool {
 	return r == WorkspaceRoleOwner || r == WorkspaceRoleAdmin || r == WorkspaceRoleEditor || r == WorkspaceRoleViewer
 }
 
-// IsOwner returns true if the role is owner.
 func (r WorkspaceRole) IsOwner() bool {
 	return r == WorkspaceRoleOwner
 }

@@ -26,16 +26,13 @@ import (
 	"time"
 )
 
-// Chat message authors.
 const (
 	ChatAuthorVisitor = "visitor"
 	ChatAuthorAgent   = "agent"
 	ChatAuthorSystem  = "system"
 )
 
-// ChatMessage is one line in a conversation. Bodies are plain text and are
-// never rendered as HTML. Seq orders a conversation's messages and lets a
-// reconnecting client ask for what it missed.
+// ChatMessage bodies are plain text, never rendered as HTML; Seq lets a reconnecting client ask for what it missed.
 type ChatMessage struct {
 	ID             uint   `json:"-" gorm:"primaryKey"`
 	UUID           string `json:"id" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
@@ -47,9 +44,7 @@ type ChatMessage struct {
 	AuthorID    *uint  `json:"author_id,omitempty"`
 	Body        string `json:"body" gorm:"type:text;not null"`
 	ClientMsgID string `json:"client_msg_id,omitempty" gorm:"size:36;default:'';not null"`
-	// Channel is how the message travelled besides the chat: email for a
-	// visitor's emailed answer. EmailUUID names the email that delivered an
-	// agent's message to a visitor who had left.
+	// Channel is email for an emailed answer; EmailUUID is the email that carried an agent's message to a visitor who left.
 	Channel     string          `json:"channel" gorm:"type:varchar(8);default:'chat';not null"`
 	EmailUUID   string          `json:"email_uuid,omitempty" gorm:"index"`
 	Attachments ChatAttachments `json:"attachments,omitempty" gorm:"type:jsonb"`
@@ -58,8 +53,7 @@ type ChatMessage struct {
 	Author *ActorRef `json:"author,omitempty" gorm:"->;foreignKey:AuthorID;references:ID;constraint:-"`
 }
 
-// ChatAttachment is a file sent in a chat. Key is its blob store key and
-// never leaves the server; clients fetch it by message and index.
+// ChatAttachment.Key is the blob store key and never leaves the server; clients fetch by message and index.
 type ChatAttachment struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`

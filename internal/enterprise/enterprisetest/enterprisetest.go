@@ -7,8 +7,7 @@
 //
 // SPDX-License-Identifier: LicenseRef-Posta-Enterprise
 
-// Package enterprisetest provides license states for tests of code that is
-// gated on the Enterprise license, in either build.
+// Package enterprisetest provides fixed license states for tests of EE-gated code, in either build.
 package enterprisetest
 
 import (
@@ -17,11 +16,10 @@ import (
 	"github.com/goposta/posta/internal/enterprise"
 )
 
-// State is an EE fixed in one license state. It verifies nothing.
+// State verifies nothing.
 type State string
 
-// Licensed is a valid license, Degraded one expired past its grace period,
-// and Community no license.
+// Degraded is expired past its grace period; Community is no license.
 const (
 	Licensed  State = enterprise.StateValid
 	Degraded  State = enterprise.StateDegraded

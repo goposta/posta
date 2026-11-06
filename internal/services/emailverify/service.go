@@ -17,8 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package emailverify handles user email verification: token issuance,
-// delivery via notification templates, and redemption.
+// Package emailverify issues, delivers and redeems email verification tokens.
 package emailverify
 
 import (
@@ -41,7 +40,6 @@ const (
 	resendMaxInWindow = 5
 )
 
-// Service coordinates email verification issuance and redemption.
 type Service struct {
 	userRepo *repositories.UserRepository
 	verRepo  *repositories.UserEmailVerificationRepository
@@ -66,8 +64,7 @@ func NewService(
 	}
 }
 
-// Required returns whether verification is enforced. Returns false when
-// notifier is not configured, since we can't deliver the verification email.
+// Required is false without a notifier, since the verification email cannot be delivered.
 func (s *Service) Required() bool {
 	if s == nil {
 		return false
@@ -78,8 +75,6 @@ func (s *Service) Required() bool {
 	return s.required
 }
 
-// IsUserVerified returns true when verification is not enforced or the user's
-// email has already been verified.
 func (s *Service) IsUserVerified(user *models.User) bool {
 	if !s.Required() {
 		return true
@@ -87,9 +82,7 @@ func (s *Service) IsUserVerified(user *models.User) bool {
 	return user != nil && user.EmailVerifiedAt != nil
 }
 
-// IssueAndSend creates a new verification token, invalidates any prior pending
-// ones for this user, and sends the verification email. It is safe to call
-// even when the notifier isn't configured — it will simply no-op.
+// IssueAndSend invalidates prior pending tokens and no-ops when the notifier is not configured.
 func (s *Service) IssueAndSend(user *models.User) error {
 	if s == nil || s.notifier == nil || !s.notifier.IsConfigured() {
 		return nil
@@ -159,7 +152,6 @@ func (s *Service) Redeem(rawToken string) (*models.User, bool, error) {
 	return user, newlyVerified, nil
 }
 
-// CanResend returns an error when the user has hit the resend rate limit.
 func (s *Service) CanResend(userID uint) error {
 	count, err := s.verRepo.CountRecentByUser(userID, time.Now().Add(-resendWindow))
 	if err != nil {
@@ -171,8 +163,7 @@ func (s *Service) CanResend(userID uint) error {
 	return nil
 }
 
-// MarkVerifiedNow marks a user's email as verified immediately (used for OAuth
-// signups and when the notifier isn't configured).
+// MarkVerifiedNow is used for OAuth signups and when the notifier is not configured.
 func (s *Service) MarkVerifiedNow(user *models.User) error {
 	if user == nil || user.EmailVerifiedAt != nil {
 		return nil

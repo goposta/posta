@@ -74,8 +74,7 @@ func (r *MessageFilterRepository) FindActive(workspaceID uint, formID uint) ([]m
 	return items, err
 }
 
-// FindActiveForWidget returns the workspace-wide filters plus those scoped to
-// one chat widget.
+// FindActiveForWidget returns the workspace-wide filters plus those scoped to one chat widget.
 func (r *MessageFilterRepository) FindActiveForWidget(workspaceID, widgetID uint) ([]models.MessageFilter, error) {
 	var items []models.MessageFilter
 	err := r.db.Where("workspace_id = ? AND enabled = true AND ((form_id IS NULL AND widget_id IS NULL) OR widget_id = ?)", workspaceID, widgetID).

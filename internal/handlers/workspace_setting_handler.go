@@ -44,8 +44,7 @@ type UpdateWorkspaceSettingsRequest struct {
 	} `json:"body"`
 }
 
-// GetSettings returns the current workspace's operational settings. Any member
-// may read them.
+// Any member may read the workspace settings.
 func (h *WorkspaceSettingHandler) GetSettings(c *okapi.Context) error {
 	wsID := uint(c.GetInt("workspace_id"))
 
@@ -56,8 +55,7 @@ func (h *WorkspaceSettingHandler) GetSettings(c *okapi.Context) error {
 	return ok(c, settings)
 }
 
-// UpdateSettings updates the current workspace's operational settings. Restricted
-// to admin/owner via the RequireWorkspaceRole middleware on the route.
+// Restricted to admin/owner by the RequireWorkspaceRole middleware on the route.
 func (h *WorkspaceSettingHandler) UpdateSettings(c *okapi.Context, req *UpdateWorkspaceSettingsRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))
 

@@ -26,10 +26,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// The server validates the OpenAPI document at startup and only logs a
-// warning, so a broken document (two operations with one operationId, an
-// undeclared security scheme) would otherwise ship unnoticed. okapi derives
-// an operationId from the summary, so two routes with the same summary clash.
+// Startup only warns on an invalid OpenAPI document, and okapi derives operationIds from summaries, so they clash.
 func TestOpenAPIDocumentIsValid(t *testing.T) {
 	app := okapi.New().WithOpenAPIDocs(okapi.OpenAPI{
 		Title:           "Posta API",

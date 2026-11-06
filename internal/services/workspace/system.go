@@ -37,7 +37,6 @@ const (
 
 var ErrNoAdmin = errors.New("no active platform administrator to own the system workspace")
 
-// FindSystem returns the built-in platform workspace.
 func FindSystem(db *gorm.DB) (*models.Workspace, error) {
 	var ws models.Workspace
 	if err := db.Where("system = ?", true).First(&ws).Error; err != nil {
@@ -46,10 +45,7 @@ func FindSystem(db *gorm.DB) (*models.Workspace, error) {
 	return &ws, nil
 }
 
-// EnsureSystem creates the built-in platform workspace when it does not exist,
-// owned by the lowest-id active administrator, and provisions the SMTP server
-// described by POSTA_SYSTEM_SMTP_*. Idempotent and safe to call on every boot:
-// an existing workspace has only its SMTP connection settings re-synced.
+// EnsureSystem is idempotent: on later boots it only re-syncs the system SMTP connection settings.
 func EnsureSystem(db *gorm.DB, smtp config.SystemSMTPConfig) (*models.Workspace, error) {
 	if ws, err := FindSystem(db); err == nil {
 		if serr := db.Transaction(func(tx *gorm.DB) error {
@@ -104,8 +100,7 @@ func EnsureSystem(db *gorm.DB, smtp config.SystemSMTPConfig) (*models.Workspace,
 			APIKeyExpiryDays:   90,
 			BounceAutoSuppress: true,
 		}
-		// The platform's own From address is the workspace's sending default, so
-		// a test send from the dashboard uses the same identity as its mail.
+		// The platform From is the sending default so a dashboard test send uses the same identity.
 		if name, addr, perr := ParseSender(smtp.From); perr == nil {
 			settings.DefaultSenderName = name
 			settings.DefaultSenderEmail = addr
@@ -124,8 +119,7 @@ func EnsureSystem(db *gorm.DB, smtp config.SystemSMTPConfig) (*models.Workspace,
 	return ws, nil
 }
 
-// SyncMembers makes the system workspace's membership match the set of active
-// platform administrators: every admin is a member, and nobody else is.
+// SyncMembers makes every active platform admin a member of the system workspace, and nobody else.
 func SyncMembers(db *gorm.DB) error {
 	ws, err := FindSystem(db)
 	if err != nil {

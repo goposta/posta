@@ -27,42 +27,22 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// WorkspaceHeader names the header carrying the active workspace. Browser-direct
-// requests (EventSource, download links) cannot set headers, so the
-// query-tolerant middleware also accepts `?workspace_id=`.
+// Browser-direct requests cannot set headers, so the query-tolerant middleware also accepts ?workspace_id=.
 const WorkspaceHeader = "X-Posta-Workspace-Id"
 
-// resolveWorkspace establishes the request's workspace and the caller's role in
-// it, given the raw workspace id the caller asked for ("" when unspecified).
-//
-// Three callers, three sources of authority:
-//
-//   - A workspace-bound API key IS the workspace. It gets owner-equivalent
-//     access to it and cannot reach any other workspace, whatever it asks for.
-//   - An account-wide API key, and any JWT session, must prove membership of the
-//     workspace they name, and inherit that membership's role.
-//   - When nobody names a workspace and `required` is false, we fall back to the
-//     user's default workspace, with the role from that membership.
-//
-// Membership answers "which workspace?", never "how much of it?". An API key's
-// scopes answer the latter, and are enforced here for every workspace-scoped
-// route — see requireWorkspaceScope.
-// DefaultWorkspaceResolver answers where a request that names no workspace
-// lands, and with what role. Narrow on purpose: the role it returns is the only
-// thing standing between a viewer and write access on a header-less request, so
-// it is worth being able to substitute in a test.
+// Swappable for tests: the role it returns is all that stops a viewer getting write access on header-less requests.
 type DefaultWorkspaceResolver interface {
 	DefaultWorkspace(userID uint) (*models.Workspace, models.WorkspaceRole, error)
 }
 
+// A workspace-bound key IS the workspace; other callers must prove membership and inherit its role.
 func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver, raw string, required bool) error {
 	userID := c.GetInt(CtxUserID)
 	if userID == 0 {
 		return c.AbortUnauthorized("authentication required")
 	}
 
-	// Checked before the workspace is resolved, so an under-scoped key is refused
-	// without learning whether the workspace it named exists.
+	// Checked before resolving, so an under-scoped key learns nothing about whether the named workspace exists.
 	if err := requireWorkspaceScope(c); err != nil {
 		return err
 	}
@@ -100,13 +80,7 @@ func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRep
 		return c.AbortBadRequest(WorkspaceHeader + " header is required")
 	}
 
-	// Nobody named a workspace: fall back to the caller's default one.
-	//
-	// The role comes from the membership row, never a constant. The default
-	// workspace used to be the caller's personal one, which they always owned, so
-	// hard-coding owner was safe. It is now any workspace they belong to —
-	// possibly as a viewer — and assuming owner here would grant write access on
-	// every header-less request.
+	// The role comes from the membership, never a constant: the default workspace may be one the caller only views.
 	if userRepo != nil {
 		if ws, role, err := userRepo.DefaultWorkspace(uint(userID)); err == nil && ws != nil {
 			c.Set(CtxWorkspaceID, int(ws.ID))
@@ -116,24 +90,20 @@ func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRep
 	return c.Next()
 }
 
-// RequireWorkspaceMiddleware demands an explicit workspace, except for a
-// workspace-bound API key, whose binding names it.
+// A workspace-bound API key needs no explicit workspace: its binding names it.
 func RequireWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		return resolveWorkspace(c, workspaceRepo, userRepo, c.Header(WorkspaceHeader), true)
 	}
 }
 
-// OptionalWorkspaceMiddleware resolves the workspace when named, and otherwise
-// falls back to the caller's personal workspace.
 func OptionalWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		return resolveWorkspace(c, workspaceRepo, userRepo, c.Header(WorkspaceHeader), false)
 	}
 }
 
-// WorkspaceFromQueryOrHeader is OptionalWorkspaceMiddleware for browser-direct
-// requests, which can pass the workspace only as a query parameter.
+// Browser-direct requests can pass the workspace only as a query parameter.
 func WorkspaceFromQueryOrHeader(workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		raw := c.Header(WorkspaceHeader)
@@ -144,8 +114,7 @@ func WorkspaceFromQueryOrHeader(workspaceRepo *repositories.WorkspaceRepository,
 	}
 }
 
-// RequireWorkspaceRole enforces a minimum workspace role. A workspace-bound API
-// key resolves as owner, so it clears every tier.
+// A workspace-bound API key resolves as owner, so it clears every tier.
 func RequireWorkspaceRole(minRole models.WorkspaceRole) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		roleStr := c.GetString(CtxWorkspaceRole)

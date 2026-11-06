@@ -32,9 +32,7 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// RetentionCleanupJob purges old email logs, audit events, and webhook
-// delivery records based on platform retention settings. It also scrubs email
-// bodies and attachments off records that outlive their (shorter) content windows.
+// RetentionCleanupJob purges old records and scrubs bodies and attachments past their shorter content windows.
 type RetentionCleanupJob struct {
 	emailRepo        *repositories.EmailRepository
 	eventRepo        *repositories.EventRepository
@@ -64,8 +62,7 @@ func NewRetentionCleanupJob(
 	}
 }
 
-// SetInboundEmailRepo configures the inbound email repository for cleanup.
-// When nil, inbound emails are not subject to retention cleanup.
+// SetInboundEmailRepo enables inbound cleanup; when nil, inbound emails are not subject to retention.
 func (j *RetentionCleanupJob) SetInboundEmailRepo(r *repositories.InboundEmailRepository) {
 	j.inboundEmailRepo = r
 }
@@ -79,22 +76,16 @@ func (j *RetentionCleanupJob) SetFormRepo(r *repositories.FormRepository) {
 	j.formRepo = r
 }
 
-// SetNotificationRepo enables pruning of the in-app inbox. Only settled items
-// are dropped; an unresolved, undismissed notification is still true however old
-// it is, so age alone never removes it.
+// SetNotificationRepo enables inbox pruning; only settled items are dropped, never by age alone.
 func (j *RetentionCleanupJob) SetNotificationRepo(r *repositories.NotificationRepository) {
 	j.notificationRepo = r
 }
 
-// SetBlobStore configures the blob store so retention cleanup can also purge
-// attachment bytes (and raw .eml) before dropping DB rows. Nil disables blob
-// cleanup — DB rows are still purged, but blobs will leak.
+// SetBlobStore enables attachment and raw .eml blob purging; when nil, DB rows are purged but blobs leak.
 func (j *RetentionCleanupJob) SetBlobStore(bs blob.Store) {
 	j.blobStore = bs
 }
 
-// deleteOutboundAttachmentBlobs enumerates StorageKeys inside each attachments_json
-// payload and deletes them from blob storage. Returns the number of keys deleted.
 func (j *RetentionCleanupJob) deleteOutboundAttachmentBlobs(jsons []string) int {
 	if j.blobStore == nil {
 		return 0
@@ -123,7 +114,6 @@ func (j *RetentionCleanupJob) deleteOutboundAttachmentBlobs(jsons []string) int 
 	return deleted
 }
 
-// deleteInboundAttachmentBlobs does the same for inbound attachment metadata.
 func (j *RetentionCleanupJob) deleteInboundAttachmentBlobs(jsons []string) int {
 	if j.blobStore == nil {
 		return 0
@@ -152,7 +142,6 @@ func (j *RetentionCleanupJob) deleteInboundAttachmentBlobs(jsons []string) int {
 	return deleted
 }
 
-// deleteRawKeys removes each raw .eml blob for the given storage keys.
 func (j *RetentionCleanupJob) deleteRawKeys(keys []string) int {
 	if j.blobStore == nil {
 		return 0
@@ -173,10 +162,9 @@ func (j *RetentionCleanupJob) deleteRawKeys(keys []string) int {
 }
 
 func (j *RetentionCleanupJob) Name() string     { return "retention-cleanup" }
-func (j *RetentionCleanupJob) Schedule() string { return "0 3 * * *" } // daily at 03:00 UTC
+func (j *RetentionCleanupJob) Schedule() string { return "0 3 * * *" }
 
-// capDays caps a content window at the record window. A value of 0 means "keep
-// forever" on either side, so it is never treated as a cap or capped.
+// capDays caps a content window at the record window; 0 means forever on either side and is never a cap.
 func capDays(v, limit int) int {
 	if limit <= 0 || v <= 0 {
 		return v
@@ -201,9 +189,7 @@ func minDays(a, b int) int {
 	return b
 }
 
-// notificationRetentionDays is how long a read-and-settled inbox item is kept.
-// It is not operator-configurable: the inbox is a UI convenience, not a record,
-// and the audit log is where history is meant to live.
+// Fixed on purpose: the inbox is a UI convenience, and history is meant to live in the audit log.
 const notificationRetentionDays = 90
 
 func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
@@ -216,12 +202,10 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 		}
 	}
 
-	// Clean up email logs (and any blob-stored attachments).
 	emailRetention := j.settings.RetentionDays()
 	if emailRetention > 0 {
 		before := time.Now().AddDate(0, 0, -emailRetention)
 
-		// Outbound attachments
 		if j.blobStore != nil {
 			if jsons, err := j.emailRepo.AttachmentsJSONOlderThan(before); err == nil {
 				n := j.deleteOutboundAttachmentBlobs(jsons)
@@ -241,7 +225,6 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 		}
 
 		if j.inboundEmailRepo != nil {
-			// Inbound attachments + raw .eml
 			if j.blobStore != nil {
 				if jsons, rawKeys, err := j.inboundEmailRepo.InboundBlobKeysOlderThan(before); err == nil {
 					n := j.deleteInboundAttachmentBlobs(jsons)
@@ -265,8 +248,7 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 
 	j.cleanupMessages()
 
-	// Content windows can never usefully exceed the record window — the row (and
-	// all its content) is deleted first — so cap them at the email log retention.
+	// The row and all its content are deleted first, so content windows are capped at the record window.
 	bodyRetention := capDays(j.settings.EmailBodyRetentionDays(), emailRetention)
 	attachmentRetention := capDays(j.settings.EmailAttachmentRetentionDays(), emailRetention)
 
@@ -322,8 +304,7 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 		}
 	}
 
-	// The raw .eml holds both body and attachments, so purge it at the shorter of
-	// the two windows — it must never outlive either content type.
+	// The raw .eml holds body and attachments, so purge it at the shorter of the two windows.
 	if rawRetention := minDays(bodyRetention, attachmentRetention); rawRetention > 0 && j.inboundEmailRepo != nil {
 		before := time.Now().AddDate(0, 0, -rawRetention)
 
@@ -341,7 +322,6 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 		}
 	}
 
-	// Clean up audit/event logs
 	auditRetention := j.settings.AuditLogRetentionDays()
 	if auditRetention > 0 {
 		before := time.Now().AddDate(0, 0, -auditRetention)
@@ -353,7 +333,6 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 		}
 	}
 
-	// Clean up webhook delivery logs
 	whRetention := j.settings.WebhookDeliveryRetentionDays()
 	if whRetention > 0 {
 		before := time.Now().AddDate(0, 0, -whRetention)
@@ -365,7 +344,6 @@ func (j *RetentionCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 		}
 	}
 
-	// Clean up old tracking events
 	trackingRetention := j.settings.TrackingEventRetentionDays()
 	if trackingRetention > 0 {
 		before := time.Now().AddDate(0, 0, -trackingRetention)
@@ -427,9 +405,7 @@ func (j *RetentionCleanupJob) cleanupMessages() {
 	}
 }
 
-// formRetentionDays is the window that applies to one form's messages. A form
-// can shorten retention below the platform setting but never extend it past
-// that ceiling; 0 means the form sets no window of its own.
+// A form can shorten the platform retention but never extend it; 0 means the form sets no window.
 func formRetentionDays(form, platform int) int {
 	if form <= 0 {
 		return 0
@@ -437,8 +413,7 @@ func formRetentionDays(form, platform int) int {
 	return minDays(form, platform)
 }
 
-// cleanupFormMessages applies each form's own retention window before the
-// platform-wide pass.
+// cleanupFormMessages applies each form's own retention window before the platform-wide pass.
 func (j *RetentionCleanupJob) cleanupFormMessages(platformDays int) {
 	if j.formRepo == nil {
 		return

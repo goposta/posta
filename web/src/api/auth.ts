@@ -17,9 +17,7 @@ export const authApi = {
   updateProfile(data: { name: string; require_verified_domain?: boolean }) {
     return api.put<ApiResponse<UserProfile>>('/users/me', data)
   },
-  // The workspace a request that sends no X-Posta-Workspace-Id header operates
-  // on. The dashboard always sends the header, so this only affects API keys,
-  // SDKs, and curl.
+  // The workspace used when a request sends no X-Posta-Workspace-Id header; only API keys, SDKs and curl are affected.
   setDefaultWorkspace(workspaceId: number) {
     return api.put<ApiResponse<{ message: string }>>('/users/me/default-workspace', {
       workspace_id: workspaceId,

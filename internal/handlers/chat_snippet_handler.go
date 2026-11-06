@@ -29,8 +29,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ChatSnippetHandler manages canned replies. Everyone in the workspace reads
-// them; editors and above change them.
+// ChatSnippetHandler lets every member read canned replies and editors and above change them.
 type ChatSnippetHandler struct {
 	repo *repositories.ChatRepository
 }

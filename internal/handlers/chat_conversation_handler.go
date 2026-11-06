@@ -33,8 +33,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ChatConversationHandler is the agent's side of live chat: the conversation
-// list, the thread, replies, and the live stream.
+// ChatConversationHandler is the agents' side of live chat; ChatVisitorHandler serves the widget.
 type ChatConversationHandler struct {
 	audit      *audit.Logger
 	svc        *chat.Service
@@ -96,7 +95,6 @@ type ChatPresenceRequest struct {
 	} `json:"body"`
 }
 
-// ChatAgentPresence is one agent's status.
 type ChatAgentPresence struct {
 	UserID uint   `json:"user_id"`
 	Status string `json:"status" enum:"online,away"`
@@ -112,8 +110,6 @@ type ChatReadRequest struct {
 // SetAudit records bans in the audit log.
 func (h *ChatConversationHandler) SetAudit(a *audit.Logger) { h.audit = a }
 
-// ChatVisitorContext is what an agent sees about the person in a
-// conversation beyond the thread.
 type ChatVisitorContext struct {
 	Visitor *models.ChatVisitor       `json:"visitor"`
 	History []models.ChatConversation `json:"history" doc:"The visitor's other conversations; for a verified visitor, also those from their other devices"`
@@ -190,8 +186,7 @@ func (h *ChatConversationHandler) Get(c *okapi.Context, req *ChatConversationReq
 	return ok(c, conv)
 }
 
-// SetPresence is the dashboard's heartbeat: send it every 30 seconds while
-// available. An agent who stops sending reads as offline after 75 seconds.
+// SetPresence is a heartbeat sent every 30 seconds; an agent silent for 75 seconds reads as offline.
 func (h *ChatConversationHandler) SetPresence(c *okapi.Context, req *ChatPresenceRequest) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("only editors and above answer chats", err)
@@ -214,7 +209,6 @@ func (h *ChatConversationHandler) SetPresence(c *okapi.Context, req *ChatPresenc
 	return noContent(c)
 }
 
-// Presence lists the agents who are online or away.
 func (h *ChatConversationHandler) Presence(c *okapi.Context) error {
 	ws, err := workspaceOf(c)
 	if err != nil {
@@ -232,7 +226,7 @@ func (h *ChatConversationHandler) Presence(c *okapi.Context) error {
 	return ok(c, out)
 }
 
-// Typing tells the visitor an agent is writing. Throttled; nothing is stored.
+// Typing is throttled and stores nothing.
 func (h *ChatConversationHandler) Typing(c *okapi.Context, req *ChatConversationRequest) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
@@ -251,7 +245,6 @@ func (h *ChatConversationHandler) Typing(c *okapi.Context, req *ChatConversation
 	return noContent(c)
 }
 
-// Read records how far the agents have read, for the visitor's "seen".
 func (h *ChatConversationHandler) Read(c *okapi.Context, req *ChatReadRequest) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
@@ -342,8 +335,7 @@ func (h *ChatConversationHandler) Assign(c *okapi.Context, req *ChatAssignReques
 	return ok(c, conv)
 }
 
-// VisitorContext returns the visitor, their history and their contact.
-// Only a verified email is matched to a contact: a typed one could be anyone's.
+// VisitorContext matches only a verified email to a contact: a typed one could be anyone's.
 func (h *ChatConversationHandler) VisitorContext(c *okapi.Context, req *ChatConversationRequest) error {
 	conv, err := h.find(c, req.ID)
 	if err != nil {
@@ -365,8 +357,7 @@ func (h *ChatConversationHandler) VisitorContext(c *okapi.Context, req *ChatConv
 	return ok(c, out)
 }
 
-// Delete erases a conversation now, for a data subject's request: its
-// messages, files, and the visitor if it was their last conversation.
+// Delete erases now, for a data subject's request, including files and the visitor if it was their last conversation.
 func (h *ChatConversationHandler) Delete(c *okapi.Context, req *ChatConversationRequest) error {
 	conv, err := h.find(c, req.ID)
 	if err != nil {
@@ -381,8 +372,7 @@ func (h *ChatConversationHandler) Delete(c *okapi.Context, req *ChatConversation
 	return noContent(c)
 }
 
-// Ban marks the conversation spam, drops the visitor's further messages, and
-// blocks their IP from new chats in the workspace for a day.
+// Ban marks the conversation spam, drops the visitor's further messages and blocks their IP for a day.
 func (h *ChatConversationHandler) Ban(c *okapi.Context, req *ChatConversationRequest) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
@@ -417,8 +407,7 @@ func (h *ChatConversationHandler) Unban(c *okapi.Context, req *ChatConversationR
 	return noContent(c)
 }
 
-// Upload sends a file as the agent: multipart with file, caption and
-// client_msg_id parts.
+// Upload takes multipart file, caption and client_msg_id parts.
 func (h *ChatConversationHandler) Upload(c *okapi.Context) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
@@ -450,7 +439,6 @@ func (h *ChatConversationHandler) Attachment(c *okapi.Context, req *ChatAttachme
 	return serveAttachment(c, h.svc, h.repo, conv, req.Msg, req.Idx)
 }
 
-// Analytics summarises the workspace's chats over a period.
 func (h *ChatConversationHandler) Analytics(c *okapi.Context, req *ChatAnalyticsRequest) error {
 	ws, err := workspaceOf(c)
 	if err != nil {
@@ -485,9 +473,7 @@ func parseDay(s string) (time.Time, error) {
 	return time.Parse("2006-01-02", s)
 }
 
-// Stream sends the workspace's chat events to the dashboard. Each event is a
-// hint: the dashboard appends a message whose sequence number follows the
-// last one it has, and otherwise refetches.
+// Stream events are hints: the dashboard appends a message whose seq follows its last one, otherwise it refetches.
 func (h *ChatConversationHandler) Stream(c *okapi.Context) error {
 	bus := h.svc.Bus()
 	if bus == nil {
@@ -548,8 +534,7 @@ func workspaceOf(c *okapi.Context) (uint, error) {
 	return *scope.WorkspaceID, nil
 }
 
-// pageMessages reads one page of a conversation: after a sequence number,
-// before one, or, with neither, the newest page.
+// pageMessages reads the page after a seq, before one, or with neither the newest page.
 func pageMessages(repo *repositories.ChatRepository, conv *models.ChatConversation, after, before int64, limit int) ([]models.ChatMessage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -570,7 +555,6 @@ func pageMessages(repo *repositories.ChatRepository, conv *models.ChatConversati
 	return items, err
 }
 
-// abortChat answers a chat service error.
 func abortChat(c *okapi.Context, err error) error {
 	switch {
 	case errors.Is(err, chat.ErrEmptyBody), errors.Is(err, chat.ErrBodyTooLong),

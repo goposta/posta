@@ -91,9 +91,7 @@ func (r *StyleSheetRepository) FindByIDInScope(scope ResourceScope, id uint) (*m
 	return &ss, nil
 }
 
-// FindByNameInScope finds a stylesheet by name or, for exports and HTML
-// files made before 0.18, when a stylesheet's name was its label, by
-// display name.
+// FindByNameInScope falls back to display name for exports and HTML files made before 0.18.
 func (r *StyleSheetRepository) FindByNameInScope(scope ResourceScope, name string) (*models.StyleSheet, error) {
 	var ss models.StyleSheet
 	if err := ApplyScope(r.db, scope).Where("name = ? OR display_name = ?", name, name).

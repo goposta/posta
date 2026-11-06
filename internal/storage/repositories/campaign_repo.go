@@ -47,8 +47,7 @@ func (r *CampaignRepository) FindByID(id uint) (*models.Campaign, error) {
 	return &c, nil
 }
 
-// FindByIDForScope returns the campaign only if it belongs to the given scope.
-// Prefer this over FindByID in request handlers so scoping lives in one place.
+// FindByIDForScope returns the campaign only if it belongs to scope; prefer it in handlers so scoping lives in one place.
 func (r *CampaignRepository) FindByIDForScope(id uint, scope ResourceScope) (*models.Campaign, error) {
 	var c models.Campaign
 	if err := ApplyScope(r.db, scope).First(&c, id).Error; err != nil {
@@ -81,10 +80,7 @@ func (r *CampaignRepository) Update(c *models.Campaign) error {
 	return r.db.Save(c).Error
 }
 
-// Delete soft-deletes the campaign and purges its CampaignMessage rows.
-// A snapshot of aggregated stats is written to campaigns.snapshot first so
-// post-deletion analytics survive. The snapshot is optional; callers pass nil
-// for a bare delete (e.g., never-sent drafts).
+// Delete writes snapshot (nil allowed) before purging the campaign's messages, so post-deletion analytics survive.
 func (r *CampaignRepository) Delete(id uint, snapshot models.TemplateData) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if snapshot != nil {
@@ -111,12 +107,10 @@ func (r *CampaignRepository) UpdateStatus(id uint, status models.CampaignStatus)
 	return r.db.Model(&models.Campaign{}).Where("id = ?", id).Updates(updates).Error
 }
 
-// ErrStatusConflict indicates the campaign was not in any of the expected source statuses,
-// so the transition did not happen. Used to detect concurrent writes / double-clicks.
+// ErrStatusConflict means no expected source status matched: a concurrent transition or double-click.
 var ErrStatusConflict = errors.New("campaign status conflict")
 
-// TransitionStatus atomically moves a campaign from one of `from` statuses to `to`.
-// Returns ErrStatusConflict when no row matched (concurrent transition).
+// TransitionStatus atomically moves from one of from to to, returning ErrStatusConflict when no row matched.
 func (r *CampaignRepository) TransitionStatus(id uint, from []models.CampaignStatus, to models.CampaignStatus) error {
 	updates := map[string]interface{}{"status": to, "updated_at": time.Now()}
 	if to == models.CampaignStatusSending {
@@ -137,9 +131,7 @@ func (r *CampaignRepository) TransitionStatus(id uint, from []models.CampaignSta
 	return nil
 }
 
-// FindStuckSending returns campaigns that have been in `sending` status longer
-// than `stuckFor` but still have pending messages — typically the result of a
-// worker crash between enqueue and completion. Used by the restart sweep.
+// FindStuckSending finds campaigns sending longer than stuckFor with pending messages, typically after a worker crash.
 func (r *CampaignRepository) FindStuckSending(stuckFor time.Duration) ([]models.Campaign, error) {
 	var items []models.Campaign
 	cutoff := time.Now().Add(-stuckFor)

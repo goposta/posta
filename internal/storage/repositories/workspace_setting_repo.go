@@ -32,8 +32,7 @@ func NewWorkspaceSettingRepository(db *gorm.DB) *WorkspaceSettingRepository {
 	return &WorkspaceSettingRepository{db: db}
 }
 
-// FindByWorkspaceID returns the workspace's settings, creating a default row if
-// none exists. Mirrors UserSettingRepository.FindByUserID.
+// FindByWorkspaceID creates a default settings row if none exists.
 func (r *WorkspaceSettingRepository) FindByWorkspaceID(workspaceID uint) (*models.WorkspaceSetting, error) {
 	var setting models.WorkspaceSetting
 	result := r.db.Where("workspace_id = ?", workspaceID).First(&setting)
@@ -56,14 +55,11 @@ func (r *WorkspaceSettingRepository) FindByWorkspaceID(workspaceID uint) (*model
 	return nil, result.Error
 }
 
-// CreateOrUpdate saves or updates the workspace's settings row.
 func (r *WorkspaceSettingRepository) CreateOrUpdate(setting *models.WorkspaceSetting) error {
 	return r.db.Save(setting).Error
 }
 
-// RequireVerifiedDomain reports whether strict domain mode is enabled for the
-// workspace. A focused read for the email-send hot path that does not
-// auto-create a settings row; returns false when no row exists.
+// RequireVerifiedDomain is a hot-path read that never creates a settings row; false when none exists.
 func (r *WorkspaceSettingRepository) RequireVerifiedDomain(workspaceID uint) bool {
 	var setting models.WorkspaceSetting
 	if err := r.db.Select("require_verified_domain").

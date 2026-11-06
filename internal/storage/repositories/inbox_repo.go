@@ -27,15 +27,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// Unified inbox sources.
 const (
 	InboxSourceForm    = "form"
 	InboxSourceInbound = "inbound"
 	InboxSourceChat    = "chat"
 )
 
-// InboxItem is one row of the unified inbox: a form message, a loose
-// inbound email, or a chat, in one shape.
+// InboxItem is a form message, loose inbound email or chat in one shape.
 type InboxItem struct {
 	Source         string    `json:"source" enum:"form,inbound,chat"`
 	ID             string    `json:"id" doc:"UUID of the message, inbound email or conversation"`
@@ -51,7 +49,6 @@ type InboxItem struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-// InboxFilter narrows the unified inbox.
 type InboxFilter struct {
 	Sources []string
 	// State is open, closed, spam, or empty for all.
@@ -62,10 +59,7 @@ type InboxFilter struct {
 	Q        string
 }
 
-// UnifiedInboxRepository lists form messages, loose inbound emails and chats
-// together. It is one UNION ALL over the three tables with a shared
-// projection, not a merged model: each source keeps its own table and its own
-// detail view.
+// UnifiedInboxRepository is one UNION ALL over three tables with a shared projection, not a merged model.
 type UnifiedInboxRepository struct {
 	db *gorm.DB
 }
@@ -74,8 +68,7 @@ func NewUnifiedInboxRepository(db *gorm.DB) *UnifiedInboxRepository {
 	return &UnifiedInboxRepository{db: db}
 }
 
-// Inbound emails that became a reply on a form thread or a chat are already
-// shown there.
+// Inbound emails that became a form or chat reply are already shown there.
 const looseInbound = `NOT EXISTS (SELECT 1 FROM message_replies r WHERE r.inbound_email_id = i.id)
 	AND NOT EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.client_msg_id = 'inbound-' || i.id::text)`
 
@@ -156,8 +149,7 @@ func (r *UnifiedInboxRepository) List(workspaceID uint, f InboxFilter, limit, of
 	return items, total, nil
 }
 
-// decryptForms re-reads the page's form messages through GORM, whose hooks
-// decrypt answers kept encrypted at rest; raw SQL sees only ciphertext.
+// decryptForms re-reads form messages through GORM, whose hooks decrypt; raw SQL sees only ciphertext.
 func (r *UnifiedInboxRepository) decryptForms(items []InboxItem) {
 	var ids []string
 	for _, it := range items {

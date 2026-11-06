@@ -17,10 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package chat is Posta's live chat: visitors on a customer's website talk
-// to the workspace's agents in real time. Postgres holds every message, each
-// with a per-conversation sequence number; Redis pub/sub (services/realtime)
-// only tells streams on any replica that something new is there.
+// Package chat is live chat: Postgres holds every sequenced message; Redis pub/sub only tells streams something is new.
 package chat
 
 import (
@@ -55,12 +52,10 @@ var (
 	ErrRateLimited   = errors.New("too many messages")
 )
 
-// MinFillSeconds is how long a nonce must exist before a conversation can
-// start with it: long enough to stop a script that posts on page load, short
-// enough that no person waits for it.
+// Long enough to stop a script that posts on page load, short enough that no person waits for it.
 const MinFillSeconds = 2
 
-// Config sets the chat quotas. A non-positive limit disables that quota.
+// A non-positive limit disables that quota.
 type Config struct {
 	StartsPerIPHourly       int
 	StartsPerWorkspaceDaily int
@@ -68,15 +63,12 @@ type Config struct {
 	VisitorDaily            int
 	ConversationPerMinute   int
 	MaxStreams              int
-	// UnansweredAfter is how long a visitor's message may wait before the
-	// assignee, or the admins, are told. Zero disables the alert.
+	// UnansweredAfter is how long a visitor's message waits before the assignee or admins are told; 0 disables it.
 	UnansweredAfter time.Duration
-	// InboundDomain receives visitors' emailed answers at
-	// chat+<token>@InboundDomain; empty means they reply in the chat only.
+	// Visitors' emailed answers go to chat+<token>@InboundDomain; empty means they reply in the chat only.
 	InboundDomain string
 }
 
-// DefaultConfig is the plan's starting point for public chat traffic.
 func DefaultConfig() Config {
 	return Config{
 		StartsPerIPHourly:       5,
@@ -89,9 +81,6 @@ func DefaultConfig() Config {
 	}
 }
 
-// Enqueuer schedules the work that follows a message: the new-chat
-// notification, the follow-up email to a visitor who left, and the alert for
-// a message nobody answered.
 type Enqueuer interface {
 	EnqueueChatNotify(conversationID uint) error
 	EnqueueChatOfflineEmail(conversationID uint, seq int64, delay time.Duration) error
@@ -105,13 +94,10 @@ type Limits struct {
 	MonthlyConversations int
 }
 
-// LimitsProvider resolves a workspace's chat limits.
 type LimitsProvider func(workspaceID uint) Limits
 
-// ErrAgentLimit means the plan's agents are all online already.
 var ErrAgentLimit = errors.New("the plan's number of chat agents are already online")
 
-// Mailer sends email as a workspace member; *email.Service implements it.
 type Mailer interface {
 	Send(ctx context.Context, userID, apiKeyID uint, workspaceID *uint, userEmail string, req *email.SendRequest) (*email.SendResponse, error)
 }
@@ -127,10 +113,8 @@ type Service struct {
 	mailer   Mailer
 	blobs    blob.Store
 	limits   LimitsProvider
-	// licensed reports whether Enterprise features may run; auto-assign is
-	// one. Nil means Community.
-	licensed func() bool
-	// workspaces lists members for auto-assign.
+	// licensed gates Enterprise parts such as auto-assign; nil means Community.
+	licensed   func() bool
 	workspaces *repositories.WorkspaceRepository
 	users      *repositories.UserRepository
 	bus        realtime.Bus
@@ -168,25 +152,18 @@ func NewService(
 	return s
 }
 
-// SetRealtime replaces the bus events go out on, for tests and for sharing
-// one bus with the rest of the server.
 func (s *Service) SetRealtime(b realtime.Bus) { s.bus = b }
 func (s *Service) SetEnqueuer(e Enqueuer)     { s.enqueuer = e }
 
-// SetMailer lets the service email agents' replies to visitors who left, as
-// the agent who wrote them.
 func (s *Service) SetMailer(m Mailer, users *repositories.UserRepository) {
 	s.mailer, s.users = m, users
 }
 
 func (s *Service) Presence() *Presence { return s.presence }
 
-// SetLicensed enables the Enterprise parts of chat (auto-assign) while it
-// returns true. A license past its grace period still returns true: the
-// feature keeps running, only its settings freeze.
+// A license past its grace period still returns true: the feature keeps running, only its settings freeze.
 func (s *Service) SetLicensed(fn func() bool) { s.licensed = fn }
 
-// SetLimits enforces plan limits on agents and monthly conversations.
 func (s *Service) SetLimits(l LimitsProvider) { s.limits = l }
 
 func (s *Service) limitsFor(workspaceID uint) Limits {
@@ -200,8 +177,6 @@ func (s *Service) Repo() *repositories.ChatRepository { return s.repo }
 func (s *Service) Bus() realtime.Bus                  { return s.bus }
 func (s *Service) Nonces() *messages.Nonces           { return s.nonces }
 
-// AcquireStream reserves one of this replica's visitor streams, or reports
-// that all are in use.
 func (s *Service) AcquireStream() bool {
 	if s.cfg.MaxStreams <= 0 {
 		s.streams.Add(1)
@@ -216,11 +191,9 @@ func (s *Service) AcquireStream() bool {
 
 func (s *Service) ReleaseStream() { s.streams.Add(-1) }
 
-// StartRequest is a visitor's first message on a new conversation.
 type StartRequest struct {
 	Widget *models.ChatWidget
-	// Visitor is the caller when they sent a visitor token; nil for a new
-	// visitor.
+	// Visitor is nil for a new visitor.
 	Visitor     *models.ChatVisitor
 	Name        string
 	Email       string
@@ -240,12 +213,10 @@ type StartResult struct {
 	Token        string
 	Conversation *models.ChatConversation
 	Message      *models.ChatMessage
-	// Rejected means the scan refused the message: nothing was stored, and
-	// the caller answers as if it had been.
+	// Rejected means the scan refused the message: nothing was stored, and the caller answers as if it had been.
 	Rejected bool
 }
 
-// Start opens a conversation with the visitor's first message.
 func (s *Service) Start(ctx context.Context, req StartRequest) (*StartResult, error) {
 	w := req.Widget
 	body, err := checkBody(req.Body, w.MessageLimit())
@@ -267,8 +238,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*StartResult, er
 		return nil, ErrEmailRequired
 	}
 
-	// A banned visitor or IP is told its message arrived, before anything
-	// else can answer differently.
+	// A banned visitor or IP is told its message arrived, before anything else can answer differently.
 	if s.ipBanned(ctx, *w.WorkspaceID, req.ClientIP) || (req.Visitor != nil && req.Visitor.BannedAt != nil) {
 		return &StartResult{Rejected: true}, nil
 	}
@@ -386,7 +356,6 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*StartResult, er
 	return res, nil
 }
 
-// PostVisitorMessage adds a visitor's message to one of their conversations.
 func (s *Service) PostVisitorMessage(ctx context.Context, w *models.ChatWidget, v *models.ChatVisitor, conv *models.ChatConversation, body, clientMsgID, ip, page string) (*models.ChatMessage, error) {
 	body, err := checkBody(body, w.MessageLimit())
 	if err != nil {
@@ -412,7 +381,6 @@ func (s *Service) PostVisitorMessage(ctx context.Context, w *models.ChatWidget, 
 	}, ip, page)
 }
 
-// appendVisitor stores a visitor's message and announces it.
 func (s *Service) appendVisitor(ctx context.Context, w *models.ChatWidget, v *models.ChatVisitor, conv *models.ChatConversation, msg *models.ChatMessage, ip, page string) (*models.ChatMessage, error) {
 	duplicate, err := s.repo.AppendMessage(msg)
 	if err != nil {
@@ -432,14 +400,12 @@ func (s *Service) appendVisitor(ctx context.Context, w *models.ChatWidget, v *mo
 	return msg, nil
 }
 
-// Agent is the workspace member speaking in a conversation.
 type Agent struct {
 	ID   uint
 	Name string
 }
 
-// PostAgentMessage adds an agent's reply. Replying to an unassigned
-// conversation claims it for the agent.
+// Replying to an unassigned conversation claims it for the agent.
 func (s *Service) PostAgentMessage(ctx context.Context, conv *models.ChatConversation, agent Agent, body, clientMsgID string) (*models.ChatMessage, error) {
 	w, err := s.repo.FindWidgetByID(conv.WidgetID)
 	if err != nil {
@@ -459,12 +425,8 @@ func (s *Service) PostAgentMessage(ctx context.Context, conv *models.ChatConvers
 	})
 }
 
-// appendAgent stores an agent's message, claims an unassigned conversation,
-// announces the message, and queues the follow-up email.
 func (s *Service) appendAgent(ctx context.Context, w *models.ChatWidget, conv *models.ChatConversation, agent Agent, msg *models.ChatMessage) (*models.ChatMessage, error) {
-	// Agents are charged to the conversation's counter, which catches loops
-	// between two automated sides, but an unreadable counter does not stop a
-	// person answering.
+	// The conversation counter catches loops between automated sides, but an unreadable one never stops a person replying.
 	if s.quotas != nil {
 		if err := s.quotas.Check(ctx, []ratelimit.Quota{s.conversationQuota(conv.ID)}); errors.Is(err, ratelimit.ErrQuotaExceeded) {
 			return nil, ErrRateLimited
@@ -493,7 +455,6 @@ func (s *Service) appendAgent(ctx context.Context, w *models.ChatWidget, conv *m
 	return msg, nil
 }
 
-// SetState moves a conversation to state.
 func (s *Service) SetState(ctx context.Context, conv *models.ChatConversation, state models.ChatState) error {
 	fields := map[string]any{"state": state}
 	var closedAt *time.Time
@@ -525,11 +486,7 @@ func (s *Service) Assign(ctx context.Context, conv *models.ChatConversation, use
 	return nil
 }
 
-// Online reports whether the widget can be answered now: inside its business
-// hours, with at least one agent online in its workspace.
-//
-// A workspace over its plan's monthly conversations is offline too, so new
-// visitors leave a message rather than lose one.
+// A workspace over its monthly conversations reads offline too, so new visitors leave a message rather than lose one.
 func (s *Service) Online(ctx context.Context, w *models.ChatWidget) bool {
 	if w.WorkspaceID == nil || !w.BusinessHours.Open(time.Now()) {
 		return false
@@ -544,7 +501,6 @@ func (s *Service) Online(ctx context.Context, w *models.ChatWidget) bool {
 	return s.presence.AnyOnline(ctx, *w.WorkspaceID)
 }
 
-// SetPresence records an agent's status and tells the workspace when it changed.
 func (s *Service) SetPresence(ctx context.Context, workspaceID, userID uint, status string) error {
 	if max := s.limitsFor(workspaceID).MaxAgents; max > 0 && status != StatusOffline {
 		if list, err := s.presence.List(ctx, workspaceID); err == nil {
@@ -564,8 +520,7 @@ func (s *Service) SetPresence(ctx context.Context, workspaceID, userID uint, sta
 	return nil
 }
 
-// Typing tells the other side that someone is writing. It is throttled and
-// never stored.
+// Typing is throttled and never stored.
 func (s *Service) Typing(ctx context.Context, conv *models.ChatConversation, visitor bool, name string) {
 	side := models.ChatAuthorAgent
 	if visitor {
@@ -584,7 +539,6 @@ func (s *Service) Typing(ctx context.Context, conv *models.ChatConversation, vis
 		Data: TypingEvent{ConversationID: conv.UUID, Author: side, Name: name}})
 }
 
-// MarkRead records how far one side has read and tells the other side.
 func (s *Service) MarkRead(ctx context.Context, conv *models.ChatConversation, visitor bool, seq int64) (int64, error) {
 	stored, err := s.repo.MarkRead(conv.ID, visitor, seq)
 	if err != nil || s.bus == nil || conv.WorkspaceID == nil {
@@ -600,8 +554,7 @@ func (s *Service) MarkRead(ctx context.Context, conv *models.ChatConversation, v
 	return stored, nil
 }
 
-// AnnounceVisitor tells the agents that the visitor's widget connected or
-// went away, which decides whether replies go out by email.
+// Visitor presence decides whether agent replies go out by email.
 func (s *Service) AnnounceVisitor(ctx context.Context, conv *models.ChatConversation, live bool) {
 	if s.bus == nil || conv.WorkspaceID == nil {
 		return
@@ -611,8 +564,7 @@ func (s *Service) AnnounceVisitor(ctx context.Context, conv *models.ChatConversa
 		Data: VisitorEvent{ConversationID: conv.UUID, Live: live}})
 }
 
-// Describe fills a conversation's computed fields: whether the visitor is
-// connected, and whether a reply now would go to them by email.
+// Describe fills computed fields: whether the visitor is connected and whether a reply now goes by email.
 func (s *Service) Describe(ctx context.Context, conv *models.ChatConversation) {
 	conv.VisitorLive = s.VisitorLive(ctx, conv.ID)
 	if conv.Visitor == nil {
@@ -633,10 +585,7 @@ func (s *Service) Describe(ctx context.Context, conv *models.ChatConversation) {
 	})
 }
 
-// scheduleOfflineEmail queues the follow-up email for an agent's message.
-// Whether it is sent is decided when it runs, a minute later: by then the
-// visitor may be back, or the agent may have written again, and that
-// message's own task then sends one email for both.
+// Sending is decided when the task runs: the visitor may be back, or a later agent message's task sends one email for both.
 func (s *Service) scheduleOfflineEmail(conv *models.ChatConversation, w *models.ChatWidget, seq int64) {
 	if s.enqueuer == nil || w.ReplyFrom == "" || conv.Status == models.MessageStatusQuarantined || conv.State == models.ChatStateSpam {
 		return
@@ -646,8 +595,6 @@ func (s *Service) scheduleOfflineEmail(conv *models.ChatConversation, w *models.
 	}
 }
 
-// scheduleUnanswered queues the alert for a visitor's message that may go
-// unanswered.
 func (s *Service) scheduleUnanswered(conv *models.ChatConversation, seq int64) {
 	if s.enqueuer == nil || s.cfg.UnansweredAfter <= 0 || conv.State == models.ChatStateSpam {
 		return
@@ -697,8 +644,7 @@ func checkBody(raw string, limit int) (string, error) {
 	return body, nil
 }
 
-// cleanClientID keeps a widget-generated message ID only when it looks like
-// one; anything else is dropped, and the message is simply not idempotent.
+// Anything unlike a widget-generated ID is dropped, and the message is simply not idempotent.
 func cleanClientID(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" || len(id) > 36 {
@@ -712,8 +658,7 @@ func cleanClientID(id string) string {
 	return id
 }
 
-// newThreadToken returns 16 random bytes in lowercase base32, the shape
-// ParseChatThreadAddress accepts.
+// Lowercase base32 of 16 random bytes, the shape ParseChatThreadAddress accepts.
 func newThreadToken() *string {
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {
@@ -734,8 +679,7 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
-// lookup feeds the scanner: the workspace-wide spam filters plus the
-// widget's own.
+// lookup feeds the scanner the workspace-wide spam filters plus the widget's own.
 type lookup struct {
 	repo            *repositories.ChatRepository
 	filterRepo      *repositories.MessageFilterRepository

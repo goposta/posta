@@ -57,7 +57,6 @@ type WorkspaceDataHandler struct {
 // SetBlobStore lets GDPR erasure remove stored attachments and raw emails.
 func (h *WorkspaceDataHandler) SetBlobStore(bs blob.Store) { h.blobStore = bs }
 
-// SetAuditLogger records destructive data operations in the audit log.
 func (h *WorkspaceDataHandler) SetAuditLogger(l *audit.Logger) { h.audit = l }
 
 func NewWorkspaceDataHandler(
@@ -215,7 +214,6 @@ func (h *WorkspaceDataHandler) Import(c *okapi.Context, req *ImportWorkspaceData
 	wsID := uint(c.GetInt("workspace_id"))
 	data := req.Body
 
-	// Import workspace settings
 	if data.WorkspaceSettings.Name != "" || data.WorkspaceSettings.Description != "" || data.WorkspaceSettings.DefaultLanguage != "" {
 		ws, err := h.workspaceRepo.FindByID(wsID)
 		if err == nil {
@@ -269,7 +267,6 @@ type GDPRDeleteResult struct {
 	Message string `json:"message"`
 }
 
-// DeleteContacts (GDPR) removes contact data scoped to the active workspace.
 func (h *WorkspaceDataHandler) DeleteContacts(c *okapi.Context, req *GDPRDeleteContactsRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))
 	if wsID == 0 {
@@ -304,7 +301,6 @@ func (h *WorkspaceDataHandler) DeleteContacts(c *okapi.Context, req *GDPRDeleteC
 	})
 }
 
-// DeleteEmailLogs (GDPR) purges email logs scoped to the active workspace.
 // Mirrors UserDataHandler.DeleteEmailLogs but scopes by workspace_id.
 func (h *WorkspaceDataHandler) DeleteEmailLogs(c *okapi.Context, req *GDPRDeleteEmailLogsRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))

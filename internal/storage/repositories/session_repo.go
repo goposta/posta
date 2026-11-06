@@ -38,7 +38,6 @@ func (r *SessionRepository) Create(session *models.Session) error {
 	return r.db.Create(session).Error
 }
 
-// FindActiveByUserID returns non-revoked, non-expired sessions for a user.
 func (r *SessionRepository) FindActiveByUserID(userID uint) ([]models.Session, error) {
 	var sessions []models.Session
 	if err := r.db.Where("user_id = ? AND revoked = false AND expires_at > ?", userID, time.Now()).
@@ -65,17 +64,14 @@ func (r *SessionRepository) FindByJTI(jti string) (*models.Session, error) {
 	return &session, nil
 }
 
-// Revoke marks a session as revoked.
 func (r *SessionRepository) Revoke(id uint) error {
 	return r.db.Model(&models.Session{}).Where("id = ?", id).Update("revoked", true).Error
 }
 
-// RevokeByJTI marks a session as revoked by JTI.
 func (r *SessionRepository) RevokeByJTI(jti string) error {
 	return r.db.Model(&models.Session{}).Where("jti = ?", jti).Update("revoked", true).Error
 }
 
-// RevokeAllByUserID revokes all active sessions for a user.
 func (r *SessionRepository) RevokeAllByUserID(userID uint) (int64, error) {
 	result := r.db.Model(&models.Session{}).
 		Where("user_id = ? AND revoked = false AND expires_at > ?", userID, time.Now()).
@@ -83,7 +79,6 @@ func (r *SessionRepository) RevokeAllByUserID(userID uint) (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
-// RevokeOthersByUserID revokes all active sessions except the given JTI.
 func (r *SessionRepository) RevokeOthersByUserID(userID uint, exceptJTI string) (int64, error) {
 	result := r.db.Model(&models.Session{}).
 		Where("user_id = ? AND jti != ? AND revoked = false AND expires_at > ?", userID, exceptJTI, time.Now()).
@@ -91,13 +86,11 @@ func (r *SessionRepository) RevokeOthersByUserID(userID uint, exceptJTI string) 
 	return result.RowsAffected, result.Error
 }
 
-// CleanExpired removes expired sessions from the database.
 func (r *SessionRepository) CleanExpired() (int64, error) {
 	result := r.db.Where("expires_at < ?", time.Now()).Delete(&models.Session{})
 	return result.RowsAffected, result.Error
 }
 
-// IsRevoked checks if a session with the given JTI is revoked.
 func (r *SessionRepository) IsRevoked(jti string) (bool, error) {
 	var count int64
 	err := r.db.Model(&models.Session{}).

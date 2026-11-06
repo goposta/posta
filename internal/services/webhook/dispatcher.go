@@ -49,16 +49,12 @@ const (
 	defaultTimeout       = 10 * time.Second
 )
 
-// Config holds configurable settings for the webhook dispatcher.
 type Config struct {
 	MaxRetries int
 	Timeout    time.Duration
-	// ProxyURL routes all outbound webhook requests through a proxy,
-	// hiding the server's IP address from webhook endpoints.
-	// Supports http://, https://, and socks5:// schemes.
+	// ProxyURL hides the server's IP from webhook endpoints; supports http, https and socks5.
 	ProxyURL string
-	// Network decides which addresses webhooks may reach. The zero value
-	// blocks private and reserved addresses.
+	// Network's zero value blocks private and reserved addresses.
 	Network netguard.Policy
 }
 
@@ -80,8 +76,7 @@ func NewDispatcher(repo *repositories.WebhookRepository) *Dispatcher {
 		maxRetries: defaultMaxRetries,
 		client: &http.Client{
 			Timeout: defaultTimeout,
-			// A webhook URL is checked where it points; a redirect could
-			// send the request somewhere else, so it is not followed.
+			// A redirect could send the request somewhere the URL check never saw, so it is not followed.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}
@@ -89,14 +84,7 @@ func NewDispatcher(repo *repositories.WebhookRepository) *Dispatcher {
 	return d
 }
 
-// guardedTransport dials only the addresses the network policy allows. It
-// checks each address as it connects, so neither a hostname resolving to a
-// private address nor a DNS answer that changed since the webhook was saved
-// gets through.
-//
-// A proxy set in HTTP_PROXY or HTTPS_PROXY is still used, as Go's default
-// transport would: the connection to it is allowed wherever it is, and the
-// target, which only the proxy dials, is checked by name instead.
+// guardedTransport checks each dialed address, so DNS can't sneak a private target past; env proxies stay honoured.
 func (d *Dispatcher) guardedTransport() *http.Transport {
 	env := httpproxy.FromEnvironment()
 	proxyFor := env.ProxyFunc()
@@ -133,12 +121,10 @@ func (d *Dispatcher) guardedTransport() *http.Transport {
 	return t
 }
 
-// Network returns the policy webhook URLs are checked against.
 func (d *Dispatcher) Network() netguard.Policy {
 	return d.network
 }
 
-// SetConfig applies configurable settings to the dispatcher.
 func (d *Dispatcher) SetConfig(cfg Config) {
 	if cfg.MaxRetries > 0 {
 		d.maxRetries = cfg.MaxRetries
@@ -160,8 +146,6 @@ func (d *Dispatcher) SetConfig(cfg Config) {
 	}
 }
 
-// proxyTransport builds an *http.Transport that routes requests through the
-// given proxy URL. Supported schemes: http, https, socks5.
 func proxyTransport(rawURL string) (*http.Transport, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -201,18 +185,14 @@ func proxyTransport(rawURL string) (*http.Transport, error) {
 	}
 }
 
-// SetDeliveryRepo sets the repository used to record delivery attempts.
 func (d *Dispatcher) SetDeliveryRepo(repo *repositories.WebhookDeliveryRepository) {
 	d.deliveryRepo = repo
 }
 
-// OnDeliverySuccess sets a callback invoked after each successful webhook delivery.
 func (d *Dispatcher) OnDeliverySuccess(fn func()) { d.onDeliverySuccess = fn }
 
-// OnDeliveryFailed sets a callback invoked after each failed webhook delivery.
 func (d *Dispatcher) OnDeliveryFailed(fn func()) { d.onDeliveryFailed = fn }
 
-// OnDeliveryDone sets a callback invoked after each delivery attempt with its duration.
 func (d *Dispatcher) OnDeliveryDone(fn func(float64)) { d.onDeliveryDone = fn }
 
 type Payload struct {
@@ -221,8 +201,7 @@ type Payload struct {
 	Timestamp string `json:"timestamp"`
 }
 
-// CampaignPayload is the outbound shape for campaign lifecycle events
-// (campaign.started, campaign.completed).
+// CampaignPayload is the shape for campaign.started and campaign.completed events.
 type CampaignPayload struct {
 	Event      string `json:"event"`
 	CampaignID uint   `json:"campaign_id"`
@@ -230,10 +209,7 @@ type CampaignPayload struct {
 	Timestamp  string `json:"timestamp"`
 }
 
-// Dispatch sends webhook notifications for the given event using the default
-// outbound payload shape ({event, email_id, timestamp}). Runs asynchronously.
-// workspaceID scopes which webhooks fire: nil targets the user's personal
-// webhooks, a value targets that workspace's webhooks.
+// Dispatch runs asynchronously; a nil workspaceID targets the user's personal webhooks.
 func (d *Dispatcher) Dispatch(userID uint, workspaceID *uint, event string, emailID string, from string) {
 	payload := Payload{
 		Event:     event,
@@ -250,9 +226,7 @@ func (d *Dispatcher) Dispatch(userID uint, workspaceID *uint, event string, emai
 	d.DispatchJSON(userID, workspaceID, event, body, from)
 }
 
-// DispatchCampaign sends webhook notifications for a campaign lifecycle event
-// using the campaign payload shape ({event, campaign_id, name, timestamp}).
-// Scoping follows the same rules as Dispatch. Runs asynchronously.
+// DispatchCampaign runs asynchronously and scopes webhooks like Dispatch.
 func (d *Dispatcher) DispatchCampaign(userID uint, workspaceID *uint, event string, campaignID uint, name string, from string) {
 	payload := CampaignPayload{
 		Event:      event,
@@ -270,11 +244,7 @@ func (d *Dispatcher) DispatchCampaign(userID uint, workspaceID *uint, event stri
 	d.DispatchJSON(userID, workspaceID, event, body, from)
 }
 
-// DispatchJSON sends a pre-serialized JSON body to all webhooks subscribed to event
-// within the given scope (personal when workspaceID is nil, otherwise the
-// workspace) that pass the sender-address filter. Runs asynchronously.
-// Callers own the payload shape — this is the escape hatch used by the inbound
-// pipeline (which has a richer payload than the outbound Payload struct).
+// DispatchJSON lets callers own the payload shape (inbound pipeline); scoped like Dispatch, runs asynchronously.
 func (d *Dispatcher) DispatchJSON(userID uint, workspaceID *uint, event string, body []byte, fromAddr string) {
 	go func() {
 		scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
@@ -293,9 +263,7 @@ func (d *Dispatcher) DispatchJSON(userID uint, workspaceID *uint, event string, 
 	}()
 }
 
-// DispatchJSONTo sends body to the named webhooks of a workspace, as a routing
-// rule asks. A webhook already subscribed to event is skipped: DispatchJSON
-// delivers to it, and it must not get the payload twice. Runs asynchronously.
+// DispatchJSONTo skips webhooks subscribed to event, which DispatchJSON already reaches, to avoid duplicates.
 func (d *Dispatcher) DispatchJSONTo(workspaceID uint, webhookIDs []uint, event string, body []byte) {
 	if len(webhookIDs) == 0 {
 		return
@@ -318,7 +286,6 @@ func (d *Dispatcher) DispatchJSONTo(workspaceID uint, webhookIDs []uint, event s
 	}()
 }
 
-// matchesFilters checks if the sender address matches the webhook's filters.
 func matchesFilters(filters []string, from string) bool {
 	if len(filters) == 0 {
 		return true
@@ -377,9 +344,7 @@ func (d *Dispatcher) deliverWithRetry(userID uint, wh models.Webhook, body []byt
 		}
 
 		if err != nil {
-			// The delivery log is read by workspace members: it says what went
-			// wrong, not which address or port answered. The server log keeps
-			// the full error.
+			// Members read the delivery log, so it names the failure, not the address; the server log has the full error.
 			lastErr = netguard.Describe(err)
 			logger.Warn("webhook delivery failed", "url", wh.URL, "attempt", attempt, "error", err)
 		} else if statusCode < 400 {
@@ -395,7 +360,6 @@ func (d *Dispatcher) deliverWithRetry(userID uint, wh models.Webhook, body []byt
 		}
 	}
 
-	// All retries exhausted
 	d.recordDelivery(userID, wh.ID, wh.WorkspaceID, event, models.WebhookDeliveryFailed, lastStatus, lastErr, d.maxRetries)
 	if d.onDeliveryFailed != nil {
 		d.onDeliveryFailed()
@@ -405,17 +369,14 @@ func (d *Dispatcher) deliverWithRetry(userID uint, wh models.Webhook, body []byt
 	}
 }
 
-// signPayload computes an HMAC-SHA256 signature of body using the given secret.
 func signPayload(secret string, body []byte) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// doRequest sends a single HTTP POST to the webhook URL with an HMAC signature.
 func (d *Dispatcher) doRequest(url string, secret string, body []byte) (int, error) {
-	// Through a proxy the dialer only reaches the proxy, so the target's
-	// host is checked here instead.
+	// Through a proxy the dialer only reaches the proxy, so the target's host is checked here.
 	if d.proxied {
 		if err := d.network.CheckURL(context.Background(), url); err != nil {
 			return 0, fmt.Errorf("%w: %v", netguard.ErrBlocked, err)
@@ -439,7 +400,6 @@ func (d *Dispatcher) doRequest(url string, secret string, body []byte) (int, err
 	return resp.StatusCode, nil
 }
 
-// recordDelivery persists a webhook delivery record if the delivery repo is configured.
 func (d *Dispatcher) recordDelivery(userID, webhookID uint, workspaceID *uint, event string, status models.WebhookDeliveryStatus, httpStatus int, errMsg string, attempt int) {
 	if d.deliveryRepo == nil {
 		return

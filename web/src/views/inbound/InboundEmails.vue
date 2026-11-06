@@ -52,7 +52,7 @@ function resetFilters() {
   goToPage(0);
 }
 
-// Live updates via SSE — the backend filters to the authenticated user.
+// The backend filters the SSE stream to the authenticated user.
 let sse: EventSource | null = null;
 onMounted(() => {
   try {

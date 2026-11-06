@@ -39,7 +39,6 @@ func (n noticeData) HeadingText() string {
 	return n.Title
 }
 
-// unsubData drives the unsubscribe confirmation page (with the POST form).
 type unsubData struct {
 	Title       string
 	Heading     string
@@ -49,7 +48,6 @@ type unsubData struct {
 	Fine        string
 }
 
-// webViewData drives the hosted email page.
 type webViewData struct {
 	Subject string
 	Body    template.HTML
@@ -59,7 +57,6 @@ func trackingHTMLView(c *okapi.Context, status int, page string, data any) error
 	return c.HTMLView(status, trackingPageTemplates+`{{template "`+page+`" .}}`, data)
 }
 
-// trackingNotice renders an error/info notice card to the response.
 func trackingNotice(c *okapi.Context, status int, title, message, variant string) error {
 	return trackingHTMLView(c, status, "notice", noticeData{
 		Title:   title,

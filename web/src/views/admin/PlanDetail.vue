@@ -159,7 +159,6 @@ onMounted(fetchPlan)
     </div>
 
     <template v-else-if="plan">
-      <!-- Info Card -->
       <div class="card" style="margin-bottom: 24px">
         <div class="card-header">
           <h2>{{ plan.name }}</h2>
@@ -186,7 +185,6 @@ onMounted(fetchPlan)
         </div>
       </div>
 
-      <!-- Rate Limits -->
       <div class="card" style="margin-bottom: 24px">
         <div class="card-header"><h2>Rate Limits</h2></div>
         <div class="card-body">
@@ -205,7 +203,6 @@ onMounted(fetchPlan)
         </div>
       </div>
 
-      <!-- Email Constraints -->
       <div class="card" style="margin-bottom: 24px">
         <div class="card-header"><h2>Email Constraints</h2></div>
         <div class="card-body">
@@ -224,7 +221,6 @@ onMounted(fetchPlan)
         </div>
       </div>
 
-      <!-- Resource Limits -->
       <div class="card" style="margin-bottom: 24px">
         <div class="card-header"><h2>Resource Limits</h2></div>
         <div class="card-body">
@@ -263,7 +259,6 @@ onMounted(fetchPlan)
         </div>
       </div>
 
-      <!-- Data Retention -->
       <div class="card" style="margin-bottom: 24px">
         <div class="card-header"><h2>Data Retention</h2></div>
         <div class="card-body">
@@ -278,7 +273,6 @@ onMounted(fetchPlan)
         </div>
       </div>
 
-      <!-- Actions -->
       <div class="card">
         <div class="card-header"><h2>Actions</h2></div>
         <div class="card-body">
@@ -298,7 +292,6 @@ onMounted(fetchPlan)
       <h3>Plan not found</h3>
     </div>
 
-    <!-- Edit Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop style="max-width: 640px">
         <div class="modal-header">

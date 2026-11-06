@@ -54,7 +54,6 @@ func (h *ContactHandler) List(c *okapi.Context, req *ListContactsRequest) error 
 		return c.AbortInternalServerError("failed to list contacts")
 	}
 
-	// Collect emails to batch-check suppression status
 	emails := make([]string, len(contacts))
 	for i, ct := range contacts {
 		emails[i] = ct.Email

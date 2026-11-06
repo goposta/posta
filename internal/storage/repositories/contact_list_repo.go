@@ -105,7 +105,6 @@ func (r *ContactListRepository) GetMemberEmails(listID uint) ([]string, error) {
 	return emails, err
 }
 
-// MemberCount returns the number of members in a list.
 func (r *ContactListRepository) MemberCount(listID uint) int64 {
 	var count int64
 	r.db.Model(&models.ContactListMember{}).Where("list_id = ?", listID).Count(&count)

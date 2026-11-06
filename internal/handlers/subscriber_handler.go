@@ -95,14 +95,11 @@ type BulkImportResult struct {
 	Created int `json:"created"`
 	Skipped int `json:"skipped"`
 	Total   int `json:"total"`
-	// InvalidTimezones counts imported subscribers whose timezone was not an
-	// IANA name. They are still imported, with no timezone.
+	// Subscribers with a non-IANA timezone are still imported, with no timezone.
 	InvalidTimezones int `json:"invalid_timezones"`
 }
 
-// subscriberTimezone returns tz when it is an IANA name (the check okapi's
-// format:"timezone" applies), and "" otherwise. Imports and restores use it
-// so one bad value drops the field instead of failing the whole batch.
+// Imports and restores use subscriberTimezone so one bad value drops the field instead of failing the batch.
 func subscriberTimezone(tz string) (string, bool) {
 	tz = strings.TrimSpace(tz)
 	if tz == "" {
@@ -279,7 +276,7 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 
 	// Parse optional column mapping: {"0":"email","1":"name","2":"custom_fields.company"}
 	mappingStr := c.Request().FormValue("column_mapping")
-	columnMap := map[int]string{0: fieldEmail, 1: fieldName} // defaults
+	columnMap := map[int]string{0: fieldEmail, 1: fieldName}
 	if mappingStr != "" {
 		var raw map[string]string
 		if err := json.Unmarshal([]byte(mappingStr), &raw); err == nil {
@@ -297,7 +294,6 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 	reader := csv.NewReader(file)
 	reader.TrimLeadingSpace = true
 
-	// Skip header row
 	if _, err := reader.Read(); err != nil {
 		return c.AbortBadRequest("failed to read CSV header")
 	}
@@ -311,7 +307,7 @@ func (h *SubscriberHandler) BulkImportCSV(c *okapi.Context) error {
 			break
 		}
 		if err != nil {
-			continue // skip bad rows
+			continue
 		}
 
 		s := models.Subscriber{

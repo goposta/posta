@@ -6,8 +6,7 @@ import { useLicenseStore } from '../../stores/license'
 import { useConfirm } from '../../composables/useConfirm'
 import { apiMessage } from '../../composables/apiError'
 
-// The Posta Enterprise license: install, inspect, remove. A license is
-// verified offline and takes effect at once, with no restart.
+// A license is verified offline and takes effect at once, with no restart.
 
 const notify = useNotificationStore()
 const licenseStore = useLicenseStore()

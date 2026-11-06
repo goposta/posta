@@ -27,16 +27,12 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// VisitorAwayAfter is how long a visitor without an open widget must have
-// been gone before an agent's reply goes to them by email.
+// VisitorAwayAfter is how long a visitor without an open widget must be gone before agent replies go by email.
 const VisitorAwayAfter = 2 * time.Minute
 
-// OfflineEmailDelay is how long after an agent's last message the follow-up
-// email waits, so a burst of messages becomes one email.
+// OfflineEmailDelay lets a burst of agent messages become one email.
 const OfflineEmailDelay = 60 * time.Second
 
-// OfflineFacts is what decides whether an agent's reply reaches a visitor by
-// email.
 type OfflineFacts struct {
 	VisitorLive     bool
 	VisitorLastSeen time.Time
@@ -47,10 +43,7 @@ type OfflineFacts struct {
 	Now             time.Time
 }
 
-// ShouldEmail is the plan's §7 rule: the visitor has no live widget and has
-// been gone a while, gave an email, the widget has a sender, and the
-// conversation is not spam. Every such email follows an agent's message;
-// nothing a visitor does can send one.
+// ShouldEmail only follows an agent's message, so nothing a visitor does can send an email.
 func ShouldEmail(f OfflineFacts) bool {
 	return !f.VisitorLive &&
 		f.Now.Sub(f.VisitorLastSeen) >= VisitorAwayAfter &&
@@ -62,9 +55,7 @@ func ShouldEmail(f OfflineFacts) bool {
 
 var quoteHeader = regexp.MustCompile(`(?im)^(on .{1,200}wrote:|le .{1,200}a écrit\s?:|-{2,}\s*original message\s*-{2,}|from:\s.+)\s*$`)
 
-// StripQuotedReply keeps what a visitor wrote in an emailed answer and drops
-// the quoted conversation below it: from an "On … wrote:" line, an
-// "Original Message" marker, or a trailing block of "> " lines.
+// StripQuotedReply drops the quote below an "On … wrote:" line, an "Original Message" marker, or trailing "> " lines.
 func StripQuotedReply(body string) string {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	if loc := quoteHeader.FindStringIndex(body); loc != nil {

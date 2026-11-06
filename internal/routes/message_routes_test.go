@@ -31,12 +31,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// The global CORS preflight only answers for POSTA_CORS_ORIGINS. A customer
-// site embedding a form is never on that list, so its preflight gets no
-// Access-Control-Allow-Origin and ingest must stay reachable with simple
-// requests (see the test below). Since okapi v1.0.0 an explicit OPTIONS route
-// can be registered alongside CORS, so per-form preflight is possible if JSON
-// submissions from customer origins are ever needed.
+// Embedding sites are not in POSTA_CORS_ORIGINS, so their preflight gets no ACAO; ingest must take simple requests.
 func TestGlobalPreflightIgnoresUnlistedOrigins(t *testing.T) {
 	app := okapi.New()
 	app.WithCORS(okapi.Cors{AllowedOrigins: []string{"https://dashboard.test"}})
@@ -96,8 +91,7 @@ func TestFormIngestPostIsNotAPreflightedRequest(t *testing.T) {
 	}
 }
 
-// The widget script lives outside /api/v1 and must not fall through to the
-// dashboard's SPA fallback, which serves index.html for unknown paths.
+// The widget script lives outside /api/v1 and must not fall through to the SPA's index.html fallback.
 func TestFormWidgetScriptIsNotShadowedBySPA(t *testing.T) {
 	o := okapi.NewTestServer(t)
 	r := &Router{app: o.Okapi, cfg: &config.Config{}, v1: o.Group("/api/v1")}

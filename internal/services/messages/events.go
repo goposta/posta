@@ -27,7 +27,6 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// Live event types on a workspace's message stream.
 const (
 	EventReceived      = "message.received"
 	EventUpdated       = "message.updated"
@@ -35,9 +34,7 @@ const (
 	EventReplyReceived = "message.reply_received"
 )
 
-// PublishEvent sends a message.* event to the workspace's live stream. The
-// payload carries identifiers and status only; the dashboard refetches what it
-// shows, so a dropped event costs freshness, never correctness.
+// The payload carries ids and status only; the dashboard refetches, so a dropped event costs only freshness.
 func PublishEvent(ctx context.Context, bus realtime.Bus, eventType string, msg *models.Message) {
 	if bus == nil || msg == nil || msg.WorkspaceID == nil {
 		return

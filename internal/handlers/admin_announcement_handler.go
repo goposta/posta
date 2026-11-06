@@ -30,12 +30,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// AdminAnnouncementHandler lets a platform administrator put a notice in every
-// user's in-app inbox — planned maintenance, a breaking upgrade, a policy change.
-//
-// This is the platform's own voice, as opposed to the health alerts Posta
-// derives per workspace, and it is the reason the inbox is not just a rendering
-// of dashboard stats.
+// AdminAnnouncementHandler broadcasts platform notices into every user's in-app inbox.
 type AdminAnnouncementHandler struct {
 	db    *gorm.DB
 	inbox *inbox.Service
@@ -78,9 +73,7 @@ func (h *AdminAnnouncementHandler) List(c *okapi.Context, req *ListAnnouncements
 	return paginated(c, rows, total, page, size)
 }
 
-// Create broadcasts the announcement immediately. There is no draft state: an
-// announcement nobody has received is just a note, and Retract exists for the
-// case it went out wrong.
+// Create broadcasts at once: there is no draft state, and Retract covers a send that went out wrong.
 func (h *AdminAnnouncementHandler) Create(c *okapi.Context, req *CreateAnnouncementRequest) error {
 	title := strings.TrimSpace(req.Body.Title)
 	if title == "" {
@@ -112,9 +105,7 @@ func (h *AdminAnnouncementHandler) Create(c *okapi.Context, req *CreateAnnouncem
 	return created(c, a)
 }
 
-// Retract deletes the announcement and every delivery it made. An operator who
-// broadcast the wrong thing should be able to take it back rather than append a
-// correction to everybody's inbox.
+// Retract deletes the announcement and every delivery it made, instead of appending a correction.
 func (h *AdminAnnouncementHandler) Retract(c *okapi.Context, req *AnnouncementIDRequest) error {
 	var a models.Announcement
 	if err := h.db.First(&a, req.ID).Error; err != nil {

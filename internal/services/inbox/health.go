@@ -25,9 +25,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// Thresholds for the derived health rules. They match what the dashboard used to
-// compute in the browser, so moving the rules to the server did not change when
-// a workspace is told something is wrong.
+// Thresholds match the old in-browser dashboard rules, so moving them server-side changed no alerts.
 const (
 	minVolumeForRates   = 20
 	bounceRateAlert     = 5.0
@@ -35,9 +33,7 @@ const (
 	rateFingerprintBand = 5.0
 )
 
-// Snapshot is the workspace health the rules read. The dashboard already
-// computes every field for its own stats, so evaluating the rules costs nothing
-// beyond the rule evaluation itself.
+// Snapshot fields are already computed for dashboard stats, so evaluating the rules costs nothing extra.
 type Snapshot struct {
 	UnverifiedDomains int64
 	ExpiringAPIKeys   int64
@@ -48,7 +44,6 @@ type Snapshot struct {
 	MessagesEnabled   bool
 }
 
-// rule is one condition Posta watches on a workspace's behalf.
 type rule struct {
 	dedupKey string
 	category models.NotificationCategory
@@ -58,12 +53,10 @@ type rule struct {
 	body     string
 	link     string
 	action   string
-	// fingerprint captures the condition's magnitude, so a dismissal made at one
-	// magnitude does not silence a worse one. See models.Notification.Fingerprint.
+	// fingerprint captures magnitude so a dismissal at one magnitude does not silence a worse one.
 	fingerprint string
 }
 
-// evaluate returns the rules currently firing for a workspace.
 func evaluate(s Snapshot) []rule {
 	var out []rule
 
@@ -81,8 +74,7 @@ func evaluate(s Snapshot) []rule {
 		})
 	}
 
-	// Rates are only meaningful once enough mail has gone out; below that a
-	// single bounce reads as a catastrophe.
+	// Rates mean nothing at low volume, where a single bounce reads as a catastrophe.
 	if s.TotalEmails >= minVolumeForRates && s.BounceRate >= bounceRateAlert {
 		out = append(out, rule{
 			dedupKey:    "deliverability:bounce-rate",
@@ -142,8 +134,7 @@ func evaluate(s Snapshot) []rule {
 	return out
 }
 
-// band buckets a rate so a dismissal is not undone by noise. A rate drifting
-// from 5.1% to 5.4% is the same problem; crossing into the next band is not.
+// band buckets a rate so noise within a band does not undo a dismissal.
 func band(rate float64) string {
 	return fmt.Sprintf("band=%d", int(rate/rateFingerprintBand))
 }
@@ -155,8 +146,6 @@ func plural(n int64) string {
 	return "s"
 }
 
-// roleRank orders workspace roles so a rule's minimum role can be compared
-// against a member's.
 func roleRank(r models.WorkspaceRole) int {
 	switch r {
 	case models.WorkspaceRoleOwner:

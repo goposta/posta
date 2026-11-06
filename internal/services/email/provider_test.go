@@ -88,8 +88,7 @@ func TestClassifyRecipients(t *testing.T) {
 	}
 }
 
-// Defense against the original bug: RFC 5322 display names must not leak into
-// the domain column. With the old split_part SQL, this produced "gmail.com>".
+// RFC 5322 display names must not leak into the domain column (the old split_part SQL produced "gmail.com>").
 func TestRFC5322DisplayNameIsStripped(t *testing.T) {
 	got := NormalizeDomain(`"Jonas Kaninda" <jonas@gmail.com>`)
 	if got != "gmail.com" {

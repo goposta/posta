@@ -17,9 +17,7 @@ export interface InboundRetryResponse {
 
 const WORKSPACE_KEY = 'posta_workspace_id'
 
-// Browser-direct requests (download links, EventSource) cannot set the
-// X-Posta-Workspace-Id header, so the active workspace travels as a query
-// parameter that the backend's WorkspaceFromQueryOrHeader middleware reads.
+// Download links and EventSource cannot set headers, so the workspace travels as a query parameter (WorkspaceFromQueryOrHeader).
 function workspaceParam(): string {
   const ws = localStorage.getItem(WORKSPACE_KEY)
   return ws ? `workspace_id=${encodeURIComponent(ws)}` : ''
@@ -48,8 +46,7 @@ export const inboundApi = {
     const ws = workspaceParam()
     return `/api/v1/workspaces/current/inbound-emails/${uuid}/attachments/${idx}${ws ? `?${ws}` : ''}`
   },
-  // No token in the URL: EventSource sends the HttpOnly session cookie on the
-  // handshake, same as the download links above.
+  // No token in the URL: EventSource sends the HttpOnly session cookie on the handshake.
   streamUrl() {
     const ws = workspaceParam()
     return `/api/v1/workspaces/current/inbound-stream${ws ? `?${ws}` : ''}`

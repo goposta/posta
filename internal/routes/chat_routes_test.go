@@ -33,8 +33,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// chatApp is a server with the production CORS setup: ChatPreflight ahead of
-// the global CORS handler, which only knows the dashboard's origin.
+// chatApp mirrors production CORS: ChatPreflight ahead of a global handler that only knows the dashboard origin.
 func chatApp(t *testing.T) *Router {
 	t.Helper()
 	app := okapi.New()
@@ -53,10 +52,7 @@ func chatApp(t *testing.T) *Router {
 	return r
 }
 
-// A customer's site is never on POSTA_CORS_ORIGINS, yet the widget sends an
-// Authorization header, so every chat call is preflighted. The preflight must
-// succeed for any origin (each real request checks the widget's allowlist)
-// and must never grant credentials.
+// Every widget call is preflighted from unknown sites: it must succeed for any origin and never grant credentials.
 func TestChatPreflightAllowsCustomerOrigins(t *testing.T) {
 	r := chatApp(t)
 	for _, path := range []string{
@@ -87,8 +83,7 @@ func TestChatPreflightAllowsCustomerOrigins(t *testing.T) {
 	}
 }
 
-// The chat exception must not leak to the rest of the API: a preflight from
-// an unknown origin for a dashboard route is still refused.
+// The chat exception must not leak: an unknown-origin preflight for a dashboard route is still refused.
 func TestChatPreflightLeavesOtherRoutesAlone(t *testing.T) {
 	r := chatApp(t)
 	r.app.Register(okapi.RouteDefinition{
@@ -127,9 +122,7 @@ func TestChatWidgetScriptIsNotShadowedBySPA(t *testing.T) {
 	}
 }
 
-// Viewers read conversations but never speak for the workspace or change
-// its widgets. The handlers check the role before touching anything, so a
-// zero handler is enough to see the refusal.
+// Handlers check the role before touching anything, so a zero handler is enough to see the viewer refusal.
 func TestChatViewerCannotWrite(t *testing.T) {
 	o := okapi.NewTestServer(t)
 	r := &Router{app: o.Okapi, cfg: &config.Config{ChatEnabled: true}, v1: o.Group("/api/v1")}
@@ -172,8 +165,7 @@ func TestChatViewerCannotWrite(t *testing.T) {
 	}
 }
 
-// Chat analytics is Posta Enterprise: in Community the route answers 402
-// before the handler runs.
+// Chat analytics is Enterprise: in Community the route answers 402 before the handler runs.
 func TestChatAnalyticsNeedsALicense(t *testing.T) {
 	o := okapi.NewTestServer(t)
 	r := &Router{app: o.Okapi, cfg: &config.Config{ChatEnabled: true}, v1: o.Group("/api/v1"), ee: enterprise.Community()}

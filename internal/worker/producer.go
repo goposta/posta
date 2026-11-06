@@ -28,7 +28,6 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-// Producer enqueues email tasks into Redis via Asynq.
 type Producer struct {
 	client     *asynq.Client
 	maxRetries int
@@ -42,7 +41,6 @@ func NewProducer(redisOpt asynq.RedisClientOpt, maxRetries int) *Producer {
 	}
 }
 
-// EnqueueEmailSend enqueues an email for background delivery.
 func (p *Producer) EnqueueEmailSend(emailID uint, queue string) error {
 	if queue == "" {
 		queue = QueueTransactional
@@ -61,7 +59,6 @@ func (p *Producer) EnqueueEmailSend(emailID uint, queue string) error {
 	return nil
 }
 
-// EnqueueEmailSendAt enqueues an email for delivery at the specified time.
 func (p *Producer) EnqueueEmailSendAt(emailID uint, queue string, sendAt time.Time) error {
 	if queue == "" {
 		queue = QueueTransactional
@@ -85,9 +82,7 @@ func (p *Producer) EnqueueEmailSendAt(emailID uint, queue string, sendAt time.Ti
 	return nil
 }
 
-// EnqueueCampaignStart enqueues a campaign start task (fan-out to subscribers).
-// The TaskID is derived from the campaign ID so double-clicks and retries
-// collapse into a single Redis entry instead of fanning out twice.
+// The TaskID derives from the campaign ID so double-clicks and retries collapse instead of fanning out twice.
 func (p *Producer) EnqueueCampaignStart(campaignID uint) error {
 	task, err := NewCampaignStartTask(
 		campaignID,
@@ -108,10 +103,7 @@ func (p *Producer) EnqueueCampaignStart(campaignID uint) error {
 	return nil
 }
 
-// EnqueueCampaignBatch enqueues a campaign batch processing task. A per-run
-// random suffix keeps successive batches distinct while still letting us dedupe
-// the *first* kick-off from Send (callers that want dedupe pass delay=0 after
-// transitioning status atomically).
+// A per-run random suffix keeps successive batches distinct while the first kick-off from Send can still dedupe.
 func (p *Producer) EnqueueCampaignBatch(campaignID uint, delay time.Duration) error {
 	opts := []asynq.Option{asynq.Queue(QueueBulk), asynq.MaxRetry(3)}
 	if delay > 0 {
@@ -125,8 +117,6 @@ func (p *Producer) EnqueueCampaignBatch(campaignID uint, delay time.Duration) er
 	return err
 }
 
-// EnqueueInboundProcess enqueues an inbound-process task that dispatches the
-// email.inbound webhook for a received message.
 func (p *Producer) EnqueueInboundProcess(inboundEmailID uint) error {
 	task, err := NewInboundProcessTask(inboundEmailID,
 		asynq.Queue(QueueTransactional),
@@ -141,10 +131,7 @@ func (p *Producer) EnqueueInboundProcess(inboundEmailID uint) error {
 	return nil
 }
 
-// EnqueueInboundParse enqueues a parse task for a raw inbound message that
-// was just persisted by the SMTP receiver. The parse step is intentionally
-// separate from EnqueueInboundProcess so a permanent parse failure does not
-// block the SMTP 250 OK reply.
+// Parsing is separate from inbound:process so a permanent parse failure never blocks the SMTP 250 OK.
 func (p *Producer) EnqueueInboundParse(inboundEmailID uint) error {
 	task, err := NewInboundParseTask(inboundEmailID,
 		asynq.Queue(QueueTransactional),
@@ -177,8 +164,7 @@ func (p *Producer) EnqueueMessageProcess(messageID uint) error {
 	return nil
 }
 
-// EnqueueMessageReply schedules the follow-up for a thread reply. The task ID
-// makes a second enqueue of the same reply a no-op.
+// The task ID makes a second enqueue of the same reply a no-op.
 func (p *Producer) EnqueueMessageReply(replyID uint) error {
 	task, err := NewMessageReplyTask(replyID,
 		asynq.Queue(QueueTransactional),
@@ -197,7 +183,6 @@ func (p *Producer) EnqueueMessageReply(replyID uint) error {
 	return nil
 }
 
-// EnqueueChatNotify schedules the notification for a new chat conversation.
 // The task ID makes a second enqueue for the same conversation a no-op.
 func (p *Producer) EnqueueChatNotify(conversationID uint) error {
 	task, err := NewChatNotifyTask(conversationID,
@@ -217,20 +202,15 @@ func (p *Producer) EnqueueChatNotify(conversationID uint) error {
 	return nil
 }
 
-// EnqueueChatOfflineEmail schedules the follow-up email for an agent's chat
-// message, delay from now.
 func (p *Producer) EnqueueChatOfflineEmail(conversationID uint, seq int64, delay time.Duration) error {
 	return p.enqueueChatMessage(TypeChatOfflineEmail, conversationID, seq, delay)
 }
 
-// EnqueueChatUnanswered schedules the alert for a visitor's chat message,
-// delay from now.
 func (p *Producer) EnqueueChatUnanswered(conversationID uint, seq int64, delay time.Duration) error {
 	return p.enqueueChatMessage(TypeChatUnanswered, conversationID, seq, delay)
 }
 
-// EnqueueChatWebhook queues a chat webhook event. Message events are
-// enqueued once per message; conversation events each time they happen.
+// Message events are enqueued once per message; conversation events each time they happen.
 func (p *Producer) EnqueueChatWebhook(event string, conversationID, messageID uint) error {
 	payload, err := json.Marshal(ChatWebhookPayload{Event: event, ConversationID: conversationID, MessageID: messageID})
 	if err != nil {
@@ -249,8 +229,7 @@ func (p *Producer) EnqueueChatWebhook(event string, conversationID, messageID ui
 	return nil
 }
 
-// enqueueChatMessage enqueues one task per message; the task ID makes a
-// second enqueue for the same message a no-op.
+// The task ID makes a second enqueue for the same message a no-op.
 func (p *Producer) enqueueChatMessage(typ string, conversationID uint, seq int64, delay time.Duration) error {
 	task, err := newChatMessageTask(typ, conversationID, seq,
 		asynq.Queue(QueueTransactional),
@@ -270,7 +249,6 @@ func (p *Producer) enqueueChatMessage(typ string, conversationID uint, seq int64
 	return nil
 }
 
-// Close closes the underlying Asynq client.
 func (p *Producer) Close() error {
 	return p.client.Close()
 }

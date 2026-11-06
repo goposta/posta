@@ -32,9 +32,7 @@ declare global {
   }
 }
 
-// The loader: find our own <script data-posta-widget>, ask Posta whether the
-// widget may run on this page, then mount it in a shadow root so the page's
-// CSS cannot reach in and ours cannot leak out.
+// Mounted in a shadow root so the page's CSS cannot reach in and ours cannot leak out.
 ;(function () {
   if (window.PostaChat) return
   const script =

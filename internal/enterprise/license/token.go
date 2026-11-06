@@ -7,18 +7,7 @@
 //
 // SPDX-License-Identifier: LicenseRef-Posta-Enterprise
 
-// Package license verifies Posta license tokens:
-//
-//	<product>-v1.<kid>.<base64url(claims JSON)>.<base64url(ed25519 signature)>
-//
-// The signature covers "<product>-v1.<kid>.<claims>", so a swapped key id
-// breaks it. Keys are looked up by kid in a keyring, which lets a signing key
-// rotate without a release. This package only verifies: there is no signing
-// code in Posta. Licenses are signed by the posta-license generator
-// (posta-ee/licensegen) or the Miabi customer portal, with the same keys.
-//
-// The design follows Miabi's (kid-keyed Ed25519 tokens), but the format is
-// Posta's own: no shared module, no portal.
+// Package license only verifies <product>-v1.<kid>.<claims>.<ed25519 sig> tokens; the signature covers the kid.
 package license
 
 import (
@@ -67,7 +56,6 @@ type Claims struct {
 	IssuedAt  time.Time      `json:"issued_at"`
 }
 
-// Keyring holds the public keys a build trusts, by key id.
 type Keyring struct {
 	Product string
 	Keys    map[string]ed25519.PublicKey
@@ -112,7 +100,6 @@ func ParseKeyring(raw string) (Keyring, error) {
 	return ring, nil
 }
 
-// KeyID returns the kid a token names, without verifying anything.
 func KeyID(token string) string {
 	parts := strings.Split(strings.TrimSpace(token), ".")
 	if len(parts) != 4 {
@@ -154,7 +141,6 @@ func Verify(ring Keyring, product, token string) (Claims, error) {
 	return c, nil
 }
 
-// Evaluate resolves the claims' state at now.
 func Evaluate(c Claims, now time.Time) (State, time.Time) {
 	graceEnds := c.NotAfter.AddDate(0, 0, c.GraceDays)
 	switch {

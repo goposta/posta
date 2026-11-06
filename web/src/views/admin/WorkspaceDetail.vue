@@ -21,8 +21,7 @@ const changingPlan = ref(false);
 const { confirm } = useConfirm();
 const changingHosted = ref(false);
 
-// Taking hosted pages offline is the abuse switch for one workspace: its share
-// links stop at once, while forms embedded on its own sites keep working.
+// Taking hosted pages offline stops a workspace's share links at once; forms embedded on its own sites keep working.
 async function toggleHostedForms() {
   const ws = workspace.value;
   if (!ws) return;
@@ -65,9 +64,7 @@ async function load() {
   }
 }
 
-// The API only assigns plans; it cannot return a workspace to the default.
-// Inactive plans are refused server-side, so they are only listed when one is
-// already assigned and has to show as the current value.
+// The API cannot unassign a plan and refuses inactive ones, so those are listed only when already assigned.
 const planOptions = computed(() =>
   plans.value.filter((p) => p.is_active || p.id === workspace.value?.plan_id)
 );

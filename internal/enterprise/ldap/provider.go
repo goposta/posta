@@ -9,10 +9,7 @@
 //
 // SPDX-License-Identifier: LicenseRef-Posta-Enterprise
 
-// Package ldap authenticates against LDAP and Active Directory with
-// go-ldap/ldap/v3. It is compiled only into the Enterprise build and holds no
-// user or session code: Authenticate returns a plain identity, and the core
-// creates the account and maps groups.
+// Package ldap is Enterprise-only and holds no user or session code; the core creates accounts and maps groups.
 package ldap
 
 import (
@@ -31,10 +28,8 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// ErrNoMatch means no enabled directory knows the user.
 var ErrNoMatch = errors.New("ldap: no matching directory")
 
-// Identity is a directory user whose password bound.
 type Identity struct {
 	Email     string
 	Name      string
@@ -42,21 +37,18 @@ type Identity struct {
 	Directory string
 }
 
-// Result is the outcome of TestConnection.
 type Result struct {
 	OK      bool
 	Message string
 	Error   string
 }
 
-// Provider binds credentials against the configured directories.
 type Provider struct {
 	directories func(ctx context.Context) ([]models.LDAPConfig, error)
 	decrypt     func(string) (string, error)
 }
 
-// New builds the provider. directories lists the enabled directories in the
-// order sign-in tries them; decrypt reads their stored service passwords.
+// directories are tried in sign-in order; decrypt reads their stored service passwords.
 func New(directories func(ctx context.Context) ([]models.LDAPConfig, error), decrypt func(string) (string, error)) *Provider {
 	if decrypt == nil {
 		decrypt = func(s string) (string, error) { return s, nil }
@@ -64,10 +56,7 @@ func New(directories func(ctx context.Context) ([]models.LDAPConfig, error), dec
 	return &Provider{directories: directories, decrypt: decrypt}
 }
 
-// Authenticate tries each enabled directory in order and returns the first
-// whose search finds the user and whose bind accepts the password. An empty
-// password is refused before any bind: most directories accept an empty bind
-// as anonymous, the classic LDAP authentication bypass.
+// An empty password is refused before any bind: directories treat it as anonymous, the classic LDAP bypass.
 func (p *Provider) Authenticate(ctx context.Context, email, password string) (Identity, error) {
 	email = strings.TrimSpace(email)
 	if email == "" || password == "" || p.directories == nil {
@@ -81,8 +70,7 @@ func (p *Provider) Authenticate(ctx context.Context, email, password string) (Id
 	for i := range cfgs {
 		ident, found, err := p.authOne(&cfgs[i], email, password)
 		if err != nil {
-			// A wrong password or an unreachable directory: try the others, and
-			// report this only if none of them knows the user.
+			// A wrong password or unreachable directory: try the others, report this only if none knows the user.
 			lastErr = err
 			logger.Warn("ldap: sign-in attempt failed", "directory", cfgs[i].Name, "error", err)
 			continue
@@ -97,9 +85,7 @@ func (p *Provider) Authenticate(ctx context.Context, email, password string) (Id
 	return Identity{}, ErrNoMatch
 }
 
-// authOne searches one directory for the user, then binds as them. found is
-// false when the directory does not know the user; an error means it does
-// but the bind failed, or the directory could not be reached.
+// found is false when the directory does not know the user; an error means a failed bind or unreachable directory.
 func (p *Provider) authOne(cfg *models.LDAPConfig, email, password string) (Identity, bool, error) {
 	conn, err := p.dial(cfg)
 	if err != nil {
@@ -115,8 +101,7 @@ func (p *Provider) authOne(cfg *models.LDAPConfig, email, password string) (Iden
 		return Identity{}, false, err
 	}
 
-	// A fresh connection for the user bind, so it does not inherit the
-	// service account's bind.
+	// A fresh connection so the user bind does not inherit the service account's bind.
 	userConn, err := p.dial(cfg)
 	if err != nil {
 		return Identity{}, false, err
@@ -134,8 +119,7 @@ func (p *Provider) authOne(cfg *models.LDAPConfig, email, password string) (Iden
 	if ident.Email == "" {
 		ident.Email = email
 	}
-	// Groups are read over the service connection: users often may not search
-	// groups themselves.
+	// Groups are read over the service connection: users often may not search groups themselves.
 	ident.Groups = resolveGroups(conn, cfg, entry)
 	return ident, true, nil
 }
@@ -154,8 +138,7 @@ func (p *Provider) serviceBind(conn *ldapv3.Conn, cfg *models.LDAPConfig) error 
 	return nil
 }
 
-// searchUser finds the user's entry with the configured filter, the email
-// escaped against LDAP filter injection. nil means not found.
+// The email is escaped against LDAP filter injection; nil means not found.
 func searchUser(conn *ldapv3.Conn, cfg *models.LDAPConfig, email string) (*ldapv3.Entry, error) {
 	filter := strings.ReplaceAll(userFilter(cfg), "%s", ldapv3.EscapeFilter(email))
 	attrs := dedupe([]string{attrOr(cfg.AttrEmail, "mail"), attrOr(cfg.AttrName, "displayName"), attrOr(cfg.MemberAttr, "memberOf")})
@@ -176,10 +159,7 @@ func searchUser(conn *ldapv3.Conn, cfg *models.LDAPConfig, email string) (*ldapv
 	}
 }
 
-// resolveGroups returns the user's group DNs: the member attribute of their
-// entry, or a group search when a group base or filter is configured, or when
-// Active Directory nested groups are wanted. A failure yields the attribute's
-// groups rather than blocking sign-in.
+// A group lookup failure falls back to the entry's member attribute rather than blocking sign-in.
 func resolveGroups(conn *ldapv3.Conn, cfg *models.LDAPConfig, entry *ldapv3.Entry) []string {
 	direct := entry.GetAttributeValues(attrOr(cfg.MemberAttr, "memberOf"))
 	if !cfg.NestedGroups && cfg.GroupBaseDN == "" && cfg.GroupFilter == "" {
@@ -218,7 +198,6 @@ func groupFilter(cfg *models.LDAPConfig, userDN string) string {
 	return "(member=" + esc + ")"
 }
 
-// dial connects with the configured TLS mode and optional private CA.
 func (p *Provider) dial(cfg *models.LDAPConfig) (*ldapv3.Conn, error) {
 	host := strings.TrimSpace(cfg.Host)
 	if host == "" {
@@ -266,8 +245,7 @@ func tlsConfig(cfg *models.LDAPConfig, host string) *tls.Config {
 	return t
 }
 
-// TestConnection connects, binds as the service account and reads the user
-// base DN. A failure is reported in the result, not as an error.
+// A failure is reported in the result, not as an error.
 func (p *Provider) TestConnection(cfg *models.LDAPConfig) Result {
 	conn, err := p.dial(cfg)
 	if err != nil {

@@ -108,8 +108,7 @@ function selectTemplate(t: Template) {
 
 function onSearchFocus() {
   searchOpen.value = true
-  // The field holds the current template's name; opening it should offer the
-  // alternatives, not one result matching what is already on screen.
+  // The field holds the current template's name, so opening it offers alternatives rather than one match for what is on screen.
   runSearch('')
 }
 
@@ -200,7 +199,6 @@ function formatDate(dateStr: string): string {
     </div>
 
     <template v-else-if="template">
-      <!-- Template Info -->
       <div class="card" style="margin-bottom: 24px;">
         <div class="card-header">
           <h2>{{ template.display_name }}</h2>
@@ -237,7 +235,6 @@ function formatDate(dateStr: string): string {
         </div>
       </div>
 
-      <!-- No active version warning -->
       <div v-if="!localization" class="card" style="margin-bottom: 24px;">
         <div class="card-body">
           <div class="text-muted" style="text-align: center; padding: 20px 0;">
@@ -246,7 +243,6 @@ function formatDate(dateStr: string): string {
         </div>
       </div>
 
-      <!-- Sample Data + Render -->
       <div v-if="localization" class="card" style="margin-bottom: 24px;">
         <div class="card-header">
           <h2>Sample Data</h2>
@@ -271,7 +267,6 @@ function formatDate(dateStr: string): string {
         </div>
       </div>
 
-      <!-- Rendered Preview -->
       <div v-if="previewError" class="preview-error" style="margin-bottom: 24px;">
         {{ previewError }}
       </div>
@@ -310,7 +305,6 @@ function formatDate(dateStr: string): string {
         </div>
       </template>
 
-      <!-- Source Code -->
       <div v-if="localization" class="card" style="margin-top: 24px;">
         <div class="card-header">
           <h2>Template Source</h2>

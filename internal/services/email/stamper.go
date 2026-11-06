@@ -29,22 +29,18 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// Stamper adds Posta-specific tracing headers and an HMAC origin signature to
-// outbound messages. It is intentionally sender-agnostic: it mutates a headers
-// map the caller then hands to the SMTP layer, so the same logic applies to
-// campaign mail and transactional/API mail without duplicating code.
+// Stamper only mutates a headers map, so campaign and transactional mail share the same logic.
 type Stamper struct {
 	AppName    string
 	AppVersion string
 	SignKey    []byte
 }
 
-// NewStamper builds a Stamper. A zero-length SignKey disables X-Posta-Signature
+// NewStamper disables X-Posta-Signature when signKey is empty.
 func NewStamper(appName, appVersion string, signKey []byte) *Stamper {
 	return &Stamper{AppName: appName, AppVersion: appVersion, SignKey: signKey}
 }
 
-// StampCampaign adds campaign-specific headers. trackOpens
 func (s *Stamper) StampCampaign(headers map[string]string, em *models.Email, campaignID, campaignMessageID uint, trackOpens, trackClicks bool) {
 	s.base(headers)
 	headers["X-Posta-Campaign-ID"] = fmt.Sprintf("%d", campaignID)
@@ -56,7 +52,6 @@ func (s *Stamper) StampCampaign(headers map[string]string, em *models.Email, cam
 	headers["Auto-Submitted"] = "auto-generated"
 }
 
-// StampTransactional adds the minimum set of correlation headers for API
 func (s *Stamper) StampTransactional(headers map[string]string, em *models.Email) {
 	s.base(headers)
 	if em.UUID != "" {
@@ -67,7 +62,6 @@ func (s *Stamper) StampTransactional(headers map[string]string, em *models.Email
 	}
 }
 
-// Sign writes X-Posta-Signature over a canonical string of stable message
 func (s *Stamper) Sign(headers map[string]string, em *models.Email, to []string, subject string) {
 	if len(s.SignKey) == 0 || em == nil {
 		return

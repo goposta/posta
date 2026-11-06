@@ -37,9 +37,7 @@ type GDPRDeleteMessagesRequest struct {
 	} `json:"body"`
 }
 
-// DeleteMessages (GDPR) erases every web form message a person submitted to
-// the workspace, the thread replies on them, the inbound emails those replies
-// came from, and all of their stored attachments.
+// DeleteMessages also erases thread replies, the inbound emails they came from, and all stored attachments.
 func (h *WorkspaceDataHandler) DeleteMessages(c *okapi.Context, req *GDPRDeleteMessagesRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))
 	if wsID == 0 {
@@ -87,8 +85,6 @@ type GDPRChatsRequest struct {
 // SetChat enables the chat data subject endpoints.
 func (h *WorkspaceDataHandler) SetChat(svc *chat.Service) { h.chat = svc }
 
-// ExportChats returns every chat conversation, with its messages, of
-// visitors who gave this address.
 func (h *WorkspaceDataHandler) ExportChats(c *okapi.Context, req *GDPRChatsRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))
 	email := messages.NormalizeEmail(req.Body.Email)
@@ -106,8 +102,7 @@ func (h *WorkspaceDataHandler) ExportChats(c *okapi.Context, req *GDPRChatsReque
 	return ok(c, items)
 }
 
-// DeleteChats erases every chat conversation of visitors who gave this
-// address, their messages and files, and the visitors.
+// DeleteChats also erases the conversations' messages, files and the visitors themselves.
 func (h *WorkspaceDataHandler) DeleteChats(c *okapi.Context, req *GDPRChatsRequest) error {
 	wsID := uint(c.GetInt("workspace_id"))
 	email := messages.NormalizeEmail(req.Body.Email)

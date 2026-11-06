@@ -19,17 +19,14 @@ const search = ref('')
 const statusFilter = ref<SubscriberStatus | ''>('')
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 
-// Create modal
 const showCreateModal = ref(false)
 const createForm = ref({ email: '', name: '', custom_fields: '' })
 const creating = ref(false)
 
-// Import JSON modal
 const showImportJsonModal = ref(false)
 const importJsonText = ref('')
 const importing = ref(false)
 
-// CSV import
 const csvFileInput = ref<HTMLInputElement | null>(null)
 const importingCsv = ref(false)
 
@@ -248,7 +245,6 @@ const { watchClickStart: watchImportStart, confirmClickEnd: confirmImportEnd } =
       </template>
     </div>
 
-    <!-- Create Subscriber Modal -->
     <div v-if="showCreateModal" class="modal-overlay" @mousedown="watchCreateStart" @mouseup="confirmCreateEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">
@@ -277,7 +273,6 @@ const { watchClickStart: watchImportStart, confirmClickEnd: confirmImportEnd } =
       </div>
     </div>
 
-    <!-- Import JSON Modal -->
     <div v-if="showImportJsonModal" class="modal-overlay" @mousedown="watchImportStart" @mouseup="confirmImportEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

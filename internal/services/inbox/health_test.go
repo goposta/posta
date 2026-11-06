@@ -50,8 +50,7 @@ func TestRatesNeedVolume(t *testing.T) {
 	}
 }
 
-// A rate wobbling inside its band is the same problem, so a dismissal must
-// survive it. Crossing into the next band is new information.
+// A dismissal must survive a rate wobbling inside its band; crossing into the next band is new information.
 func TestRateFingerprintIsBanded(t *testing.T) {
 	at := func(rate float64) string {
 		r := keys(evaluate(Snapshot{TotalEmails: 100, BounceRate: rate}))["deliverability:bounce-rate"]
@@ -99,8 +98,7 @@ func TestSingularTitles(t *testing.T) {
 	}
 }
 
-// A viewer cannot verify a domain or rotate a key, so the rules that need
-// action are gated above them.
+// Viewers cannot verify a domain or rotate a key, so actionable rules are gated above them.
 func TestRoleGating(t *testing.T) {
 	all := evaluate(Snapshot{
 		UnverifiedDomains: 1,

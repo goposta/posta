@@ -6,8 +6,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // The session travels as an HttpOnly cookie. Same-origin requests would send
-  // it anyway; this also covers a cross-origin VITE_API_URL in development.
+  // Same-origin requests send the cookie anyway; this covers a cross-origin VITE_API_URL in development.
   withCredentials: true,
 })
 

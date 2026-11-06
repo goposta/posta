@@ -42,10 +42,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("click", onDocClick);
-  // The bell mounts with the authenticated layout, so unmounting means leaving
-  // it — a logout, usually. Clear the inbox rather than just stopping the poll:
-  // if a different account signs in without a reload, the previous user's
-  // notifications must not still be sitting in the store.
+  // Clear the inbox, not just the poll: another account signing in without a reload must not see the previous user's notifications.
   store.reset();
 });
 </script>

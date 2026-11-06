@@ -42,13 +42,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ChatVisitorHandler serves the public live chat API that the widget on a
-// customer's website calls. There is no session: a visitor proves who they
-// are with the bearer token they got when they first wrote, and a widget is
-// usable only from the origins on its allowlist.
-//
-// Anything a visitor may not see answers 404, never 403, so the API does not
-// confirm that a widget or conversation exists.
+// ChatVisitorHandler is the widget's sessionless API; anything a visitor may not see is 404, never 403, to hide existence.
 type ChatVisitorHandler struct {
 	svc     *chat.Service
 	repo    *repositories.ChatRepository
@@ -67,7 +61,6 @@ const (
 	chatRetryAfterSecs = "30"
 )
 
-// ChatWidgetConfig is what the widget needs before it renders.
 type ChatWidgetConfig struct {
 	Enabled         bool            `json:"enabled"`
 	Reason          string          `json:"reason,omitempty" doc:"Why the widget cannot be used here: unavailable, origin_not_allowed, or offline (no one is online and the widget hides then)"`
@@ -98,8 +91,7 @@ type ChatStartRequest struct {
 		ClientMsgID string `json:"client_msg_id"`
 		Nonce       string `json:"nonce"`
 		PageURL     string `json:"page_url"`
-		// Identity is a signed identity from PostaChat.identify(); an invalid
-		// one is ignored and the visitor stays anonymous.
+		// Identity is a signed identity from PostaChat.identify(); an invalid one leaves the visitor anonymous.
 		Identity *chat.Identity `json:"identity"`
 	} `json:"body"`
 }
@@ -170,8 +162,7 @@ type ChatVisitorPostRequest struct {
 	} `json:"body"`
 }
 
-// Config answers 200 in every case, so the widget can always read why it
-// should not render.
+// Config always answers 200 so the widget can read why it should not render.
 func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error {
 	c.ResponseWriter().Header().Set("Cache-Control", "no-store")
 	w := h.widget(req.Key)
@@ -211,8 +202,7 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 	})
 }
 
-// disabled answers a config request the widget cannot use. It carries no
-// widget data, so any origin may read it.
+// disabled carries no widget data, so any origin may read it.
 func (h *ChatVisitorHandler) disabled(c *okapi.Context, reason string) error {
 	if origin := c.Request().Header.Get("Origin"); origin != "" {
 		c.ResponseWriter().Header().Set("Access-Control-Allow-Origin", origin)
@@ -236,8 +226,7 @@ func (h *ChatVisitorHandler) Nonce(c *okapi.Context, req *ChatKeyRequest) error 
 	return ok(c, nonce)
 }
 
-// Start opens a conversation. A visitor who already has a token sends it, and
-// the conversation joins their others; a new visitor gets a token back.
+// Start joins a returning visitor's conversations when they send their token; a new visitor gets one back.
 func (h *ChatVisitorHandler) Start(c *okapi.Context, req *ChatStartRequest) error {
 	ip := c.RealIP()
 	if h.limiter != nil && !h.limiter.Allow(ip) {
@@ -287,7 +276,6 @@ func (h *ChatVisitorHandler) Start(c *okapi.Context, req *ChatStartRequest) erro
 	})
 }
 
-// Conversations lists the visitor's recent conversations on this widget.
 func (h *ChatVisitorHandler) Conversations(c *okapi.Context, req *ChatKeyRequest) error {
 	w := h.widget(req.Key)
 	if w == nil || !h.allowOrigin(c, w) {
@@ -337,8 +325,7 @@ func (h *ChatVisitorHandler) PostMessage(c *okapi.Context, req *ChatVisitorPostR
 	return created(c, chat.ToVisitorMessage(msg, w.ShowAgentNames))
 }
 
-// Identify attaches a signed identity to the visitor. It answers 200 either
-// way: verified=false means the signature did not match and nothing changed.
+// Identify answers 200 either way: verified=false means the signature did not match and nothing changed.
 func (h *ChatVisitorHandler) Identify(c *okapi.Context, req *ChatIdentifyRequest) error {
 	w := h.widget(req.Key)
 	if w == nil || !h.allowOrigin(c, w) {
@@ -381,8 +368,7 @@ func (h *ChatVisitorHandler) Attributes(c *okapi.Context, req *ChatAttributesReq
 	return noContent(c)
 }
 
-// Upload sends a file in the visitor's conversation: multipart with a file
-// part, and optional caption and client_msg_id parts.
+// Upload takes a multipart file part plus optional caption and client_msg_id parts.
 func (h *ChatVisitorHandler) Upload(c *okapi.Context) error {
 	w, v, conv, status := h.conversation(c, c.Param("key"), c.Param("id"))
 	if status != 0 {
@@ -403,7 +389,6 @@ func (h *ChatVisitorHandler) Upload(c *okapi.Context) error {
 	return created(c, chat.ToVisitorMessage(msg, w.ShowAgentNames))
 }
 
-// Attachment serves a file from the visitor's conversation.
 func (h *ChatVisitorHandler) Attachment(c *okapi.Context, req *ChatAttachmentRequest) error {
 	_, _, conv, status := h.conversation(c, req.Key, req.ID)
 	if status != 0 {
@@ -412,7 +397,7 @@ func (h *ChatVisitorHandler) Attachment(c *okapi.Context, req *ChatAttachmentReq
 	return serveAttachment(c, h.svc, h.repo, conv, req.Msg, req.Idx)
 }
 
-// Typing tells the agents the visitor is writing. Throttled; nothing is stored.
+// Typing is throttled and stores nothing.
 func (h *ChatVisitorHandler) Typing(c *okapi.Context, req *ChatVisitorConversationRequest) error {
 	_, _, conv, status := h.conversation(c, req.Key, req.ID)
 	if status != 0 {
@@ -422,7 +407,6 @@ func (h *ChatVisitorHandler) Typing(c *okapi.Context, req *ChatVisitorConversati
 	return noContent(c)
 }
 
-// Read records how far the visitor has read, for the agents' "seen".
 func (h *ChatVisitorHandler) Read(c *okapi.Context, req *ChatVisitorReadRequest) error {
 	_, _, conv, status := h.conversation(c, req.Key, req.ID)
 	if status != 0 {
@@ -435,10 +419,7 @@ func (h *ChatVisitorHandler) Read(c *okapi.Context, req *ChatVisitorReadRequest)
 	return ok(c, ChatReadResponse{Seq: seq})
 }
 
-// Stream is the visitor's live view of one conversation. It first replays
-// what the visitor has not seen (after Last-Event-ID, or ?after=), then
-// relays live events, using the sequence numbers to drop what the replay
-// already sent and to refetch anything pub/sub lost.
+// Stream replays what the visitor missed, then relays live events, using seqs to drop duplicates and refetch losses.
 func (h *ChatVisitorHandler) Stream(c *okapi.Context) error {
 	w, v, conv, status := h.conversation(c, c.Param("key"), c.Param("id"))
 	if status != 0 {
@@ -453,14 +434,12 @@ func (h *ChatVisitorHandler) Stream(c *okapi.Context) error {
 
 	cursor := chat.Cursor{Last: resumeSeq(c.Request())}
 	ctx := c.Request().Context()
-	// Subscribe before reading the database, so nothing stored in between
-	// is missed: it arrives live, or the replay already has it.
+	// Subscribe before reading the database so nothing stored in between is missed.
 	events, unsub := bus.Subscribe(ctx, realtime.ChatConversationTopic(conv.ID))
 	defer unsub()
 	_ = h.repo.TouchVisitor(v.ID, c.RealIP(), "")
 	c.ResponseWriter().Header().Set("X-Accel-Buffering", "no")
-	// While the stream is open the visitor counts as present, so agents'
-	// replies stay in the chat instead of going out by email.
+	// An open stream counts as presence, so agents' replies stay in the chat instead of going out by email.
 	if h.svc.MarkVisitorLive(ctx, conv.ID) {
 		h.svc.AnnounceVisitor(ctx, conv, true)
 	}
@@ -517,8 +496,7 @@ func (h *ChatVisitorHandler) Stream(c *okapi.Context) error {
 					}
 					continue
 				}
-				// Every event carries the newest sequence number the visitor
-				// has, so Last-Event-ID always resumes in the right place.
+				// Each event carries the visitor's newest seq so Last-Event-ID always resumes in the right place.
 				if !send(okapi.Message{ID: strconv.FormatInt(cursor.Last, 10), Event: ev.Type, Data: ev.Data}) {
 					return
 				}
@@ -531,7 +509,6 @@ func (h *ChatVisitorHandler) Stream(c *okapi.Context) error {
 	})
 }
 
-// replay sends every stored message after the cursor, in order.
 func (h *ChatVisitorHandler) replay(ctx context.Context, convID uint, cursor *chat.Cursor, showNames bool, send func(okapi.Message) bool) bool {
 	for {
 		items, err := h.repo.MessagesAfter(convID, cursor.Last, chatReplayBatch)
@@ -552,7 +529,6 @@ func (h *ChatVisitorHandler) replay(ctx context.Context, convID uint, cursor *ch
 	}
 }
 
-// ChatScript serves the live chat widget.
 func (h *ChatVisitorHandler) ChatScript(c *okapi.Context) error {
 	w := c.ResponseWriter()
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
@@ -564,14 +540,12 @@ func (h *ChatVisitorHandler) ChatScript(c *okapi.Context) error {
 	return nil
 }
 
-// Preflight answers a plain OPTIONS request; CORS preflights never get here
-// (see config.ChatPreflight).
+// Preflight answers plain OPTIONS only; CORS preflights are answered earlier by config.ChatPreflight.
 func (h *ChatVisitorHandler) Preflight(c *okapi.Context) error {
 	return c.NoContent()
 }
 
-// widget returns the usable widget with key, or nil. Unknown, paused and
-// archived widgets are all simply not there.
+// widget treats unknown, paused and archived widgets alike as absent.
 func (h *ChatVisitorHandler) widget(key string) *models.ChatWidget {
 	if !strings.HasPrefix(key, models.ChatWidgetKeyPrefix) {
 		return nil
@@ -583,9 +557,7 @@ func (h *ChatVisitorHandler) widget(key string) *models.ChatWidget {
 	return w
 }
 
-// allowOrigin applies the widget's allowlist and, for an allowed browser
-// origin, the CORS headers that let it read the answer. Credentials are never
-// allowed: the API uses no cookies.
+// allowOrigin never allows credentials: the chat API uses no cookies.
 func (h *ChatVisitorHandler) allowOrigin(c *okapi.Context, w *models.ChatWidget) bool {
 	origin := c.Request().Header.Get("Origin")
 	allowlist, strict := w.OriginPolicy()
@@ -601,7 +573,6 @@ func (h *ChatVisitorHandler) allowOrigin(c *okapi.Context, w *models.ChatWidget)
 	return true
 }
 
-// visitor resolves the bearer token to a visitor of this widget, or nil.
 func (h *ChatVisitorHandler) visitor(c *okapi.Context, w *models.ChatWidget) *models.ChatVisitor {
 	token := chat.BearerVisitorToken(c.Request().Header.Get("Authorization"))
 	if token == "" {
@@ -614,8 +585,6 @@ func (h *ChatVisitorHandler) visitor(c *okapi.Context, w *models.ChatWidget) *mo
 	return v
 }
 
-// conversation resolves widget, visitor and conversation for a visitor
-// request, or the status to answer with.
 func (h *ChatVisitorHandler) conversation(c *okapi.Context, key, id string) (*models.ChatWidget, *models.ChatVisitor, *models.ChatConversation, int) {
 	w := h.widget(key)
 	if w == nil || !h.allowOrigin(c, w) {
@@ -625,8 +594,7 @@ func (h *ChatVisitorHandler) conversation(c *okapi.Context, key, id string) (*mo
 	if v == nil {
 		return nil, nil, nil, http.StatusUnauthorized
 	}
-	// A verified visitor also reaches the conversations the same customer
-	// user had on other devices.
+	// A verified visitor also reaches the same customer user's conversations from other devices.
 	conv, err := h.repo.FindLinkedConversation(h.repo.LinkedVisitorIDs(v), id)
 	if err != nil {
 		return nil, nil, nil, http.StatusNotFound
@@ -652,8 +620,7 @@ func isChatClientError(err error) bool {
 	return false
 }
 
-// resumeSeq reads where a reconnecting stream resumes: Last-Event-ID, which
-// browsers and the widget send on reconnect, or ?after= on the first connect.
+// resumeSeq reads Last-Event-ID, which browsers send on reconnect, or ?after= on the first connect.
 func resumeSeq(r *http.Request) int64 {
 	for _, raw := range []string{r.Header.Get("Last-Event-ID"), r.URL.Query().Get("after")} {
 		if n, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64); err == nil && n > 0 {
@@ -663,8 +630,7 @@ func resumeSeq(r *http.Request) int64 {
 	return 0
 }
 
-// readUpload reads a multipart chat file, refusing anything over the cap
-// before it is read into memory.
+// readUpload refuses anything over the cap before it is read into memory.
 func readUpload(c *okapi.Context) (chat.Upload, error) {
 	r := c.Request()
 	r.Body = http.MaxBytesReader(c.ResponseWriter(), r.Body, chat.MaxAttachmentBytes+64<<10)
@@ -691,9 +657,7 @@ func readUpload(c *okapi.Context) (chat.Upload, error) {
 	}, nil
 }
 
-// serveAttachment streams one of a message's files. The type was sniffed on
-// upload; nosniff and a sandbox CSP keep the browser from treating it as
-// anything else, and a PDF downloads instead of opening on Posta's origin.
+// serveAttachment sets nosniff and a sandbox CSP, and downloads PDFs, so nothing renders on Posta's origin.
 func serveAttachment(c *okapi.Context, svc *chat.Service, repo *repositories.ChatRepository, conv *models.ChatConversation, msgID string, idx int) error {
 	msg, err := repo.FindMessage(conv.ID, msgID)
 	if err != nil {

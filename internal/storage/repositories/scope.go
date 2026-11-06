@@ -29,10 +29,7 @@ type ResourceScope struct {
 	WorkspaceID *uint
 }
 
-// ApplyScope narrows a query to the caller's workspace. Every resource is
-// workspace-scoped; a scope without one matches nothing rather than falling back
-// to the pre-workspace "user_id AND workspace_id IS NULL" rows, which no longer
-// exist. UserID remains on the scope for attribution, and never selects rows.
+// ApplyScope matches nothing without a workspace; UserID is for attribution only and never selects rows.
 func ApplyScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
 	if scope.WorkspaceID == nil {
 		logger.Warn("ApplyScope: request has no workspace; matching nothing", "user_id", scope.UserID)
@@ -41,13 +38,11 @@ func ApplyScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
 	return db.Where("workspace_id = ?", *scope.WorkspaceID)
 }
 
-// OwnsResource checks whether the given resource belongs to the current scope.
 func OwnsResource(scope ResourceScope, _ uint, resourceWorkspaceID *uint) bool {
 	return OwnsWorkspaceResource(scope, resourceWorkspaceID)
 }
 
-// ApplyWorkspaceScope is an alias for ApplyScope, kept for one release so the
-// call sites added while the two behaved differently keep compiling.
+// ApplyWorkspaceScope is an alias for ApplyScope, kept for one release so older call sites keep compiling.
 func ApplyWorkspaceScope(db *gorm.DB, scope ResourceScope) *gorm.DB {
 	return ApplyScope(db, scope)
 }

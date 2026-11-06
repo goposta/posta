@@ -26,10 +26,7 @@ import (
 	"github.com/goposta/posta/internal/services/email"
 )
 
-// TestDefaultTemplatesRender renders every seeded template (subject, HTML, text;
-// EN and FR) with its own sample data using the strict missingkey=error renderer
-// that the real send path uses. This catches template parse errors and any
-// referenced variable that the sample data forgot to provide.
+// TestDefaultTemplatesRender renders every seed template with the strict missingkey=error renderer of the send path.
 func TestDefaultTemplatesRender(t *testing.T) {
 	defs := defaultTemplateDefs("Jonas", 2026, "https://example.com/docs")
 	if len(defs) == 0 {
@@ -46,8 +43,7 @@ func TestDefaultTemplatesRender(t *testing.T) {
 					t.Fatalf("%s/%s: missing subject", def.DisplayName, lang)
 				}
 
-				// WithSystemVars injects the reserved posta_* variables (as
-				// sentinels) the same way the send path does.
+				// WithSystemVars injects the reserved posta_* sentinels the same way the send path does.
 				data := email.WithSystemVars(def.SampleData)
 
 				out, err := renderer.Render(&email.RenderInput{
@@ -69,8 +65,7 @@ func TestDefaultTemplatesRender(t *testing.T) {
 				if strings.TrimSpace(out.Text) == "" {
 					t.Errorf("%s/%s: empty text", def.DisplayName, lang)
 				}
-				// Every seeded template links the hosted web view, so a reserved
-				// system sentinel must survive into the rendered HTML.
+				// Every seeded template links the hosted web view, so a system sentinel must survive into the HTML.
 				if !email.HasSystemSentinels(out.HTML) {
 					t.Errorf("%s/%s: expected a posta_* system link in rendered HTML", def.DisplayName, lang)
 				}

@@ -71,13 +71,10 @@ type Email struct {
 	APIKeyName string `json:"api_key_name,omitempty" gorm:"-"`
 }
 
-// Attachment represents a file attachment in an email.
 type Attachment struct {
 	Filename    string `json:"filename"`
 	Content     string `json:"content,omitempty"`
 	ContentType string `json:"content_type"`
-	// StorageKey is set when the attachment content is stored in blob storage
-	// (S3 or filesystem). When present, Content may be empty and the actual
-	// bytes should be fetched from the blob store using this key.
+	// StorageKey, when set, means the bytes live in blob storage and Content may be empty.
 	StorageKey string `json:"storage_key,omitempty"`
 }

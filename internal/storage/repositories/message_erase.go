@@ -27,13 +27,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// EraseMessagesBySender hard-deletes, in one transaction, every web form
-// message one address submitted to a workspace, the thread replies on them,
-// and the inbound emails those replies arrived as. Soft-deleted rows are
-// included: an erasure request is not a trash can.
-//
-// It returns the number of messages deleted and the blob keys (attachments,
-// raw .eml files) the caller must remove once the transaction has committed.
+// EraseMessagesBySender includes soft-deleted rows (erasure is no trash can); callers delete returned blob keys post-commit.
 func EraseMessagesBySender(db *gorm.DB, workspaceID uint, email string) (int64, []string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	var blobKeys []string
@@ -81,8 +75,7 @@ func EraseMessagesBySender(db *gorm.DB, workspaceID uint, email string) (int64, 
 			}
 		}
 
-		// Delete replies explicitly rather than relying on the cascade alone, so
-		// erasure holds even where the foreign key was never created.
+		// Delete replies explicitly so erasure holds even where the foreign key was never created.
 		if err := tx.Where("message_id IN ?", ids).Delete(&models.MessageReply{}).Error; err != nil {
 			return err
 		}
@@ -99,8 +92,7 @@ func EraseMessagesBySender(db *gorm.DB, workspaceID uint, email string) (int64, 
 	return deleted, blobKeys, nil
 }
 
-// AttachmentBlobKeys returns the blob storage keys in an attachments_json
-// column (a []models.InboundAttachmentMeta).
+// AttachmentBlobKeys reads the blob keys from an attachments_json column ([]models.InboundAttachmentMeta).
 func AttachmentBlobKeys(attachmentsJSON string) []string {
 	if attachmentsJSON == "" {
 		return nil

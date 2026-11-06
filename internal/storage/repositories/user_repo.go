@@ -56,10 +56,7 @@ func (r *UserRepository) FindByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
-// DefaultWorkspace resolves where a request that names no workspace should land.
-// It verifies membership, so a stale default (the user left, or the workspace was
-// deleted) falls back to the oldest remaining membership and is repaired in place.
-// Returns (nil, "", nil) when the user belongs to no workspace at all.
+// DefaultWorkspace repairs a stale default to the oldest membership; (nil, "", nil) means no workspace at all.
 func (r *UserRepository) DefaultWorkspace(userID uint) (*models.Workspace, models.WorkspaceRole, error) {
 	var user models.User
 	if err := r.db.Select("id", "default_workspace_id").First(&user, userID).Error; err != nil {
@@ -99,8 +96,7 @@ func (r *UserRepository) SetDefaultWorkspace(userID uint, workspaceID *uint) err
 		Update("default_workspace_id", workspaceID).Error
 }
 
-// WorkspaceForMember returns the workspace and the caller's role in it, or
-// gorm.ErrRecordNotFound when they are not a member.
+// WorkspaceForMember returns gorm.ErrRecordNotFound when the user is not a member.
 func (r *UserRepository) WorkspaceForMember(userID, workspaceID uint) (*models.Workspace, models.WorkspaceRole, error) {
 	var row struct {
 		models.Workspace
@@ -173,26 +169,20 @@ func (r *UserRepository) Delete(id uint) error {
 	return r.db.Delete(&models.User{}, id).Error
 }
 
-// DeleteAllUserData removes all data owned by a user
 func (r *UserRepository) DeleteAllUserData(userID uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Delete tracking_events via campaign_messages -> campaigns
 		if err := tx.Exec("DELETE FROM tracking_events WHERE campaign_message_id IN (SELECT id FROM campaign_messages WHERE campaign_id IN (SELECT id FROM campaigns WHERE user_id = ?))", userID).Error; err != nil {
 			return err
 		}
-		// Delete tracked_links via campaigns
 		if err := tx.Exec("DELETE FROM tracked_links WHERE campaign_id IN (SELECT id FROM campaigns WHERE user_id = ?)", userID).Error; err != nil {
 			return err
 		}
-		// Delete campaign_messages via campaigns
 		if err := tx.Exec("DELETE FROM campaign_messages WHERE campaign_id IN (SELECT id FROM campaigns WHERE user_id = ?)", userID).Error; err != nil {
 			return err
 		}
-		// Delete subscriber_list_members via subscriber_lists
 		if err := tx.Exec("DELETE FROM subscriber_list_members WHERE list_id IN (SELECT id FROM subscriber_lists WHERE user_id = ?)", userID).Error; err != nil {
 			return err
 		}
-		// Delete subscriber_list_unsubscribes via subscriber_lists
 		if err := tx.Exec("DELETE FROM subscriber_list_unsubscribes WHERE list_id IN (SELECT id FROM subscriber_lists WHERE user_id = ?)", userID).Error; err != nil {
 			return err
 		}
@@ -200,16 +190,13 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 		if err := tx.Exec("UPDATE templates SET active_version_id = NULL WHERE user_id = ?", userID).Error; err != nil {
 			return err
 		}
-		// Delete template_localizations via template_versions -> templates
 		if err := tx.Exec("DELETE FROM template_localizations WHERE version_id IN (SELECT id FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE user_id = ?))", userID).Error; err != nil {
 			return err
 		}
-		// Delete template_versions via templates
 		if err := tx.Exec("DELETE FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE user_id = ?)", userID).Error; err != nil {
 			return err
 		}
 
-		// Tables with a direct user_id column
 		tables := []string{
 			"sessions",
 			"webhook_deliveries",
@@ -234,7 +221,6 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 			"o_auth_accounts",
 		}
 
-		// Delete events
 		if err := tx.Exec("DELETE FROM events WHERE actor_id = ?", userID).Error; err != nil {
 			return err
 		}
@@ -252,7 +238,6 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 			return err
 		}
 
-		// Delete webhook_deliveries that reference the user's webhooks
 		if err := tx.Exec("DELETE FROM webhook_deliveries WHERE webhook_id IN (SELECT id FROM webhooks WHERE user_id = ?)", userID).Error; err != nil {
 			return err
 		}
@@ -263,12 +248,10 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 			}
 		}
 
-		// Remove workspace memberships
 		if err := tx.Exec("DELETE FROM workspace_members WHERE user_id = ?", userID).Error; err != nil {
 			return err
 		}
 
-		// Delete workspaces owned
 		var ownedWSIDs []uint
 		if err := tx.Raw("SELECT id FROM workspaces WHERE owner_id = ?", userID).Scan(&ownedWSIDs).Error; err != nil {
 			return err
@@ -289,7 +272,6 @@ func (r *UserRepository) DeleteAllUserData(userID uint) error {
 	})
 }
 
-// FindScheduledForDeletion returns users whose scheduled_deletion_at is in the past.
 func (r *UserRepository) FindScheduledForDeletion() ([]models.User, error) {
 	var users []models.User
 	if err := r.db.Where("scheduled_deletion_at IS NOT NULL AND scheduled_deletion_at <= ?", time.Now()).

@@ -29,8 +29,7 @@ const total = computed(() => props.rows.reduce((sum, r) => sum + r.total, 0));
 const sorted = computed(() =>
   [...props.rows].sort((a, b) => {
     if (sortBy.value === "delivery_rate") {
-      // A provider with no attempts has no rate; keep those last rather than
-      // letting a 0% with zero volume top the table.
+      // A provider with no attempts has no rate; keep it last rather than let a zero-volume 0% top the table.
       const av = a.sent + a.failed === 0 ? -1 : a.delivery_rate;
       const bv = b.sent + b.failed === 0 ? -1 : b.delivery_rate;
       return av - bv;
@@ -39,8 +38,6 @@ const sorted = computed(() =>
   })
 );
 
-// The provider that is actually hurting deliverability: enough volume to matter
-// and a rate below par. Naming it saves the reader scanning the table.
 const problem = computed(() => {
   let found: ProviderBreakdownPoint | null = null;
   for (const r of props.rows) {

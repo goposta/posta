@@ -28,7 +28,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// stashAuth mimics authenticateAPIKey populating the auth context.
 func stashAuth(method, scopes string) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		c.Set(CtxAuthMethod, method)
@@ -52,8 +51,7 @@ func TestRequireScope(t *testing.T) {
 		{"empty scopes forbidden for read", AuthMethodAPIKey, "", models.ScopeRead, http.StatusForbidden},
 		{"send-only forbidden for webhooks", AuthMethodAPIKey, "send", models.ScopeWebhooks, http.StatusForbidden},
 
-		// Scopes describe API keys only. A dashboard session carries none, and is
-		// governed by workspace RBAC instead, so RequireScope must let it through.
+		// Scopes describe API keys only; a dashboard session is governed by workspace RBAC, so it passes.
 		{"jwt session bypasses scopes", AuthMethodJWT, "", models.ScopeWebhooks, http.StatusOK},
 
 		// write and admin are ordinary workspace scopes: the wildcard covers them.

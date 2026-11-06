@@ -53,8 +53,7 @@ func (r *UserEmailVerificationRepository) MarkUsed(id uint) error {
 		Update("used_at", now).Error
 }
 
-// InvalidatePending marks all pending (unused) tokens for a user as used.
-// Called when a new token is issued or when the email becomes verified.
+// InvalidatePending marks unused tokens used; called when a new token is issued and when the email is verified.
 func (r *UserEmailVerificationRepository) InvalidatePending(userID uint) error {
 	now := time.Now()
 	return r.db.Model(&models.UserEmailVerification{}).

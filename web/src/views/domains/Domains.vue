@@ -332,7 +332,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </div>
     </template>
 
-    <!-- Add Domain Modal -->
     <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

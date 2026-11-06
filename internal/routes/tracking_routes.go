@@ -26,12 +26,11 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// trackingRoutes returns public (no auth) route definitions for open/click/unsubscribe tracking.
 func (r *Router) trackingRoutes() []okapi.RouteDefinition {
 	return []okapi.RouteDefinition{
 		{
 			Method:  http.MethodGet,
-			Path:    "/t/o/{message_id:int}.gif",
+			Path:    "/t/o/{pixel}",
 			Handler: okapi.H(r.h.tracking.OpenPixel),
 			Tags:    []string{tagTracking},
 			Summary: "Open tracking pixel",
@@ -39,7 +38,7 @@ func (r *Router) trackingRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/t/c/{message_id:int}/{hash}",
+			Path:    "/t/c/{message_id}/{hash}",
 			Handler: okapi.H(r.h.tracking.ClickRedirect),
 			Tags:    []string{tagTracking},
 			Summary: "Click tracking redirect",
@@ -88,7 +87,6 @@ func (r *Router) trackingRoutes() []okapi.RouteDefinition {
 	}
 }
 
-// bounceWebhookRoutes returns the bounce webhook route (authenticated via API key).
 func (r *Router) bounceWebhookRoutes() []okapi.RouteDefinition {
 	bounceGroup := r.v1.Group("/webhooks/bounce", r.mw.apiKey).WithTagInfo(okapi.GroupTag{
 		Name:        "Webhooks",
@@ -108,8 +106,6 @@ func (r *Router) bounceWebhookRoutes() []okapi.RouteDefinition {
 	}
 }
 
-// trackingAnalyticsRoutes returns the authenticated campaign analytics route,
-// scoped to the active workspace (workspace-only migration §7).
 func (r *Router) trackingAnalyticsRoutes() []okapi.RouteDefinition {
 	wsGroup := r.v1.Group("/workspaces/current", r.mw.auth, r.mw.workspace).WithTagInfo(okapi.GroupTag{
 		Name:        tagCampaigns,
@@ -120,7 +116,7 @@ func (r *Router) trackingAnalyticsRoutes() []okapi.RouteDefinition {
 	return []okapi.RouteDefinition{
 		{
 			Method:   http.MethodGet,
-			Path:     "/campaigns/{id:int}/analytics",
+			Path:     "/campaigns/{id}/analytics",
 			Handler:  okapi.H(r.h.tracking.CampaignAnalytics),
 			Group:    wsGroup,
 			Summary:  "Get campaign analytics",

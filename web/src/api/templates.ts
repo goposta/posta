@@ -32,7 +32,6 @@ export const templatesApi = {
     return api.delete(`/workspaces/current/templates/${id}`)
   },
 
-  // Versions
   listVersions(templateId: number) {
     return api.get<ApiResponse<TemplateVersion[]>>(`/workspaces/current/templates/${templateId}/versions`)
   },
@@ -49,7 +48,6 @@ export const templatesApi = {
     return api.delete(`/workspaces/current/templates/${templateId}/versions/${versionId}`)
   },
 
-  // Localizations
   listLocalizations(templateId: number, versionId: number) {
     return api.get<ApiResponse<TemplateLocalization[]>>(`/workspaces/current/templates/${templateId}/versions/${versionId}/localizations`)
   },
@@ -65,8 +63,7 @@ export const templatesApi = {
   previewLocalization(templateId: number, versionId: number, data: { language: string; template_data: Record<string, any> }) {
     return api.post<ApiResponse<TemplatePreview>>(`/workspaces/current/templates/${templateId}/versions/${versionId}/preview`, data)
   },
-  // Renders raw, unsaved template content so the editor can show a live preview
-  // without persisting first.
+  // Renders unsaved content so the editor can preview without persisting first.
   previewTemplate(data: {
     subject_template: string
     html_template?: string
@@ -81,7 +78,6 @@ export const templatesApi = {
     return api.post<ApiResponse<SendTestResponse>>(`/workspaces/current/templates/${templateId}/send-test`, data)
   },
 
-  // Import/Export
   exportTemplate(templateId: number) {
     return api.get<ApiResponse<TemplateExport>>(`/workspaces/current/templates/${templateId}/export`)
   },

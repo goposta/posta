@@ -69,7 +69,6 @@ func (s *CredentialService) GenerateCredential(userID, workspaceID uint, name st
 	return username, password, cred, nil
 }
 
-// VerifyPassword reports whether password matches cred's stored hash.
 func VerifyPassword(cred *models.SMTPCredential, password string) bool {
 	return cred.PasswordHash == hashPassword(password)
 }

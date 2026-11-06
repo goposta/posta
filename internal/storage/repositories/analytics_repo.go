@@ -45,7 +45,6 @@ type StatusBreakdown struct {
 	Count  int64  `json:"count"`
 }
 
-// AdminDailyCounts returns email counts across all users.
 func (r *AnalyticsRepository) AdminDailyCounts(from, to time.Time, status string) ([]DailyCount, error) {
 	var results []DailyCount
 	query := r.db.Table("emails").
@@ -58,7 +57,6 @@ func (r *AnalyticsRepository) AdminDailyCounts(from, to time.Time, status string
 	return results, err
 }
 
-// AdminStatusBreakdown returns counts grouped by status across all users.
 func (r *AnalyticsRepository) AdminStatusBreakdown(from, to time.Time) ([]StatusBreakdown, error) {
 	var results []StatusBreakdown
 	err := r.db.Table("emails").
@@ -81,7 +79,6 @@ type bounceRow struct {
 	Count int64
 }
 
-// DeliveryRatePoint represents a single day's delivery rate.
 type DeliveryRatePoint struct {
 	Date         string  `json:"date"`
 	Sent         int64   `json:"sent"`
@@ -90,7 +87,6 @@ type DeliveryRatePoint struct {
 	DeliveryRate float64 `json:"delivery_rate"`
 }
 
-// BounceRatePoint represents a single day's bounce counts by type.
 type BounceRatePoint struct {
 	Date      string `json:"date"`
 	Hard      int64  `json:"hard"`
@@ -99,7 +95,6 @@ type BounceRatePoint struct {
 	Total     int64  `json:"total"`
 }
 
-// LatencyPercentiles represents email delivery latency percentiles.
 type LatencyPercentiles struct {
 	P50 float64 `json:"p50"`
 	P75 float64 `json:"p75"`
@@ -108,7 +103,6 @@ type LatencyPercentiles struct {
 	Avg float64 `json:"avg"`
 }
 
-// AdminDeliveryRateTrends returns daily delivery rate across all users.
 func (r *AnalyticsRepository) AdminDeliveryRateTrends(from, to time.Time) ([]DeliveryRatePoint, error) {
 	var rows []deliveryRow
 	err := r.db.Table("emails").
@@ -122,19 +116,13 @@ func (r *AnalyticsRepository) AdminDeliveryRateTrends(from, to time.Time) ([]Del
 	return buildDeliveryRatePoints(rows, from, to), nil
 }
 
-// utcDay is the UTC calendar day an instant falls on.
-//
-// The series has to be built the same way Postgres buckets the rows, and the
-// queries pin their buckets to UTC with `AT TIME ZONE 'UTC'`. time.Truncate is
-// not a substitute: it rounds against the zero time, so on a server west of UTC
-// it lands on the previous day and the report loses its final day.
+// utcDay must match the queries' UTC buckets; time.Truncate rounds against zero time and loses a day west of UTC.
 func utcDay(t time.Time) time.Time {
 	u := t.UTC()
 	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// dayKeys is the gapless list of UTC day labels covering a range, so a quiet day
-// renders as a zero rather than disappearing from the axis.
+// dayKeys is gapless so a quiet day renders as a zero rather than vanishing from the axis.
 func dayKeys(from, to time.Time) []string {
 	start, end := utcDay(from), utcDay(to)
 	if end.Before(start) {
@@ -147,13 +135,7 @@ func dayKeys(from, to time.Time) []string {
 	return keys
 }
 
-// buildDeliveryRatePoints turns grouped rows into a gapless daily series.
-//
-// Rows whose day falls outside the requested range are folded onto the nearest
-// end rather than dropped. That cannot happen while the query and the series
-// agree on UTC, but it used to: when Postgres ran in a non-UTC timezone its
-// buckets drifted past the range and the rows vanished from the report with
-// nothing to show that anything was missing.
+// buildDeliveryRatePoints folds out-of-range rows onto the nearest end so they never vanish from the report.
 func buildDeliveryRatePoints(rows []deliveryRow, from, to time.Time) []DeliveryRatePoint {
 	keys := dayKeys(from, to)
 	if len(keys) == 0 {
@@ -191,8 +173,7 @@ func buildDeliveryRatePoints(rows []deliveryRow, from, to time.Time) []DeliveryR
 	return result
 }
 
-// clampKey picks the end of the series an out-of-range day belongs to. Keys are
-// zero-padded ISO dates, so they compare correctly as strings.
+// clampKey keys are zero-padded ISO dates, so they compare correctly as strings.
 func clampKey(key, first, last string) string {
 	if key < first {
 		return first
@@ -200,7 +181,6 @@ func clampKey(key, first, last string) string {
 	return last
 }
 
-// AdminBounceRateTrends returns daily bounce counts by type across all users.
 func (r *AnalyticsRepository) AdminBounceRateTrends(from, to time.Time) ([]BounceRatePoint, error) {
 	var rows []bounceRow
 	err := r.db.Table("bounces").
@@ -250,7 +230,6 @@ func buildBounceRatePoints(rows []bounceRow, from, to time.Time) []BounceRatePoi
 	return result
 }
 
-// AdminLatencyPercentiles returns delivery latency percentiles across all users.
 func (r *AnalyticsRepository) AdminLatencyPercentiles(from, to time.Time) (*LatencyPercentiles, error) {
 	var result LatencyPercentiles
 	err := r.db.Table("emails").
@@ -329,15 +308,11 @@ func (r *AnalyticsRepository) WorkspaceLatencyPercentiles(workspaceID uint, from
 	return &result, err
 }
 
-// ProviderBreakdownPoint represents delivery counts bucketed by recipient mailbox provider.
 type ProviderBreakdownPoint struct {
 	Provider string `json:"provider"`
 	Sent     int64  `json:"sent"`
 	Failed   int64  `json:"failed"`
-	// Suppressed counts sends Posta blocked before they left, because every
-	// recipient was on the suppression list. It was previously reported as
-	// "bounced", which it is not: nothing was ever handed to the provider, so it
-	// says nothing about how that provider treats your mail.
+	// Suppressed sends never reached the provider, so they say nothing about how it treats your mail.
 	Suppressed   int64   `json:"suppressed"`
 	Total        int64   `json:"total"`
 	DeliveryRate float64 `json:"delivery_rate"`
@@ -349,9 +324,7 @@ type providerRow struct {
 	Count    int64
 }
 
-// queryProviderRows groups the persisted `provider` column by (provider, status).
-// The column is populated at send time by email.ClassifyRecipients, so the query
-// is a single indexed aggregate — no CASE expression, no unnest.
+// The provider column is set at send time by email.ClassifyRecipients, so this is a single indexed aggregate.
 func (r *AnalyticsRepository) queryProviderRows(where string, args []any) ([]providerRow, error) {
 	var rows []providerRow
 	err := r.db.Table("emails").
@@ -362,7 +335,6 @@ func (r *AnalyticsRepository) queryProviderRows(where string, args []any) ([]pro
 	return rows, err
 }
 
-// WorkspaceProviderBreakdown returns delivery counts by provider for a workspace.
 func (r *AnalyticsRepository) WorkspaceProviderBreakdown(workspaceID uint, from, to time.Time) ([]ProviderBreakdownPoint, error) {
 	rows, err := r.queryProviderRows(
 		"workspace_id = ? AND created_at >= ? AND created_at <= ?",
@@ -374,7 +346,6 @@ func (r *AnalyticsRepository) WorkspaceProviderBreakdown(workspaceID uint, from,
 	return buildProviderBreakdown(rows), nil
 }
 
-// AdminProviderBreakdown returns delivery counts by provider across all users.
 func (r *AnalyticsRepository) AdminProviderBreakdown(from, to time.Time) ([]ProviderBreakdownPoint, error) {
 	rows, err := r.queryProviderRows(
 		"created_at >= ? AND created_at <= ?",
@@ -412,9 +383,7 @@ func buildProviderBreakdown(rows []providerRow) []ProviderBreakdownPoint {
 		}
 		out = append(out, *p)
 	}
-	// Highest volume first, then by name so equal volumes do not reorder between
-	// requests — map iteration order is random, and a table that reshuffles on
-	// every refresh is hard to read.
+	// Tie-break by name: map iteration is random, and a table that reshuffles on every refresh is hard to read.
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Total != out[j].Total {
 			return out[i].Total > out[j].Total

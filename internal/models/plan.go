@@ -21,9 +21,7 @@ package models
 
 import "time"
 
-// Plan defines a usage package that can be assigned to workspaces.
-// Each plan specifies rate limits, resource quotas, and retention policies.
-// A value of 0 for any limit field means unlimited.
+// A value of 0 for any Plan limit field means unlimited.
 type Plan struct {
 	ID                  uint   `json:"id" gorm:"primaryKey"`
 	Name                string `json:"name" gorm:"uniqueIndex;not null"`

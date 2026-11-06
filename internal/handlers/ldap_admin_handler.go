@@ -33,10 +33,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// LDAPAdminHandler manages the LDAP / Active Directory directories users sign
-// in through, and their group mappings. It is plain storage: the directory
-// itself is reached only through the enterprise seam. The routes require a
-// license; reading needs any license, changing one that has not expired.
+// The directory is reached only through the enterprise seam; reads need a license, changes an unexpired one.
 type LDAPAdminHandler struct {
 	repo       *repositories.LDAPRepository
 	workspaces *repositories.WorkspaceRepository
@@ -92,7 +89,6 @@ type CreateLDAPMappingRequest struct {
 	} `json:"body"`
 }
 
-// LDAPTestResponse is the outcome of a connection test.
 type LDAPTestResponse = enterprise.LDAPTestResult
 
 type DeleteLDAPMappingRequest struct {
@@ -153,8 +149,7 @@ func (h *LDAPAdminHandler) Delete(c *okapi.Context, req *LDAPConfigIDRequest) er
 	return noContent(c)
 }
 
-// Test connects with the saved settings, binds as the service account and
-// reads the user base DN.
+// Test binds as the service account and reads the user base DN.
 func (h *LDAPAdminHandler) Test(c *okapi.Context, req *LDAPConfigIDRequest) error {
 	a := h.ee.LDAP()
 	if a == nil {
@@ -277,7 +272,6 @@ func (h *LDAPAdminHandler) apply(c *okapi.Context, cfg *models.LDAPConfig, b LDA
 	return nil
 }
 
-// uniqueName derives the directory's handle from its display name.
 func (h *LDAPAdminHandler) uniqueName(displayName string) string {
 	base := models.ToIdentifier(displayName)
 	if base == "" {

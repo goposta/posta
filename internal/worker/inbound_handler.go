@@ -39,8 +39,7 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// InboundAttachmentView is the attachment shape included in the email.inbound webhook.
-// No raw content — only metadata plus a signed download URL (when configured).
+// InboundAttachmentView carries no raw content, only metadata plus a signed download URL when configured.
 type InboundAttachmentView struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
@@ -48,7 +47,6 @@ type InboundAttachmentView struct {
 	URL         string `json:"url,omitempty"`
 }
 
-// InboundWebhookPayload is the body posted to subscribers of email.inbound.
 type InboundWebhookPayload struct {
 	Event       string                  `json:"event"`
 	Timestamp   string                  `json:"timestamp"`
@@ -77,7 +75,6 @@ func NewInboundParseHandler(repo *repositories.InboundEmailRepository, svc *inbo
 	return &InboundParseHandler{repo: repo, svc: svc, producer: producer}
 }
 
-// OnParsed sets a callback invoked after each successfully parsed record.
 func (h *InboundParseHandler) OnParsed(fn func()) { h.onParsed = fn }
 
 func (h *InboundParseHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
@@ -112,8 +109,7 @@ func (h *InboundParseHandler) ProcessTask(ctx context.Context, t *asynq.Task) er
 		return nil
 	}
 
-	// ApplyParsed replaces the envelope recipients with the To header; keep them,
-	// since a thread address may only appear in the envelope (Bcc, aliases).
+	// ApplyParsed replaces envelope recipients with To; keep them, as a thread address may be envelope-only (Bcc).
 	envelope := append([]string(nil), rec.Recipients...)
 
 	if aerr := h.svc.ApplyParsed(ctx, rec, parsed); aerr != nil {
@@ -142,8 +138,7 @@ func (h *InboundParseHandler) ProcessTask(ctx context.Context, t *asynq.Task) er
 	return nil
 }
 
-// InboundProcessHandler processes inbound:process tasks — builds the inbound
-// webhook payload and dispatches it via the webhook dispatcher.
+// InboundProcessHandler builds and dispatches the email.inbound webhook for inbound:process tasks.
 type InboundProcessHandler struct {
 	repo        *repositories.InboundEmailRepository
 	dispatcher  *webhook.Dispatcher
@@ -167,7 +162,6 @@ func NewInboundProcessHandler(
 	}
 }
 
-// OnForwarded sets a callback invoked after a successful inbound forward.
 func (h *InboundProcessHandler) OnForwarded(fn func()) { h.onForwarded = fn }
 
 // OnFailed sets a callback invoked after a permanently failed inbound forward.
@@ -245,15 +239,12 @@ func (h *InboundProcessHandler) ProcessTask(_ context.Context, t *asynq.Task) er
 	return nil
 }
 
-// attachmentURL builds a signed URL for downloading an inbound attachment.
 // Format: {baseURL}/api/v1/inbound/attachments/{uuid}/{idx}?t={token}
 func (h *InboundProcessHandler) attachmentURL(uuid string, idx int) string {
 	token := SignInboundAttachmentToken(h.hmacKey, uuid, idx)
 	return fmt.Sprintf("%s/api/v1/inbound/attachments/%s/%d?t=%s", h.baseURL, uuid, idx, token)
 }
 
-// SignInboundAttachmentToken creates an HMAC-signed token authorizing access
-// to a specific inbound attachment.
 func SignInboundAttachmentToken(key []byte, uuid string, idx int) string {
 	payload := uuid + ":" + strconv.Itoa(idx)
 	mac := hmac.New(sha256.New, key)
@@ -261,15 +252,12 @@ func SignInboundAttachmentToken(key []byte, uuid string, idx int) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// VerifyInboundAttachmentToken checks whether the provided token is valid for
-// the given (uuid, idx) pair.
 func VerifyInboundAttachmentToken(key []byte, uuid string, idx int, token string) bool {
 	expected := SignInboundAttachmentToken(key, uuid, idx)
 	return hmac.Equal([]byte(expected), []byte(token))
 }
 
-// InboundExhaustedErrorHandler marks inbound emails permanently failed once Asynq
-// exhausts retries for the inbound:process task.
+// InboundExhaustedErrorHandler marks inbound emails failed once Asynq exhausts inbound:process retries.
 type InboundExhaustedErrorHandler struct {
 	repo     *repositories.InboundEmailRepository
 	onFailed func()
@@ -279,8 +267,7 @@ func NewInboundExhaustedErrorHandler(repo *repositories.InboundEmailRepository, 
 	return &InboundExhaustedErrorHandler{repo: repo, onFailed: onFailed}
 }
 
-// ChainErrorHandlers returns an asynq.ErrorHandler that invokes each handler in
-// order. Each inner handler is expected to guard on task type and no-op otherwise.
+// ChainErrorHandlers runs each in order; every inner handler must guard on task type and no-op otherwise.
 func ChainErrorHandlers(handlers ...asynq.ErrorHandler) asynq.ErrorHandler {
 	return asynq.ErrorHandlerFunc(func(ctx context.Context, t *asynq.Task, err error) {
 		for _, h := range handlers {
@@ -312,9 +299,7 @@ func (e *InboundExhaustedErrorHandler) HandleError(_ context.Context, t *asynq.T
 			return
 		}
 		id = payload.InboundEmailID
-		// Parse-time exhaustion lands in quarantine, not failed: the raw bytes
-		// are still durable and an operator can retry once the underlying
-		// cause (DB outage, blob fetch, malformed message) is resolved.
+		// Parse-time exhaustion is quarantined, not failed: the raw bytes are durable, so an operator can retry later.
 		finalStatus = models.InboundStatusQuarantined
 		logMsg = "worker: inbound parse permanently failed, quarantined"
 	default:

@@ -24,7 +24,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// CronHandler exposes cron job status to admin users.
 type CronHandler struct {
 	manager *cron.Manager
 }

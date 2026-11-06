@@ -26,15 +26,13 @@ import (
 	"time"
 )
 
-// BusinessHours are the times a chat widget is staffed: weekly ranges in one
-// time zone. No days means always.
+// BusinessHours are weekly staffed ranges in one time zone; no days means always.
 type BusinessHours struct {
 	Timezone string       `json:"timezone,omitempty" doc:"IANA time zone, e.g. Europe/Paris; UTC when empty"`
 	Days     []HoursRange `json:"days,omitempty"`
 }
 
-// HoursRange is one staffed range on a weekday: Day 0 is Sunday, From and To
-// are HH:MM in the hours' time zone, To after From.
+// HoursRange Day 0 is Sunday; From and To are HH:MM in the hours' zone, To after From.
 type HoursRange struct {
 	Day  int    `json:"day" minimum:"0" maximum:"6"`
 	From string `json:"from" example:"09:00"`
@@ -61,7 +59,6 @@ func (b *BusinessHours) Scan(value any) error {
 	return fmt.Errorf("business hours: unsupported type %T", value)
 }
 
-// Validate checks the zone and every range.
 func (b BusinessHours) Validate() error {
 	if _, err := b.location(); err != nil {
 		return fmt.Errorf("business_hours.timezone %q is not a known time zone", b.Timezone)
@@ -76,7 +73,7 @@ func (b BusinessHours) Validate() error {
 	return nil
 }
 
-// Open reports whether t falls inside the hours. No ranges means always open.
+// Open treats no ranges as always open.
 func (b BusinessHours) Open(t time.Time) bool {
 	if len(b.Days) == 0 {
 		return true

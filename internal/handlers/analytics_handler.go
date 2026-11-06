@@ -63,7 +63,6 @@ func (h *AnalyticsHandler) UserAnalytics(c *okapi.Context, req *AnalyticsRequest
 	scope := getScope(c)
 	ctx := c.Request().Context()
 
-	// Try cache first
 	scopeKey := int(scope.UserID)
 	if scope.WorkspaceID != nil {
 		scopeKey = int(*scope.WorkspaceID) + 1000000
@@ -104,7 +103,6 @@ func (h *AnalyticsHandler) UserAnalytics(c *okapi.Context, req *AnalyticsRequest
 func (h *AnalyticsHandler) AdminAnalytics(c *okapi.Context, req *AnalyticsRequest) error {
 	ctx := c.Request().Context()
 
-	// Try cache first
 	cacheKey := cache.AdminAnalyticsKey(req.From, req.To, req.Status)
 	var resp AnalyticsResponse
 	if h.cache.Get(ctx, cacheKey, &resp) {
@@ -189,8 +187,7 @@ type ProviderBreakdownResponse struct {
 	Providers []repositories.ProviderBreakdownPoint `json:"providers"`
 }
 
-// UserProviderBreakdown returns delivery counts grouped by recipient mailbox
-// provider (Gmail, Outlook, Yahoo, ...) for the authenticated scope.
+// UserProviderBreakdown groups delivery counts by recipient mailbox provider (Gmail, Outlook, Yahoo, ...).
 func (h *AnalyticsHandler) UserProviderBreakdown(c *okapi.Context, req *ProviderBreakdownRequest) error {
 	scope := getScope(c)
 	ctx := c.Request().Context()
@@ -223,7 +220,6 @@ func (h *AnalyticsHandler) UserProviderBreakdown(c *okapi.Context, req *Provider
 	return ok(c, resp)
 }
 
-// AdminProviderBreakdown returns provider breakdown across all users.
 func (h *AnalyticsHandler) AdminProviderBreakdown(c *okapi.Context, req *ProviderBreakdownRequest) error {
 	ctx := c.Request().Context()
 
@@ -284,18 +280,10 @@ func (h *AnalyticsHandler) AdminDashboardAnalytics(c *okapi.Context, req *Dashbo
 	return ok(c, resp)
 }
 
-// maxAnalyticsRangeDays caps how far a single report may reach. The series is
-// materialised one entry per day in memory and in the response, so without a cap
-// a caller asking for 1970..2099 would have the server build a 47,000-point
-// array per chart.
+// The series is materialised one entry per day, so an uncapped range would build huge arrays per chart.
 const maxAnalyticsRangeDays = 400
 
-// parseTimeRange resolves the requested window to a UTC half-open-ish range:
-// midnight on the from date through the last instant of the to date.
-//
-// Everything is UTC on purpose. The queries bucket rows with
-// `AT TIME ZONE 'UTC'`, so the boundaries have to agree or the first and last
-// day of a report would be cut at the wrong hour.
+// parseTimeRange is UTC on purpose: the queries bucket with AT TIME ZONE 'UTC', so the boundaries must agree.
 func parseTimeRange(fromStr, toStr string) (time.Time, time.Time, error) {
 	now := time.Now().UTC()
 	to := endOfUTCDay(now)
@@ -319,10 +307,7 @@ func parseTimeRange(fromStr, toStr string) (time.Time, time.Time, error) {
 	if to.Before(from) {
 		return time.Time{}, time.Time{}, fmt.Errorf("from must not be later than to")
 	}
-	// Counted on the calendar, not by dividing the duration: `to` is the last
-	// instant of its day, and Duration.Hours() is a float64 that rounds
-	// 9599h59m59.999999999s up to exactly 9600, which put the count a day over
-	// and rejected ranges that sat exactly on the cap.
+	// Counted on the calendar: Duration.Hours() rounds 9599h59m59.999999999s up to 9600, a day over the cap.
 	if days := int(startOfUTCDay(to).Sub(from)/(24*time.Hour)) + 1; days > maxAnalyticsRangeDays {
 		return time.Time{}, time.Time{}, fmt.Errorf(
 			"the range covers %d days; %d is the maximum", days, maxAnalyticsRangeDays)
@@ -338,10 +323,7 @@ func startOfUTCDay(t time.Time) time.Time {
 	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// endOfUTCDay is the last representable instant of the day, so a range stated
-// inclusively really does include everything sent that day. The previous
-// implementation stopped a second early and quietly dropped anything accepted in
-// the final second.
+// endOfUTCDay is the last representable instant, so an inclusive range keeps the day's final second.
 func endOfUTCDay(t time.Time) time.Time {
 	return startOfUTCDay(t).AddDate(0, 0, 1).Add(-time.Nanosecond)
 }

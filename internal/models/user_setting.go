@@ -21,7 +21,7 @@ package models
 
 import "time"
 
-// UserSetting stores per-user preferences. Each user has at most one row.
+// Each user has at most one UserSetting row.
 type UserSetting struct {
 	ID                 uint   `json:"id" gorm:"primaryKey"`
 	UserID             uint   `json:"user_id" gorm:"uniqueIndex;not null"`

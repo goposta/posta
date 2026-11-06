@@ -28,8 +28,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// A JWT written by SetCookie must come back byte-identical from Cookie(),
-// otherwise okapi's cookie TokenLookup hands a corrupted token to the parser.
+// SetCookie's JWT must round-trip byte-identical, or okapi's cookie TokenLookup hands the parser a corrupt token.
 func TestSetCookie_RoundTripsJWT(t *testing.T) {
 	const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsImp0aSI6ImEtYl9jIn0.7Hy-_signature"
 
@@ -98,8 +97,7 @@ func TestSetCookie_SecureBehindTLSTerminatingProxy(t *testing.T) {
 	}
 }
 
-// ClearCookie must expire the cookie; its other attributes have to match
-// SetCookie's or the browser keeps the original.
+// ClearCookie's other attributes must match SetCookie's or the browser keeps the original.
 func TestClearCookie_Expires(t *testing.T) {
 	o := okapi.NewTestServer(t)
 	o.Get("/logout", func(c *okapi.Context) error {

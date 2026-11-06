@@ -42,25 +42,22 @@ import (
 )
 
 const (
-	DefaultMaxAttachmentSize int64 = 10 * 1024 * 1024 // 10MB per attachment
-	DefaultMaxTotalSize      int64 = 25 * 1024 * 1024 // 25MB total
+	DefaultMaxAttachmentSize int64 = 10 * 1024 * 1024
+	DefaultMaxTotalSize      int64 = 25 * 1024 * 1024
 
 	defaultFromAddress = "noreply@localhost"
 )
 
-// EmailEnqueuer enqueues an email for background delivery.
-// When set on the Service, emails are sent asynchronously via a worker.
+// EmailEnqueuer, when set on the Service, makes delivery asynchronous via a worker.
 type EmailEnqueuer interface {
 	EnqueueEmailSend(emailID uint, queue string) error
 	EnqueueEmailSendAt(emailID uint, queue string, sendAt time.Time) error
 }
 
-// PlanLimitsProvider resolves effective plan limits for a given workspace.
 type PlanLimitsProvider interface {
 	EffectiveLimits(workspaceID *uint) *PlanLimits
 }
 
-// PlanLimits holds the resolved limits from a plan or global settings.
 type PlanLimits struct {
 	HourlyRateLimit     int
 	DailyRateLimit      int
@@ -68,10 +65,7 @@ type PlanLimits struct {
 	MaxBatchSize        int
 }
 
-// LinkGenerator produces the signed public links Posta injects into messages:
-// the one-click (RFC 8058) unsubscribe URL and the hosted "view in browser" URL.
-// Kept as a narrow interface so the email service does not depend directly on the
-// tracking package.
+// LinkGenerator stays narrow so the email service does not depend on the tracking package.
 type LinkGenerator interface {
 	TxUnsubscribeURL(emailID uint) string
 	WebViewURL(emailUUID string) string
@@ -126,65 +120,48 @@ func NewService(
 	}
 }
 
-// SetVersionRepos sets the version and localization repositories for multi-language support.
 func (s *Service) SetVersionRepos(vr *repositories.TemplateVersionRepository, lr *repositories.TemplateLocalizationRepository) {
 	s.versionRepo = vr
 	s.localizationRepo = lr
 }
 
-// SetContactRepo sets the contact repository for tracking recipient stats.
 func (s *Service) SetContactRepo(cr *repositories.ContactRepository) {
 	s.contactRepo = cr
 }
 
-// SetUnsubscribeListRepo wires the repository used to validate Posta-managed
-// unsubscribe-list references at send time.
 func (s *Service) SetUnsubscribeListRepo(r *repositories.UnsubscribeListRepository) {
 	s.unsubRepo = r
 }
 
-// SetDomainVerification sets the repositories for enforcing verified-domain
-// sending. Strict mode is read from the workspace settings when a workspace is
-// active, falling back to the user's setting in legacy personal mode.
+// SetDomainVerification reads strict mode from workspace settings, falling back to the user's in personal mode.
 func (s *Service) SetDomainVerification(dr *repositories.DomainRepository, ur *repositories.UserRepository, wsr *repositories.WorkspaceSettingRepository) {
 	s.domainRepo = dr
 	s.userRepo = ur
 	s.wsSettingRepo = wsr
 }
 
-// SetSettings sets the platform settings provider for dynamic configuration.
 func (s *Service) SetSettings(sp *settings.Provider) {
 	s.settings = sp
 }
 
-// SetPlanLimits sets the plan limits provider for plan-aware enforcement.
 func (s *Service) SetPlanLimits(pl PlanLimitsProvider) {
 	s.planLimits = pl
 }
 
-// SetEnqueuer sets the email enqueuer for asynchronous delivery.
-// When set, emails are enqueued to a background worker instead of being sent synchronously.
 func (s *Service) SetEnqueuer(eq EmailEnqueuer) {
 	s.enqueuer = eq
 }
 
-// SetLinkGenerator wires the generator for Posta-injected public links — the
-// one-click unsubscribe URL and the hosted "view in browser" URL used to resolve
-// reserved {{ posta_* }} template variables.
+// SetLinkGenerator wires the links behind the reserved {{ posta_* }} template variables.
 func (s *Service) SetLinkGenerator(gen LinkGenerator) {
 	s.linkGen = gen
 }
 
-// SetBlobStore sets the blob storage backend for persisting email attachments.
-// When configured, attachment content is uploaded to the store and only metadata
-// (with a storage key) is kept in the database, reducing DB pressure.
+// SetBlobStore sends attachment content to the store and keeps only a storage key in the database.
 func (s *Service) SetBlobStore(bs blob.Store) {
 	s.blobStore = bs
 }
 
-// uploadAttachments stores each attachment's content in blob storage and replaces
-// the inline base64 content with a storage key reference. Returns the modified
-// attachments with StorageKey set and Content cleared.
 func (s *Service) uploadAttachments(ctx context.Context, emailUUID string, attachments []models.Attachment) ([]models.Attachment, error) {
 	result := make([]models.Attachment, len(attachments))
 	for i, att := range attachments {
@@ -205,8 +182,6 @@ func (s *Service) uploadAttachments(ctx context.Context, emailUUID string, attac
 	return result, nil
 }
 
-// DownloadAttachments fetches attachment content from blob storage and populates
-// the base64 Content field for each attachment that has a StorageKey.
 func (s *Service) DownloadAttachments(ctx context.Context, attachments []models.Attachment) ([]models.Attachment, error) {
 	return fetchAttachmentContent(ctx, s.blobStore, attachments)
 }
@@ -232,9 +207,7 @@ func fetchAttachmentContent(ctx context.Context, store blob.Store, attachments [
 	return result, nil
 }
 
-// persistAttachments prepares attachments for the email record. With a blob store
-// the bytes are uploaded and the record keeps only the key; without one the base64
-// content stays on the record, because the record is all the send worker gets.
+// Without a blob store the base64 content stays on the record, because the record is all the send worker gets.
 func (s *Service) persistAttachments(ctx context.Context, keyPrefix string, atts []models.Attachment) (string, error) {
 	if len(atts) == 0 {
 		return "", nil
@@ -251,9 +224,7 @@ func (s *Service) persistAttachments(ctx context.Context, keyPrefix string, atts
 	return string(b), nil
 }
 
-// LoadAttachments rebuilds the attachments to send from a stored email record.
-// The send worker runs long after Send returned, so the record is all it has:
-// whatever cannot be recovered here goes out as a zero-byte file. store may be nil.
+// LoadAttachments must recover everything from the record: whatever it cannot goes out as a zero-byte file.
 func LoadAttachments(ctx context.Context, em *models.Email, store blob.Store) ([]models.Attachment, error) {
 	if em.AttachmentsJSON == "" {
 		return nil, nil
@@ -268,7 +239,6 @@ func LoadAttachments(ctx context.Context, em *models.Email, store blob.Store) ([
 	return fetchAttachmentContent(ctx, store, atts)
 }
 
-// DeleteAttachments removes attachment blobs from storage for the given keys.
 func (s *Service) DeleteAttachments(ctx context.Context, attachments []models.Attachment) {
 	for _, att := range attachments {
 		if att.StorageKey != "" {
@@ -277,13 +247,10 @@ func (s *Service) DeleteAttachments(ctx context.Context, attachments []models.At
 	}
 }
 
-// OnSent sets a callback invoked after each successful email send.
 func (s *Service) OnSent(fn func()) { s.onSent = fn }
 
-// OnFailed sets a callback invoked after each failed email send.
 func (s *Service) OnFailed(fn func()) { s.onFailed = fn }
 
-// OnQueued sets a callback invoked after each email is enqueued for delivery.
 func (s *Service) OnQueued(fn func()) { s.onQueued = fn }
 
 var (
@@ -291,24 +258,16 @@ var (
 	ErrUnsubscribeInvalid      = errors.New("invalid unsubscribe configuration")
 )
 
-// Unsubscribe configures the List-Unsubscribe headers (RFC 2369 / 8058) and, for
-// the Posta-managed path, list-scoped suppression on a one-click opt-out.
 type Unsubscribe struct {
-	// ListID (Posta-managed): reference an existing UnsubscribeList by id.
 	ListID *uint `json:"list_id,omitempty" doc:"Reference an existing UnsubscribeList by id (Posta-managed). Posta mints the signed one-click URL and a click suppresses the recipient on this list only. Mutually exclusive with url."`
 
-	// URL (caller-managed): you own the endpoint; Posta only emits the header.
-	// Also the RFC 8058 POST target when OneClick is set.
-	URL string `json:"url,omitempty" format:"url" doc:"Caller-managed unsubscribe endpoint. Posta only emits the List-Unsubscribe header; you own the endpoint. Also the RFC 8058 POST target when one_click is true (which requires https). Mutually exclusive with list_id."`
-	// Mailto is an optional mailto: unsubscribe (RFC 2369), emitted alongside URL.
+	// URL is also the RFC 8058 POST target when OneClick is set.
+	URL    string `json:"url,omitempty" format:"url" doc:"Caller-managed unsubscribe endpoint. Posta only emits the List-Unsubscribe header; you own the endpoint. Also the RFC 8058 POST target when one_click is true (which requires https). Mutually exclusive with list_id."`
 	Mailto string `json:"mailto,omitempty" doc:"Optional mailto: URI emitted alongside the URL in the List-Unsubscribe header (RFC 2369). A bare address is accepted; Posta prepends 'mailto:' if missing."`
-	// OneClick emits "List-Unsubscribe-Post: List-Unsubscribe=One-Click" (requires
-	// an https URL for the caller-managed path).
+	// OneClick requires an https URL on the caller-managed path.
 	OneClick bool `json:"one_click,omitempty" doc:"Emit 'List-Unsubscribe-Post: List-Unsubscribe=One-Click' (RFC 8058). Applies to the https URL target only; the caller-managed path requires an https url. Implied true on the Posta-managed (list_id) path."`
 }
 
-// errRecipientSuppressed is the reason recorded on an email, and reported in a
-// batch result, when the recipient is on the workspace suppression list.
 const errRecipientSuppressed = "recipient is suppressed"
 
 type SendRequest struct {
@@ -319,30 +278,23 @@ type SendRequest struct {
 	Text        string              `json:"text"`
 	Attachments []models.Attachment `json:"attachments,omitempty" doc:"Optional file attachments. Each must include filename, content_type, and base64-encoded content. Subject to per-attachment and total size limits set by your plan."`
 	Headers     map[string]string   `json:"headers,omitempty"`
-	// SystemHeaders are headers Posta itself sets on internal sends, such as the
-	// Message-ID, In-Reply-To, and Reply-To that thread a form reply. They are
-	// never accepted from API callers and apply whether or not the platform
-	// allows custom headers.
+	// SystemHeaders are never accepted from API callers and apply whether or not custom headers are allowed.
 	SystemHeaders map[string]string `json:"-"`
 	Unsubscribe   *Unsubscribe      `json:"unsubscribe,omitempty"`
-	// Deprecated: use Unsubscribe. Kept for one minor release; mapped onto
-	// Unsubscribe{URL, OneClick} in resolveUnsubscribe.
+	// Deprecated: use Unsubscribe; mapped onto Unsubscribe{URL, OneClick} in resolveUnsubscribe.
 	ListUnsubscribeURL  string     `json:"list_unsubscribe_url,omitempty" deprecated:"true"`
 	ListUnsubscribePost bool       `json:"list_unsubscribe_post,omitempty" deprecated:"true"`
 	SendAt              *time.Time `json:"send_at,omitempty"`
-	// TemplateName is populated by internal template-send paths
-	TemplateName string `json:"-"`
+	TemplateName        string     `json:"-"`
 }
 
-// resolvedUnsub is the normalized, validated unsubscribe config used internally.
 type resolvedUnsub struct {
-	listID   *uint  // Posta-managed list (validated + owned)
+	listID   *uint
 	url      string // caller-managed https URL
-	mailto   string // normalized mailto: URI
-	oneClick bool   // emit List-Unsubscribe-Post
+	mailto   string
+	oneClick bool
 }
 
-// resolveUnsubscribe normalizes the request's unsubscribe config
 func (s *Service) resolveUnsubscribe(scope repositories.ResourceScope, req *SendRequest) (*resolvedUnsub, error) {
 	u := req.Unsubscribe
 	// Map legacy fields onto the object when the new one is absent.
@@ -363,8 +315,7 @@ func (s *Service) resolveUnsubscribe(scope repositories.ResourceScope, req *Send
 		mailto = "mailto:" + mailto
 	}
 
-	// Posta-managed: validate + own the list. The one-click URL is minted later
-	// (it needs the email id); OneClick is implied.
+	// The one-click URL for a Posta-managed list is minted later, since it needs the email id.
 	if u.ListID != nil {
 		if s.unsubRepo == nil {
 			return nil, fmt.Errorf("%w: list-managed unsubscribe is not configured", ErrUnsubscribeInvalid)
@@ -375,7 +326,6 @@ func (s *Service) resolveUnsubscribe(scope repositories.ResourceScope, req *Send
 		return &resolvedUnsub{listID: u.ListID, mailto: mailto, oneClick: true}, nil
 	}
 
-	// Caller-managed.
 	if u.URL == "" {
 		if mailto == "" {
 			return nil, nil
@@ -434,7 +384,6 @@ type BatchResult struct {
 	Error  string             `json:"error,omitempty"`
 }
 
-// DryRunResponse is returned when a send request is validated without actually sending.
 type DryRunResponse struct {
 	Valid           bool     `json:"valid"`
 	From            string   `json:"from"`
@@ -448,7 +397,6 @@ type DryRunResponse struct {
 	RenderedSubject string   `json:"rendered_subject,omitempty"`
 }
 
-// ValidateSend runs all validation checks without persisting or sending.
 func (s *Service) ValidateSend(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *SendRequest) (*DryRunResponse, error) {
 	if err := validateAddresses(req.From, req.To); err != nil {
 		return nil, err
@@ -515,7 +463,6 @@ func (s *Service) ValidateSend(ctx context.Context, userID uint, workspaceID *ui
 	}, nil
 }
 
-// ValidateSendWithTemplate validates a template send request without sending.
 func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *SendTemplateRequest) (*DryRunResponse, error) {
 	tmpl, err := s.findTemplate(userID, workspaceID, req.TemplateID, req.Template)
 	if err != nil {
@@ -548,7 +495,6 @@ func (s *Service) ValidateSendWithTemplate(ctx context.Context, userID uint, wor
 	return resp, nil
 }
 
-// ValidateSendBatch validates a batch send request without sending.
 func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceID *uint, userEmail string, req *BatchRequest) (*DryRunResponse, error) {
 	from := req.From
 	if from == "" {
@@ -614,19 +560,16 @@ func (s *Service) ValidateSendBatch(ctx context.Context, userID uint, workspaceI
 }
 
 func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *uint, userEmail string, req *SendRequest) (*SendResponse, error) {
-	// Validate email addresses
 	if err := validateAddresses(req.From, req.To); err != nil {
 		return nil, err
 	}
 
 	req.From = s.applyDefaultSenderName(workspaceID, req.From)
 
-	// Enforce maintenance mode
 	if s.settings != nil && s.settings.MaintenanceMode() {
 		return nil, fmt.Errorf("maintenance: email sending is temporarily disabled")
 	}
 
-	// Rate limiting: use plan limits if available, otherwise global.
 	if s.planLimits != nil {
 		pl := s.planLimits.EffectiveLimits(workspaceID)
 		if err := s.limiter.AllowWithLimits(ctx, userEmail, pl.HourlyRateLimit, pl.DailyRateLimit); err != nil {
@@ -638,7 +581,6 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		}
 	}
 
-	// Validate attachments if present
 	if len(req.Attachments) > 0 {
 		maxSize := DefaultMaxAttachmentSize
 		if s.planLimits != nil {
@@ -654,14 +596,12 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		}
 	}
 
-	// Enforce verified-domain sending. Strict mode is scoped to the active
-	// workspace (or the user in legacy personal mode).
+	// Strict mode is scoped to the active workspace, or the user in legacy personal mode.
 	if err := s.checkDomainVerification(userID, workspaceID, req.From); err != nil {
 		return nil, err
 	}
 
-	// Resolve + validate the unsubscribe config (Posta-managed list, or caller-managed
-	// url/mailto). nil ⇒ no headers, no suppression — the transactional default.
+	// A nil unsubscribe config means no headers and no suppression, the transactional default.
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	unsub, err := s.resolveUnsubscribe(scope, req)
 	if err != nil {
@@ -679,7 +619,6 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 			return nil, fmt.Errorf("failed to check suppression list: %w", err)
 		}
 		if len(filtered) == 0 {
-			// Log the suppressed email attempt
 			var apiKeyPtr *uint
 			if apiKeyID > 0 {
 				apiKeyPtr = &apiKeyID
@@ -701,7 +640,6 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 			_ = s.emailRepo.Create(em)
 			return &SendResponse{ID: em.UUID, Status: em.Status}, nil
 		}
-		// Log suppressed recipients individually if some were filtered out
 		if len(filtered) < len(req.To) {
 			suppressed := diffRecipients(req.To, filtered)
 			var apiKeyPtr *uint
@@ -727,20 +665,17 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		req.To = filtered
 	}
 
-	// Persist attachments. The blob key prefix is a temporary stand-in for the
-	// email UUID, which is not assigned until the record is created.
+	// The blob key prefix stands in for the email UUID, which is not assigned until the record is created.
 	attachmentsJSON, err := s.persistAttachments(ctx, fmt.Sprintf("%d", time.Now().UnixNano()), req.Attachments)
 	if err != nil {
 		return nil, err
 	}
 
-	// Auto-generate plain text from HTML when text body is not provided
 	if req.Text == "" && req.HTML != "" {
 		req.Text = HTMLToText(req.HTML)
 	}
 
-	// Resolve the headers once; the async worker reads them back from the row
-	// and the sync path sends them directly, so both paths agree.
+	// Resolve headers once so the async worker, reading them from the row, and the sync path agree.
 	customEnabled := s.settings != nil && s.settings.CustomHeadersEnabled()
 	req.Headers = outboundHeaders(req, customEnabled)
 	var headersJSON string
@@ -754,8 +689,7 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		apiKeyPtr = &apiKeyID
 	}
 
-	// Posta-managed (list) URL is minted in the post-Create block (it needs em.ID),
-	// which also sets ListUnsubscribePost for that path.
+	// The Posta-managed list URL is minted after Create since it needs em.ID.
 	var luURL, luMailto string
 	var luPost bool
 	if unsub != nil {
@@ -804,7 +738,6 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 			req.Text = em.TextBody
 			req.Subject = em.Subject
 		}
-		// Posta-managed list: emit the RFC 8058 one-click List-Unsubscribe header.
 		if em.UnsubscribeListID != nil {
 			em.ListUnsubscribeURL = unsubscribeURL
 			em.ListUnsubscribePost = true
@@ -824,7 +757,6 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		return &SendResponse{ID: em.UUID, Status: em.Status}, nil
 	}
 
-	// Scheduled sending
 	if req.SendAt != nil && req.SendAt.After(time.Now()) && s.enqueuer != nil {
 		em.Status = models.EmailStatusScheduled
 		em.ScheduledAt = req.SendAt
@@ -838,7 +770,6 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		return &SendResponse{ID: em.UUID, Status: em.Status}, nil
 	}
 
-	// Asynchronous path: enqueue the email for background delivery
 	if s.enqueuer != nil {
 		em.Status = models.EmailStatusQueued
 		_ = s.emailRepo.Update(em)
@@ -858,11 +789,9 @@ func (s *Service) Send(ctx context.Context, userID, apiKeyID uint, workspaceID *
 		return &SendResponse{ID: em.UUID, Status: em.Status}, nil
 	}
 
-	// Synchronous fallback: send email directly (no worker configured)
 	return s.sendSync(em, userID, workspaceID, req)
 }
 
-// sendSync performs synchronous SMTP delivery (used when no enqueuer is configured).
 func (s *Service) sendSync(em *models.Email, userID uint, workspaceID *uint, req *SendRequest) (*SendResponse, error) {
 	var smtpServer *models.SMTPServer
 	var err error
@@ -979,11 +908,9 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 		from = defaultFromAddress
 	}
 
-	// Validate sender address
 	if err := validateEmailAddress(from); err != nil {
 		return nil, fmt.Errorf("invalid sender: %w", err)
 	}
-	// Validate all recipient addresses
 	for _, r := range req.Recipients {
 		if err := validateEmailAddress(r.Email); err != nil {
 			return nil, fmt.Errorf("invalid recipient: %w", err)
@@ -995,8 +922,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 		return nil, fmt.Errorf("template not found: %w", err)
 	}
 
-	// Resolve + validate the batch's unsubscribe config once upfront so a bad
-	// list_id fails the batch immediately instead of replicating the error per row.
+	// Resolve unsubscribe once so a bad list_id fails the whole batch instead of every row.
 	scope := repositories.ResourceScope{UserID: userID, WorkspaceID: workspaceID}
 	unsub, err := s.resolveUnsubscribe(scope, &SendRequest{Unsubscribe: req.Unsubscribe})
 	if err != nil {
@@ -1017,7 +943,6 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 		if s.suppressionRepo != nil {
 			suppressed, err := s.suppressionRepo.IsSuppressedForList(scope, recipient.Email, unsubListID)
 			if err == nil && suppressed {
-				// Log the suppressed email
 				var apiKeyPtr *uint
 				if apiKeyID > 0 {
 					apiKeyPtr = &apiKeyID
@@ -1047,7 +972,6 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 			}
 		}
 
-		// Use per-recipient language, fall back to batch-level language
 		lang := recipient.Language
 		if lang == "" {
 			lang = req.Language
@@ -1094,8 +1018,7 @@ func (s *Service) SendBatch(ctx context.Context, userID, apiKeyID uint, workspac
 	return resp, nil
 }
 
-// SendTestByTemplateID sends a test email using a template looked up by ID.
-// It uses apiKeyID=0 since test sends come from the dashboard, not an API key.
+// SendTestByTemplateID uses apiKeyID=0 since test sends come from the dashboard.
 func (s *Service) SendTestByTemplateID(ctx context.Context, userID uint, workspaceID *uint, userEmail string, templateID uint, req *SendTestRequest) (*SendResponse, error) {
 	tmpl, err := s.templateRepo.FindByID(templateID)
 	if err != nil {
@@ -1129,13 +1052,10 @@ type SendTestRequest struct {
 	TemplateData map[string]any `json:"template_data" doc:"Variables substituted into the template's {{ var_name }} placeholders. Reserved posta_* variables (e.g. posta_unsubscribe_url, posta_web_view_url) are injected automatically."`
 }
 
-// defaultRetryLimit is the fallback maximum number of manual retries when
-// no SMTP server is configured or the server's MaxRetries is zero.
+// defaultRetryLimit applies when no SMTP server is configured or its MaxRetries is zero.
 const defaultRetryLimit = 5
 
-// RetryEmail re-enqueues a failed email for another delivery attempt.
-// Only emails with status "failed" can be retried, and the retry count
-// must not exceed the SMTP server's MaxRetries (or the default limit).
+// RetryEmail only retries "failed" emails, up to the SMTP server's MaxRetries or the default limit.
 func (s *Service) RetryEmail(emailUUID string, userID uint, workspaceID *uint) (*SendResponse, error) {
 	em, err := s.emailRepo.FindByUUID(emailUUID)
 	if err != nil {
@@ -1144,8 +1064,6 @@ func (s *Service) RetryEmail(emailUUID string, userID uint, workspaceID *uint) (
 	if em.UserID != userID {
 		return nil, fmt.Errorf("email not found")
 	}
-	// When called from a workspace-scoped context, verify the email belongs
-	// to that workspace.
 	if workspaceID != nil {
 		if em.WorkspaceID == nil || *em.WorkspaceID != *workspaceID {
 			return nil, fmt.Errorf("email not found")
@@ -1155,7 +1073,6 @@ func (s *Service) RetryEmail(emailUUID string, userID uint, workspaceID *uint) (
 		return nil, fmt.Errorf("only failed emails can be retried")
 	}
 
-	// Enforce retry limit from the SMTP server configuration.
 	maxRetries := defaultRetryLimit
 	if s.smtpRepo != nil {
 		var smtpServer *models.SMTPServer
@@ -1187,7 +1104,6 @@ func (s *Service) RetryEmail(emailUUID string, userID uint, workspaceID *uint) (
 		return &SendResponse{ID: em.UUID, Status: em.Status}, nil
 	}
 
-	// Synchronous fallback
 	return s.sendSync(em, userID, em.WorkspaceID, &SendRequest{
 		From:                em.Sender,
 		To:                  em.Recipients,
@@ -1199,8 +1115,6 @@ func (s *Service) RetryEmail(emailUUID string, userID uint, workspaceID *uint) (
 	})
 }
 
-// RenderTemplate resolves a template by ID or name and renders it with the given data,
-// returning the rendered subject, HTML, and text without sending.
 func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uint, ref TemplateRef, language string, data map[string]any) (*RenderedTemplate, error) {
 	tmpl, err := s.findTemplate(userID, workspaceID, templateID, ref)
 	if err != nil {
@@ -1210,20 +1124,14 @@ func (s *Service) RenderTemplate(userID uint, workspaceID *uint, templateID *uin
 	if err != nil {
 		return nil, err
 	}
-	// This is a preview (editor / dry-run): there is no real message yet, so show
-	// the reserved {{ posta_* }} variables by name rather than leaking the internal
-	// sentinels or generating throwaway links.
+	// Previews have no real message, so show reserved variables by name, not sentinels or throwaway links.
 	rendered.HTML = SubstituteSystemLinks(rendered.HTML, VarWebView, VarUnsubscribe)
 	rendered.Text = SubstituteSystemLinks(rendered.Text, VarWebView, VarUnsubscribe)
 	rendered.Subject = SubstituteSystemLinks(rendered.Subject, VarWebView, VarUnsubscribe)
 	return rendered, nil
 }
 
-// findTemplate looks up the template ref names, or the deprecated templateID
-// when ref is empty. A ref is matched by name in the workspace first; one that
-// is all digits and matches no name is then looked up as an ID, so a template
-// named "2024" still wins over the template whose ID is 2024. Until 0.19 a ref
-// matching nothing else is tried as a display name, with a warning.
+// findTemplate matches names before all-digit IDs, so a template named "2024" wins over ID 2024.
 func (s *Service) findTemplate(userID uint, workspaceID *uint, templateID *uint, ref TemplateRef) (*models.Template, error) {
 	if ref == "" {
 		if templateID != nil && *templateID != 0 {
@@ -1256,9 +1164,7 @@ func (s *Service) findTemplate(userID uint, workspaceID *uint, templateID *uint,
 	return nil, fmt.Errorf("template %q not found", ref)
 }
 
-// findTemplateByID performs a primary-key lookup and verifies the caller owns
-// the template: it must belong to the same workspace, or be the user's own
-// personal template outside a workspace.
+// findTemplateByID requires the template to be in the caller's workspace, or their own personal one.
 func (s *Service) findTemplateByID(userID uint, workspaceID *uint, id uint) (*models.Template, error) {
 	tmpl, err := s.templateRepo.FindByID(id)
 	if err != nil {
@@ -1274,8 +1180,6 @@ func (s *Service) findTemplateByID(userID uint, workspaceID *uint, id uint) (*mo
 	return tmpl, nil
 }
 
-// resolveAndRender resolves the template content using versioned localizations
-// and renders it with the given data.
 func (s *Service) resolveAndRender(tmpl *models.Template, language string, data map[string]any) (*RenderedTemplate, error) {
 	if tmpl.ActiveVersionID == nil {
 		return nil, fmt.Errorf("template %q has no active version", tmpl.DisplayName)
@@ -1301,13 +1205,11 @@ func (s *Service) resolveAndRender(tmpl *models.Template, language string, data 
 		TextTemplate:    l.TextTemplate,
 		CSS:             css,
 	}
-	// Inject reserved {{ posta_* }} variables as sentinels; the real per-message
-	// URLs are substituted later in Send once the email identity is known.
+	// Reserved variables render as sentinels; Send substitutes the real per-message URLs once the email is known.
 	return s.renderer.Render(input, WithSystemVars(data))
 }
 
-// resolveLocalization implements the language fallback strategy:
-// requested language → base language (e.g. fr-CA → fr) → template default → "en"
+// Fallback order: requested language, base language (fr-CA to fr), template default, then "en".
 func (s *Service) resolveLocalization(versionID uint, language, defaultLang string) *models.TemplateLocalization {
 	if language == "" {
 		language = defaultLang
@@ -1316,13 +1218,11 @@ func (s *Service) resolveLocalization(versionID uint, language, defaultLang stri
 		language = "en"
 	}
 
-	// Try exact match
 	l, err := s.localizationRepo.FindByVersionAndLanguage(versionID, language)
 	if err == nil {
 		return l
 	}
 
-	// Try base language (e.g. fr-CA → fr)
 	if idx := strings.Index(language, "-"); idx > 0 {
 		base := language[:idx]
 		l, err = s.localizationRepo.FindByVersionAndLanguage(versionID, base)
@@ -1331,7 +1231,6 @@ func (s *Service) resolveLocalization(versionID uint, language, defaultLang stri
 		}
 	}
 
-	// Try template default language
 	if language != defaultLang && defaultLang != "" {
 		l, err = s.localizationRepo.FindByVersionAndLanguage(versionID, defaultLang)
 		if err == nil {
@@ -1339,7 +1238,6 @@ func (s *Service) resolveLocalization(versionID uint, language, defaultLang stri
 		}
 	}
 
-	// Try "en" as final fallback
 	if language != "en" && defaultLang != "en" {
 		l, err = s.localizationRepo.FindByVersionAndLanguage(versionID, "en")
 		if err == nil {
@@ -1350,7 +1248,6 @@ func (s *Service) resolveLocalization(versionID uint, language, defaultLang stri
 	return nil
 }
 
-// diffRecipients returns elements in original that are not in filtered.
 func diffRecipients(original, filtered []string) []string {
 	set := make(map[string]struct{}, len(filtered))
 	for _, e := range filtered {
@@ -1365,9 +1262,7 @@ func diffRecipients(original, filtered []string) []string {
 	return diff
 }
 
-// outboundHeaders returns the headers a message is sent with: the caller's
-// custom headers, filtered, when the platform allows them, plus the system
-// headers Posta set itself, which always apply and win on conflict.
+// System headers always apply and win over the caller's custom headers on conflict.
 func outboundHeaders(req *SendRequest, customEnabled bool) map[string]string {
 	out := map[string]string{}
 	if customEnabled {
@@ -1389,15 +1284,8 @@ func outboundHeaders(req *SendRequest, customEnabled bool) map[string]string {
 	return out
 }
 
-// filterCustomHeaders removes headers that could conflict with system-set
-// headers or be used for spoofing. It returns a sanitized copy.
-//
-// Date and Message-ID are deliberately allowed: buildMessage emits them only
-// when the caller has not supplied its own, so an integration that needs a
-// stable Message-ID (e.g. for threading against an external system) can set
-// one while every other message still gets a generated RFC 5322 pair.
+// Date and Message-ID stay allowed so an integration can set a stable Message-ID; buildMessage only fills gaps.
 func filterCustomHeaders(headers map[string]string) map[string]string {
-	// Headers that are set by the system and must not be overridden.
 	reserved := map[string]bool{
 		"from":         true,
 		"to":           true,
@@ -1406,7 +1294,6 @@ func filterCustomHeaders(headers map[string]string) map[string]string {
 		"content-type": true,
 	}
 
-	// Prefixes that must not appear in custom headers.
 	blockedPrefixes := []string{
 		"x-posta-",
 		"dkim-",
@@ -1465,7 +1352,6 @@ func (s *Service) checkDomainVerification(userID uint, workspaceID *uint, from s
 		return nil
 	}
 
-	// Resolve whether strict domain mode is on for this scope.
 	strict := false
 	if workspaceID != nil {
 		if s.wsSettingRepo != nil {
@@ -1501,7 +1387,6 @@ func (s *Service) checkDomainVerification(userID uint, workspaceID *uint, from s
 	return nil
 }
 
-// validateEmailAddress checks that a string is a valid RFC 5322 email address
 func validateEmailAddress(addr string) error {
 	parsed, err := mail.ParseAddress(addr)
 	if err != nil {
@@ -1517,7 +1402,6 @@ func validateEmailAddress(addr string) error {
 	return nil
 }
 
-// validateAddresses validates the From and all To addresses.
 func validateAddresses(from string, to []string) error {
 	if err := validateEmailAddress(from); err != nil {
 		return fmt.Errorf("invalid sender: %w", err)
@@ -1530,7 +1414,6 @@ func validateAddresses(from string, to []string) error {
 	return nil
 }
 
-// extractSenderDomain returns the domain part of a sender address.
 func extractSenderDomain(from string) string {
 	bare := extractEmail(from)
 	parts := strings.SplitN(bare, "@", 2)
@@ -1540,8 +1423,6 @@ func extractSenderDomain(from string) string {
 	return strings.ToLower(parts[1])
 }
 
-// extractEmail extracts the bare email address from a string that may be in
-// RFC 5322 format like "Display Name <user@example.com>" or just "user@example.com".
 func extractEmail(from string) string {
 	addr, err := mail.ParseAddress(from)
 	if err != nil {

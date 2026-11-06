@@ -24,8 +24,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// applyPersonalWorkspaces is the Apply func for the one-shot personal-workspace
-// backfill.
 func applyPersonalWorkspaces(tx *gorm.DB) error {
 	svc := workspaceprovision.New(runOptions.PlanEnforcement)
 	return svc.BackfillMissingWorkspaces(tx)

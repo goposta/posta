@@ -27,8 +27,7 @@ import (
 	"github.com/goposta/posta/internal/models"
 )
 
-// Auto-assign is Posta Enterprise. Community may save a widget as long as it
-// leaves the auto-assign settings as they are.
+// Community may save a widget as long as it leaves the Enterprise auto-assign settings unchanged.
 func TestChatAutoAssignNeedsALicenseToChange(t *testing.T) {
 	h := &ChatWidgetHandler{edition: enterprise.Community()}
 	w := &models.ChatWidget{AutoAssign: false, MaxOpenPerAgent: 0}

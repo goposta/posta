@@ -21,7 +21,6 @@ package models
 
 import "time"
 
-// Session tracks an active JWT session for a user.
 type Session struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	UserID    uint      `json:"user_id" gorm:"index;not null"`
@@ -35,12 +34,10 @@ type Session struct {
 	User User `json:"-" gorm:"foreignKey:UserID"`
 }
 
-// IsExpired returns true if the session has passed its expiry time.
 func (s *Session) IsExpired() bool {
 	return time.Now().After(s.ExpiresAt)
 }
 
-// IsActive returns true if the session is neither revoked nor expired.
 func (s *Session) IsActive() bool {
 	return !s.Revoked && !s.IsExpired()
 }

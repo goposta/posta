@@ -21,8 +21,7 @@ package handlers
 
 import "testing"
 
-// Absent means seed. A client that predates the flag, or one that does not set
-// it, should get a workspace it can send from rather than an empty one.
+// Absent means seed, so older clients get a workspace they can send from rather than an empty one.
 func TestShouldSeedWorkspace(t *testing.T) {
 	yes, no := true, false
 

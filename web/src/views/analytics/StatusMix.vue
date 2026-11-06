@@ -5,8 +5,6 @@ import { formatNumber } from "./chart";
 
 const props = defineProps<{ rows: StatusBreakdown[] }>();
 
-// What each status means in Posta, so the page explains itself rather than
-// assuming the reader knows the pipeline.
 const MEANING: Record<string, string> = {
   sent: "Handed off to the receiving server",
   failed: "The send did not succeed",
@@ -29,7 +27,6 @@ const COLOR: Record<string, string> = {
 
 const total = computed(() => props.rows.reduce((sum, r) => sum + r.count, 0));
 
-// Largest first: the shape of the mix is the point, not alphabetical order.
 const sorted = computed(() => [...props.rows].sort((a, b) => b.count - a.count));
 
 function percent(count: number): number {

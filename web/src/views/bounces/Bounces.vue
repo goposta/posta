@@ -123,7 +123,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
     </div>
 
     <template v-else>
-      <!-- Bounces Tab -->
       <div v-if="activeTab === 'bounces'" class="card">
         <div class="card-header">
           <h2>Bounces</h2>
@@ -156,7 +155,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
         </div>
       </div>
 
-      <!-- Suppressions Tab -->
       <div v-if="activeTab === 'suppressions'" class="card">
         <div class="card-header">
           <h2>Suppressions</h2>
@@ -196,7 +194,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </div>
     </template>
 
-    <!-- Add Suppression Modal -->
     <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

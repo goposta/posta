@@ -20,7 +20,6 @@ const loading = ref(true)
 const contact = ref<Contact | null>(null)
 const suppressingEmail = ref('')
 
-// Add to list modal
 const showAddToListModal = ref(false)
 const contactLists = ref<ContactListWithCount[]>([])
 const selectedListId = ref<number | null>(null)
@@ -175,7 +174,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       <p>The contact you are looking for does not exist.</p>
     </div>
 
-    <!-- Add to Contact List Modal -->
     <div v-if="showAddToListModal" class="modal-overlay" @mousedown="watchClickStart" 
       @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>

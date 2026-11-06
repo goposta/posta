@@ -72,6 +72,8 @@ jobs:
           tags: |
             ${{ vars.BUILDKIT_IMAGE }}:${{ env.VERSION }}
             ${{ vars.BUILDKIT_IMAGE }}:${{ env.CHANNEL_TAG }}
+            goposta/posta:${{ env.VERSION }}
+            goposta/posta:${{ env.CHANNEL_TAG }}
             ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}
             ${{ env.GHCR_IMAGE }}:${{ env.CHANNEL_TAG }}
           cache-from: type=gha

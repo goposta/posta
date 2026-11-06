@@ -28,18 +28,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// embeddedKeyring is the keyring posta-license writes, set at link time with
-// -ldflags "-X github.com/goposta/posta/internal/enterprise.embeddedKeyring=<base64>".
-// A build without one runs as Community.
+// Set at link time via -ldflags -X ...enterprise.embeddedKeyring=<base64>; a build without one runs as Community.
 var embeddedKeyring string
 
-// reloadEvery bounds how stale this process's view of the stored license may
-// be. Another replica, or the API server when this is the worker, may
-// install or remove it.
+// Bounds staleness: another replica, or the server when this is the worker, may install or remove the license.
 const reloadEvery = time.Minute
 
-// New returns the license-verifying EE. It loads the stored license, or
-// installs the one given in opts when none is stored.
 func New(db *gorm.DB, opts Options) EE {
 	e := &impl{db: db, opts: opts, ldap: eldap.New(opts.LDAPDirectories, opts.Decrypt)}
 	if ring, err := license.ParseKeyring(embeddedKeyring); err != nil || ring.Product != Product {
@@ -70,7 +64,6 @@ type impl struct {
 	loadedAt time.Time
 }
 
-// loadedLicense is the stored license as last read.
 type loadedLicense struct {
 	token      string
 	claims     *license.Claims // nil when there is none, or it does not verify
@@ -96,14 +89,12 @@ func (e *impl) installFromOptions() {
 	}
 }
 
-// reload reads the stored license and verifies it again. The token is
-// authoritative, so a row edited in the database does not verify.
+// The token is authoritative, so a license row edited in the database does not verify.
 func (e *impl) reload() error {
 	// Find, not First: no license is the usual case, not an error to log.
 	var rows []models.License
 	if err := e.db.Order("id DESC").Limit(1).Find(&rows).Error; err != nil {
-		// Keep what was loaded: a database hiccup must not switch a
-		// licensed deployment off.
+		// Keep what was loaded: a database hiccup must not switch a licensed deployment off.
 		e.mu.Lock()
 		e.loadedAt = time.Now()
 		e.mu.Unlock()
@@ -132,8 +123,7 @@ func (e *impl) reload() error {
 	return nil
 }
 
-// verify checks a token and its bindings. requestHost counts for the URL
-// binding at install time only; there is no request at boot.
+// requestHost counts for the URL binding at install time only; there is no request at boot.
 func (e *impl) verify(token, requestHost string) (claims *license.Claims, unknownKey bool, binding string) {
 	if e.ring == nil {
 		return nil, false, ""
@@ -165,9 +155,7 @@ func (e *impl) current() loadedLicense {
 	return e.loaded
 }
 
-// bindingFailure names the binding the license fails here, or "". Both
-// bindings must hold. The Install ID must match exactly; the URL matches the
-// configured web URL or the request host.
+// Both bindings must hold: the Install ID exactly, the URL against the configured web URL or the request host.
 func (e *impl) bindingFailure(c license.Claims, requestHost string) string {
 	if id := strings.TrimSpace(c.InstallID); id != "" && !strings.EqualFold(id, strings.TrimSpace(e.opts.InstallID)) {
 		return BindingInstallID
@@ -178,9 +166,7 @@ func (e *impl) bindingFailure(c license.Claims, requestHost string) string {
 	return ""
 }
 
-// urlAllowed reports whether a license bound to licenseURL may run where the
-// candidates point. When no candidate is known it fails open, so a
-// deployment without POSTA_WEB_URL is never locked out by a missing setting.
+// Fails open with no candidate, so a deployment without POSTA_WEB_URL is never locked out by a missing setting.
 func urlAllowed(licenseURL string, candidates ...string) bool {
 	want := hostOf(licenseURL)
 	if want == "" {
@@ -200,7 +186,6 @@ func urlAllowed(licenseURL string, candidates ...string) bool {
 	return !known
 }
 
-// hostOf reduces a URL or a host to its lowercased hostname.
 func hostOf(raw string) string {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" {
@@ -240,8 +225,7 @@ func (e *impl) Status() Status {
 
 func (e *impl) Licensed() bool { return e.Status().Licensed() }
 
-// LDAP is on while licensed, degraded included: an expired license freezes
-// settings but never locks people out.
+// On while degraded too: an expired license freezes settings but never locks people out.
 func (e *impl) LDAP() LDAPAuthenticator {
 	if !e.Licensed() {
 		return nil
@@ -249,8 +233,7 @@ func (e *impl) LDAP() LDAPAuthenticator {
 	return ldapAdapter{e.ldap}
 }
 
-// ldapAdapter maps the ldap package's types, which do not import this
-// package, onto LDAPAuthenticator.
+// The ldap package does not import this one, so its types are mapped here.
 type ldapAdapter struct{ p *eldap.Provider }
 
 func (a ldapAdapter) Authenticate(ctx context.Context, email, password string) (LDAPIdentity, error) {
@@ -272,8 +255,7 @@ func (e *impl) Mutable() bool         { return e.Status().Mutable() }
 func (e *impl) Require() error        { return gate(e.Status()) }
 func (e *impl) RequireMutable() error { return gateMutable(e.Status()) }
 
-// Install verifies a token and stores it as the only license. A license
-// bound to another installation is refused rather than stored.
+// A license bound to another installation is refused rather than stored.
 func (e *impl) Install(ctx context.Context, token, requestHost string) (Status, error) {
 	token = strings.TrimSpace(token)
 	if e.ring == nil {

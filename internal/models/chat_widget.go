@@ -34,11 +34,9 @@ const (
 	ChatWidgetStatusArchived ChatWidgetStatus = "archived"
 )
 
-// ChatWidgetKeyPrefix marks a chat widget's public key, so a key pasted in the
-// wrong place is recognisable.
+// ChatWidgetKeyPrefix makes a key pasted in the wrong place recognisable.
 const ChatWidgetKeyPrefix = "pcw_"
 
-// NewChatWidgetKey returns a random public key for the embed snippet.
 func NewChatWidgetKey() (string, error) {
 	key, err := NewFormPublicKey()
 	if err != nil {
@@ -49,12 +47,9 @@ func NewChatWidgetKey() (string, error) {
 
 const (
 	DefaultChatMaxMessageBytes = 4096
-	// ScanSourceChatWidget is the ScanSource kind of a chat widget.
-	ScanSourceChatWidget = "chat_widget"
+	ScanSourceChatWidget       = "chat_widget"
 )
 
-// ChatWidget is an embeddable live chat: the public key a website loads it
-// with, the origins allowed to use it, its appearance, and its spam posture.
 type ChatWidget struct {
 	ID          uint             `json:"id" gorm:"primaryKey"`
 	UUID        string           `json:"uuid" gorm:"type:uuid;default:gen_random_uuid();uniqueIndex;not null"`
@@ -64,14 +59,11 @@ type ChatWidget struct {
 	PublicKey   string           `json:"public_key" gorm:"uniqueIndex;not null"`
 	Status      ChatWidgetStatus `json:"status" gorm:"type:varchar(20);default:'active';index;not null"`
 
-	// Chat is JS-only, so a request without an Origin is a script, not a
-	// browser: StrictOrigin is on by default.
+	// Chat is JS-only, so a request without an Origin is a script, not a browser: StrictOrigin is on by default.
 	AllowedOrigins pq.StringArray `json:"allowed_origins" gorm:"type:text[]"`
 	StrictOrigin   bool           `json:"strict_origin" gorm:"default:true;not null"`
 
-	// Appearance, served by the public config endpoint. AccentColor and
-	// AvatarURL end up in the widget's shadow DOM on the customer's page, so
-	// they are validated on save.
+	// AccentColor and AvatarURL end up in the widget's shadow DOM on the customer's page, so they are validated on save.
 	Title          string `json:"title"`
 	Greeting       string `json:"greeting"`
 	AccentColor    string `json:"accent_color" gorm:"size:7"`
@@ -79,34 +71,27 @@ type ChatWidget struct {
 	AvatarURL      string `json:"avatar_url"`
 	ShowAgentNames bool   `json:"show_agent_names" gorm:"default:true;not null"`
 
-	// Pre-chat form. Email is always required while the widget is offline.
+	// Email is always required while the widget is offline.
 	RequireEmail bool `json:"require_email" gorm:"default:false;not null"`
 	RequireName  bool `json:"require_name" gorm:"default:false;not null"`
 
-	// Availability. The widget is online when an agent is and the time is
-	// inside business hours (empty hours: always). Offline, it either takes
-	// messages to answer by email or hides.
+	// Online needs an online agent and the time inside business hours (empty: always); offline it takes messages or hides.
 	BusinessHours   BusinessHours `json:"business_hours" gorm:"type:jsonb"`
 	OfflineMode     string        `json:"offline_mode" gorm:"type:varchar(8);default:'email';not null"`
 	OfflineGreeting string        `json:"offline_greeting"`
 
-	// ReplyFrom sends agent replies to visitors who left; it must be on an
-	// ownership-verified domain of the workspace.
+	// ReplyFrom must be on an ownership-verified domain of the workspace.
 	ReplyFrom     string `json:"reply_from"`
 	ReplyFromName string `json:"reply_from_name"`
 
 	// Attachments: images and PDFs up to 5 MB, stored in the blob store.
 	AllowAttachments bool `json:"allow_attachments" gorm:"default:false;not null"`
 
-	// Auto-assign gives each new conversation to an online agent in turn,
-	// skipping agents who already hold MaxOpenPerAgent open conversations
-	// (0: no cap).
+	// Auto-assign rotates new conversations over online agents holding fewer than MaxOpenPerAgent (0: no cap).
 	AutoAssign      bool `json:"auto_assign" gorm:"default:false;not null"`
 	MaxOpenPerAgent int  `json:"max_open_per_agent" gorm:"default:0;not null"`
 
-	// IdentitySecretEnc signs PostaChat.identify() on the customer's server.
-	// Stored encrypted, shown once when rotated; HasIdentitySecret says
-	// whether one is set.
+	// IdentitySecretEnc is stored encrypted and shown once when rotated.
 	IdentitySecretEnc string `json:"-"`
 	HasIdentitySecret bool   `json:"has_identity_secret" gorm:"-"`
 
@@ -115,8 +100,7 @@ type ChatWidget struct {
 	QuarantineThreshold float64 `json:"quarantine_threshold" gorm:"default:6;not null"`
 	RejectThreshold     float64 `json:"reject_threshold" gorm:"default:10;not null"`
 	MaxMessageBytes     int     `json:"max_message_bytes" gorm:"default:4096;not null"`
-	// RetentionDays keeps closed and spam conversations this long; 0 means the
-	// platform's POSTA_CHAT_RETENTION_DAYS, which it can only lower.
+	// RetentionDays can only lower POSTA_CHAT_RETENTION_DAYS; 0 uses the platform value.
 	RetentionDays int `json:"retention_days" gorm:"default:0;not null"`
 
 	LastEditedByID *uint          `json:"last_edited_by_id,omitempty" gorm:"index"`
@@ -127,7 +111,6 @@ type ChatWidget struct {
 	LastEditedBy *ActorRef `json:"last_edited_by,omitempty" gorm:"->;foreignKey:LastEditedByID;references:ID;constraint:-"`
 }
 
-// Offline modes.
 const (
 	ChatOfflineEmail = "email"
 	ChatOfflineHide  = "hide"
@@ -140,7 +123,6 @@ func (w *ChatWidget) AfterFind(*gorm.DB) error {
 	return nil
 }
 
-// HidesWhenOffline reports whether the widget disappears while no one can answer.
 func (w *ChatWidget) HidesWhenOffline() bool { return w.OfflineMode == ChatOfflineHide }
 
 // MessageLimit is the largest message body the widget accepts, in bytes.
@@ -151,12 +133,10 @@ func (w *ChatWidget) MessageLimit() int {
 	return w.MaxMessageBytes
 }
 
-// OriginPolicy returns the origin allowlist and whether a missing Origin is
-// refused, for messages.OriginAllowed.
+// OriginPolicy returns the allowlist and whether a missing Origin is refused.
 func (w *ChatWidget) OriginPolicy() ([]string, bool) { return w.AllowedOrigins, w.StrictOrigin }
 
-// ScanningEnabled, ScanThresholds, and ScanSource make a ChatWidget a
-// messagescan.Policy.
+// ScanningEnabled, ScanThresholds and ScanSource make a ChatWidget a messagescan.Policy.
 func (w *ChatWidget) ScanningEnabled() bool { return w == nil || w.ScanEnabled }
 
 func (w *ChatWidget) ScanThresholds() (flag, quarantine, reject float64) {

@@ -123,6 +123,7 @@ jobs:
             LICENSE_KEYRING=${{ vars.LICENSE_KEYRING }}
           tags: |
             ${{ vars.BUILDKIT_IMAGE }}:nightly
+            goposta/posta:nightly
             ${{ env.GHCR_IMAGE }}:nightly
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -135,6 +136,7 @@ jobs:
             echo "| Image | Tag |"
             echo "|---|---|"
             echo "| \`${{ vars.BUILDKIT_IMAGE }}\` | \`nightly\` |"
+            echo "| \`goposta/posta\` | \`nightly\` |"
             echo "| \`${GHCR_IMAGE}\` | \`nightly\` |"
             echo
             echo "Built from \`${GITHUB_SHA::7}\`, reported as \`${VERSION}\`."

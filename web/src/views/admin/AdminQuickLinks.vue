@@ -3,9 +3,7 @@ import { useRouter } from "vue-router";
 
 const router = useRouter();
 
-// Destinations that have no number worth showing. Anything countable lives in
-// the inventory row instead, where the count is the point and the tile is also
-// the link — so no figure appears twice on this page.
+// Anything countable lives in the inventory row instead, so no figure appears twice on this page.
 const links = [
   { to: "/admin/plans", label: "Plans" },
   { to: "/admin/jobs", label: "Jobs" },

@@ -37,7 +37,6 @@ func NewSessionHandler(repo *repositories.SessionRepository, store *session.Stor
 	return &SessionHandler{repo: repo, store: store}
 }
 
-// SessionResponse is the API representation of a session.
 type SessionResponse struct {
 	ID        uint   `json:"id"`
 	IPAddress string `json:"ip_address"`
@@ -55,7 +54,6 @@ type RevokeSessionRequest struct {
 	ID int `param:"id"`
 }
 
-// List returns all active sessions for the current user.
 func (h *SessionHandler) List(c *okapi.Context) error {
 	userID := uint(c.GetInt("user_id"))
 	currentJTI := c.GetString("jti")
@@ -85,7 +83,6 @@ func (h *SessionHandler) List(c *okapi.Context) error {
 	return ok(c, result)
 }
 
-// Revoke terminates a specific session by ID.
 func (h *SessionHandler) Revoke(c *okapi.Context, req *RevokeSessionRequest) error {
 	userID := uint(c.GetInt("user_id"))
 
@@ -108,7 +105,6 @@ func (h *SessionHandler) Revoke(c *okapi.Context, req *RevokeSessionRequest) err
 	return ok(c, okapi.M{"message": fmt.Sprintf("Session %d revoked", sess.ID)})
 }
 
-// RevokeOthers revokes all sessions except the current one.
 func (h *SessionHandler) RevokeOthers(c *okapi.Context) error {
 	userID := uint(c.GetInt("user_id"))
 	currentJTI := c.GetString("jti")
@@ -124,7 +120,6 @@ func (h *SessionHandler) RevokeOthers(c *okapi.Context) error {
 		return c.AbortInternalServerError("failed to revoke sessions")
 	}
 
-	// Blacklist each revoked session in Redis
 	for _, s := range sessions {
 		if s.JTI != currentJTI {
 			h.store.MarkRevoked(c.Request().Context(), s.JTI, s.ExpiresAt)
@@ -137,9 +132,7 @@ func (h *SessionHandler) RevokeOthers(c *okapi.Context) error {
 	})
 }
 
-// Logout revokes the current session and clears the browser session cookie.
-// Clearing the cookie unconditionally means a browser holding a token we can no
-// longer resolve still ends up logged out.
+// Logout clears the cookie unconditionally so a browser holding an unresolvable token still logs out.
 func (h *SessionHandler) Logout(c *okapi.Context) error {
 	session.ClearCookie(c)
 

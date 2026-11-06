@@ -29,10 +29,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// stashAPIKey mimics authenticateAPIKey's context for a workspace-bound key.
-// boundWorkspace of 0 means an account-wide key. The caller's identity is
-// irrelevant to what these tests assert — workspace binding and scopes — so it
-// is fixed rather than threaded through every call.
+// Identity is irrelevant to these tests (binding and scopes), so it is fixed; boundWorkspace 0 is account-wide.
 const stubAPIKeyUserID = 1
 
 func stashAPIKey(boundWorkspace int, scopes string) okapi.Middleware {
@@ -48,7 +45,6 @@ func stashAPIKey(boundWorkspace int, scopes string) okapi.Middleware {
 	}
 }
 
-// stashJWT mimics okapi's ForwardClaims for a session caller.
 func stashJWT(userID int) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		c.Set(CtxUserID, userID)
@@ -57,8 +53,7 @@ func stashJWT(userID int) okapi.Middleware {
 	}
 }
 
-// A workspace-bound API key needs no repository lookup: the binding itself is
-// the authority, so these cases exercise resolveWorkspace with nil repos.
+// The binding itself is the authority, so bound-key cases run resolveWorkspace with nil repos.
 func TestRequireWorkspace_BoundAPIKey(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -123,8 +118,7 @@ func TestRequireWorkspace_BoundAPIKey(t *testing.T) {
 	}
 }
 
-// route registers a handler for an arbitrary method and returns the *Route, so
-// middleware can be attached (okapi's Handle returns nothing).
+// okapi's Handle returns nothing, so this returns the *Route for attaching middleware.
 func route(o *okapi.TestServer, method, path string, h okapi.HandlerFunc) *okapi.Route {
 	switch method {
 	case http.MethodGet:
@@ -140,9 +134,7 @@ func route(o *okapi.TestServer, method, path string, h okapi.HandlerFunc) *okapi
 	}
 }
 
-// Scopes bound what a key may do inside the workspace it is bound to. The
-// binding alone must never imply full access: a send-only key is confined to the
-// public sending API and must not read or modify workspace resources.
+// The binding must never imply full access: a send-only key must not read or modify workspace resources.
 func TestWorkspaceScopeEnforcement(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -151,9 +143,7 @@ func TestWorkspaceScopeEnforcement(t *testing.T) {
 		path       string
 		wantStatus int
 	}{
-		// The vulnerability this guards: `send` is the default scope for a key
-		// created without an explicit set, so a leak of the weakest key must not
-		// expose the workspace's contacts, templates or domains.
+		// `send` is the default scope, so leaking the weakest key must not expose contacts, templates or domains.
 		{"send cannot read", models.ScopeSend, http.MethodGet, "/templates", http.StatusForbidden},
 		{"send cannot write", models.ScopeSend, http.MethodPost, "/templates", http.StatusForbidden},
 		{"send cannot administer", models.ScopeSend, http.MethodGet, "/api-keys", http.StatusForbidden},
@@ -164,8 +154,7 @@ func TestWorkspaceScopeEnforcement(t *testing.T) {
 
 		{"write may write", models.ScopeWrite, http.MethodPost, "/templates", http.StatusOK},
 		{"write may delete", models.ScopeWrite, http.MethodDelete, "/templates/1", http.StatusOK},
-		// write covers content, not the tenant itself — minting credentials or
-		// inviting members stays behind admin.
+		// write covers content, not the tenant: minting credentials or inviting members stays behind admin.
 		{"write may not mint keys", models.ScopeWrite, http.MethodPost, "/api-keys", http.StatusForbidden},
 		{"write may not invite", models.ScopeWrite, http.MethodPost, "/invitations", http.StatusForbidden},
 		{"write may not change settings", models.ScopeWrite, http.MethodPut, "/settings", http.StatusForbidden},
@@ -229,8 +218,7 @@ func TestRequireWorkspace_RejectsUnauthenticated(t *testing.T) {
 	}
 }
 
-// A session caller must name a workspace on a required-workspace route; there is
-// no binding to fall back on.
+// A session has no binding to fall back on, so it must name a workspace on a required route.
 func TestRequireWorkspace_JWTWithoutHeader(t *testing.T) {
 	o := okapi.NewTestServer(t)
 	o.Get("/ws", func(c *okapi.Context) error {
@@ -245,8 +233,7 @@ func TestRequireWorkspace_JWTWithoutHeader(t *testing.T) {
 	}
 }
 
-// WorkspaceFromQueryOrHeader exists for EventSource and download links, which
-// cannot set headers. A bound key still overrides whatever the query claims.
+// A bound key overrides whatever workspace the query claims.
 func TestWorkspaceFromQuery_BoundKeyIgnoresMismatchedQuery(t *testing.T) {
 	o := okapi.NewTestServer(t)
 	o.Get("/stream", func(c *okapi.Context) error {
@@ -261,10 +248,7 @@ func TestWorkspaceFromQuery_BoundKeyIgnoresMismatchedQuery(t *testing.T) {
 	}
 }
 
-// An account-wide API key carries no workspace binding, so it has nothing to
-// fall back on: a route that demands a workspace must refuse it rather than
-// resolving one on its behalf. This exercises stashAPIKey's boundWorkspace == 0
-// branch, which every other case skips.
+// An account-wide key has no binding to fall back on, so a required-workspace route must refuse it.
 func TestRequireWorkspace_AccountWideKeyWithoutHeader(t *testing.T) {
 	o := okapi.New()
 	o.Get("/ws", func(c *okapi.Context) error {

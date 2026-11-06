@@ -135,9 +135,7 @@ func TestSlowSubscriberIsDroppedNotBlocking(t *testing.T) {
 	}
 }
 
-// TestRedisBusAcrossClients runs only against a real Redis, set via
-// POSTA_TEST_REDIS_URL (for example redis://localhost:6379/15). Two buses with
-// separate clients stand in for two processes.
+// TestRedisBusAcrossClients needs a real Redis via POSTA_TEST_REDIS_URL, e.g. redis://localhost:6379/15.
 func TestRedisBusAcrossClients(t *testing.T) {
 	url := os.Getenv("POSTA_TEST_REDIS_URL")
 	if url == "" {

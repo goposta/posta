@@ -34,8 +34,7 @@ import (
 
 const bounceRateThreshold = 5.0 // percent
 
-// BounceAlertJob checks for workspaces with high bounce rates and alerts their
-// owners and admins.
+// BounceAlertJob alerts a workspace's owners and admins when its bounce rate is high.
 type BounceAlertJob struct {
 	db              *gorm.DB
 	notifier        *notification.Service
@@ -58,7 +57,7 @@ func NewBounceAlertJob(
 }
 
 func (j *BounceAlertJob) Name() string     { return "bounce-alert" }
-func (j *BounceAlertJob) Schedule() string { return "0 9 * * *" } // daily at 09:00 UTC
+func (j *BounceAlertJob) Schedule() string { return "0 9 * * *" }
 
 func (j *BounceAlertJob) Run(_ context.Context, _ *asynq.Client) error {
 	if j.notifier == nil || !j.notifier.IsConfigured() {
@@ -68,7 +67,6 @@ func (j *BounceAlertJob) Run(_ context.Context, _ *asynq.Client) error {
 	now := time.Now().UTC()
 	from := now.Add(-24 * time.Hour)
 
-	// Find workspaces that sent emails in the last 24 hours
 	type workspaceEmailCount struct {
 		WorkspaceID uint  `gorm:"column:workspace_id"`
 		Total       int64 `gorm:"column:total"`
@@ -96,7 +94,6 @@ func (j *BounceAlertJob) Run(_ context.Context, _ *asynq.Client) error {
 			continue
 		}
 
-		// Count new suppressions
 		var suppressionCount int64
 		j.db.Model(&models.Suppression{}).
 			Where("workspace_id = ? AND created_at >= ?", wc.WorkspaceID, from).

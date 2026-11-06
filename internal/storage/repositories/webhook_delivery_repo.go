@@ -38,7 +38,6 @@ func (r *WebhookDeliveryRepository) Create(d *models.WebhookDelivery) error {
 	return r.db.Create(d).Error
 }
 
-// WebhookDeliveryStats holds aggregate delivery counts.
 type WebhookDeliveryStats struct {
 	TotalDeliveries   int64   `json:"total_deliveries"`
 	SuccessDeliveries int64   `json:"success_deliveries"`
@@ -46,7 +45,6 @@ type WebhookDeliveryStats struct {
 	SuccessRate       float64 `json:"success_rate"`
 }
 
-// StatsByUserID returns aggregate webhook delivery stats for a user's personal space.
 func (r *WebhookDeliveryRepository) StatsByUserID(userID uint) (*WebhookDeliveryStats, error) {
 	var stats WebhookDeliveryStats
 
@@ -61,7 +59,6 @@ func (r *WebhookDeliveryRepository) StatsByUserID(userID uint) (*WebhookDelivery
 	return &stats, nil
 }
 
-// StatsByWorkspaceID returns aggregate webhook delivery stats for a workspace.
 func (r *WebhookDeliveryRepository) StatsByWorkspaceID(workspaceID uint) (*WebhookDeliveryStats, error) {
 	var stats WebhookDeliveryStats
 
@@ -76,7 +73,6 @@ func (r *WebhookDeliveryRepository) StatsByWorkspaceID(workspaceID uint) (*Webho
 	return &stats, nil
 }
 
-// StatsAll returns aggregate webhook delivery stats across all users.
 func (r *WebhookDeliveryRepository) StatsAll() (*WebhookDeliveryStats, error) {
 	var stats WebhookDeliveryStats
 
@@ -91,7 +87,6 @@ func (r *WebhookDeliveryRepository) StatsAll() (*WebhookDeliveryStats, error) {
 	return &stats, nil
 }
 
-// RecentByUserID returns the most recent deliveries for a user.
 func (r *WebhookDeliveryRepository) RecentByUserID(userID uint, limit int) ([]models.WebhookDelivery, error) {
 	var deliveries []models.WebhookDelivery
 	err := r.db.Where("user_id = ?", userID).
@@ -101,7 +96,6 @@ func (r *WebhookDeliveryRepository) RecentByUserID(userID uint, limit int) ([]mo
 	return deliveries, err
 }
 
-// FindByUserID returns paginated webhook deliveries for a user's personal space.
 func (r *WebhookDeliveryRepository) FindByUserID(userID uint, limit, offset int) ([]models.WebhookDelivery, int64, error) {
 	var deliveries []models.WebhookDelivery
 	var total int64
@@ -114,7 +108,6 @@ func (r *WebhookDeliveryRepository) FindByUserID(userID uint, limit, offset int)
 	return deliveries, total, err
 }
 
-// FindByWorkspaceID returns paginated webhook deliveries for a workspace.
 func (r *WebhookDeliveryRepository) FindByWorkspaceID(workspaceID uint, limit, offset int) ([]models.WebhookDelivery, int64, error) {
 	var deliveries []models.WebhookDelivery
 	var total int64
@@ -156,8 +149,6 @@ func (r *WebhookDeliveryRepository) StatsByScope(scope ResourceScope) (*WebhookD
 	return &stats, nil
 }
 
-// DeleteOlderThan deletes webhook delivery records older than the given time.
-// Returns the number of rows deleted.
 func (r *WebhookDeliveryRepository) DeleteOlderThan(before time.Time) (int64, error) {
 	result := r.db.Where("created_at < ?", before).Delete(&models.WebhookDelivery{})
 	return result.RowsAffected, result.Error

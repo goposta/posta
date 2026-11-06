@@ -8,10 +8,6 @@ import { useLicenseStore } from "../../stores/license";
 import EnterpriseLock from "../../components/EnterpriseLock.vue";
 import type { Team, WorkspaceMember } from "../../api/types";
 
-// Teams group workspace members so routing rules can notify or assign them
-// together. Any member can see them; owners and admins change them. Teams are
-// a Posta Enterprise feature.
-
 const notify = useNotificationStore();
 const license = useLicenseStore();
 const loading = ref(true);

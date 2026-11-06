@@ -23,8 +23,7 @@ func provider(cfgs ...models.LDAPConfig) *Provider {
 	return New(func(context.Context) ([]models.LDAPConfig, error) { return cfgs, nil }, nil)
 }
 
-// An empty password is an anonymous bind most directories accept: it must
-// never reach a directory.
+// An empty password is an anonymous bind most directories accept, so it must never reach one.
 func TestEmptyCredentialsNeverBind(t *testing.T) {
 	p := provider(models.LDAPConfig{Name: "corp", Host: "ldap.invalid", Enabled: true, UserBaseDN: "dc=corp"})
 	for _, tc := range [][2]string{{"alice@corp.test", ""}, {"  ", "secret"}} {

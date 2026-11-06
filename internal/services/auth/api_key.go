@@ -31,8 +31,7 @@ import (
 	"github.com/goposta/posta/internal/storage/repositories"
 )
 
-// APIKeyPrefix identifies a raw Posta API key. Auth middleware uses it to tell
-// an API key apart from a JWT without parsing either.
+// APIKeyPrefix lets auth middleware tell an API key apart from a JWT without parsing either.
 const APIKeyPrefix = "psk_"
 
 type APIKeyService struct {
@@ -94,7 +93,6 @@ func (s *APIKeyService) GenerateKey(userID uint, workspaceID *uint, name string,
 	return rawKey, key, nil
 }
 
-// ValidateKey checks if a raw API key is valid and returns the matching APIKey.
 func (s *APIKeyService) ValidateKey(rawKey string) (*models.APIKey, error) {
 	if !strings.HasPrefix(rawKey, APIKeyPrefix) {
 		return nil, fmt.Errorf("invalid key format")

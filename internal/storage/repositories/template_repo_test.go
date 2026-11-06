@@ -48,8 +48,7 @@ func seedTemplateWorkspace(t *testing.T, tx *gorm.DB, slug string) (uint, uint) 
 	return userID, ws.ID
 }
 
-// The list renders the active version number. Without the preload it had
-// nothing to read and printed "v?" against every template that had one.
+// The list renders the active version number, so FindByScope must preload it.
 func TestFindByScopePreloadsActiveVersion(t *testing.T) {
 	db := templateDB(t)
 	tx := db.Begin()
@@ -81,8 +80,7 @@ func TestFindByScopePreloadsActiveVersion(t *testing.T) {
 	}
 }
 
-// A template with no active version can never be sent. Creating the rows
-// separately left exactly that behind whenever a later step failed.
+// A template with no active version can never be sent, so a failed create must leave nothing behind.
 func TestCreateWithVersionsIsAtomic(t *testing.T) {
 	db := templateDB(t)
 	tx := db.Begin()
@@ -91,8 +89,7 @@ func TestCreateWithVersionsIsAtomic(t *testing.T) {
 	userID, wsID := seedTemplateWorkspace(t, tx, "tmpl-atomic")
 	repo := &TemplateRepository{db: tx}
 
-	// Two localizations for the same language violate idx_version_language, so
-	// the second version fails after the template and first version are written.
+	// Duplicate localizations violate idx_version_language, failing after the template and first version are written.
 	tmpl := &models.Template{UserID: userID, WorkspaceID: &wsID, Name: "broken", DefaultLanguage: "en"}
 	err := repo.CreateWithVersions(tmpl, []ImportVersion{
 		{Localizations: []ImportLocalization{
@@ -153,8 +150,7 @@ func TestCreateAlwaysActivatesAVersion(t *testing.T) {
 	}
 }
 
-// Versions are numbered from 1 in source order, so an import reproduces the
-// ordering it was given.
+// Versions are numbered from 1 in source order, so an import reproduces its ordering.
 func TestImportedVersionsAreNumberedInOrder(t *testing.T) {
 	db := templateDB(t)
 	tx := db.Begin()
@@ -183,8 +179,7 @@ func TestImportedVersionsAreNumberedInOrder(t *testing.T) {
 	}
 }
 
-// The builder document has to survive creation, or a template designed visually
-// comes back editable only as raw HTML.
+// The builder document must survive creation, or a visual template comes back editable only as raw HTML.
 func TestBuilderJSONSurvivesCreate(t *testing.T) {
 	db := templateDB(t)
 	tx := db.Begin()
@@ -213,8 +208,7 @@ func TestBuilderJSONSurvivesCreate(t *testing.T) {
 	}
 }
 
-// A duplicate name has to be recognisable so the API can answer with a conflict
-// naming the problem instead of a generic failure.
+// A duplicate name must be recognisable so the API can answer with a conflict instead of a generic failure.
 func TestDuplicateNameIsDetectable(t *testing.T) {
 	db := templateDB(t)
 	tx := db.Begin()
@@ -228,8 +222,7 @@ func TestDuplicateNameIsDetectable(t *testing.T) {
 		t.Fatalf("first create: %v", err)
 	}
 
-	// The unique index lives in constraints.go, not the model, so AutoMigrate
-	// alone does not create it; add it here to exercise the real behaviour.
+	// The unique index lives in constraints.go, not the model, so AutoMigrate alone does not create it.
 	if err := tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_template
 		ON templates (workspace_id, name) WHERE workspace_id IS NOT NULL`).Error; err != nil {
 		t.Skipf("cannot create the unique index: %v", err)
@@ -245,9 +238,7 @@ func TestDuplicateNameIsDetectable(t *testing.T) {
 	}
 }
 
-// The list shows which languages a template is actually translated into. It has
-// to read the active version only: languages from an older version would claim
-// coverage the template no longer sends.
+// Only the active version counts: an older version's languages would claim coverage the template no longer sends.
 func TestLanguagesForActiveVersions(t *testing.T) {
 	db := templateDB(t)
 	tx := db.Begin()

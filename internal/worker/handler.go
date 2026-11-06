@@ -38,7 +38,6 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// EmailSendHandler processes email:send tasks from the Asynq queue.
 type EmailSendHandler struct {
 	emailRepo       *repositories.EmailRepository
 	smtpRepo        *repositories.SMTPRepository
@@ -77,53 +76,42 @@ func NewEmailSendHandler(
 	}
 }
 
-// SetBlobStore sets the blob storage backend for fetching attachment content.
 func (h *EmailSendHandler) SetBlobStore(bs blob.Store) { h.blobStore = bs }
 
-// SetCampaignMessageRepo sets the campaign message repository so that
-// campaign message statuses are updated when emails are sent or fail.
 func (h *EmailSendHandler) SetCampaignMessageRepo(r *repositories.CampaignMessageRepository) {
 	h.messageRepo = r
 }
 
-// SetCampaignRepo lets the handler consult the campaign's live status before
-// sending. When set, already-queued emails for cancelled/paused campaigns are
-// dropped instead of dispatched.
+// SetCampaignRepo makes already-queued emails for cancelled or paused campaigns drop instead of send.
 func (h *EmailSendHandler) SetCampaignRepo(r *repositories.CampaignRepository) {
 	h.campaignRepo = r
 }
 
-// SetStamper enables X-Mailer/X-Posta-* header stamping and optional
-// X-Posta-Signature HMAC. Nil disables stamping.
+// SetStamper enables X-Mailer/X-Posta-* stamping and optional X-Posta-Signature HMAC; nil disables it.
 func (h *EmailSendHandler) SetStamper(s *email.Stamper) {
 	h.stamper = s
 }
 
-// SetSuppressionRepo enables auto-suppression of recipients permanently
-// rejected by the receiving server.
+// SetSuppressionRepo enables auto-suppression of recipients permanently rejected by the receiving server.
 func (h *EmailSendHandler) SetSuppressionRepo(r *repositories.SuppressionRepository) {
 	h.suppressionRepo = r
 }
 
-// SetBounceRepo lets the handler record a hard bounce when a recipient is
-// permanently rejected.
+// SetBounceRepo lets the handler record a hard bounce when a recipient is permanently rejected.
 func (h *EmailSendHandler) SetBounceRepo(r *repositories.BounceRepository) {
 	h.bounceRepo = r
 }
 
-// SetAutoSuppress toggles auto-suppression on permanent (5xx) recipient
-// rejection. When false, such failures fall back to the normal retry path.
+// SetAutoSuppress(false) sends permanent (5xx) recipient rejections down the normal retry path.
 func (h *EmailSendHandler) SetAutoSuppress(enabled bool) {
 	h.autoSuppress = enabled
 }
 
-// OnSent sets a callback invoked after each successful email send.
 func (h *EmailSendHandler) OnSent(fn func()) { h.onSent = fn }
 
 // OnFailed sets a callback invoked after each permanently failed email send.
 func (h *EmailSendHandler) OnFailed(fn func()) { h.onFailed = fn }
 
-// ProcessTask handles an email:send task.
 func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	var payload EmailSendPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -135,9 +123,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		return fmt.Errorf("email not found: %w", err)
 	}
 
-	// If this email was enqueued as part of a campaign, respect the live
-	// campaign status. A paused campaign releases the message back to pending
-	// so a Resume will re-dispatch it; cancelled drops it permanently.
+	// A paused campaign releases the message to pending so Resume re-dispatches it; cancelled drops it for good.
 	if h.messageRepo != nil && h.campaignRepo != nil {
 		if msg, mErr := h.messageRepo.FindByEmailID(em.ID); mErr == nil {
 			if camp, cErr := h.campaignRepo.FindByID(msg.CampaignID); cErr == nil {
@@ -160,19 +146,15 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		}
 	}
 
-	// Mark as processing
 	em.Status = models.EmailStatusProcessing
 	_ = h.emailRepo.Update(em)
 
-	// Resolve sender address for validation/domain matching
 	senderAddr := em.Sender
 	if parsed, err := mail.ParseAddress(em.Sender); err == nil {
 		senderAddr = parsed.Address
 	}
 
-	// Server selection:
-	// 1. Try the workspace or user's own per-account SMTP server first.
-	// 2. Fall back to a shared server whose allowed_domains covers the sender domain.
+	// Prefer the workspace or user's own SMTP server, then a shared one whose allowed_domains covers the sender.
 	var smtpServer *models.SMTPServer
 	var sharedServerID uint // non-zero when a shared server is used
 
@@ -183,7 +165,6 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		userServer, err = h.smtpRepo.FindFirstByUserID(em.UserID)
 	}
 	if err == nil {
-		// Validate the sender against the per-user allowed emails list
 		if len(userServer.AllowedEmails) > 0 {
 			allowed := false
 			for _, e := range userServer.AllowedEmails {
@@ -199,7 +180,6 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		}
 		smtpServer = userServer
 	} else {
-		// No per-user server – look for a shared server by sender domain
 		if h.serverRepo != nil {
 			domain := senderDomain(senderAddr)
 			if domain != "" {
@@ -228,12 +208,10 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 	em.SMTPHostname = smtpServer.Host
 	_ = h.emailRepo.Update(em)
 
-	// Auto-generate plain text from HTML if not provided
 	if em.TextBody == "" && em.HTMLBody != "" {
 		em.TextBody = email.HTMLToText(em.HTMLBody)
 	}
 
-	// Rebuild the attachments from the record, pulling blob-stored content if needed.
 	attachments, err := email.LoadAttachments(ctx, em, h.blobStore)
 	if err != nil {
 		h.markFailed(em, fmt.Sprintf("failed to load attachments: %v", err))
@@ -247,7 +225,6 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		}
 	}
 
-	// Parse custom headers from stored JSON
 	var headers map[string]string
 	if em.HeadersJSON != "" {
 		_ = json.Unmarshal([]byte(em.HeadersJSON), &headers)
@@ -277,8 +254,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		}
 	}
 
-	// Stamp Posta headers. Campaign mail gets campaign-aware headers; everything
-	// else gets transactional headers. A final HMAC signs the message identity.
+	// Campaign mail gets campaign-aware headers, the rest transactional ones; a final HMAC signs the identity.
 	if h.stamper != nil {
 		var campMsg *models.CampaignMessage
 		if h.messageRepo != nil {
@@ -287,7 +263,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 			}
 		}
 		if campMsg != nil {
-			// Opens and clicks are rewritten together in the tracking service's
+			// Opens and clicks are rewritten together, so one flag stamps both.
 			tracked := em.HTMLBody != "" && em.ListUnsubscribeURL != ""
 			h.stamper.StampCampaign(
 				headers, em,
@@ -306,9 +282,7 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 			go h.serverRepo.IncrementFailedCount(sharedServerID)
 		}
 
-		// A permanent rejection at RCPT TO (5xx, e.g. 550 user unknown) is a
-		// hard bounce: suppress the recipient and stop retrying — retrying a
-		// 5xx is pointless.
+		// A 5xx at RCPT TO (e.g. 550 user unknown) is a hard bounce: suppress and stop, since retrying it is pointless.
 		if se, ok := permanentRejection(err); ok && h.autoSuppress {
 			h.handlePermanentRejection(em, se)
 			logger.Info("worker: recipient permanently rejected, suppressed", "id", em.ID, "recipient", se.Recipient, "code", se.Code)
@@ -320,17 +294,14 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		em.ErrorMessage = err.Error()
 		_ = h.emailRepo.Update(em)
 		logger.Debug("worker: email send failed, will retry", "id", em.ID, "attempt", em.RetryCount, "error", err)
-		// Return error so Asynq retries the task
 		return fmt.Errorf("SMTP send failed: %w", err)
 	}
 
-	// Success
 	now := time.Now()
 	em.Status = models.EmailStatusSent
 	em.SentAt = &now
 	em.ErrorMessage = ""
 	_ = h.emailRepo.Update(em)
-	// Increment the shared server's success counter
 	if sharedServerID != 0 && h.serverRepo != nil {
 		go h.serverRepo.IncrementSentCount(sharedServerID)
 	}
@@ -369,10 +340,7 @@ func (h *EmailSendHandler) markFailed(em *models.Email, reason string) {
 	}
 }
 
-// permanentRejection reports whether err represents a permanent recipient
-// rejection (a 5xx reply at RCPT TO, e.g. 550 user unknown) that should trigger
-// auto-suppression. Transient errors (4xx), connection failures, and failures
-// at other SMTP stages (MAIL FROM, DATA) return false so they keep retrying.
+// Only a 5xx at RCPT TO counts; 4xx, connection and MAIL FROM/DATA failures return false and keep retrying.
 func permanentRejection(err error) (*email.SendError, bool) {
 	var se *email.SendError
 	if errors.As(err, &se) && se.Permanent() && se.Stage == "RCPT TO" && se.Recipient != "" {
@@ -381,17 +349,13 @@ func permanentRejection(err error) (*email.SendError, bool) {
 	return nil, false
 }
 
-// handlePermanentRejection records a hard bounce, adds the recipient to the
-// suppression list (idempotently) and marks the email failed without retrying.
-// Called when the receiving server permanently rejects a recipient (5xx at
-// RCPT TO, e.g. 550 user unknown).
+// handlePermanentRejection records a hard bounce, suppresses the recipient idempotently, and fails without retry.
 func (h *EmailSendHandler) handlePermanentRejection(em *models.Email, se *email.SendError) {
 	reason := se.Msg
 	if reason == "" {
 		reason = se.Error()
 	}
 
-	// Record a hard bounce for audit/metrics.
 	if h.bounceRepo != nil {
 		bounce := &models.Bounce{
 			UserID:      em.UserID,
@@ -437,7 +401,6 @@ func (h *EmailSendHandler) handlePermanentRejection(em *models.Email, se *email.
 	}
 }
 
-// senderDomain extracts the domain part of an email address.
 func senderDomain(addr string) string {
 	parts := strings.SplitN(addr, "@", 2)
 	if len(parts) != 2 {
@@ -446,8 +409,7 @@ func senderDomain(addr string) string {
 	return strings.ToLower(parts[1])
 }
 
-// ExhaustedErrorHandler marks emails as permanently failed when Asynq exhausts
-// all retries. It implements asynq.ErrorHandler.
+// ExhaustedErrorHandler marks emails permanently failed once Asynq exhausts all retries.
 type ExhaustedErrorHandler struct {
 	emailRepo  *repositories.EmailRepository
 	dispatcher *webhook.Dispatcher

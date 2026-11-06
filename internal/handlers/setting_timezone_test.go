@@ -28,8 +28,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// Both settings endpoints accept only IANA names; an omitted timezone leaves
-// the stored one alone.
+// Both settings endpoints accept only IANA names; an omitted timezone leaves the stored one alone.
 func TestSettingsTimezoneValidation(t *testing.T) {
 	app := okapi.New()
 	ok := func(c *okapi.Context) error { return c.String(http.StatusOK, "ok") }

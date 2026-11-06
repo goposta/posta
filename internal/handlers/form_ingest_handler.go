@@ -89,8 +89,7 @@ func (h *FormIngestHandler) Nonce(c *okapi.Context) error {
 	return ok(c, nonce)
 }
 
-// Widget config reasons. "unavailable" covers unknown, paused and archived
-// forms alike, so the endpoint does not reveal which keys exist.
+// "unavailable" covers unknown, paused and archived forms alike so the endpoint doesn't reveal which keys exist.
 const (
 	widgetReasonUnavailable      = "unavailable"
 	widgetReasonOriginNotAllowed = "origin_not_allowed"
@@ -106,9 +105,7 @@ func closedMessage(form *models.Form) string {
 	return defaultClosedMessage
 }
 
-// isSelfOrigin reports whether a request comes from a page Posta serves
-// itself, such as a form's hosted page. Browsers send no Origin on a
-// same-origin GET, so Sec-Fetch-Site stands in for it there.
+// Browsers send no Origin on a same-origin GET, so Sec-Fetch-Site stands in for it there.
 func isSelfOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -118,9 +115,7 @@ func isSelfOrigin(r *http.Request) bool {
 	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
 }
 
-// originAllowed applies the form's allowlist to other websites. The
-// allowlist decides which sites may embed a form; Posta's own hosted page is
-// always allowed.
+// originAllowed applies the form's allowlist to other websites; Posta's own hosted page is always allowed.
 func originAllowed(r *http.Request, form *models.Form) bool {
 	if isSelfOrigin(r) {
 		return true
@@ -129,7 +124,6 @@ func originAllowed(r *http.Request, form *models.Form) bool {
 	return messages.OriginAllowed(allowlist, strict, r.Header.Get("Origin"))
 }
 
-// WidgetConfig is what the website widget needs before it renders a form.
 type WidgetConfig struct {
 	Enabled        bool            `json:"enabled"`
 	Reason         string          `json:"reason,omitempty" doc:"Why the form cannot be used here: unavailable or origin_not_allowed"`
@@ -145,9 +139,7 @@ type WidgetConfig struct {
 	Appearance           *models.FormAppearance `json:"appearance,omitempty"`
 }
 
-// WidgetField is the public view of a schema field: what a browser needs to
-// render and pre-check it, without internal flags such as PII or roles.
-// Defaults are resolved, so the widget does not repeat them.
+// WidgetField leaves out internal flags such as PII and roles, and carries defaults already resolved.
 type WidgetField struct {
 	Key         string               `json:"key"`
 	Label       string               `json:"label"`
@@ -195,8 +187,7 @@ func widgetFields(defs models.FieldDefs) []WidgetField {
 	return out
 }
 
-// widgetConfig decides what the widget on origin may see of form. A nil form
-// is an unknown key.
+// A nil form is an unknown key.
 func widgetConfig(form *models.Form, originOK bool, now time.Time) WidgetConfig {
 	if form == nil || form.Status == models.FormStatusArchived {
 		return WidgetConfig{Reason: widgetReasonUnavailable}
@@ -227,8 +218,7 @@ func widgetConfig(form *models.Form, originOK bool, now time.Time) WidgetConfig 
 	return cfg
 }
 
-// WidgetConfig answers 200 in every case so the widget can always read why a
-// form is not usable.
+// WidgetConfig answers 200 in every case so the widget can always read why a form is not usable.
 func (h *FormIngestHandler) WidgetConfig(c *okapi.Context) error {
 	key := c.Param("key")
 	origin := c.Request().Header.Get("Origin")
@@ -263,7 +253,6 @@ func (h *FormIngestHandler) WidgetConfig(c *okapi.Context) error {
 	return ok(c, cfg)
 }
 
-// FormScript serves the website form widget.
 func (h *FormIngestHandler) FormScript(c *okapi.Context) error {
 	w := c.ResponseWriter()
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
@@ -297,8 +286,7 @@ func (h *FormIngestHandler) Submit(c *okapi.Context) error {
 		return h.respond(c, form, nil, http.StatusForbidden, "origin_not_allowed", "This origin is not allowed to submit to this form.")
 	}
 	h.applyCORS(c, form)
-	// A closed form says so: the visitor is real enough to have reached it,
-	// and the form's owner chose the message.
+	// A closed form says so: the visitor is real enough to have reached it, and the owner chose the message.
 	if form.Closed(time.Now()) {
 		return h.respond(c, form, nil, http.StatusForbidden, "closed", closedMessage(form))
 	}
@@ -398,8 +386,7 @@ func (h *FormIngestHandler) parseBody(c *okapi.Context, form *models.Form) ([]mo
 		}
 		fields := make([]models.MessageField, 0, len(raw))
 		for k, v := range raw {
-			// An array is a multi-value answer: keep its values apart so a
-			// multi-select can be validated value by value.
+			// An array is a multi-value answer: keep its values apart so a multi-select is validated value by value.
 			if items, isArray := v.([]any); isArray && len(items) > 0 {
 				for _, item := range items {
 					fields = append(fields, models.MessageField{Key: k, Value: stringify(item)})
@@ -519,9 +506,7 @@ func (h *FormIngestHandler) respond(c *okapi.Context, form *models.Form, msg *mo
 	return c.JSON(status, ingestResponse{Success: status < 400, Data: data})
 }
 
-// respondInvalid answers a submission that does not match the form's schema:
-// 422 with per-field errors for scripts, or for a plain HTML form a redirect
-// to the form's error page or a minimal page listing the errors.
+// respondInvalid answers scripts with a 422 and redirects a plain HTML form to its error page or an error list.
 func (h *FormIngestHandler) respondInvalid(c *okapi.Context, form *models.Form, invalid *messages.ValidationError) error {
 	h.applyCORS(c, form)
 	if wantsJSON(c.Request()) {
@@ -535,8 +520,7 @@ func (h *FormIngestHandler) respondInvalid(c *okapi.Context, form *models.Form, 
 		})
 	}
 	if form.ErrorRedirectURL != "" {
-		// The URL is set by the form's admin, and the query only carries a
-		// fixed code and a schema key, never a submitted value.
+		// Safe: the admin sets the URL, and the query carries only a fixed code and a schema key.
 		target, err := url.Parse(form.ErrorRedirectURL)
 		if err == nil {
 			q := target.Query()
@@ -582,8 +566,7 @@ func wantsJSON(req *http.Request) bool {
 	return !strings.Contains(accept, "text/html") && accept != ""
 }
 
-// valuesToFields keeps every value of a repeated key as its own field, which
-// is how checkboxes sharing a name submit a multi-select.
+// Repeated keys stay separate fields, which is how checkboxes sharing a name submit a multi-select.
 func valuesToFields(values url.Values) ([]models.MessageField, string) {
 	fields := make([]models.MessageField, 0, len(values))
 	redirect := ""

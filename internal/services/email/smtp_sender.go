@@ -42,9 +42,7 @@ import (
 	"github.com/goposta/posta/internal/netguard"
 )
 
-// SendError carries structured information about an SMTP failure so callers can
-// distinguish a permanent recipient rejection (5xx at RCPT TO) from a transient
-// error worth retrying. Error() preserves the original human-readable string.
+// SendError separates a permanent RCPT TO rejection from a transient error; Error() keeps the original string.
 type SendError struct {
 	Stage     string // "RCPT TO", "MAIL FROM", "DATA", ...
 	Recipient string // bare recipient address, set for RCPT TO failures
@@ -53,15 +51,12 @@ type SendError struct {
 	Err       error
 }
 
-// Permanent reports whether the failure is a permanent (5xx) SMTP rejection.
 func (e *SendError) Permanent() bool { return e.Code >= 500 && e.Code < 600 }
 
 func (e *SendError) Error() string { return e.Err.Error() }
 func (e *SendError) Unwrap() error { return e.Err }
 
-// smtpReply extracts the SMTP reply code and message from an error returned by
-// the net/smtp client. It returns (0, "") when err does not wrap a
-// *textproto.Error (e.g. a connection-level failure).
+// smtpReply returns (0, "") when err does not wrap a *textproto.Error, e.g. a connection failure.
 func smtpReply(err error) (int, string) {
 	var t *textproto.Error
 	if errors.As(err, &t) {
@@ -72,20 +67,15 @@ func smtpReply(err error) (int, string) {
 
 type SMTPSender struct{}
 
-// workspaceNetwork decides which addresses a workspace's own SMTP servers may
-// reach. Private ones are allowed unless the operator says otherwise, since a
-// relay on the same host or network is a common setup.
+// Private addresses are allowed by default since a relay on the same host or network is common.
 var workspaceNetwork = netguard.Policy{AllowPrivate: true}
 
-// SetWorkspaceSMTPNetwork sets the policy for workspace SMTP servers. Called
-// once at startup, before any mail is sent.
+// SetWorkspaceSMTPNetwork must be called once at startup, before any mail is sent.
 func SetWorkspaceSMTPNetwork(p netguard.Policy) {
 	workspaceNetwork = p
 }
 
-// dialerFor returns the dialer for a server: guarded for one a workspace
-// member configured, plain for the operator's system server and for
-// platform servers, which admins configure.
+// Only workspace-configured servers get the guarded dialer; system and platform servers are admin-configured.
 func dialerFor(server *models.SMTPServer) *net.Dialer {
 	if server.WorkspaceID != nil && !server.IsSystem {
 		return workspaceNetwork.Dialer(0)
@@ -93,7 +83,6 @@ func dialerFor(server *models.SMTPServer) *net.Dialer {
 	return &net.Dialer{}
 }
 
-// dialSMTP connects in plain text and starts an SMTP session.
 func dialSMTP(d *net.Dialer, addr, host string) (*smtp.Client, error) {
 	conn, err := d.Dial("tcp", addr)
 	if err != nil {
@@ -107,10 +96,7 @@ func dialSMTP(d *net.Dialer, addr, host string) (*smtp.Client, error) {
 	return client, nil
 }
 
-// DescribeSMTPError turns a connection or SMTP failure into a message fit to
-// show a workspace member. A reply from the SMTP server, such as a refused
-// login, is kept; a network error is reduced to what went wrong, without the
-// addresses and ports that would map the server's network.
+// DescribeSMTPError keeps SMTP replies but strips addresses and ports so a network error cannot map the network.
 func DescribeSMTPError(err error) string {
 	if err == nil {
 		return ""
@@ -132,8 +118,6 @@ func NewSMTPSender() *SMTPSender {
 	return &SMTPSender{}
 }
 
-// TestConnection verifies that a connection to the SMTP server can be
-// established and, when credentials are provided, that authentication succeeds.
 func (s *SMTPSender) TestConnection(server *models.SMTPServer) error {
 	addr := fmt.Sprintf("%s:%d", server.Host, server.Port)
 	tlsConfig := &tls.Config{ServerName: server.Host}
@@ -248,9 +232,6 @@ func (s *SMTPSender) Send(server *models.SMTPServer, from string, to []string, s
 	}
 }
 
-// envelopeAddress extracts the bare email from an RFC 5322 address like
-// "Display Name <user@example.com>", returning just "user@example.com".
-// If parsing fails, it returns the input unchanged.
 func envelopeAddress(from string) string {
 	addr, err := mail.ParseAddress(from)
 	if err != nil {
@@ -332,8 +313,6 @@ func sendViaClient(client *smtp.Client, auth smtp.Auth, from string, to []string
 	return client.Quit()
 }
 
-// wrapSendError turns a stage failure into a *SendError carrying the SMTP reply
-// code and recipient, while preserving the original error string.
 func wrapSendError(stage, recipient string, err error) error {
 	code, msg := smtpReply(err)
 	return &SendError{Stage: stage, Recipient: recipient, Code: code, Msg: msg, Err: err}
@@ -344,9 +323,7 @@ const (
 	contentTypeTextHTML  = "text/html"
 )
 
-// writeTextPart writes a text body part. Non-ASCII bodies are quoted-printable
-// encoded: with no Content-Transfer-Encoding the part defaults to 7bit, so raw
-// UTF-8 would be a lie the next hop is free to mangle.
+// Non-ASCII bodies need quoted-printable: without a Content-Transfer-Encoding the part defaults to 7bit.
 func writeTextPart(b *strings.Builder, mediaType, body string) {
 	fmt.Fprintf(b, "Content-Type: %s; charset=\"UTF-8\"\r\n", mediaType)
 	if isASCII(body) {
@@ -369,9 +346,7 @@ func isASCII(s string) bool {
 	return true
 }
 
-// encodeHeader encodes s for an unstructured header such as Subject, folding
-// its encoded-words onto separate lines. Plain text containing "=?" is encoded
-// too, or a reader would decode what merely looks like an encoded-word.
+// Plain text containing "=?" is encoded too, or a reader would decode what merely looks like an encoded-word.
 func encodeHeader(s string) string {
 	if mime.BEncoding.Encode("UTF-8", s) == s && !strings.Contains(s, "=?") {
 		return foldPlain(s)
@@ -379,14 +354,9 @@ func encodeHeader(s string) string {
 	return strings.Join(encodeWords(s), "\r\n ")
 }
 
-// encodeWords encodes s as RFC 2047 encoded-words. RFC 2047 ignores the
-// whitespace between encoded-words, but some relays keep it when they
-// re-encode the header, so encoded-words break only at spaces; a break inside
-// a word would reach the reader as a stray space.
+// Encoded-words break only at spaces because some relays keep the whitespace between them.
 func encodeWords(s string) []string {
-	// 39 bytes encode to 52 base64 characters, so even the first line, after
-	// "Subject: ", stays within the 76 characters RFC 2047 allows a line that
-	// carries encoded-words.
+	// 39 bytes encode to 52 base64 chars, keeping even the first line after "Subject: " within RFC 2047's 76.
 	const limit = 39
 	chunks := []string{""}
 	for i, w := range strings.Split(s, " ") {
@@ -409,7 +379,6 @@ func encodeWords(s string) []string {
 	return chunks
 }
 
-// encodeFrom encodes a non-ASCII sender name, folded between encoded-words.
 func encodeFrom(from string) string {
 	addr, err := mail.ParseAddress(from)
 	if err != nil || isASCII(addr.Name) {
@@ -418,8 +387,7 @@ func encodeFrom(from string) string {
 	return strings.Join(encodeWords(addr.Name), "\r\n ") + " <" + addr.Address + ">"
 }
 
-// foldPlain folds plain text at spaces so that, after "Subject: ", each line
-// stays within the 78 characters RFC 5322 §2.1.1 recommends.
+// foldPlain keeps each line after "Subject: " within the 78 characters RFC 5322 recommends.
 func foldPlain(s string) string {
 	var b strings.Builder
 	n := len("Subject: ")
@@ -438,8 +406,6 @@ func foldPlain(s string) string {
 	return b.String()
 }
 
-// hasHeader reports whether the caller-supplied headers already include key
-// (header names are case-insensitive per RFC 5322).
 func hasHeader(headers map[string]string, key string) bool {
 	for k := range headers {
 		if strings.EqualFold(k, key) {
@@ -449,11 +415,7 @@ func hasHeader(headers map[string]string, key string) bool {
 	return false
 }
 
-// newBoundary returns a random MIME boundary. A fixed boundary shared by every
-// message would collide with quoted or nested content that happens to contain
-// the same string, and makes all Posta mail trivially fingerprintable. The
-// token stays short enough that the Content-Type header line fits in 76
-// characters even with the boundary quoted.
+// A per-message boundary avoids collisions with nested content and fingerprinting, and fits a 76-char line.
 func newBoundary() string {
 	var token [12]byte
 	if _, err := rand.Read(token[:]); err != nil {
@@ -470,9 +432,7 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 	fmt.Fprintf(&b, "To: %s\r\n", strings.Join(to, ", "))
 	fmt.Fprintf(&b, "Subject: %s\r\n", encodeHeader(subject))
 
-	// RFC 5322 requires Date and recommends Message-ID; relays are free to
-	// forward a message without adding them, so emit both unless the caller
-	// already supplied one through custom headers.
+	// Relays may forward a message without Date or Message-ID, so emit both unless the caller supplied them.
 	if !hasHeader(headers, "Date") {
 		fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	}
@@ -504,7 +464,6 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 		}
 	}
 
-	// Write custom headers (already filtered for safety)
 	for key, value := range headers {
 		fmt.Fprintf(&b, "%s: %s\r\n", key, value)
 	}
@@ -517,7 +476,6 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 
 		fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", mixedBoundary)
 
-		// Body part
 		fmt.Fprintf(&b, "--%s\r\n", mixedBoundary)
 
 		if htmlBody != "" && textBody != "" {
@@ -533,7 +491,6 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 			writeTextPart(&b, contentTypeTextPlain, textBody)
 		}
 
-		// Attachment parts
 		for _, att := range attachments {
 			fmt.Fprintf(&b, "\r\n--%s\r\n", mixedBoundary)
 			contentType := att.ContentType
@@ -575,7 +532,6 @@ func buildMessage(from string, to []string, subject, htmlBody, textBody string, 
 	return []byte(b.String())
 }
 
-// ValidateAttachments checks that attachments are within size limits.
 func ValidateAttachments(attachments []models.Attachment, maxAttachmentSize, maxTotalSize int64) error {
 	var totalSize int64
 	for _, att := range attachments {

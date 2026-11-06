@@ -32,8 +32,6 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString()
 }
 
-// Pretty-print the JSON metadata blob; fall back to the raw string if it
-// isn't valid JSON (or empty).
 const prettyMetadata = computed(() => {
   const raw = event.value?.metadata
   if (!raw) return ''

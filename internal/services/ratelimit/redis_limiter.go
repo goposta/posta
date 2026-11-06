@@ -27,7 +27,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// SettingsProvider is an interface for retrieving dynamic rate limit settings.
 type SettingsProvider interface {
 	DefaultRateLimitHourly() int
 	DefaultRateLimitDaily() int
@@ -50,8 +49,7 @@ func NewRedisLimiter(client *redis.Client, hourlyLimit, dailyLimit int) *RedisLi
 	}
 }
 
-// SetSettings sets a dynamic settings provider. When set, rate limits
-// are read from the provider instead of using the static config values.
+// SetSettings makes rate limits read from the provider instead of the static config.
 func (l *RedisLimiter) SetSettings(sp SettingsProvider) {
 	l.settings = sp
 }
@@ -63,7 +61,7 @@ func (l *RedisLimiter) effectiveLimits() (int, int) {
 	return l.hourlyLimit, l.dailyLimit
 }
 
-// Allow checks if the user is within rate limits. Returns an error if exceeded.
+// Allow counts the request against the user's limits and errors when one is exceeded.
 func (l *RedisLimiter) Allow(ctx context.Context, userEmail string) error {
 	hourlyLimit, dailyLimit := l.effectiveLimits()
 
@@ -121,10 +119,7 @@ func (l *RedisLimiter) Check(ctx context.Context, userEmail string) error {
 	return nil
 }
 
-// AllowWithLimits checks if the user is within the given rate limits.
-// A limit of 0 means unlimited (the check is skipped for that window).
-// This method is used for plan-aware rate limiting where limits are resolved
-// by the caller.
+// AllowWithLimits uses caller-resolved (plan-aware) limits; a limit of 0 skips that window.
 func (l *RedisLimiter) AllowWithLimits(ctx context.Context, userEmail string, hourlyLimit, dailyLimit int) error {
 	hourKey := fmt.Sprintf("ratelimit:hour:%s:%s", userEmail, time.Now().Format("2006010215"))
 	dayKey := fmt.Sprintf("ratelimit:day:%s:%s", userEmail, time.Now().Format("20060102"))
@@ -158,8 +153,7 @@ func (l *RedisLimiter) AllowWithLimits(ctx context.Context, userEmail string, ho
 	return nil
 }
 
-// AllowLogin checks if a login attempt from the given IP is within rate limits.
-// The max attempts and window duration are configurable via admin settings.
+// AllowLogin limits login attempts per IP; attempts and window come from admin settings.
 func (l *RedisLimiter) AllowLogin(ctx context.Context, ip string) error {
 	maxAttempts := 10
 	windowMinutes := 15
@@ -169,7 +163,6 @@ func (l *RedisLimiter) AllowLogin(ctx context.Context, ip string) error {
 	}
 
 	window := time.Duration(windowMinutes) * time.Minute
-	// Bucket key: truncate current minute to the window size
 	bucket := time.Now().Unix() / int64(windowMinutes*60)
 	key := fmt.Sprintf("ratelimit:login:%s:%d", ip, bucket)
 

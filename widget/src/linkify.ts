@@ -1,5 +1,4 @@
-// Splits plain text into text and link parts. Only http, https and mailto
-// become links; everything else stays text. Nothing is ever parsed as HTML.
+// Only http, https and mailto become links; nothing is ever parsed as HTML.
 
 export type Part = { text: string; href?: string }
 

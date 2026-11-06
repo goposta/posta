@@ -89,11 +89,7 @@ func (r *TemplateRepository) FindByWorkspaceID(workspaceID uint, limit, offset i
 	return templates, total, nil
 }
 
-// FindByScope lists a workspace's templates.
-//
-// ActiveVersion and the actor refs are preloaded because the list renders all
-// three. Without the preload the version column had nothing to show and printed
-// "v?" against every template that had an active version.
+// FindByScope preloads ActiveVersion and the actor refs because the list renders all three.
 func (r *TemplateRepository) FindByScope(scope ResourceScope, search string, limit, offset int) ([]models.Template, int64, error) {
 	var items []models.Template
 	var total int64
@@ -122,9 +118,7 @@ func (r *TemplateRepository) FindByScope(scope ResourceScope, search string, lim
 	return items, total, nil
 }
 
-// FindByWorkspaceDisplayName finds a template by its label, for callers that
-// still send what a template's name was before 0.18. The oldest one wins
-// when two share a label.
+// FindByWorkspaceDisplayName serves callers still sending pre-0.18 names; the oldest wins when two share a label.
 func (r *TemplateRepository) FindByWorkspaceDisplayName(workspaceID uint, displayName string) (*models.Template, error) {
 	var tmpl models.Template
 	if err := r.db.Where("workspace_id = ? AND display_name = ?", workspaceID, displayName).Order("id").First(&tmpl).Error; err != nil {
@@ -158,15 +152,7 @@ type ImportVersion struct {
 	Localizations []ImportLocalization
 }
 
-// CreateWithVersions writes a template, its versions, their localizations and
-// the active-version pointer as one unit.
-//
-// Creating these separately left wreckage behind whenever a later step failed:
-// a template with no active version can never be sent, and a partially imported
-// one silently lost languages. Both looked fine in the list.
-//
-// Versions are numbered from 1 in the order given, so an import reproduces the
-// source's ordering rather than depending on what already exists.
+// CreateWithVersions is atomic so no template lacks an active version; versions are numbered from 1 in given order.
 func (r *TemplateRepository) CreateWithVersions(tmpl *models.Template, versions []ImportVersion) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(tmpl).Error; err != nil {
@@ -184,8 +170,7 @@ func (r *TemplateRepository) CreateWithVersions(tmpl *models.Template, versions 
 			if err := tx.Create(v).Error; err != nil {
 				return err
 			}
-			// The first version is activated by default so the template is
-			// usable the moment it exists; an explicitly active one wins.
+			// The first version is activated so the template is usable at once; an explicitly active one wins.
 			if in.IsActive || i == 0 {
 				id := v.ID
 				activeID = &id
@@ -214,13 +199,7 @@ func (r *TemplateRepository) CreateWithVersions(tmpl *models.Template, versions 
 	})
 }
 
-// IsDuplicateName reports whether an error is a unique-constraint violation —
-// for templates, the index on (workspace_id, name) rejecting a second template
-// with the same name. The caller can then answer with a conflict naming the
-// problem instead of a generic failure.
-//
-// It reads the driver error directly rather than gorm.ErrDuplicatedKey, which
-// only exists when the connection is opened with TranslateError.
+// IsDuplicateName reads the driver error, since gorm.ErrDuplicatedKey only exists with TranslateError.
 func IsDuplicateName(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -231,14 +210,7 @@ func IsDuplicateName(err error) bool {
 
 const uniqueViolationCode = "23505"
 
-// LanguagesForActiveVersions returns the languages each template is actually
-// translated into, keyed by template id.
-//
-// It is a single aggregate rather than a preload of the localizations
-// themselves: the list only needs the codes, and loading every localization
-// would pull each language's full HTML body across for nothing. Returning
-// partially-selected localization rows instead would put objects on the wire
-// whose empty subject and body mean "not loaded" rather than "empty".
+// LanguagesForActiveVersions aggregates codes instead of preloading localizations, which would pull every HTML body.
 func (r *TemplateRepository) LanguagesForActiveVersions(templateIDs []uint) (map[uint][]string, error) {
 	out := make(map[uint][]string, len(templateIDs))
 	if len(templateIDs) == 0 {

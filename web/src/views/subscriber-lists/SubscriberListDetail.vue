@@ -22,17 +22,14 @@ const pageable = ref<Pageable>({ current_page: 0, size: 20, total_pages: 0, tota
 const loading = ref(true)
 const saving = ref(false)
 
-// Edit form
 const editName = ref('')
 const editDescription = ref('')
 
-// Add member (static lists)
 const showAddModal = ref(false)
 const allSubscribers = ref<Subscriber[]>([])
 const selectedSubscriberId = ref<number | null>(null)
 const addingMember = ref(false)
 
-// Dynamic preview
 const previewMembers = ref<Subscriber[]>([])
 const previewLoading = ref(false)
 const previewCount = ref<number | null>(null)
@@ -190,7 +187,6 @@ onMounted(async () => {
       <button v-if="!isDynamic && wsStore.canEdit" class="btn btn-primary" @click="openAddMember">Add Member</button>
     </div>
 
-    <!-- Edit Details -->
     <div class="card" style="margin-bottom: 24px">
       <div class="card-header">
         <h2>Details</h2>
@@ -212,7 +208,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Dynamic: Filter Rules -->
     <div v-if="isDynamic && list?.filter_rules" class="card" style="margin-bottom: 24px">
       <div class="card-header">
         <h2>Filter Rules</h2>
@@ -247,7 +242,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Dynamic: Preview Results -->
     <div v-if="isDynamic && previewMembers.length > 0" class="card" style="margin-bottom: 24px">
       <div class="card-header">
         <h2>Matching Subscribers</h2>
@@ -274,7 +268,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Static: Members Table -->
     <div v-if="!isDynamic" class="card">
       <div class="card-header">
         <h2>Members</h2>
@@ -329,7 +322,6 @@ onMounted(async () => {
       </template>
     </div>
 
-    <!-- Add Member Modal -->
     <div v-if="showAddModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

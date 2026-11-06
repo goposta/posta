@@ -45,12 +45,10 @@ const (
 	prefixAdminProvider      = "cache:provider:admin"
 )
 
-// Cache provides Redis-backed caching for dashboard stats and metrics.
 type Cache struct {
 	client *redis.Client
 }
 
-// New creates a new Cache backed by the given Redis client.
 func New(client *redis.Client) *Cache {
 	return &Cache{client: client}
 }
@@ -63,7 +61,6 @@ func (c *Cache) Get(ctx context.Context, key string, dest any) bool {
 	return json.Unmarshal(data, dest) == nil
 }
 
-// Set marshals value and stores it with the given TTL.
 func (c *Cache) Set(ctx context.Context, key string, value any, ttl time.Duration) {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -72,7 +69,6 @@ func (c *Cache) Set(ctx context.Context, key string, value any, ttl time.Duratio
 	c.client.Set(ctx, key, data, ttl)
 }
 
-// Delete removes a cached key.
 func (c *Cache) Delete(ctx context.Context, key string) {
 	c.client.Del(ctx, key)
 }
@@ -113,7 +109,6 @@ func AdminProviderBreakdownKey(from, to string) string {
 	return fmt.Sprintf("%s:%s:%s", prefixAdminProvider, from, to)
 }
 
-// InvalidateUser removes all cached data scoped to a specific user.
 func (c *Cache) InvalidateUser(ctx context.Context, userID int) {
 	c.Delete(ctx, DashboardKey(userID))
 	c.Delete(ctx, UserMetricsKey(userID))
@@ -125,12 +120,11 @@ func (c *Cache) InvalidateUser(ctx context.Context, userID int) {
 	c.Delete(ctx, AdminMetricsKey())
 }
 
-// InvalidateAdmin removes admin-level cached metrics.
 func (c *Cache) InvalidateAdmin(ctx context.Context) {
 	c.Delete(ctx, AdminMetricsKey())
 }
 
-// InvalidateByPattern removes keys matching a pattern using SCAN (non-blocking).
+// InvalidateByPattern uses SCAN so it never blocks Redis.
 func (c *Cache) InvalidateByPattern(ctx context.Context, pattern string) {
 	iter := c.client.Scan(ctx, 0, pattern, 100).Iterator()
 	for iter.Next(ctx) {
@@ -138,14 +132,12 @@ func (c *Cache) InvalidateByPattern(ctx context.Context, pattern string) {
 	}
 }
 
-// InvalidateAnalytics removes all cached analytics data (both user and admin).
 func (c *Cache) InvalidateAnalytics(ctx context.Context) {
 	c.InvalidateByPattern(ctx, "cache:analytics:*")
 	c.InvalidateByPattern(ctx, "cache:dash_analytics:*")
 	c.InvalidateByPattern(ctx, "cache:provider:*")
 }
 
-// InvalidateAll removes all cache keys (dashboard + metrics + analytics).
 func (c *Cache) InvalidateAll(ctx context.Context) {
 	c.InvalidateByPattern(ctx, "cache:*")
 }

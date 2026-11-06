@@ -24,7 +24,6 @@ const links = [
   { title: 'Java SDK', url: 'https://github.com/goposta/posta-java', mdi: 'mdi-code-tags' },
 ]
 
-// Capability groups — a high-level tour of what Posta does, both outbound and inbound.
 const capabilities = [
   {
     icon: 'mdi-send-outline',
@@ -108,7 +107,6 @@ onMounted(async () => {
     </div>
 
     <template v-else>
-      <!-- Hero -->
       <div class="card about-hero">
         <div class="card-body">
           <div class="hero-content">
@@ -132,7 +130,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Capabilities -->
       <div class="about-section">
         <h2 class="section-title">Capabilities</h2>
         <div class="features-grid">
@@ -150,7 +147,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Links -->
       <div class="about-section">
         <h2 class="section-title">Resources & SDKs</h2>
         <div class="card">
@@ -177,7 +173,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Footer -->
       <div class="about-footer">
         <p class="about-powered">
           Powered by

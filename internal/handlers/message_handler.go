@@ -71,11 +71,8 @@ func NewMessageHandler(
 func (h *MessageHandler) SetBlobStore(bs blob.Store)       { h.blobStore = bs }
 func (h *MessageHandler) SetEventBus(b *eventbus.EventBus) { h.bus = b }
 
-// SetRealtime configures the cross-process bus behind the live message stream.
 func (h *MessageHandler) SetRealtime(b realtime.Bus) { h.realtime = b }
 
-// SetRouting lets the inbox filter by team and name the rules that routed a
-// submission.
 func (h *MessageHandler) SetRouting(teams *repositories.TeamRepository, rules *repositories.FormRuleRepository) {
 	h.teamRepo, h.ruleRepo = teams, rules
 }
@@ -188,8 +185,7 @@ func (h *MessageHandler) List(c *okapi.Context, req *MessageListRequest) error {
 		Unread:   req.Unread,
 		Query:    strings.TrimSpace(req.Q),
 		Priority: req.Priority,
-		// Collect-mode responses show in the inbox only when their form is
-		// picked: the inbox is for conversations.
+		// Collect-mode responses show only when their form is picked: the inbox is for conversations.
 		InboxOnly: req.FormID == 0,
 	}
 	tags, err := tagFilter(req.Tag)
@@ -380,7 +376,6 @@ func (h *MessageHandler) Assign(c *okapi.Context, req *AssignMessageRequest) err
 	return ok(c, msg)
 }
 
-// UpdateTags adds and removes tags on a message.
 func (h *MessageHandler) UpdateTags(c *okapi.Context, req *UpdateMessageTagsRequest) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
@@ -404,7 +399,6 @@ func (h *MessageHandler) UpdateTags(c *okapi.Context, req *UpdateMessageTagsRequ
 	return ok(c, msg)
 }
 
-// UpdatePriority sets a message's priority.
 func (h *MessageHandler) UpdatePriority(c *okapi.Context, req *UpdateMessagePriorityRequest) error {
 	if err := requireEdit(c); err != nil {
 		return c.AbortForbidden("insufficient workspace permissions", err)
@@ -461,8 +455,7 @@ func (h *MessageHandler) UpdateTeam(c *okapi.Context, req *UpdateMessageTeamRequ
 	return ok(c, msg)
 }
 
-// nameRules fills RoutedBy from the rules that matched, so the dashboard can
-// show why a submission went where it did. A deleted rule keeps its ID.
+// nameRules lets the dashboard show why a submission went where it did; a deleted rule keeps its ID.
 func (h *MessageHandler) nameRules(msg *models.Message) {
 	if h.ruleRepo == nil || len(msg.MatchedRules) == 0 {
 		return
@@ -686,8 +679,7 @@ func (h *MessageHandler) Stream(c *okapi.Context) error {
 	})
 }
 
-// publish sends a message event to the live stream and, for operator actions
-// worth keeping, to the persisted activity log.
+// publish also writes operator actions worth keeping to the persisted activity log.
 func (h *MessageHandler) publish(c *okapi.Context, eventType string, msg *models.Message) {
 	messages.PublishEvent(c.Request().Context(), h.realtime, eventType, msg)
 	if h.bus == nil || eventType != messages.EventReplied {
@@ -700,7 +692,6 @@ func (h *MessageHandler) publish(c *okapi.Context, eventType string, msg *models
 		map[string]any{metaMessageID: msg.UUID, metaFormID: msg.FormID})
 }
 
-// tagFilter turns a tag query parameter into a filter, nil when empty.
 func tagFilter(raw string) ([]string, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, nil

@@ -29,29 +29,25 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// chatIPKeepDays is how long a visitor's full IP address is kept for abuse
-// handling before it is cut to its /24 (IPv4) or /48 (IPv6) network.
+// Full IPs are kept this long for abuse handling, then cut to their /24 (IPv4) or /48 (IPv6) network.
 const chatIPKeepDays = 30
 
 const chatRetentionBatch = 500
 
-// ChatRetentionJob ages live chat out: it erases closed and spam
-// conversations past their retention, visitors left with nothing, and the
-// precision of old IP addresses.
+// ChatRetentionJob erases expired closed and spam conversations and orphaned visitors, and truncates old IPs.
 type ChatRetentionJob struct {
 	svc  *chat.Service
 	days int
 	now  func() time.Time
 }
 
-// NewChatRetentionJob keeps conversations for days (a widget may set fewer);
-// 0 keeps them forever, though IPs are still truncated.
+// NewChatRetentionJob keeps conversations for days (a widget may set fewer); 0 keeps them forever, IPs still truncate.
 func NewChatRetentionJob(svc *chat.Service, days int) *ChatRetentionJob {
 	return &ChatRetentionJob{svc: svc, days: days, now: time.Now}
 }
 
 func (j *ChatRetentionJob) Name() string     { return "chat-retention" }
-func (j *ChatRetentionJob) Schedule() string { return "30 3 * * *" } // daily at 03:30 UTC
+func (j *ChatRetentionJob) Schedule() string { return "30 3 * * *" }
 
 func (j *ChatRetentionJob) Run(ctx context.Context, _ *asynq.Client) error {
 	repo := j.svc.Repo()
@@ -97,8 +93,6 @@ func (j *ChatRetentionJob) Run(ctx context.Context, _ *asynq.Client) error {
 	return nil
 }
 
-// truncateIPs cuts the addresses of visitors not seen for a month down to
-// their network.
 func (j *ChatRetentionJob) truncateIPs() int {
 	repo := j.svc.Repo()
 	cutoff := j.now().AddDate(0, 0, -chatIPKeepDays)
@@ -134,8 +128,7 @@ func EffectiveChatRetention(platformDays, widgetDays int) int {
 	return platformDays
 }
 
-// TruncateIP keeps the /24 of an IPv4 address or the /48 of an IPv6 one.
-// Anything unparseable is dropped.
+// TruncateIP keeps the /24 of an IPv4 address or the /48 of an IPv6 one, and drops anything unparseable.
 func TruncateIP(ip string) string {
 	if ip == "" {
 		return ""

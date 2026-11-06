@@ -21,8 +21,7 @@ package verifier
 
 import "strings"
 
-// disposableDomains is a representative (non-exhaustive) set of throwaway email
-// providers.
+// disposableDomains is a representative, non-exhaustive set of throwaway providers.
 var disposableDomains = map[string]bool{
 	"mailinator.com":    true,
 	"guerrillamail.com": true,
@@ -56,8 +55,7 @@ var disposableDomains = map[string]bool{
 	"burnermail.io":     true,
 }
 
-// roleLocalParts are mailbox names that usually point at a function/team rather
-// than a person. Deliverable, but risky for cold/marketing sends.
+// roleLocalParts name a function or team rather than a person: deliverable, but risky for cold sends.
 var roleLocalParts = map[string]bool{
 	"admin":         true,
 	"administrator": true,
@@ -82,12 +80,10 @@ var roleLocalParts = map[string]bool{
 	"nepasrepondre": true,
 }
 
-// isDisposable reports whether the domain belongs to a known throwaway provider.
 func isDisposable(domain string) bool {
 	return disposableDomains[strings.ToLower(domain)]
 }
 
-// isRoleAccount reports whether the local part is a role/function mailbox.
 func isRoleAccount(local string) bool {
 	return roleLocalParts[strings.ToLower(local)]
 }

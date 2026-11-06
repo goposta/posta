@@ -34,28 +34,17 @@ import (
 	"gorm.io/gorm"
 )
 
-// HealthServer exposes liveness, readiness, and Prometheus metrics for a
-// dedicated worker process.
-//
-// A worker has no HTTP surface of its own, which left an orchestrator with no
-// way to tell a wedged worker from a busy one, and left the Prometheus counters
-// the worker increments with nothing to scrape them.
+// HealthServer gives a dedicated worker, which has no HTTP surface of its own, probes and a metrics endpoint.
 type HealthServer struct {
 	db    *gorm.DB
 	redis *redis.Client
 	srv   *http.Server
 
-	// processing is set once the queue consumer is running and cleared when it
-	// stops. Dependencies being reachable is not the same as the worker doing
-	// its job: a process that answered every ping but had stopped consuming
-	// would keep reporting ready while the queue backed up behind it.
+	// Reachable dependencies are not enough: a worker that stopped consuming would report ready as the queue backs up.
 	processing atomic.Bool
 }
 
-// WorkerStatus is the worker's readiness payload: the same fields the server's
-// /readyz returns, plus whether this process is actually consuming from the
-// queue. It is spelled out rather than embedding health.Status, which would make
-// the field reachable as status.Status.Status.
+// WorkerStatus spells out health.Status's fields rather than embedding it, avoiding status.Status.Status.
 type WorkerStatus struct {
 	Status     string `json:"status"`
 	Database   string `json:"database"`
@@ -79,14 +68,9 @@ func NewHealthServer(addr string, db *gorm.DB, rdb *redis.Client) *HealthServer 
 	return h
 }
 
-// SetProcessing records whether the queue consumer is running.
 func (h *HealthServer) SetProcessing(running bool) { h.processing.Store(running) }
 
-// Start serves in the background and returns a shutdown function.
-//
-// A failure to bind is logged, not fatal. The worker's job is delivering mail;
-// taking a healthy worker down because its probe port is occupied would trade a
-// monitoring problem for an outage.
+// A bind failure is logged, not fatal: an occupied probe port must not take down a healthy mail worker.
 func (h *HealthServer) Start() func(context.Context) {
 	go func() {
 		if err := h.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -102,13 +86,9 @@ func (h *HealthServer) Start() func(context.Context) {
 	}
 }
 
-// healthz answers whether the process is alive. It deliberately touches nothing
-// else: a liveness probe that fails when the database is briefly unreachable
-// gets the worker restarted, which does not help and loses in-flight work.
+// healthz touches nothing else: failing liveness on a DB blip restarts the worker and loses in-flight work.
 func (h *HealthServer) healthz(w http.ResponseWriter, _ *http.Request) {
-	// Only the status field: health.Status would also serialise empty database
-	// and redis entries, which read as failed checks rather than unasked ones,
-	// and would not match what the server's /healthz returns.
+	// Only status: empty database/redis entries would read as failed checks and differ from the server's /healthz.
 	writeJSON(w, http.StatusOK, map[string]string{"status": health.StatusOK})
 }
 

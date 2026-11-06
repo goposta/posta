@@ -2,12 +2,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { inboxApi, type InboxNotification } from "../api/inbox";
 
-// The user's in-app inbox: the header bell and the dashboard alert banner read
-// from here. Distinct from stores/notification, which is transient toasts.
-//
-// There is no push channel; the counts are polled and the banner refreshes with
-// the dashboard. An inbox item is never urgent enough to justify a socket, and a
-// poll degrades gracefully when the tab is backgrounded.
+// Polled, not pushed: no inbox item is urgent enough for a socket, and a poll degrades gracefully in background tabs.
 const POLL_MS = 60_000;
 
 export const useInboxStore = defineStore("inbox", () => {
@@ -81,9 +76,7 @@ export const useInboxStore = defineStore("inbox", () => {
     await inboxApi.markAllRead();
   }
 
-  // Dismissal removes the item from the banner optimistically. The server binds
-  // it to the condition as it currently stands, so it comes back on its own if
-  // the condition materially worsens.
+  // The server binds a dismissal to the condition as it stands, so the item returns if the condition materially worsens.
   async function dismiss(id: number) {
     banner.value = banner.value.filter((n) => n.id !== id);
     stamp(items.value, [id], "dismissed_at");

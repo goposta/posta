@@ -43,8 +43,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// InboundHandler serves inbound-email HTTP endpoints: the generic webhook ingest
-// endpoint, list/get for authenticated users, and attachment downloads.
 type InboundHandler struct {
 	svc       *inbound.Service
 	repo      *repositories.InboundEmailRepository
@@ -71,14 +69,11 @@ func NewInboundHandler(
 	}
 }
 
-// SetEnqueuer configures the worker enqueuer for the retry endpoint.
 func (h *InboundHandler) SetEnqueuer(eq inbound.Enqueuer) { h.producer = eq }
 
-// SetEventBus configures the event bus used for SSE streaming.
 func (h *InboundHandler) SetEventBus(b *eventbus.EventBus) { h.bus = b }
 
-// Stream pushes email.inbound.received events to the authenticated user via SSE.
-// Events from other users' inboxes are filtered out.
+// Stream filters out events from other users' inboxes.
 func (h *InboundHandler) Stream(c *okapi.Context) error {
 	if h.bus == nil {
 		return c.AbortNotFound("inbound stream not configured")
@@ -129,8 +124,7 @@ func (h *InboundHandler) Stream(c *okapi.Context) error {
 	})
 }
 
-// contentDisposition builds a safe Content-Disposition header. Non-ASCII filenames
-// are RFC 5987 encoded; quotes and CR/LF are stripped from the fallback name.
+// Non-ASCII filenames are RFC 5987 encoded; quotes and CR/LF are stripped from the fallback name.
 func contentDisposition(filename string) string {
 	ascii := strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f || r == '"' || r == '\\' || r > 0x7e {
@@ -171,8 +165,7 @@ func constantTimeSecretEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-// DedupFallbackHash derives a stable hash for messages without a Message-ID.
-// Used by the webhook path to reject near-duplicate retries.
+// DedupFallbackHash lets the webhook path reject near-duplicate retries of messages without a Message-ID.
 func DedupFallbackHash(sender string, recipients []string, subject string, size int64) string {
 	h := sha256.New()
 	h.Write([]byte(strings.ToLower(sender)))
@@ -187,17 +180,13 @@ func DedupFallbackHash(sender string, recipients []string, subject string, size 
 	return "fh-" + hex.EncodeToString(h.Sum(nil))[:24]
 }
 
-// InboundWebhookAttachment is the normalized attachment shape accepted on the
-// generic webhook — content is base64-encoded. Providers (Mailgun/SendGrid/SES)
-// can be adapted upstream to this shape.
+// Content is base64; provider payloads (Mailgun/SendGrid/SES) are adapted to this shape upstream.
 type InboundWebhookAttachment struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
 	Content     string `json:"content" doc:"Base64-encoded content"`
 }
 
-// InboundWebhookRequest is the normalized inbound-email payload accepted on the
-// public webhook endpoint.
 type InboundWebhookRequest struct {
 	PostaInboundSecret string `header:"X-Posta-Inbound-Secret" required:"true"`
 	Body               struct {
@@ -220,8 +209,7 @@ type InboundWebhookResponse struct {
 	Status    string `json:"status"`
 }
 
-// Receive accepts a normalized inbound email from an external MX provider.
-// Auth is a shared secret provided via X-Posta-Inbound-Secret header.
+// Receive authenticates by the shared secret in the X-Posta-Inbound-Secret header.
 func (h *InboundHandler) Receive(c *okapi.Context, req *InboundWebhookRequest) error {
 	if h.secret == "" {
 		return c.AbortForbidden("inbound webhook is not configured")
@@ -282,7 +270,6 @@ func (h *InboundHandler) Receive(c *okapi.Context, req *InboundWebhookRequest) e
 	}
 }
 
-// InboundListRequest extends ListRequest with filter query params.
 type InboundListRequest struct {
 	Page   int    `query:"page" default:"0"`
 	Size   int    `query:"size" default:"20"`
@@ -292,7 +279,6 @@ type InboundListRequest struct {
 	Q      string `query:"q" doc:"Full-text search on subject"`
 }
 
-// List returns inbound emails for the current scope, with optional filters.
 func (h *InboundHandler) List(c *okapi.Context, req *InboundListRequest) error {
 	page, size, offset := normalizePageParams(req.Page, req.Size)
 
@@ -308,7 +294,7 @@ func (h *InboundHandler) List(c *okapi.Context, req *InboundListRequest) error {
 	return paginated(c, items, total, page, size)
 }
 
-// Delete removes an inbound email by UUID (scope-checked) and cleans up blob-stored content.
+// Delete also cleans up blob-stored content.
 func (h *InboundHandler) Delete(c *okapi.Context, req *GetEmailRequest) error {
 	rec, err := h.repo.FindByUUID(req.ID)
 	if err != nil {
@@ -339,11 +325,7 @@ func (h *InboundHandler) Delete(c *okapi.Context, req *GetEmailRequest) error {
 	return noContent(c)
 }
 
-// Retry re-enqueues an inbound email for another attempt. Quarantined records
-// (those that failed during parsing) are routed back through inbound:parse so
-// the operator can re-run the MIME pipeline after a fix is deployed; failed
-// or stuck records (parsed but webhook delivery exhausted) go back through
-// inbound:process for re-dispatch.
+// Quarantined (unparsed) records rerun inbound:parse; failed or stuck parsed ones go back through inbound:process.
 func (h *InboundHandler) Retry(c *okapi.Context, req *GetEmailRequest) error {
 	if h.producer == nil {
 		return c.AbortForbidden("inbound retry requires an async worker")
@@ -380,8 +362,7 @@ func (h *InboundHandler) Retry(c *okapi.Context, req *GetEmailRequest) error {
 	return ok(c, map[string]string{"id": rec.UUID, "status": string(rec.Status)})
 }
 
-// DownloadAttachmentAuthed streams an inbound attachment to an authenticated user
-// who owns the record — no signed token required.
+// DownloadAttachmentAuthed needs no signed token: owning the record authorizes it.
 func (h *InboundHandler) DownloadAttachmentAuthed(c *okapi.Context, req *InboundAttachmentOwnedRequest) error {
 	rec, err := h.repo.FindByUUID(req.UUID)
 	if err != nil {
@@ -393,13 +374,11 @@ func (h *InboundHandler) DownloadAttachmentAuthed(c *okapi.Context, req *Inbound
 	return h.streamAttachment(c, rec, req.Index)
 }
 
-// InboundAttachmentOwnedRequest is the path-params-only variant used by authed users.
 type InboundAttachmentOwnedRequest struct {
 	UUID  string `param:"id" doc:"Inbound email UUID"`
 	Index int    `param:"idx" doc:"Zero-based attachment index"`
 }
 
-// GetRaw streams the raw RFC 5322 message bytes (if stored).
 func (h *InboundHandler) GetRaw(c *okapi.Context, req *GetEmailRequest) error {
 	rec, err := h.repo.FindByUUID(req.ID)
 	if err != nil {
@@ -425,7 +404,6 @@ func (h *InboundHandler) GetRaw(c *okapi.Context, req *GetEmailRequest) error {
 	return nil
 }
 
-// streamAttachment is the shared body for both signed and authed attachment endpoints.
 func (h *InboundHandler) streamAttachment(c *okapi.Context, rec *models.InboundEmail, idx int) error {
 	var atts []models.InboundAttachmentMeta
 	if rec.AttachmentsJSON != "" {
@@ -466,7 +444,6 @@ func (h *InboundHandler) streamAttachment(c *okapi.Context, rec *models.InboundE
 	return c.AbortNotFound("attachment content unavailable")
 }
 
-// Get returns a single inbound email by UUID (scope-checked).
 func (h *InboundHandler) Get(c *okapi.Context, req *GetEmailRequest) error {
 	rec, err := h.repo.FindByUUID(req.ID)
 	if err != nil {
@@ -478,15 +455,13 @@ func (h *InboundHandler) Get(c *okapi.Context, req *GetEmailRequest) error {
 	return ok(c, rec)
 }
 
-// InboundAttachmentRequest identifies a specific attachment on an inbound email.
 type InboundAttachmentRequest struct {
 	UUID  string `param:"uuid"`
 	Index int    `param:"idx"`
 	Token string `query:"t"`
 }
 
-// ServeAttachment streams an inbound attachment from blob storage after validating
-// the HMAC-signed token. Used by webhook consumers to fetch bytes asynchronously.
+// ServeAttachment authorizes by an HMAC-signed token so webhook consumers can fetch bytes asynchronously.
 func (h *InboundHandler) ServeAttachment(c *okapi.Context, req *InboundAttachmentRequest) error {
 	if req.Token == "" || !worker.VerifyInboundAttachmentToken(h.hmacKey, req.UUID, req.Index, req.Token) {
 		return c.AbortUnauthorized("invalid or missing token")

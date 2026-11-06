@@ -25,7 +25,6 @@ import (
 	"fmt"
 )
 
-// FieldType is the kind of answer a form field accepts.
 type FieldType string
 
 const (
@@ -43,17 +42,14 @@ const (
 	FieldScale       FieldType = "scale"
 	FieldRating      FieldType = "rating"
 	FieldHidden      FieldType = "hidden"
-	// FieldSection is not a question: it starts a new page of the form. The
-	// questions after it, up to the next section, are that page.
+	// FieldSection is not a question: it starts a new page holding the questions up to the next section.
 	FieldSection FieldType = "section"
 )
 
-// GotoSubmit is a branch target that ends the form: the respondent submits
-// from the page they are on.
+// GotoSubmit is a branch target that ends the form, submitting from the current page.
 const GotoSubmit = "submit"
 
-// FieldRole marks the field that carries one of a message's summary values,
-// replacing the key-name guessing of messages.Extract.
+// FieldRole marks the field carrying one of a message's summary values, instead of guessing from key names.
 type FieldRole string
 
 const (
@@ -65,8 +61,7 @@ const (
 	RoleBody        FieldRole = "body"
 )
 
-// FieldDisplay chooses how a choice field is drawn. It never changes what is
-// accepted.
+// FieldDisplay chooses how a choice field is drawn; it never changes what is accepted.
 type FieldDisplay string
 
 const (
@@ -77,8 +72,7 @@ const (
 	DisplayList       FieldDisplay = "list"       // multiselect
 )
 
-// UnknownFieldsPolicy decides what happens to submitted keys the schema does
-// not declare.
+// UnknownFieldsPolicy decides what happens to submitted keys the schema does not declare.
 type UnknownFieldsPolicy string
 
 const (
@@ -90,14 +84,11 @@ const (
 type FieldOption struct {
 	Value string `json:"value"`
 	Label string `json:"label,omitempty"`
-	// Goto, on a single-choice question, is where choosing this option leads
-	// after its page: a later section's key, or GotoSubmit. Empty follows
-	// the page's own next.
+	// Goto (single-choice only) leads to a later section key or GotoSubmit after this page; empty follows Next.
 	Goto string `json:"goto,omitempty"`
 }
 
-// FieldDef declares one question of a form. A key, once saved, can be
-// archived but not renamed or removed, so old submissions keep their meaning.
+// A saved key can be archived but never renamed or removed, so old submissions keep their meaning.
 type FieldDef struct {
 	Key      string    `json:"key"`
 	Label    string    `json:"label"`
@@ -121,17 +112,13 @@ type FieldDef struct {
 	Help        string `json:"help,omitempty"`
 	Archived    bool   `json:"archived,omitempty"`
 
-	// Next, on a section, is where its page leads when no answer branches: a
-	// later section's key, or GotoSubmit. Empty continues to the next page.
+	// Next is where a section's page leads absent a branch: a later section key or GotoSubmit; empty continues.
 	Next string `json:"next,omitempty"`
 }
 
-// IsSection reports whether the entry starts a page rather than asking a
-// question.
 func (f *FieldDef) IsSection() bool { return f.Type == FieldSection }
 
-// FieldDefs is a form's schema, stored as jsonb. Nil means the form has no
-// schema and accepts any fields, as before schemas existed.
+// FieldDefs is a form's jsonb schema; nil means no schema, accepting any fields.
 type FieldDefs []FieldDef
 
 func (d FieldDefs) Value() (driver.Value, error) {
@@ -150,7 +137,6 @@ func (d *FieldDefs) Scan(value any) error {
 	return json.Unmarshal(raw, d)
 }
 
-// Active returns the fields that are not archived, in order.
 func (d FieldDefs) Active() FieldDefs {
 	out := make(FieldDefs, 0, len(d))
 	for _, f := range d {
@@ -161,8 +147,7 @@ func (d FieldDefs) Active() FieldDefs {
 	return out
 }
 
-// Questions returns the entries that ask something, archived ones included,
-// leaving out sections.
+// Questions returns the entries that ask something, archived ones included, leaving out sections.
 func (d FieldDefs) Questions() FieldDefs {
 	out := make(FieldDefs, 0, len(d))
 	for _, f := range d {
@@ -173,8 +158,7 @@ func (d FieldDefs) Questions() FieldDefs {
 	return out
 }
 
-// SubmissionData is a submission's typed answers keyed by field key, stored
-// as jsonb. Numbers, booleans and multi-select arrays keep their JSON type.
+// SubmissionData keeps numbers, booleans and multi-select arrays as their JSON types.
 type SubmissionData map[string]any
 
 func (d SubmissionData) Value() (driver.Value, error) {
@@ -193,8 +177,7 @@ func (d *SubmissionData) Scan(value any) error {
 	return json.Unmarshal(raw, d)
 }
 
-// FormAppearance is a form's saved look, used by its hosted page and as the
-// widget's default. Attributes on an embed take precedence.
+// FormAppearance is a form's saved look for its hosted page and widget default; embed attributes win.
 type FormAppearance struct {
 	Accent         string `json:"accent,omitempty"`           // #RRGGBB
 	Theme          string `json:"theme,omitempty"`            // light, dark or auto

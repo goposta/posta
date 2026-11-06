@@ -73,13 +73,9 @@ type Lookup interface {
 	ActiveFilters(workspaceID uint, src models.ScanSource) ([]models.MessageFilter, error)
 }
 
-// Policy is the per-endpoint scanning configuration: whether to scan, where
-// the score thresholds sit, and which source's filters apply. *models.Form
-// implements it; a chat widget will too.
 type Policy interface {
 	ScanningEnabled() bool
-	// ScanThresholds returns the flag, quarantine, and reject scores. A
-	// non-positive value means the default for that rung.
+	// A non-positive threshold means the default for that rung.
 	ScanThresholds() (flag, quarantine, reject float64)
 	ScanSource() models.ScanSource
 }
@@ -96,8 +92,7 @@ type Input struct {
 	UserAgent   string
 	HoneypotHit bool
 	NonceFailed bool
-	// Light skips the signals about the sender (address, IP, user agent,
-	// repeats, length) and scores the content only: filters, links, markup.
+	// Light scores content only (filters, links, markup) and skips sender signals: address, IP, user agent, repeats, length.
 	Light bool
 }
 

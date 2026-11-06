@@ -25,8 +25,7 @@ import (
 	"testing"
 )
 
-// clearRedisEnv unsets every POSTA_REDIS_* var (Setenv registers restore,
-// Unsetenv removes it so goutils.Env falls back to its default).
+// Unsetenv after Setenv keeps the restore but makes goutils.Env fall back to its default.
 func clearRedisEnv(t *testing.T) {
 	for _, k := range []string{
 		"POSTA_REDIS_ADDR",
@@ -40,8 +39,7 @@ func clearRedisEnv(t *testing.T) {
 	}
 }
 
-// TestNewRedisConfigBackwardCompatible: legacy addr/password (or nothing) keeps
-// the same connection settings as before DB/URL support was added.
+// Legacy addr/password (or nothing) must keep the connection settings from before DB/URL support.
 func TestNewRedisConfigBackwardCompatible(t *testing.T) {
 	t.Run("defaults unchanged", func(t *testing.T) {
 		clearRedisEnv(t)
@@ -71,7 +69,6 @@ func TestNewRedisConfigBackwardCompatible(t *testing.T) {
 	})
 }
 
-// TestNewRedisConfigDB verifies the new POSTA_REDIS_DB selector.
 func TestNewRedisConfigDB(t *testing.T) {
 	clearRedisEnv(t)
 	t.Setenv("POSTA_REDIS_ADDR", "localhost:6379")
@@ -88,8 +85,6 @@ func TestNewRedisConfigDB(t *testing.T) {
 	}
 }
 
-// TestNewRedisConfigURL: POSTA_REDIS_URL is parsed, overrides the discrete
-// fields, and flows through both option builders.
 func TestNewRedisConfigURL(t *testing.T) {
 	clearRedisEnv(t)
 	// Discrete values are set but must be overridden by the URL.
@@ -116,13 +111,11 @@ func TestNewRedisConfigURL(t *testing.T) {
 	if ao.Addr != "cache.example.com:6390" || ao.Username != "alice" || ao.Password != "hunter2" || ao.DB != 5 {
 		t.Fatalf("AsynqRedisOpt mismatch: %+v", ao)
 	}
-	// Plain redis:// URL must not carry TLS.
 	if rc.TLSConfig != nil {
 		t.Fatalf("TLSConfig should be nil for redis:// URL")
 	}
 }
 
-// TestNewRedisConfigTLS: a rediss:// URL enables TLS in both option builders.
 func TestNewRedisConfigTLS(t *testing.T) {
 	clearRedisEnv(t)
 	t.Setenv("POSTA_REDIS_URL", "rediss://cache.example.com:6390/1")
@@ -158,8 +151,7 @@ func TestAllowedCORSOrigins(t *testing.T) {
 	}
 }
 
-// Form links and inbound attachment links use POSTA_API_URL when the API has
-// its own host, and POSTA_WEB_URL otherwise, as the configuration docs say.
+// Public links use POSTA_API_URL when the API has its own host, else POSTA_WEB_URL, as the configuration docs say.
 func TestPublicAPIURL(t *testing.T) {
 	cases := []struct {
 		api, web, want string

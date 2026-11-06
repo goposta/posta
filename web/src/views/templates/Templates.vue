@@ -359,7 +359,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Create/Edit Template Modal -->
      <TemplateModal :editing="editing" :is-visible="showModal" :saving="saving" :form="form"
       @close="closeModal" @save="saveTemplate" />
    

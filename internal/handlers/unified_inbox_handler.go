@@ -24,8 +24,7 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// UnifiedInboxHandler lists form messages, loose inbound emails and chats in
-// one list. Each row links to its own detail view.
+// UnifiedInboxHandler lists form messages, loose inbound emails and chats together; each row links to its own view.
 type UnifiedInboxHandler struct {
 	repo    *repositories.UnifiedInboxRepository
 	sources []string

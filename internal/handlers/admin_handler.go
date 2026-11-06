@@ -64,8 +64,6 @@ type AdminHandler struct {
 	sessionStore   *session.Store
 }
 
-// SetMigrator wires the personal-workspace migrator used to provision (and seed)
-// a personal workspace for admin-created users. See §4.
 func (h *AdminHandler) SetMigrator(m *workspaceprovision.Service) {
 	h.migrator = m
 }
@@ -90,7 +88,6 @@ type AdminDeleteUserRequest struct {
 	ID int `param:"id"`
 }
 
-// PlatformMetrics holds aggregate platform metrics.
 type PlatformMetrics struct {
 	TotalUsers         int64                              `json:"total_users"`
 	TotalEmails        int64                              `json:"total_emails"`
@@ -118,18 +115,15 @@ type PlatformMetrics struct {
 	CurrentGoroutines  int                                `json:"current_goroutines"`
 	CurrentMemoryUsage uint64                             `json:"current_memory_usage"`
 
-	// Security
 	ActiveSessions        int64   `json:"active_sessions"`
 	FailedLoginsLast24h   int64   `json:"failed_logins_last_24h"`
 	TwoFactorAdoptionRate float64 `json:"two_factor_adoption_rate"`
 	TwoFactorUsers        int64   `json:"two_factor_users"`
 
-	// Users belonging to no workspace at all. Non-zero means provisioning failed
-	// for somebody and they will land on the dashboard's empty state.
+	// Non-zero means provisioning failed for someone, who will land on the dashboard's empty state.
 	UsersWithoutWorkspace int64 `json:"users_without_workspace"`
 }
 
-// processStartTime records when the process started, for uptime reporting.
 var processStartTime = time.Now()
 
 type AdminRevokeKeyRequest struct {
@@ -140,7 +134,6 @@ type AdminGetUserRequest struct {
 	ID int `param:"id"`
 }
 
-// UserDetailMetrics holds per-user metrics.
 type UserDetailMetrics struct {
 	User              *models.User                       `json:"user"`
 	TotalEmails       int64                              `json:"total_emails"`
@@ -165,7 +158,6 @@ func NewAdminHandler(db *gorm.DB, c *cache.Cache, userRepo *repositories.UserRep
 	return &AdminHandler{db: db, cache: c, userRepo: userRepo, keyRepo: keyRepo, emailRepo: emailRepo, whDeliveryRepo: whDeliveryRepo, inspector: inspector, redis: redisClient, bus: bus, seeder: seeder, embeddedWorker: embeddedWorker}
 }
 
-// SetWorkspaceRepo sets the workspace and plan repositories for workspace management.
 func (h *AdminHandler) SetWorkspaceRepo(wsRepo *repositories.WorkspaceRepository, planRepo *repositories.PlanRepository) {
 	h.workspaceRepo = wsRepo
 	h.planRepo = planRepo
@@ -175,13 +167,11 @@ func (h *AdminHandler) SetEmailSettings(s *settings.Provider) {
 	h.emailSettings = s
 }
 
-// SetSessionRepo sets the session repository and store for session management.
 func (h *AdminHandler) SetSessionRepo(repo *repositories.SessionRepository, store *session.Store) {
 	h.sessionRepo = repo
 	h.sessionStore = store
 }
 
-// CreateUser allows admins to create a new user.
 func (h *AdminHandler) CreateUser(c *okapi.Context, req *AdminCreateUserRequest) error {
 	role := models.UserRole(req.Body.Role)
 	if role != models.UserRoleAdmin && role != models.UserRoleUser {
@@ -204,7 +194,6 @@ func (h *AdminHandler) CreateUser(c *okapi.Context, req *AdminCreateUserRequest)
 		return c.AbortConflict("email already registered")
 	}
 
-	// Provision the new user's personal workspace and seed its default content.
 	if h.migrator != nil {
 		go func(id uint) {
 			if _, err := h.migrator.EnsureWorkspace(h.db, id); err != nil {
@@ -239,7 +228,6 @@ func (h *AdminHandler) ListUsers(c *okapi.Context, req *ListUsersRequest) error 
 	return paginated(c, users, total, page, size)
 }
 
-// UpdateUser allows admins to change a user's role and active status.
 func (h *AdminHandler) UpdateUser(c *okapi.Context, req *AdminUpdateUserRequest) error {
 	user, err := h.userRepo.FindByID(uint(req.ID))
 	if err != nil {
@@ -315,8 +303,7 @@ func (h *AdminHandler) DeleteUser(c *okapi.Context, req *AdminDeleteUserRequest)
 	})
 }
 
-// ForceDeleteUser permanently deletes a disabled user and all their data (admin only).
-// The user must be disabled (Active=false) before they can be force-deleted.
+// ForceDeleteUser permanently deletes a user and all their data; the user must be disabled first.
 func (h *AdminHandler) ForceDeleteUser(c *okapi.Context, req *AdminDeleteUserRequest) error {
 	currentUserID := c.GetInt("user_id")
 	if req.ID == currentUserID {
@@ -346,7 +333,6 @@ func (h *AdminHandler) ForceDeleteUser(c *okapi.Context, req *AdminDeleteUserReq
 	return c.NoContent()
 }
 
-// CancelUserDeletion cancels a scheduled account deletion (admin only).
 func (h *AdminHandler) CancelUserDeletion(c *okapi.Context, req *AdminDeleteUserRequest) error {
 	user, err := h.userRepo.FindByID(uint(req.ID))
 	if err != nil {
@@ -374,11 +360,9 @@ func (h *AdminHandler) CancelUserDeletion(c *okapi.Context, req *AdminDeleteUser
 	return ok(c, map[string]any{"message": "Account deletion cancelled"})
 }
 
-// Metrics returns platform-wide metrics (admin only).
 func (h *AdminHandler) Metrics(c *okapi.Context) error {
 	ctx := c.Request().Context()
 
-	// Try cache first
 	cacheKey := cache.AdminMetricsKey()
 	var m PlatformMetrics
 	if h.cache.Get(ctx, cacheKey, &m) {
@@ -407,7 +391,6 @@ func (h *AdminHandler) Metrics(c *okapi.Context) error {
 	h.db.Model(&models.Domain{}).Count(&m.TotalDomains)
 	h.db.Model(&models.Workspace{}).Count(&m.TotalWorkspaces)
 
-	// Inbound email counts (platform-wide)
 	h.db.Model(&models.InboundEmail{}).Count(&m.TotalInbound)
 	h.db.Model(&models.InboundEmail{}).Where("status = ?", models.InboundStatusForwarded).Count(&m.ForwardedInbound)
 	h.db.Model(&models.InboundEmail{}).Where("status = ?", models.InboundStatusFailed).Count(&m.FailedInbound)
@@ -424,12 +407,10 @@ func (h *AdminHandler) Metrics(c *okapi.Context) error {
 		}
 	}
 
-	// Webhook delivery stats (platform-wide)
 	if whStats, err := h.whDeliveryRepo.StatsAll(); err == nil {
 		m.WebhookDeliveries = whStats
 	}
 
-	// Security stats
 	now := time.Now()
 	h.db.Model(&models.Session{}).Where("revoked = false AND expires_at > ?", now).Count(&m.ActiveSessions)
 	h.db.Model(&models.Event{}).Where("type = ? AND created_at > ?", "user.login_failed", now.Add(-24*time.Hour)).Count(&m.FailedLoginsLast24h)
@@ -438,7 +419,6 @@ func (h *AdminHandler) Metrics(c *okapi.Context) error {
 		m.TwoFactorAdoptionRate = float64(m.TwoFactorUsers) / float64(m.TotalUsers) * 100
 	}
 
-	// Workspace-only migration progress.
 	h.db.Model(&models.User{}).
 		Where("active = ? AND NOT EXISTS (SELECT 1 FROM workspace_members m WHERE m.user_id = users.id)", true).
 		Count(&m.UsersWithoutWorkspace)
@@ -458,11 +438,9 @@ func fillRuntimeStats(m *PlatformMetrics) {
 	m.CurrentMemoryUsage = ms.Alloc
 }
 
-// UserMetrics returns detailed metrics for a specific user (admin only).
 func (h *AdminHandler) UserMetrics(c *okapi.Context, req *AdminGetUserRequest) error {
 	ctx := c.Request().Context()
 
-	// Try cache first
 	cacheKey := cache.UserMetricsKey(req.ID)
 	var m UserDetailMetrics
 	if h.cache.Get(ctx, cacheKey, &m) {
@@ -495,7 +473,6 @@ func (h *AdminHandler) UserMetrics(c *okapi.Context, req *AdminGetUserRequest) e
 		m.FailureRate = float64(m.FailedEmails) / float64(m.TotalEmails) * 100
 	}
 
-	// Webhook delivery stats for this user
 	if whStats, err := h.whDeliveryRepo.StatsByUserID(uint(req.ID)); err == nil {
 		m.WebhookDeliveries = whStats
 	}
@@ -505,7 +482,6 @@ func (h *AdminHandler) UserMetrics(c *okapi.Context, req *AdminGetUserRequest) e
 	return ok(c, m)
 }
 
-// AdminWorkspace is a workspace with its plan name for admin views.
 type AdminWorkspace struct {
 	ID          uint      `json:"id"`
 	DisplayName string    `json:"display_name"`
@@ -517,7 +493,6 @@ type AdminWorkspace struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// UserWorkspaces returns workspaces for a specific user (admin only).
 func (h *AdminHandler) UserWorkspaces(c *okapi.Context, req *AdminGetUserRequest) error {
 	_, err := h.userRepo.FindByID(uint(req.ID))
 	if err != nil {
@@ -529,7 +504,6 @@ func (h *AdminHandler) UserWorkspaces(c *okapi.Context, req *AdminGetUserRequest
 		return c.AbortInternalServerError("failed to list workspaces")
 	}
 
-	// Collect plan IDs and fetch plan names
 	planIDs := make(map[uint]bool)
 	for _, ws := range workspaces {
 		if ws.PlanID != nil {
@@ -565,7 +539,6 @@ func (h *AdminHandler) UserWorkspaces(c *okapi.Context, req *AdminGetUserRequest
 	return ok(c, result)
 }
 
-// Disable2FA allows admins to disable 2FA for a user.
 func (h *AdminHandler) Disable2FA(c *okapi.Context, req *AdminGetUserRequest) error {
 	user, err := h.userRepo.FindByID(uint(req.ID))
 	if err != nil {
@@ -591,14 +564,13 @@ func (h *AdminHandler) Disable2FA(c *okapi.Context, req *AdminGetUserRequest) er
 	return ok(c, okapi.M{"message": "2FA disabled"})
 }
 
-// RevokeUserSessions revokes all active sessions for a user.
 func (h *AdminHandler) RevokeUserSessions(c *okapi.Context, req *AdminGetUserRequest) error {
 	user, err := h.userRepo.FindByID(uint(req.ID))
 	if err != nil {
 		return c.AbortNotFound("user not found")
 	}
 
-	// Get active sessions first
+	// Loaded before revoking: their JTIs are needed for the Redis blacklist.
 	sessions, err := h.sessionRepo.FindActiveByUserID(user.ID)
 	if err != nil {
 		return c.AbortInternalServerError("failed to load sessions")
@@ -622,7 +594,6 @@ func (h *AdminHandler) RevokeUserSessions(c *okapi.Context, req *AdminGetUserReq
 	return ok(c, okapi.M{"message": fmt.Sprintf("%d session(s) revoked", count), "revoked": count})
 }
 
-// WorkerStatus is sent over SSE with the current worker count and details.
 type WorkerStatus struct {
 	ActiveWorkers   int            `json:"active_workers"`
 	Workers         []WorkerDetail `json:"workers"`
@@ -646,7 +617,6 @@ func buildSystemStatus() SystemStatus {
 	}
 }
 
-// WorkerDetail holds info about a single connected worker.
 type WorkerDetail struct {
 	Host     string         `json:"host"`
 	PID      int            `json:"pid"`
@@ -656,7 +626,6 @@ type WorkerDetail struct {
 	Outdated bool           `json:"outdated"`          // version differs from the server
 }
 
-// MetricsStream sends real-time platform metrics updates via SSE
 func (h *AdminHandler) MetricsStream(c *okapi.Context) error {
 	ctx := c.Request().Context()
 
@@ -682,7 +651,6 @@ func (h *AdminHandler) MetricsStream(c *okapi.Context) error {
 		return nil
 	}
 
-	// Send initial status immediately.
 	if err := sendStatus(); err != nil {
 		return nil
 	}

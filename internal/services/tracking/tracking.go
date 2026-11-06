@@ -34,9 +34,7 @@ import (
 	"github.com/goposta/posta/internal/storage/repositories"
 )
 
-// defaultWebViewTTL bounds how long a hosted "view in browser" link stays valid.
-// A web-view link exposes full message content, so unlike unsubscribe tokens it
-// carries an expiry.
+// A web-view link exposes full message content, so unlike unsubscribe tokens it expires.
 const defaultWebViewTTL = 90 * 24 * time.Hour
 
 // Service handles link rewriting and pixel injection for campaign emails.
@@ -61,7 +59,6 @@ func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) stri
 
 	trackingPrefix := s.baseURL + "/t/"
 
-	// Rewrite links for click tracking
 	html = linkRegex.ReplaceAllStringFunc(html, func(match string) string {
 		sub := linkRegex.FindStringSubmatch(match)
 		if len(sub) < 2 {
@@ -69,9 +66,7 @@ func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) stri
 		}
 		originalURL := sub[1]
 
-		// Skip URLs that are already our own tracking endpoints. The previous
-		// `Contains("/t/")` check accidentally skipped any legitimate link
-		// whose path segment contained "/t/" (e.g. blog posts).
+		// Match the exact tracking prefix; a bare "/t/" check would skip legitimate links such as blog posts.
 		if strings.HasPrefix(originalURL, trackingPrefix) {
 			return match
 		}
@@ -91,9 +86,7 @@ func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) stri
 		return strings.Replace(match, originalURL, trackedURL, 1)
 	})
 
-	// Inject open tracking pixel before </body>. The URL is HMAC-signed so
-	// metrics can't be inflated by a third party hitting the predictable
-	// /t/o/<msg_id> path.
+	// The pixel URL is HMAC-signed so a third party can't inflate metrics via the predictable /t/o/<id> path.
 	pixel := fmt.Sprintf(`<img src="%s" width="1" height="1" alt="" style="display:none" />`, s.OpenURL(messageID))
 	if strings.Contains(html, "</body>") {
 		html = strings.Replace(html, "</body>", pixel+"</body>", 1)
@@ -114,12 +107,10 @@ func (s *Service) ClickURL(messageID uint, hash string) string {
 	return fmt.Sprintf("%s/t/c/%d/%s?sig=%s", s.baseURL, messageID, hash, s.signClick(messageID, hash))
 }
 
-// VerifyOpenSig checks an open-tracking signature.
 func (s *Service) VerifyOpenSig(messageID uint, sig string) bool {
 	return hmac.Equal([]byte(sig), []byte(s.signOpen(messageID)))
 }
 
-// VerifyClickSig checks a click-tracking signature.
 func (s *Service) VerifyClickSig(messageID uint, hash, sig string) bool {
 	return hmac.Equal([]byte(sig), []byte(s.signClick(messageID, hash)))
 }
@@ -145,7 +136,6 @@ func (s *Service) SignUnsubscribeToken(messageID uint) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + sig
 }
 
-// VerifyUnsubscribeToken verifies the HMAC token and returns the message ID.
 func (s *Service) VerifyUnsubscribeToken(token string) (uint, error) {
 	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {
@@ -171,14 +161,11 @@ func (s *Service) VerifyUnsubscribeToken(token string) (uint, error) {
 	return uint(id), nil
 }
 
-// UnsubscribeURL generates the unsubscribe URL for a campaign message.
 func (s *Service) UnsubscribeURL(messageID uint) string {
 	return fmt.Sprintf("%s/t/u/%s", s.baseURL, s.SignUnsubscribeToken(messageID))
 }
 
-// SignTxUnsubscribeToken creates an HMAC-signed token encoding a transactional
-// email ID. The "tx:" prefix distinguishes it from campaign-message tokens so
-// the two token kinds can't be confused or replayed against the wrong handler.
+// SignTxUnsubscribeToken's "tx:" prefix stops it being replayed against the campaign-token handler.
 func (s *Service) SignTxUnsubscribeToken(emailID uint) string {
 	payload := "tx:" + strconv.FormatUint(uint64(emailID), 10)
 	mac := hmac.New(sha256.New, s.hmacKey)
@@ -187,7 +174,6 @@ func (s *Service) SignTxUnsubscribeToken(emailID uint) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + sig
 }
 
-// VerifyTxUnsubscribeToken verifies a transactional unsubscribe
 func (s *Service) VerifyTxUnsubscribeToken(token string) (uint, error) {
 	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {
@@ -214,16 +200,12 @@ func (s *Service) VerifyTxUnsubscribeToken(token string) (uint, error) {
 	return uint(id), nil
 }
 
-// TxUnsubscribeURL returns the public one-click unsubscribe URL for a
-// transactional email. Suitable for RFC 8058 List-Unsubscribe-Post headers.
+// TxUnsubscribeURL is the one-click unsubscribe URL, suitable for RFC 8058 List-Unsubscribe-Post.
 func (s *Service) TxUnsubscribeURL(emailID uint) string {
 	return fmt.Sprintf("%s/t/u/tx/%s", s.baseURL, s.SignTxUnsubscribeToken(emailID))
 }
 
-// SignWebViewToken creates an HMAC-signed token for the hosted "view in browser"
-// page. The payload encodes the opaque Email UUID (non-enumerable) plus an expiry,
-// and a "view:" prefix binds the token kind so it can't be replayed against the
-// unsubscribe handlers.
+// SignWebViewToken encodes the non-enumerable Email UUID and an expiry; its "view:" prefix blocks unsubscribe replay.
 func (s *Service) SignWebViewToken(emailUUID string, ttl time.Duration) string {
 	exp := time.Now().Add(ttl).Unix()
 	payload := fmt.Sprintf("view:%s:%d", emailUUID, exp)
@@ -233,8 +215,6 @@ func (s *Service) SignWebViewToken(emailUUID string, ttl time.Duration) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + sig
 }
 
-// VerifyWebViewToken verifies the HMAC token, checks the expiry, and returns the
-// Email UUID it encodes.
 func (s *Service) VerifyWebViewToken(token string) (string, error) {
 	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {
@@ -270,8 +250,7 @@ func (s *Service) VerifyWebViewToken(token string) (string, error) {
 	return emailUUID, nil
 }
 
-// WebViewURL returns the public "view in browser" URL for a transactional or
-// campaign email, keyed by its opaque UUID. Returns "" for an empty UUID.
+// WebViewURL returns "" for an empty UUID.
 func (s *Service) WebViewURL(emailUUID string) string {
 	if emailUUID == "" {
 		return ""

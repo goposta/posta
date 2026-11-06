@@ -49,9 +49,7 @@ function saveStatus(workspaceId: number, status: ChatPresenceStatus) {
   }
 }
 
-// The dashboard's one live connection to the workspace's chat events. Views
-// subscribe to it instead of opening their own streams, and the sidebar badge
-// reads the awaiting-reply count kept here.
+// The dashboard's single chat event stream: views subscribe here instead of opening their own.
 export const useChatStore = defineStore('chat', () => {
   /** null until probed; false when the server runs without POSTA_CHAT_ENABLED. */
   const enabled = ref<boolean | null>(null)
@@ -147,8 +145,7 @@ export const useChatStore = defineStore('chat', () => {
     if (presenceWs !== null && myStatus.value !== 'offline') conversationsApi.goOffline(presenceWs)
   }
 
-  // A closed or backgrounded tab goes offline at once instead of 75 s later;
-  // coming back resumes the heartbeat.
+  // A hidden or closed tab goes offline at once instead of 75 s later; coming back resumes the heartbeat.
   if (typeof window !== 'undefined') {
     window.addEventListener('pagehide', () => leave())
     window.addEventListener('pageshow', (e) => {
@@ -244,8 +241,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     es.onerror = () => {
       connected.value = false
-      // The browser retries a dropped connection itself; it gives up for good
-      // on an HTTP error, which is when we take over, with backoff.
+      // The browser retries a dropped connection itself but gives up on an HTTP error, so we take over then, with backoff.
       if (es.readyState !== EventSource.CLOSED) return
       es.close()
       if (source === es) source = null
@@ -257,8 +253,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /** (Re)start for the current workspace. Safe to call repeatedly. */
   async function start() {
-    // Restarting for the same workspace must not flap this agent offline,
-    // which would take the widget offline for visitors too.
+    // Restarting for the same workspace must not flap this agent offline, which would take the widget offline for visitors too.
     const ws = useWorkspaceStore().currentWorkspaceId
     stop(presenceWs !== null && presenceWs !== (ws ?? null))
     const gen = ++generation
@@ -267,8 +262,7 @@ export const useChatStore = defineStore('chat', () => {
     myStatus.value = ws ? savedStatus(ws) : 'offline'
     await loadPresence()
     if (gen !== generation) return
-    // Another tab may already have this agent online: show and keep that
-    // rather than a stale local choice.
+    // Another tab may already have this agent online: keep that rather than a stale local choice.
     const me = useAuthStore().user?.id
     const live = me !== undefined ? agents.value[me] : undefined
     if (ws && live && live !== myStatus.value) {

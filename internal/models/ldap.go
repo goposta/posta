@@ -21,18 +21,15 @@ package models
 
 import "time"
 
-// LDAP TLS modes for the directory connection.
 const (
 	LDAPTLSNone     = "none"     // plain LDAP: development or a trusted LAN only
 	LDAPTLSStartTLS = "starttls" // upgrade a plain connection with StartTLS
 	LDAPTLSLDAPS    = "ldaps"    // implicit TLS, usually port 636
 )
 
-// AuthMethodLDAP marks accounts a directory created and manages. They have no
-// usable local password.
+// AuthMethodLDAP marks directory-created and -managed accounts; they have no usable local password.
 const AuthMethodLDAP = "ldap"
 
-// LDAPConfig is an LDAP or Active Directory connection users sign in through.
 // The table exists in every build; only the Enterprise build reads it.
 type LDAPConfig struct {
 	ID uint `json:"id" gorm:"primaryKey"`
@@ -47,8 +44,7 @@ type LDAPConfig struct {
 	InsecureSkipTLS bool   `json:"insecure_skip_tls" gorm:"not null;default:false"`
 	TimeoutSeconds  int    `json:"timeout_seconds" gorm:"not null;default:10"`
 
-	// BindDN is the service account that searches for the user entry before
-	// Posta binds as the user to check the password.
+	// BindDN is the service account that finds the user entry before Posta binds as the user to check the password.
 	BindDN string `json:"bind_dn"`
 	// BindPasswordEnc is the service account's password, encrypted at rest.
 	BindPasswordEnc string `json:"-" gorm:"type:text"`
@@ -59,7 +55,6 @@ type LDAPConfig struct {
 	AttrEmail  string `json:"attr_email"` // blank: mail
 	AttrName   string `json:"attr_name"`  // blank: displayName
 
-	// Group resolution, used by LDAPGroupMapping.
 	GroupBaseDN  string `json:"group_base_dn"`
 	GroupFilter  string `json:"group_filter"`  // %s is the user's DN; blank reads MemberAttr
 	MemberAttr   string `json:"member_attr"`   // blank: memberOf
@@ -75,14 +70,11 @@ type LDAPConfig struct {
 	BindPasswordSet bool `json:"bind_password_set" gorm:"-"`
 }
 
-// LDAPGroupMapping maps a directory group to Posta access, reconciled at every
-// sign-in: PlatformAdmin grants the platform admin role, WorkspaceID with
-// WorkspaceRole grants membership of a workspace.
+// Reconciled at every sign-in: PlatformAdmin grants admin, WorkspaceID with WorkspaceRole grants membership.
 type LDAPGroupMapping struct {
 	ID           uint `json:"id" gorm:"primaryKey"`
 	LDAPConfigID uint `json:"ldap_config_id" gorm:"index;not null"`
-	// GroupDN is matched case-insensitively against the user's groups; a bare
-	// CN such as "posta-admins" also works.
+	// GroupDN matches the user's groups case-insensitively; a bare CN such as "posta-admins" also works.
 	GroupDN       string        `json:"group_dn" gorm:"not null"`
 	PlatformAdmin bool          `json:"platform_admin" gorm:"not null;default:false"`
 	WorkspaceID   *uint         `json:"workspace_id"`

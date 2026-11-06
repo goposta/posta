@@ -41,16 +41,13 @@ type HealthResponse struct {
 	Status string `json:"status" example:"ok"`
 }
 
-// ReadyResponse is the shared readiness payload, so a probe pointed at a server
-// and one pointed at a dedicated worker read the same.
+// ReadyResponse is shared with dedicated workers so a probe of either reads the same.
 type ReadyResponse = health.Status
 
-// Healthz is a lightweight liveness probe.
 func (h *HealthHandler) Healthz(c *okapi.Context) error {
 	return c.OK(HealthResponse{Status: health.StatusOK})
 }
 
-// Readyz checks that all dependencies are reachable.
 func (h *HealthHandler) Readyz(c *okapi.Context) error {
 	status := health.Check(c.Request().Context(), h.db, h.redis)
 	if !status.Ready() {

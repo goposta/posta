@@ -26,7 +26,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// VerifyHandler exposes the email-verification endpoint.
 type VerifyHandler struct {
 	svc *verifier.Service
 }
@@ -35,10 +34,7 @@ func NewVerifyHandler(svc *verifier.Service) *VerifyHandler {
 	return &VerifyHandler{svc: svc}
 }
 
-// VerifyAddressRequest is the body for POST /emails/verify. The email is
-// validated with format:"email", so a syntactically malformed address is
-// rejected with a 400 before the handler runs; the verifier still re-checks
-// syntax as a safety net.
+// format:"email" rejects malformed addresses with a 400 first; the verifier re-checks syntax as a safety net.
 type VerifyAddressRequest struct {
 	Fresh bool `query:"fresh" doc:"Bypass the cache and re-check the address"`
 	Body  struct {
@@ -46,7 +42,6 @@ type VerifyAddressRequest struct {
 	} `json:"body"`
 }
 
-// Verify checks whether an email address is valid/deliverable.
 func (h *VerifyHandler) Verify(c *okapi.Context, req *VerifyAddressRequest) error {
 	if h.svc == nil || !h.svc.Enabled() {
 		return c.AbortNotFound("email verification is disabled")

@@ -21,9 +21,7 @@ package models
 
 import "time"
 
-// License is the installed Posta Enterprise license. There is at most one
-// row. Token is authoritative: it is verified again on every load, and the
-// other columns are copies kept for operators reading the database.
+// At most one row; Token is authoritative and re-verified on every load, other columns are operator copies.
 type License struct {
 	ID        uint      `gorm:"primaryKey"`
 	LicenseID string    `gorm:"size:64"`

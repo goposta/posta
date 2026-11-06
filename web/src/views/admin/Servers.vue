@@ -50,7 +50,6 @@ const { pageable, goToPage } = usePagination(async (page) => {
   }
 })
 
-// Debounce keystrokes, then reset to the first page of results.
 function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => goToPage(0), 300)
@@ -220,7 +219,6 @@ const { watchClickStart, confirmClickEnd } = useModalSafeClose(() => {
       </template>
     </div>
 
-    <!-- Create/Edit Modal -->
     <div v-if="showModal" class="modal-overlay" @mousedown="watchClickStart" @mouseup="confirmClickEnd">
       <div class="modal" @mousedown.stop @mouseup.stop>
         <div class="modal-header">

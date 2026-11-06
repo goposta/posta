@@ -27,8 +27,7 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// AccountCleanupJob permanently deletes user accounts whose scheduled
-// deletion date has passed.
+// AccountCleanupJob permanently deletes user accounts whose scheduled deletion date has passed.
 type AccountCleanupJob struct {
 	userRepo *repositories.UserRepository
 }
@@ -38,7 +37,7 @@ func NewAccountCleanupJob(userRepo *repositories.UserRepository) *AccountCleanup
 }
 
 func (j *AccountCleanupJob) Name() string     { return "account-cleanup" }
-func (j *AccountCleanupJob) Schedule() string { return "0 2 * * *" } // daily at 02:00 UTC
+func (j *AccountCleanupJob) Schedule() string { return "0 2 * * *" }
 
 func (j *AccountCleanupJob) Run(_ context.Context, _ *asynq.Client) error {
 	users, err := j.userRepo.FindScheduledForDeletion()

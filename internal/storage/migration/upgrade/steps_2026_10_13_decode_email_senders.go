@@ -26,8 +26,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// applyDecodeEmailSenders rewrites senders stored as RFC 2047 encoded-words
-// into the readable form now stored for display.
+// applyDecodeEmailSenders rewrites senders stored as RFC 2047 encoded-words into readable form.
 func applyDecodeEmailSenders(tx *gorm.DB) error {
 	var rows []struct {
 		ID     uint

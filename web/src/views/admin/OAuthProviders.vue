@@ -30,7 +30,6 @@ const emptyForm = () => ({
 })
 const form = ref(emptyForm())
 
-// Edit modal
 const showEditModal = ref(false)
 const editing = ref(false)
 const editingProvider = ref<OAuthProviderAdmin | null>(null)
@@ -210,7 +209,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Create Modal -->
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal" style="max-width: 560px;">
         <div class="modal-header"><h3>Add OAuth Provider</h3></div>
@@ -270,7 +268,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Edit Modal -->
     <div v-if="showEditModal && editingProvider" class="modal-overlay" @click.self="showEditModal = false">
       <div class="modal" style="max-width: 560px;">
         <div class="modal-header"><h3>Edit {{ editingProvider.display_name }}</h3></div>

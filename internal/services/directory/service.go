@@ -17,11 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package directory turns a successful LDAP or Active Directory sign-in into
-// a Posta user: it creates the account the first time, and keeps the platform
-// admin role and workspace memberships in step with the user's directory
-// groups. The bind itself sits behind the enterprise seam, so this package
-// never talks to a directory.
+// Package directory provisions Posta users from LDAP/AD sign-ins and syncs admin role and memberships from groups.
 package directory
 
 import (
@@ -40,11 +36,9 @@ import (
 )
 
 var (
-	// ErrAccountDisabled: the directory accepted the password, but the Posta
-	// account is disabled.
+	// ErrAccountDisabled means the directory accepted the password but the Posta account is disabled.
 	ErrAccountDisabled = errors.New("account is disabled")
-	// ErrNoEmail: the directory entry has no email, a mapping mistake the
-	// admin needs to fix.
+	// ErrNoEmail means the directory entry has no email, a mapping mistake the admin must fix.
 	ErrNoEmail = errors.New("the directory entry has no email address")
 )
 
@@ -59,11 +53,7 @@ func NewService(ee enterprise.EE, users *repositories.UserRepository, workspaces
 	return &Service{ee: ee, users: users, workspaces: workspaces, ldap: ldap}
 }
 
-// Login tries the directories after the local password check failed.
-// (user, nil): the password bound and the account is ready. (nil, nil): no
-// directory knows the email, so the caller keeps its local result. (nil,
-// err): a directory knows the user but refused the password or could not be
-// reached, or the Posta account is disabled.
+// Login returns (nil, nil) when no directory knows the email, so the caller keeps its local result.
 func (s *Service) Login(ctx context.Context, email, password string) (*models.User, error) {
 	if s == nil || s.ee == nil {
 		return nil, nil
@@ -90,9 +80,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*models.Us
 	return user, nil
 }
 
-// provision finds the account by email, or creates a directory-managed one.
-// An existing local or OAuth account with the same email is used as is: the
-// directory has just proved the person owns that address.
+// provision reuses an existing account with the same email, since the directory just proved ownership of it.
 func (s *Service) provision(ident enterprise.LDAPIdentity) (*models.User, error) {
 	email := strings.ToLower(strings.TrimSpace(ident.Email))
 	if email == "" {
@@ -127,10 +115,7 @@ func (s *Service) provision(ident enterprise.LDAPIdentity) (*models.User, error)
 	return user, nil
 }
 
-// reconcile applies the directory's group mappings. Only accounts the
-// directory created are touched, and only the access a mapping governs: a
-// workspace no mapping names, or the admin role when no mapping grants it, is
-// left as an admin set it by hand.
+// reconcile touches only directory-created accounts and only access a mapping governs; the rest stays as set by hand.
 func (s *Service) reconcile(user *models.User, ident enterprise.LDAPIdentity) error {
 	if user.AuthMethod != models.AuthMethodLDAP {
 		return nil
@@ -170,8 +155,7 @@ func (s *Service) reconcile(user *models.User, ident enterprise.LDAPIdentity) er
 	return nil
 }
 
-// reconcileAdmin grants or withdraws the platform admin role, never taking it
-// from the last admin who can sign in.
+// reconcileAdmin never takes the admin role from the last admin who can sign in.
 func (s *Service) reconcileAdmin(user *models.User, want bool) {
 	isAdmin := user.Role == models.UserRoleAdmin
 	switch {
@@ -190,19 +174,15 @@ func (s *Service) reconcileAdmin(user *models.User, want bool) {
 	}
 }
 
-// Access is what a user's groups grant under a directory's mappings.
 type Access struct {
-	// Admin is whether a mapping grants the platform admin role, and
-	// AdminManaged whether any mapping governs it at all.
+	// AdminManaged reports whether any mapping governs the admin role at all.
 	Admin        bool
 	AdminManaged bool
-	// Roles is the highest role granted per workspace; Managed every
-	// workspace a mapping names.
+	// Roles holds the highest role granted per workspace; Managed every workspace a mapping names.
 	Roles   map[uint]models.WorkspaceRole
 	Managed map[uint]bool
 }
 
-// Plan works out what groups grant under mappings.
 func Plan(mappings []models.LDAPGroupMapping, groups []string) Access {
 	have := normalizeGroups(groups)
 	a := Access{Roles: map[uint]models.WorkspaceRole{}, Managed: map[uint]bool{}}
@@ -226,8 +206,7 @@ func Plan(mappings []models.LDAPGroupMapping, groups []string) Access {
 	return a
 }
 
-// MappableRoles are the workspace roles a group may grant. Owner is not one:
-// a workspace has exactly one owner, who is never managed by a directory.
+// Owner is not mappable: a workspace has exactly one owner, never managed by a directory.
 var MappableRoles = []models.WorkspaceRole{models.WorkspaceRoleAdmin, models.WorkspaceRoleEditor, models.WorkspaceRoleViewer}
 
 func roleRank(r models.WorkspaceRole) int {
@@ -252,8 +231,7 @@ func normalizeGroups(groups []string) map[string]bool {
 	return m
 }
 
-// groupMatches reports whether a mapping's group, a full DN or a bare CN,
-// matches one of the user's groups, ignoring case.
+// groupMatches accepts a full DN or a bare CN and ignores case.
 func groupMatches(have map[string]bool, group string) bool {
 	g := strings.ToLower(strings.TrimSpace(group))
 	if g == "" {
@@ -281,8 +259,7 @@ func cnOf(dn string) string {
 	return strings.TrimSpace(first)
 }
 
-// unusablePassword is a bcrypt hash of random bytes, so a directory account
-// can never sign in with a local password.
+// unusablePassword is a bcrypt hash of random bytes so a directory account can never sign in locally.
 func unusablePassword() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)

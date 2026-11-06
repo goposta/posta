@@ -26,13 +26,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// renameIdentifiers moves workspaces, forms, OAuth providers, templates and
-// stylesheets to one naming scheme before AutoMigrate sees the new models:
-// name is the identifier used in the API, display_name the label people
-// read. It runs before AutoMigrate because AutoMigrate would otherwise add
-// an empty display_name and build the unique index on name while name still
-// holds labels, which need not be unique. Each table is moved once; on a
-// fresh database there is nothing to move.
+// renameIdentifiers must run before AutoMigrate, which would build the unique name index while name still holds labels.
 func renameIdentifiers(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		// name was the label and slug the identifier.
@@ -52,10 +46,7 @@ func renameIdentifiers(db *gorm.DB) error {
 			logger.Info("identifiers renamed: slug is now name, name is now display_name", "table", table)
 		}
 
-		// name was a free-form label that also identified the row. It becomes
-		// the label, and name becomes a slug of it; a second row with the
-		// same slug in a workspace gets its id appended. The unique index
-		// is dropped while names change and rebuilt by runConstraints.
+		// Old name becomes display_name and name a slug of it (id appended on clash); runConstraints rebuilds the dropped index.
 		for _, t := range []struct{ table, index, fallback string }{
 			{"templates", "idx_workspace_template", "template"},
 			{"style_sheets", "idx_workspace_stylesheet", "stylesheet"},

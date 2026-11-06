@@ -48,7 +48,6 @@ type EmailSendPayload struct {
 	EmailID uint `json:"email_id"`
 }
 
-// NewEmailSendTask creates an Asynq task to send an email.
 func NewEmailSendTask(emailID uint, opts ...asynq.Option) (*asynq.Task, error) {
 	payload, err := json.Marshal(EmailSendPayload{EmailID: emailID})
 	if err != nil {
@@ -81,8 +80,6 @@ type InboundProcessPayload struct {
 	InboundEmailID uint `json:"inbound_email_id"`
 }
 
-// NewInboundProcessTask creates an Asynq task to dispatch an inbound email's
-// email.inbound webhook to subscribers.
 func NewInboundProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	payload, err := json.Marshal(InboundProcessPayload{InboundEmailID: id})
 	if err != nil {
@@ -95,8 +92,6 @@ type InboundParsePayload struct {
 	InboundEmailID uint `json:"inbound_email_id"`
 }
 
-// NewInboundParseTask creates an Asynq task that parses a previously-received
-// raw inbound message into its structured form.
 func NewInboundParseTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	payload, err := json.Marshal(InboundParsePayload{InboundEmailID: id})
 	if err != nil {
@@ -117,8 +112,7 @@ func NewMessageProcessTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	return asynq.NewTask(TypeMessageProcess, payload, opts...), nil
 }
 
-// MessageReplyPayload names one thread reply, outbound or inbound, whose
-// webhook (and, for inbound replies, notification) is still to be sent.
+// MessageReplyPayload names a reply whose webhook (and, for inbound, notification) is still to be sent.
 type MessageReplyPayload struct {
 	ReplyID uint `json:"reply_id"`
 }
@@ -131,8 +125,6 @@ func NewMessageReplyTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	return asynq.NewTask(TypeMessageReply, payload, opts...), nil
 }
 
-// ChatNotifyPayload names a new chat conversation whose notification is still
-// to be sent.
 type ChatNotifyPayload struct {
 	ConversationID uint `json:"conversation_id"`
 }
@@ -145,9 +137,7 @@ func NewChatNotifyTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 	return asynq.NewTask(TypeChatNotify, payload, opts...), nil
 }
 
-// ChatMessagePayload names one message of a conversation by its sequence
-// number: the agent message an offline email follows, or the visitor message
-// an unanswered alert is about.
+// Seq is the agent message an offline email follows, or the visitor message an unanswered alert is about.
 type ChatMessagePayload struct {
 	ConversationID uint  `json:"conversation_id"`
 	Seq            int64 `json:"seq"`
@@ -161,7 +151,6 @@ func newChatMessageTask(typ string, conversationID uint, seq int64, opts ...asyn
 	return asynq.NewTask(typ, payload, opts...), nil
 }
 
-// ChatWebhookPayload names a chat webhook event to build and send.
 type ChatWebhookPayload struct {
 	Event          string `json:"event"`
 	ConversationID uint   `json:"conversation_id"`

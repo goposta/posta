@@ -80,14 +80,11 @@ type Router struct {
 }
 
 type routerMiddleware struct {
-	// jwtAdminAuth guards platform administration. Only an admin user session
-	// satisfies it — /admin/* is dashboard-only and an API key is never a valid
-	// credential there, whatever scopes it carries.
+	// Only an admin user session satisfies this: /admin/* never accepts an API key, whatever its scopes.
 	jwtAdminAuth okapi.JWTAuth
 	// auth accepts a user JWT or an API key; it guards workspace-scoped routes.
 	auth okapi.Middleware
-	// jwtOnly accepts only a user JWT; it guards account-level routes (profile,
-	// 2FA, API key management), which a machine key must not reach.
+	// jwtOnly guards account-level routes (profile, 2FA, API keys), which a machine key must not reach.
 	jwtOnly okapi.Middleware
 	// apiKey accepts only an API key; it guards the public machine-facing API.
 	apiKey            okapi.Middleware
@@ -161,7 +158,6 @@ type routerHandlers struct {
 
 func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, edition enterprise.EE, producer *worker.Producer, cronManager *cronpkg.Manager, blobStore blob.Store, ctx context.Context, notifier ...*notification.Service) *email.Service {
 
-	// Repositories
 	userRepo := repositories.NewUserRepository(db)
 	apiKeyRepo := repositories.NewAPIKeyRepository(db)
 	emailRepo := repositories.NewEmailRepository(db)
@@ -188,10 +184,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	workspaceRepo := repositories.NewWorkspaceRepository(db)
 	emailVerifyRepo := repositories.NewUserEmailVerificationRepository(db)
 
-	// Session store (Redis-backed blacklist)
 	sessionStore := sessionpkg.NewStore(redisClient)
 
-	// Services
 	bus := eventbus.New(eventRepo)
 	auditLogger := audit.NewLogger(bus)
 	inboxService := inbox.NewService(db, notificationRepo)
@@ -215,10 +209,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	dispatcher.OnDeliveryDone(metrics.ObserveWebhookDeliveryDuration)
 	emailService := buildEmailService(db, cfg, limiter, dispatcher, settingsProvider, planService, producer, blobStore)
 
-	// Cache
 	statsCache := cache.New(redisClient)
 
-	// Email verification service (Redis-cached)
 	verifierSvc := verifier.NewService(redisClient, suppressionRepo, bounceRepo, verifier.Options{
 		Enabled:    cfg.EmailVerifyEnabled,
 		AddrTTL:    time.Duration(cfg.EmailVerifyCacheTTLHours) * time.Hour,
@@ -226,8 +218,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		RateHourly: cfg.EmailVerifyRateHourly,
 	})
 
-	// Handlers
-	// Example forms only where forms exist.
 	var seedFormRepo *repositories.FormRepository
 	if cfg.MessagesEnabled {
 		seedFormRepo = repositories.NewFormRepository(db)
@@ -241,10 +231,8 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	userHandler.SetMigrator(db, migrator)
 	inspector := asynq.NewInspector(cfg.Redis.AsynqRedisOpt())
 
-	// Seed default platform settings
 	go seeder.SeedDefaultSettings(settingRepo)
 
-	// Start worker connection monitor
 	wm := workermon.New(inspector, bus, 15*time.Second)
 	wm.OnCount(metrics.SetActiveWorkers)
 	wm.Start(ctx)
@@ -278,9 +266,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		h: routerHandlers{
 			health:  handlers.NewHealthHandler(db, redisClient),
 			license: handlers.NewLicenseHandler(edition, installID, auditLogger),
-			// A second Service instance also exists for the cron job. They share no
-			// in-memory state — the cached verdict is a single database row — so
-			// constructing one per consumer is equivalent to threading one through.
+			// The cron job builds a second instance; they share no in-memory state (the verdict is one DB row), so that is safe.
 			update:           handlers.NewUpdateHandler(updatecheck.NewService(db, config.Version, cfg.UpdateCheck)),
 			user:             userHandler,
 			email:            handlers.NewEmailHandler(emailService, emailRepo, bus, statsCache),
@@ -316,12 +302,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		},
 	}
 
-	// Session management
 	r.h.user.SetSessionRepo(sessionRepo)
 	r.h.admin.SetSessionRepo(sessionRepo, sessionStore)
 	r.h.admin.SetMigrator(migrator)
 
-	// Plans
 	r.h.plan = handlers.NewPlanHandler(planRepo, workspaceRepo, userRepo, planService, auditLogger)
 	r.h.plan.SetEdition(edition)
 	r.h.event.SetEdition(edition)
@@ -333,7 +317,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	r.h.domain.SetQuota(planService, db)
 	r.h.smtp.SetQuota(planService, db)
 
-	// Notifications
 	var notif *notification.Service
 	if len(notifier) > 0 && notifier[0] != nil {
 		notif = notifier[0]
@@ -342,12 +325,10 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.apiKey.SetNotifier(notif)
 	}
 
-	// Email verification service (coordinates token issuance, delivery, redemption)
 	emailVerifySvc := emailverify.NewService(userRepo, emailVerifyRepo, notif, cfg.AppWebURL, cfg.EmailVerificationRequired)
 	r.h.user.SetEmailVerifier(emailVerifySvc)
 	r.mw.verifiedEmail = middlewares.RequireVerifiedEmail(emailVerifySvc, userRepo)
 
-	// Self-service password reset (gated by the password_reset_enabled setting)
 	passwordResetSvc := passwordreset.NewService(userRepo, repositories.NewPasswordResetRepository(db), notif, cfg.AppWebURL)
 	r.h.user.SetPasswordReset(passwordResetSvc)
 
@@ -359,7 +340,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	})
 	r.h.dashboard.SetInbox(inboxService)
 
-	// Email content privacy
 	r.h.email.SetSettings(settingsProvider)
 	r.h.admin.SetEmailSettings(settingsProvider)
 
@@ -367,7 +347,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.cron = handlers.NewCronHandler(cronManager)
 	}
 
-	// OAuth
 	oauthProviderRepo := repositories.NewOAuthProviderRepository(db)
 	oauthAccountRepo := repositories.NewOAuthAccountRepository(db)
 	ssoRepo := repositories.NewWorkspaceSSORepository(db)
@@ -391,13 +370,11 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	r.h.ldapAdmin = handlers.NewLDAPAdminHandler(ldapRepo, workspaceRepo, edition, auditLogger)
 	r.h.user.SetDirectory(directory.NewService(edition, userRepo, workspaceRepo, ldapRepo))
 
-	// Subscribers
 	subscriberRepo := repositories.NewSubscriberRepository(db)
 	subscriberListRepo := repositories.NewSubscriberListRepository(db)
 	r.h.subscriber = handlers.NewSubscriberHandler(subscriberRepo)
 	r.h.subscriberList = handlers.NewSubscriberListHandler(subscriberListRepo, subscriberRepo)
 
-	// Campaigns
 	campaignRepo := repositories.NewCampaignRepository(db)
 	campaignMessageRepo := repositories.NewCampaignMessageRepository(db)
 	r.h.campaign = handlers.NewCampaignHandler(
@@ -405,20 +382,15 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		subscriberListRepo, subscriberRepo, templateRepo, domainRepo, producer,
 	)
 
-	// Tracking
 	trackingRepo := repositories.NewTrackingRepository(db)
 	trackingService := tracking.NewService(trackingRepo, cfg.AppWebURL, []byte(cfg.JWTSecret))
 	r.h.tracking = handlers.NewTrackingHandler(trackingRepo, campaignMessageRepo, campaignRepo, subscriberRepo, subscriberListRepo, emailRepo, suppressionRepo, trackingService, dispatcher)
 
-	// Wire the generator for Posta-injected public links (one-click unsubscribe +
-	// hosted "view in browser"), used to resolve reserved {{ posta_* }} template
-	// variables once an email's identity is known.
+	// The link generator resolves reserved {{ posta_* }} variables (unsubscribe, view in browser) once an email is known.
 	emailService.SetLinkGenerator(trackingService)
 
-	// Bounce webhook
 	r.h.bounceWebhook = handlers.NewBounceWebhookHandler(subscriberRepo, emailRepo, campaignMessageRepo)
 
-	// Inbound email
 	if cfg.InboundEnabled {
 		inboundEmailRepo := repositories.NewInboundEmailRepository(db)
 		inboundSvc := inbound.NewService(
@@ -473,7 +445,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.inbound.SetEventBus(bus)
 	}
 
-	// Web form messages
 	if cfg.MessagesEnabled {
 		formRepo := repositories.NewFormRepository(db)
 		messageRepo := repositories.NewMessageRepository(db)
@@ -529,7 +500,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		}
 	}
 
-	// Live chat
 	if cfg.ChatEnabled {
 		chatSvc := NewChatService(db, cfg)
 		if producer != nil {
@@ -576,14 +546,12 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.unifiedInbox = handlers.NewUnifiedInboxHandler(repositories.NewUnifiedInboxRepository(db), inboxSources)
 	}
 
-	// SMTP Relay
 	if cfg.SMTPRelayEnabled {
 		smtpCredRepo := repositories.NewSMTPCredentialRepository(db)
 		credService := smtprelay.NewCredentialService(smtpCredRepo)
 		r.h.smtpCredential = handlers.NewSMTPCredentialHandler(credService, smtpCredRepo, cfg, auditLogger)
 	}
 
-	// Workspace data export/import
 	r.h.workspaceData = handlers.NewWorkspaceDataHandler(
 		db, workspaceRepo, templateRepo, versionRepo, localizationRepo,
 		stylesheetRepo, languageRepo, contactRepo, contactListRepo,
@@ -598,7 +566,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.workspaceData.SetBlobStore(blobStore)
 	}
 
-	// Auto-seed Google provider if configured
 	if cfg.GoogleOAuthClientID != "" {
 		if _, err := oauthProviderRepo.FindByName("google"); err != nil {
 			_ = oauthProviderRepo.Create(&models.OAuthProvider{
@@ -619,7 +586,6 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 	return emailService
 }
 
-// emailPlanAdapter adapts planpkg.Service to the email.PlanLimitsProvider interface.
 type emailPlanAdapter struct {
 	svc *planpkg.Service
 }
@@ -634,11 +600,8 @@ func (a *emailPlanAdapter) EffectiveLimits(workspaceID *uint) *email.PlanLimits 
 	}
 }
 
-// workspaceHeaderRequired is a reusable route option documenting the required workspace header.
 var workspaceHeaderRequired = okapi.DocHeader("X-Posta-Workspace-Id", "integer", "Workspace ID (required for workspace-scoped endpoints)", true)
 
-// loginLimiterMiddleware returns the login rate limit middleware when enabled,
-// or a pass-through middleware when disabled.
 func loginLimiterMiddleware(cfg *config.Config, limiter *ratelimit.RedisLimiter) okapi.Middleware {
 	if !cfg.AuthRateLimitEnabled {
 		return func(c *okapi.Context) error {
@@ -649,16 +612,13 @@ func loginLimiterMiddleware(cfg *config.Config, limiter *ratelimit.RedisLimiter)
 }
 
 func (r *Router) registerRoutes() {
-	// Request ID middleware
 	r.app.Use(okapi.RequestID())
 
-	// Prometheus metrics
 	if r.cfg.MetricsEnabled {
 		r.app.Use(metrics.PrometheusMiddleware())
 		r.app.Get("/metrics", metrics.MetricsHandler(), okapi.DocHide())
 	}
 
-	// Register all route definitions
 	r.app.Register(r.healthRoutes()...)
 	r.app.Register(r.infoRoute())
 	r.app.Register(r.authRoutes()...)
@@ -690,17 +650,9 @@ func (r *Router) registerRoutes() {
 	r.app.Register(r.licenseRoutes()...)
 	r.app.Register(r.ldapRoutes()...)
 
-	// Documentation-only OpenAPI webhooks (events Posta POSTs to subscribers).
 	r.registerWebhookDocs()
 
-	// Dashboard UI (static files + SPA fallback). Registered last so API routes
-	// win; Okapi auto-excludes their top-level segments (/api, /healthz, /metrics)
-	// from the index fallback, so those keep returning JSON rather than index.html.
-	//
-	// The UI is embedded in the binary (internal/web), so a stock `posta`
-	// executable serves it with no static files to ship. POSTA_WEB_DIR overrides
-	// this to serve from disk — useful for frontend development against live
-	// rebuilds, or to swap in a customized build without recompiling.
+	// Registered last so API routes win; okapi excludes /api, /healthz, /metrics from the SPA fallback.
 	if r.cfg.WebDir != "" {
 		r.app.Web("/", r.cfg.WebDir, okapi.WebConfig{MaxAge: time.Hour})
 	} else {
@@ -708,9 +660,7 @@ func (r *Router) registerRoutes() {
 	}
 }
 
-// NewChatService builds the live chat service from configuration. The
-// server, the worker and every inbound mail parser each build their own; they
-// share state only through Postgres and Redis.
+// NewChatService is built per process (server, worker, inbound parsers); they share state only via Postgres and Redis.
 func NewChatService(db *gorm.DB, cfg *config.Config) *chat.Service {
 	chatCfg := chat.DefaultConfig()
 	chatCfg.MaxStreams = cfg.ChatMaxStreams
@@ -726,9 +676,7 @@ func NewChatService(db *gorm.DB, cfg *config.Config) *chat.Service {
 	)
 }
 
-// buildEmailService wires an email.Service the way every process that sends
-// mail needs it: verified-domain checks, suppression, plan limits, templates,
-// and the queue. Its link generator is set separately.
+// buildEmailService wires what every sending process needs; the link generator is set separately.
 func buildEmailService(db *gorm.DB, cfg *config.Config, limiter *ratelimit.RedisLimiter, dispatcher *webhook.Dispatcher,
 	settingsProvider *settings.Provider, planService *planpkg.Service, producer *worker.Producer, blobStore blob.Store) *email.Service {
 	svc := email.NewService(
@@ -756,9 +704,7 @@ func buildEmailService(db *gorm.DB, cfg *config.Config, limiter *ratelimit.Redis
 	return svc
 }
 
-// NewEmailService builds an email.Service for a process outside the HTTP
-// server, such as the worker, which sends chat follow-up emails as the agent
-// who wrote them.
+// NewEmailService serves processes outside the HTTP server, such as the worker sending chat follow-ups.
 func NewEmailService(db *gorm.DB, cfg *config.Config, dispatcher *webhook.Dispatcher, producer *worker.Producer, blobStore blob.Store) *email.Service {
 	settingsProvider := settings.NewProvider(repositories.NewSettingRepository(db))
 	limiter := ratelimit.NewRedisLimiter(cfg.Redis.Client, cfg.RateLimitHourly, cfg.RateLimitDaily)

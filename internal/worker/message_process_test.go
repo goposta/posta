@@ -125,8 +125,7 @@ func newTestHandler(store *fakeMessageStore, form *models.Form) (*MessageProcess
 	return h, d, n
 }
 
-// processTask builds the message:process task for message 1, the ID every
-// fakeMessageStore fixture uses.
+// processTask builds the message:process task for message 1, the ID every fakeMessageStore fixture uses.
 func processTask(t *testing.T) *asynq.Task {
 	t.Helper()
 	payload, _ := json.Marshal(MessageProcessPayload{MessageID: 1})
@@ -209,8 +208,7 @@ func TestProcessTaskQuarantinedFiresSpamWebhookWithoutNotifying(t *testing.T) {
 	}
 }
 
-// replyTask builds the message:reply task for reply 5, the ID every reply
-// fixture uses.
+// replyTask builds the message:reply task for reply 5, the ID every reply fixture uses.
 func replyTask(t *testing.T) *asynq.Task {
 	t.Helper()
 	payload, _ := json.Marshal(MessageReplyPayload{ReplyID: 5})

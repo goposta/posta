@@ -74,8 +74,7 @@ func (r *FormRuleRepository) Delete(id uint) error {
 	return r.db.Delete(&models.FormRule{}, id).Error
 }
 
-// Reorder sets the evaluation order to ids, which must be exactly the form's
-// rules.
+// Reorder sets the evaluation order to ids, which must be exactly the form's rules.
 func (r *FormRuleRepository) Reorder(formID uint, ids []uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var count int64
@@ -130,8 +129,7 @@ type RuleUsingTeam struct {
 	FormName string `json:"form_name"`
 }
 
-// RulesUsingTeam lists a workspace's rules that notify or assign team teamID,
-// by form then rule order.
+// RulesUsingTeam lists a workspace's rules that notify or assign teamID, by form then rule order.
 func (r *FormRuleRepository) RulesUsingTeam(workspaceID, teamID uint) ([]RuleUsingTeam, error) {
 	var out []RuleUsingTeam
 	err := r.db.Table("form_rules").
@@ -143,9 +141,7 @@ func (r *FormRuleRepository) RulesUsingTeam(workspaceID, teamID uint) ([]RuleUsi
 	return out, err
 }
 
-// UsingTeam names a workspace's rules that notify or assign team teamID.
-// Rules of a deleted form never run and can no longer be edited, so they do
-// not count.
+// UsingTeam skips rules of deleted forms, which never run and can no longer be edited.
 func (r *FormRuleRepository) UsingTeam(workspaceID, teamID uint) ([]string, error) {
 	rules, err := r.RulesUsingTeam(workspaceID, teamID)
 	names := make([]string, 0, len(rules))

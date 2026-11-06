@@ -35,7 +35,6 @@ type UpdateHandler struct {
 
 func NewUpdateHandler(svc *updatecheck.Service) *UpdateHandler { return &UpdateHandler{svc: svc} }
 
-// UpdateInfo is what the dashboard renders.
 type UpdateInfo struct {
 	CurrentVersion  string     `json:"current_version" example:"v0.12.0"`
 	LatestVersion   string     `json:"latest_version,omitempty" example:"v0.13.0"`
@@ -47,14 +46,12 @@ type UpdateInfo struct {
 	LastError       string     `json:"last_error,omitempty"`
 }
 
-// DismissUpdateRequest silences the notice for one version.
 type DismissUpdateRequest struct {
 	Body struct {
 		Version string `json:"version" required:"true"`
 	} `json:"body"`
 }
 
-// GetUpdate returns the cached release-check result for the running build.
 func (h *UpdateHandler) GetUpdate(c *okapi.Context) error {
 	info := UpdateInfo{CurrentVersion: config.Version, Enabled: h.svc.Enabled()}
 	st, err := h.svc.Status()

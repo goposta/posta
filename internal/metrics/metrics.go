@@ -29,8 +29,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// labelStatus is the Prometheus label shared by the request, email, and
-// message counters.
 const labelStatus = "status"
 
 var (
@@ -200,100 +198,81 @@ func init() {
 	prometheus.MustRegister(activeWorkers)
 }
 
-// IncrementEmailSent increments the emails sent counter.
 func IncrementEmailSent() {
 	emailsSentTotal.Inc()
 }
 
-// IncrementEmailFailed increments the emails failed counter.
 func IncrementEmailFailed() {
 	emailsFailedTotal.Inc()
 }
 
-// IncrementEmailQueued increments the in-flight queue-size gauge.
 func IncrementEmailQueued() {
 	emailsQueueSize.Inc()
 }
 
-// DecrementEmailQueued decrements the in-flight queue-size gauge, called when
-// a queued email finishes delivery (sent or permanently failed).
+// DecrementEmailQueued is called when a queued email finishes delivery (sent or permanently failed).
 func DecrementEmailQueued() {
 	emailsQueueSize.Dec()
 }
 
-// IncrementEmailRetry increments the email retries counter.
 func IncrementEmailRetry() {
 	emailRetriesTotal.Inc()
 }
 
-// IncrementWebhookDelivery increments the webhook delivery counter for the given status.
 func IncrementWebhookDelivery(status string) {
 	webhookDeliveriesTotal.WithLabelValues(status).Inc()
 }
 
-// ObserveWebhookDeliveryDuration records a webhook delivery duration.
 func ObserveWebhookDeliveryDuration(seconds float64) {
 	webhookDeliveryDuration.Observe(seconds)
 }
 
-// IncrementBounce increments the bounce counter for the given type (hard, soft, complaint).
 func IncrementBounce(bounceType string) {
 	bouncesTotal.WithLabelValues(bounceType).Inc()
 }
 
-// IncrementSuppression increments the suppression counter.
 func IncrementSuppression() {
 	suppressionsTotal.Inc()
 }
 
-// IncrementMessageReceived increments the web form message counter for the given scan status.
 func IncrementMessageReceived(status string) {
 	messagesReceivedTotal.WithLabelValues(status).Inc()
 }
 
-// IncrementMessageNotification increments the web form notification counter.
 func IncrementMessageNotification() {
 	messageNotificationsTotal.Inc()
 }
 
-// IncrementInboundReceived increments the inbound received counter for the given source.
 func IncrementInboundReceived(source string) {
 	inboundReceivedTotal.WithLabelValues(source).Inc()
 }
 
-// IncrementInboundForwarded increments the inbound forwarded counter.
 func IncrementInboundForwarded() {
 	inboundForwardedTotal.Inc()
 }
 
-// IncrementInboundFailed increments the permanently-failed inbound counter.
 func IncrementInboundFailed() {
 	inboundFailedTotal.Inc()
 }
 
-// IncrementInboundRejected increments the rejected inbound counter for the given reason.
 func IncrementInboundRejected(reason string) {
 	inboundRejectedTotal.WithLabelValues(reason).Inc()
 }
 
-// AddInboundBytes adds n bytes to the inbound bytes counter.
 func AddInboundBytes(n int64) {
 	if n > 0 {
 		inboundBytesTotal.Add(float64(n))
 	}
 }
 
-// ObserveInboundIngestDuration records how long a single ingest took, in seconds.
 func ObserveInboundIngestDuration(seconds float64) {
 	inboundIngestDuration.Observe(seconds)
 }
 
-// SetActiveWorkers updates the active worker gauge.
 func SetActiveWorkers(n int) {
 	activeWorkers.Set(float64(n))
 }
 
-// PrometheusMiddleware records HTTP request metrics.
 func PrometheusMiddleware() okapi.Middleware {
 	return func(c *okapi.Context) error {
 		start := time.Now()
@@ -313,13 +292,11 @@ func PrometheusMiddleware() okapi.Middleware {
 
 }
 
-// HTTPHandler returns the Prometheus handler for a plain net/http mux — the
-// dedicated worker, which has no okapi router.
+// HTTPHandler serves metrics on a plain net/http mux, for the dedicated worker which has no okapi router.
 func HTTPHandler() http.Handler {
 	return promhttp.Handler()
 }
 
-// MetricsHandler returns the Prometheus metrics handler.
 func MetricsHandler() okapi.HandlerFunc {
 	handler := promhttp.Handler()
 	return func(c *okapi.Context) error {

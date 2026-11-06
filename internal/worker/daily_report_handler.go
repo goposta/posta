@@ -32,14 +32,12 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// DailyReportHandler processes daily report tasks from the Asynq queue.
 type DailyReportHandler struct {
 	notifier      *notification.Service
 	analyticsRepo *repositories.AnalyticsRepository
 	bounceRepo    *repositories.BounceRepository
 }
 
-// NewDailyReportHandler creates a new daily report task handler.
 func NewDailyReportHandler(
 	notifier *notification.Service,
 	analyticsRepo *repositories.AnalyticsRepository,
@@ -52,7 +50,6 @@ func NewDailyReportHandler(
 	}
 }
 
-// ProcessTask handles a daily report task for a single workspace.
 func (h *DailyReportHandler) ProcessTask(_ context.Context, t *asynq.Task) error {
 	var payload jobs.DailyReportPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -62,13 +59,11 @@ func (h *DailyReportHandler) ProcessTask(_ context.Context, t *asynq.Task) error
 	workspaceID := payload.WorkspaceID
 	logger.Info("daily report: processing", "workspace_id", workspaceID)
 
-	// Yesterday's date range
 	now := time.Now().UTC()
 	yesterday := now.AddDate(0, 0, -1)
 	from := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
 	to := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 0, time.UTC)
 
-	// Gather stats
 	breakdown, err := h.analyticsRepo.WorkspaceStatusBreakdown(workspaceID, from, to)
 	if err != nil {
 		logger.Error("daily report: failed to get stats", "workspace_id", workspaceID, "error", err)
@@ -88,7 +83,6 @@ func (h *DailyReportHandler) ProcessTask(_ context.Context, t *asynq.Task) error
 		}
 	}
 
-	// Count bounces for the period
 	var bounced int64
 	if h.bounceRepo != nil {
 		bounced, _ = h.bounceRepo.CountByWorkspaceAndDateRange(workspaceID, from, to)

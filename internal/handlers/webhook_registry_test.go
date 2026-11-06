@@ -27,9 +27,7 @@ import (
 	"github.com/goposta/posta/internal/dto"
 )
 
-// TestWebhookEnumMatchesRegistry pins the subscribable events (the enum okapi
-// validates against) to the documented registry. Adding an event to one list
-// but not the other is how message.replied went missing.
+// Pins the okapi enum to the documented registry; drift between the two is how message.replied went missing.
 func TestWebhookEnumMatchesRegistry(t *testing.T) {
 	body, ok := reflect.TypeOf(CreateWebhookRequest{}).FieldByName("Body")
 	if !ok {
