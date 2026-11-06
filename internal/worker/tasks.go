@@ -27,13 +27,17 @@ import (
 )
 
 const (
-	TypeEmailSend      = "email:send"
-	TypeCampaignStart  = "campaign:start"
-	TypeCampaignBatch  = "campaign:batch"
-	TypeInboundParse   = "inbound:parse"
-	TypeInboundProcess = "inbound:process"
-	TypeMessageProcess = "message:process"
-	TypeMessageReply   = "message:reply"
+	TypeEmailSend        = "email:send"
+	TypeCampaignStart    = "campaign:start"
+	TypeCampaignBatch    = "campaign:batch"
+	TypeInboundParse     = "inbound:parse"
+	TypeInboundProcess   = "inbound:process"
+	TypeMessageProcess   = "message:process"
+	TypeMessageReply     = "message:reply"
+	TypeChatNotify       = "chat:notify"
+	TypeChatOfflineEmail = "chat:offline-email"
+	TypeChatUnanswered   = "chat:unanswered"
+	TypeChatWebhook      = "chat:webhook"
 
 	QueueTransactional = queues.Transactional
 	QueueBulk          = queues.Bulk
@@ -125,4 +129,41 @@ func NewMessageReplyTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeMessageReply, payload, opts...), nil
+}
+
+// ChatNotifyPayload names a new chat conversation whose notification is still
+// to be sent.
+type ChatNotifyPayload struct {
+	ConversationID uint `json:"conversation_id"`
+}
+
+func NewChatNotifyTask(id uint, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(ChatNotifyPayload{ConversationID: id})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeChatNotify, payload, opts...), nil
+}
+
+// ChatMessagePayload names one message of a conversation by its sequence
+// number: the agent message an offline email follows, or the visitor message
+// an unanswered alert is about.
+type ChatMessagePayload struct {
+	ConversationID uint  `json:"conversation_id"`
+	Seq            int64 `json:"seq"`
+}
+
+func newChatMessageTask(typ string, conversationID uint, seq int64, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(ChatMessagePayload{ConversationID: conversationID, Seq: seq})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(typ, payload, opts...), nil
+}
+
+// ChatWebhookPayload names a chat webhook event to build and send.
+type ChatWebhookPayload struct {
+	Event          string `json:"event"`
+	ConversationID uint   `json:"conversation_id"`
+	MessageID      uint   `json:"message_id,omitempty"`
 }

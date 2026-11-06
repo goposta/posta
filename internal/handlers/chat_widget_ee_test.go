@@ -1,0 +1,54 @@
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// This file is part of Posta.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package handlers
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/goposta/posta/internal/enterprise"
+	"github.com/goposta/posta/internal/models"
+)
+
+// Auto-assign is Posta Enterprise. Community may save a widget as long as it
+// leaves the auto-assign settings as they are.
+func TestChatAutoAssignNeedsALicenseToChange(t *testing.T) {
+	h := &ChatWidgetHandler{edition: enterprise.Community()}
+	w := &models.ChatWidget{AutoAssign: false, MaxOpenPerAgent: 0}
+	on, off, five, zero := true, false, 5, 0
+
+	var gate enterprise.GateError
+	if err := h.requireAutoAssign(w, chatWidgetSettings{AutoAssign: &on}); !errors.As(err, &gate) || gate.HTTPStatus() != 402 {
+		t.Fatalf("turning auto-assign on in Community: err = %v, want a 402 gate error", err)
+	}
+	if err := h.requireAutoAssign(w, chatWidgetSettings{MaxOpenPerAgent: &five}); err == nil {
+		t.Fatal("changing the per-agent cap in Community was allowed")
+	}
+	if err := h.requireAutoAssign(w, chatWidgetSettings{AutoAssign: &off, MaxOpenPerAgent: &zero}); err != nil {
+		t.Fatalf("resending the stored values was refused: %v", err)
+	}
+	if err := h.requireAutoAssign(w, chatWidgetSettings{}); err != nil {
+		t.Fatalf("a save without auto-assign fields was refused: %v", err)
+	}
+	// No edition wired at all behaves as Community.
+	if err := (&ChatWidgetHandler{}).requireAutoAssign(w, chatWidgetSettings{AutoAssign: &on}); err == nil {
+		t.Fatal("a handler without an edition allowed auto-assign")
+	}
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -11,12 +11,34 @@ import type { UpdateInfo } from '../api/types'
 import EmailVerificationBanner from '../components/EmailVerificationBanner.vue'
 import { useLicenseStore } from '../stores/license'
 import { licenseApi } from '../api/license'
+import { useChatStore } from '../stores/chat'
+import { unifiedInboxApi } from '../api/unifiedInbox'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const theme = useThemeStore()
 const wsStore = useWorkspaceStore()
+const chat = useChatStore()
+// One chat stream for the whole dashboard, restarted when the workspace changes.
+watch(() => wsStore.currentWorkspaceId, (id) => {
+  if (id) chat.start()
+  else chat.stop()
+}, { immediate: true })
+// The unified inbox exists only when forms, inbound or chat is enabled.
+const inboxAvailable = ref(false)
+watch(() => wsStore.currentWorkspaceId, async (id) => {
+  if (!id) {
+    inboxAvailable.value = false
+    return
+  }
+  try {
+    await unifiedInboxApi.list({ size: 1 })
+    inboxAvailable.value = true
+  } catch (e: any) {
+    inboxAvailable.value = e?.response?.status !== 404 && inboxAvailable.value
+  }
+}, { immediate: true })
 const license = useLicenseStore()
 const sidebarCollapsed = ref(localStorage.getItem('posta_sidebar_collapsed') === 'true')
 const mobileOpen = ref(false)
@@ -135,6 +157,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeUserMenu)
+  chat.stop()
 })
 
 const user = computed(() => auth.user)
@@ -161,6 +184,12 @@ interface NavItem {
   matchPaths?: string[]
   /** Nested items shown indented under this entry. */
   children?: NavItem[]
+  /** Only show when the server runs live chat (POSTA_CHAT_ENABLED). */
+  requiresChat?: boolean
+  /** Only show when the unified inbox exists (forms, inbound or chat enabled). */
+  requiresInbox?: boolean
+  /** Show the count of chats awaiting a reply. */
+  chatBadge?: boolean
 }
 
 interface NavSection {
@@ -205,6 +234,7 @@ const workspaceNavSections: NavSection[] = [
     id: 'inbound',
     title: 'Inbound',
     items: [
+      { name: 'Inbox', path: '/inbox', icon: 'layers', requiresInbox: true },
       { name: 'Inbound Emails', path: '/inbound-emails', icon: 'inbox' },
       {
         name: 'Messages',
@@ -214,6 +244,18 @@ const workspaceNavSections: NavSection[] = [
           { name: 'Forms', path: '/forms', icon: 'edit-3' },
           { name: 'Teams', path: '/teams', icon: 'users' },
           { name: 'Spam Filters', path: '/message-filters', icon: 'shield' },
+        ],
+      },
+      {
+        name: 'Chat',
+        path: '/chat',
+        icon: 'message-square',
+        requiresChat: true,
+        chatBadge: true,
+        children: [
+          { name: 'Chat Widgets', path: '/chat-widgets', icon: 'edit-3' },
+          { name: 'Canned Replies', path: '/chat/canned-replies', icon: 'file-text' },
+          { name: 'Chat Analytics', path: '/chat/analytics', icon: 'bar-chart' },
         ],
       },
     ],
@@ -415,6 +457,8 @@ function sectionItems(section: NavSection): NavItem[] {
     if (item.requiresWorkspaceAdmin && !wsStore.isWorkspaceAdmin) return false
     if (item.hideInSystem && wsStore.currentWorkspaceIsSystem) return false
     if (item.requiresOpenapiDocs && !appInfo.value?.openapi_docs) return false
+    if (item.requiresChat && !chat.enabled) return false
+    if (item.requiresInbox && !inboxAvailable.value) return false
     return true
   })
 }
@@ -475,6 +519,8 @@ function createWorkspace() {
 }
 
 async function logout() {
+  // Go offline in chat while the session still exists.
+  chat.stop()
   await auth.logout()
   router.push('/login')
 }
@@ -611,6 +657,8 @@ function getIcon(name: string): string {
                   :title="sidebarCollapsed ? item.name : ''" :to="itemTo(item)">
                   <span class="nav-icon" v-html="getIcon(item.icon)"></span>
                   <span v-if="!sidebarCollapsed" class="nav-label">{{ item.name }}</span>
+                  <span v-if="item.chatBadge && chat.awaitingReply > 0" class="nav-count"
+                    :title="`${chat.awaitingReply} awaiting a reply`">{{ chat.awaitingReply }}</span>
                 </router-link>
                 <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
                   :class="{ active: isItemActive(child) }" :title="sidebarCollapsed ? child.name : ''" :to="child.path">
@@ -637,6 +685,17 @@ function getIcon(name: string): string {
           </button>
         </div>
         <div class="topbar-right">
+          <div v-if="chat.enabled && wsStore.canEdit" class="chat-presence"
+            :title="`Your chat availability. ${chat.onlineCount} agent${chat.onlineCount === 1 ? '' : 's'} online.`">
+            <span class="presence-dot" :class="chat.myStatus" aria-hidden="true"></span>
+            <select class="presence-select" :value="chat.myStatus" aria-label="Chat availability"
+              @change="chat.setStatus(($event.target as HTMLSelectElement).value as 'online' | 'away' | 'offline')">
+              <option value="online">Online</option>
+              <option value="away">Away</option>
+              <option value="offline">Offline</option>
+            </select>
+            <span class="presence-count">{{ chat.onlineCount }} online</span>
+          </div>
           <NotificationBell />
           <div class="user-menu" @click="userMenuOpen = !userMenuOpen">
             <div class="user-avatar">{{ user?.name?.charAt(0)?.toUpperCase() || '?' }}</div>
@@ -880,6 +939,7 @@ function getIcon(name: string): string {
                   @click="mobileOpen = false" :to="itemTo(item)">
                   <span class="nav-icon" v-html="getIcon(item.icon)"></span>
                   <span class="nav-label">{{ item.name }}</span>
+                  <span v-if="item.chatBadge && chat.awaitingReply > 0" class="nav-count">{{ chat.awaitingReply }}</span>
                 </router-link>
                 <router-link v-for="child in item.children" :key="child.path" class="nav-item nav-subitem"
                   :class="{ active: isItemActive(child) }" @click="mobileOpen = false" :to="child.path">
@@ -1155,6 +1215,23 @@ function getIcon(name: string): string {
   opacity: 1;
 }
 
+.nav-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--primary-600);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.sidebar-collapsed .sidebar:not(.sidebar-mobile) .nav-count {
+  display: none;
+}
+
 .nav-label {
   overflow: hidden;
   opacity: 1;
@@ -1221,6 +1298,51 @@ function getIcon(name: string): string {
 .mobile-menu-btn:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+.chat-presence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.presence-dot.online {
+  background: #22c55e;
+}
+
+.presence-dot.away {
+  background: #f59e0b;
+}
+
+.presence-select {
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.presence-count {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .presence-count {
+    display: none;
+  }
 }
 
 .topbar-right {

@@ -178,6 +178,18 @@ type Config struct {
 	MessagesPerWorkspaceDaily int
 	MessagesInboundDomain     string
 
+	// Live chat settings
+	ChatEnabled         bool
+	ChatMaxStreams      int
+	ChatMaxMessageBytes int
+	ChatIPRateLimit     int
+	// ChatUnansweredMinutes is how long a visitor's message waits before the
+	// assignee or the admins are told; 0 disables the alert.
+	ChatUnansweredMinutes int
+	// ChatRetentionDays is how long closed and spam conversations are kept;
+	// a widget can lower it. 0 keeps them forever.
+	ChatRetentionDays int
+
 	// SMTP Relay settings.
 	SMTPRelayEnabled        bool
 	SMTPRelayHost           string
@@ -392,6 +404,13 @@ func New() *Config {
 		MessagesPerWorkspaceDaily: goutils.EnvInt("POSTA_MESSAGES_PER_WORKSPACE_DAILY", 1000),
 		MessagesInboundDomain:     goutils.Env("POSTA_MESSAGES_INBOUND_DOMAIN", ""),
 
+		ChatEnabled:           goutils.EnvBool("POSTA_CHAT_ENABLED", false),
+		ChatMaxStreams:        goutils.EnvInt("POSTA_CHAT_MAX_STREAMS", 5000),
+		ChatMaxMessageBytes:   goutils.EnvInt("POSTA_CHAT_MAX_MESSAGE_BYTES", 4096),
+		ChatIPRateLimit:       goutils.EnvInt("POSTA_CHAT_IP_RATE_LIMIT", 60),
+		ChatUnansweredMinutes: goutils.EnvInt("POSTA_CHAT_UNANSWERED_MINUTES", 5),
+		ChatRetentionDays:     goutils.EnvInt("POSTA_CHAT_RETENTION_DAYS", 365),
+
 		SMTPRelayEnabled:        goutils.EnvBool("POSTA_SMTP_RELAY_ENABLED", false),
 		SMTPRelayHost:           goutils.Env("POSTA_SMTP_RELAY_HOST", "0.0.0.0"),
 		SMTPRelayPort:           goutils.EnvInt("POSTA_SMTP_RELAY_PORT", 2526),
@@ -504,6 +523,8 @@ func (c *Config) Initialize(app *okapi.Okapi) error {
 	if c.ApiBaseURL != "" {
 		apiServers = append(apiServers, okapi.Server{URL: c.ApiBaseURL})
 	}
+	// Must come before WithCORS: see ChatPreflight.
+	app.Use(ChatPreflight)
 	app.WithCORS(okapi.Cors{
 		AllowedOrigins:   c.AllowedCORSOrigins(),
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Request-ID", "X-Posta-Workspace-Id"},

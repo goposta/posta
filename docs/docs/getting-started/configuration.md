@@ -194,6 +194,21 @@ Where email attachments are stored. Leave `POSTA_BLOB_PROVIDER` empty to disable
 | `POSTA_MESSAGES_PER_WORKSPACE_DAILY` | `1000` | Submissions allowed per workspace per day |
 | `POSTA_MESSAGES_INBOUND_DOMAIN` | — | Domain for `msg+<token>@` reply addressing so email answers rejoin the thread (requires `POSTA_INBOUND_ENABLED=true`) |
 
+## Live Chat
+
+| Variable | Default | Description |
+|---|---|---|
+| `POSTA_CHAT_ENABLED` | `false` | Master toggle — enables the public `/api/v1/chat/{key}` API, the `/widget/v1/posta-chat.js` script, and the chat routes |
+| `POSTA_CHAT_MAX_STREAMS` | `5000` | Visitor streams one server process holds open; over it, widgets fall back to polling every 10 seconds |
+| `POSTA_CHAT_MAX_MESSAGE_BYTES` | `4096` | Largest chat message in bytes (each widget can lower it) |
+| `POSTA_CHAT_IP_RATE_LIMIT` | `60` | Per-IP conversation starts per hour, checked in memory before the Redis quotas (`0` disables) |
+| `POSTA_CHAT_RETENTION_DAYS` | `365` | Days closed and spam conversations are kept before they are erased, with their files; each widget can lower it (`0` keeps them) |
+| `POSTA_CHAT_UNANSWERED_MINUTES` | `5` | Minutes a visitor's message may wait before the assignee, or the owners and admins, get an email (`0` disables) |
+
+Visitors who leave a chat get agents' replies by email. To let them answer by email too, set `POSTA_MESSAGES_INBOUND_DOMAIN` and `POSTA_INBOUND_ENABLED=true`: answers to `chat+<token>@` that domain come back into the conversation.
+
+See [Live chat](../chat/overview.md) for setup, reverse proxy settings, and the widget's Content Security Policy entries.
+
 ## Advanced
 
 | Variable | Default | Description |

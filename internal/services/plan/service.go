@@ -34,21 +34,25 @@ const (
 	ResourceAPIKey     = "api_keys"
 	ResourceDomain     = "domains"
 	ResourceSMTPServer = "smtp_servers"
+	ResourceChatWidget = "chat_widgets"
 	ResourceWorkspace  = "workspaces"
 )
 
 // Limits holds the effective limits for a given scope.
 // A value of 0 means unlimited.
 type Limits struct {
-	HourlyRateLimit       int
-	DailyRateLimit        int
-	MaxAttachmentSizeMB   int
-	MaxBatchSize          int
-	MaxAPIKeys            int
-	MaxDomains            int
-	MaxSMTPServers        int
-	MaxWorkspaces         int
-	EmailLogRetentionDays int
+	HourlyRateLimit          int
+	DailyRateLimit           int
+	MaxAttachmentSizeMB      int
+	MaxBatchSize             int
+	MaxAPIKeys               int
+	MaxDomains               int
+	MaxSMTPServers           int
+	MaxChatWidgets           int
+	MaxChatAgents            int
+	MonthlyConversationLimit int
+	MaxWorkspaces            int
+	EmailLogRetentionDays    int
 }
 
 // Service resolves effective plan limits and enforces resource quotas.
@@ -151,6 +155,9 @@ func (s *Service) CheckQuota(db *gorm.DB, userID uint, workspaceID *uint, resour
 	case ResourceSMTPServer:
 		limit = limits.MaxSMTPServers
 		table = "smtp_servers"
+	case ResourceChatWidget:
+		limit = limits.MaxChatWidgets
+		table = "chat_widgets"
 	default:
 		return nil
 	}
@@ -161,6 +168,9 @@ func (s *Service) CheckQuota(db *gorm.DB, userID uint, workspaceID *uint, resour
 
 	var count int64
 	query := db.Table(table)
+	if resource == ResourceChatWidget {
+		query = query.Where("deleted_at IS NULL")
+	}
 	if workspaceID != nil {
 		query = query.Where("workspace_id = ?", *workspaceID)
 	} else {
@@ -207,15 +217,18 @@ func IsWithinLimit(current int64, limit int) bool {
 
 func limitsFromPlan(plan *models.Plan) *Limits {
 	return &Limits{
-		HourlyRateLimit:       plan.HourlyRateLimit,
-		DailyRateLimit:        plan.DailyRateLimit,
-		MaxAttachmentSizeMB:   plan.MaxAttachmentSizeMB,
-		MaxBatchSize:          plan.MaxBatchSize,
-		MaxAPIKeys:            plan.MaxAPIKeys,
-		MaxDomains:            plan.MaxDomains,
-		MaxSMTPServers:        plan.MaxSMTPServers,
-		MaxWorkspaces:         plan.MaxWorkspaces,
-		EmailLogRetentionDays: plan.EmailLogRetentionDays,
+		HourlyRateLimit:          plan.HourlyRateLimit,
+		DailyRateLimit:           plan.DailyRateLimit,
+		MaxAttachmentSizeMB:      plan.MaxAttachmentSizeMB,
+		MaxBatchSize:             plan.MaxBatchSize,
+		MaxAPIKeys:               plan.MaxAPIKeys,
+		MaxDomains:               plan.MaxDomains,
+		MaxSMTPServers:           plan.MaxSMTPServers,
+		MaxChatWidgets:           plan.MaxChatWidgets,
+		MaxChatAgents:            plan.MaxChatAgents,
+		MonthlyConversationLimit: plan.MonthlyConversationLimit,
+		MaxWorkspaces:            plan.MaxWorkspaces,
+		EmailLogRetentionDays:    plan.EmailLogRetentionDays,
 	}
 }
 

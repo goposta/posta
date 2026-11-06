@@ -137,6 +137,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Live Chat',
+      items: ['chat/overview'],
+    },
+    {
+      type: 'category',
       label: 'Analytics & Monitoring',
       items: [
         'analytics/dashboard',

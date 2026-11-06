@@ -139,6 +139,34 @@ func runConstraints(db *gorm.DB) {
 	EXCEPTION WHEN others THEN NULL;
 	END $$`)
 
+	// Live chat. The sequence index is what makes a conversation's message
+	// order unique, and the client index makes a retried send idempotent, so
+	// each has its own block: a failure must not skip the other.
+	db.Exec(`DO $$ BEGIN
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_msg_seq ON chat_messages (conversation_id, seq);
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+	db.Exec(`DO $$ BEGIN
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_msg_client ON chat_messages (conversation_id, client_msg_id) WHERE client_msg_id <> '';
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+	db.Exec(`DO $$ BEGIN
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_chat_widget_name ON chat_widgets (workspace_id, name) WHERE workspace_id IS NOT NULL AND deleted_at IS NULL;
+		CREATE INDEX IF NOT EXISTS idx_chat_conv_inbox ON chat_conversations (workspace_id, state, last_message_at DESC) WHERE deleted_at IS NULL;
+		CREATE INDEX IF NOT EXISTS idx_chat_conv_assignee ON chat_conversations (assigned_to_id, state) WHERE deleted_at IS NULL;
+		CREATE INDEX IF NOT EXISTS idx_chat_visitor_identity ON chat_visitors (widget_id, external_id) WHERE email_verified AND external_id <> '';
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_chat_snippet ON chat_snippets (workspace_id, shortcut) WHERE deleted_at IS NULL;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+	// Erasing a conversation takes its messages with it.
+	db.Exec(`DO $$ BEGIN
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_chat_messages_conversation') THEN
+			ALTER TABLE chat_messages ADD CONSTRAINT fk_chat_messages_conversation
+				FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE;
+		END IF;
+	EXCEPTION WHEN others THEN NULL;
+	END $$`)
+
 	// One thread reply per inbound email, so a retried parse task cannot attach
 	// the same answer twice. Its own block: a failure must not skip the others.
 	db.Exec(`DO $$ BEGIN

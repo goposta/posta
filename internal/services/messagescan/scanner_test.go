@@ -320,3 +320,21 @@ func TestVerdictStatusMapping(t *testing.T) {
 		}
 	}
 }
+
+// Light scans score content only: a short line from a bot-like client with
+// no sender is fine, links still count, and filters still apply.
+func TestLightScanSkipsSenderSignals(t *testing.T) {
+	s := New(nil)
+	in := Input{Body: "ok", UserAgent: "curl/8", SenderEmail: "not an address", Light: true}
+	if v := s.Scan(in); v.Score != 0 {
+		t.Fatalf("light scan scored sender signals: %+v", v)
+	}
+	in.Light = false
+	if v := s.Scan(in); v.Score == 0 {
+		t.Fatal("full scan ignored the sender signals")
+	}
+	links := Input{Body: strings.Repeat("http://a.test ", 8), Light: true}
+	if v := s.Scan(links); v.Score == 0 {
+		t.Fatal("light scan ignored links")
+	}
+}

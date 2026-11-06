@@ -38,7 +38,10 @@ type Event struct {
 	Type        string `json:"type"`
 	WorkspaceID uint   `json:"workspace_id"`
 	Topic       string `json:"topic"`
-	Data        any    `json:"data,omitempty"`
+	// Seq orders events that stand for a stored record, such as a chat
+	// message, so a subscriber can tell what it missed. Zero for the rest.
+	Seq  int64 `json:"seq,omitempty"`
+	Data any   `json:"data,omitempty"`
 }
 
 // Bus publishes and subscribes to topics.
@@ -54,6 +57,11 @@ type Bus interface {
 // Topics are built from database IDs only, never from client input.
 func WorkspaceTopic(workspaceID uint) string {
 	return fmt.Sprintf("ws:%d", workspaceID)
+}
+
+// ChatConversationTopic is the topic a chat visitor's stream listens on.
+func ChatConversationTopic(conversationID uint) string {
+	return fmt.Sprintf("chat:%d", conversationID)
 }
 
 // subscriberBuffer is how many undelivered events a subscriber may hold before

@@ -300,6 +300,7 @@ var tenantAdminPaths = []string{
 	"/sso",
 	"/plan",
 	"/forms",
+	"/chat-widgets",
 	"/message-filters",
 	"/teams",
 	"/gdpr/",

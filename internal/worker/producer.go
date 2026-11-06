@@ -20,6 +20,7 @@
 package worker
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -192,6 +193,79 @@ func (p *Producer) EnqueueMessageReply(replyID uint) error {
 			return nil
 		}
 		return fmt.Errorf("failed to enqueue message reply task: %w", err)
+	}
+	return nil
+}
+
+// EnqueueChatNotify schedules the notification for a new chat conversation.
+// The task ID makes a second enqueue for the same conversation a no-op.
+func (p *Producer) EnqueueChatNotify(conversationID uint) error {
+	task, err := NewChatNotifyTask(conversationID,
+		asynq.Queue(QueueTransactional),
+		asynq.MaxRetry(p.maxRetries),
+		asynq.TaskID(fmt.Sprintf("chat:notify:%d", conversationID)),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create chat notify task: %w", err)
+	}
+	if _, err := p.client.Enqueue(task); err != nil {
+		if errors.Is(err, asynq.ErrTaskIDConflict) {
+			return nil
+		}
+		return fmt.Errorf("failed to enqueue chat notify task: %w", err)
+	}
+	return nil
+}
+
+// EnqueueChatOfflineEmail schedules the follow-up email for an agent's chat
+// message, delay from now.
+func (p *Producer) EnqueueChatOfflineEmail(conversationID uint, seq int64, delay time.Duration) error {
+	return p.enqueueChatMessage(TypeChatOfflineEmail, conversationID, seq, delay)
+}
+
+// EnqueueChatUnanswered schedules the alert for a visitor's chat message,
+// delay from now.
+func (p *Producer) EnqueueChatUnanswered(conversationID uint, seq int64, delay time.Duration) error {
+	return p.enqueueChatMessage(TypeChatUnanswered, conversationID, seq, delay)
+}
+
+// EnqueueChatWebhook queues a chat webhook event. Message events are
+// enqueued once per message; conversation events each time they happen.
+func (p *Producer) EnqueueChatWebhook(event string, conversationID, messageID uint) error {
+	payload, err := json.Marshal(ChatWebhookPayload{Event: event, ConversationID: conversationID, MessageID: messageID})
+	if err != nil {
+		return err
+	}
+	opts := []asynq.Option{asynq.Queue(QueueLow), asynq.MaxRetry(p.maxRetries)}
+	if messageID != 0 {
+		opts = append(opts, asynq.TaskID(fmt.Sprintf("%s:%s:%d", TypeChatWebhook, event, messageID)))
+	}
+	if _, err := p.client.Enqueue(asynq.NewTask(TypeChatWebhook, payload, opts...)); err != nil {
+		if errors.Is(err, asynq.ErrTaskIDConflict) {
+			return nil
+		}
+		return fmt.Errorf("failed to enqueue chat webhook: %w", err)
+	}
+	return nil
+}
+
+// enqueueChatMessage enqueues one task per message; the task ID makes a
+// second enqueue for the same message a no-op.
+func (p *Producer) enqueueChatMessage(typ string, conversationID uint, seq int64, delay time.Duration) error {
+	task, err := newChatMessageTask(typ, conversationID, seq,
+		asynq.Queue(QueueTransactional),
+		asynq.MaxRetry(p.maxRetries),
+		asynq.ProcessIn(delay),
+		asynq.TaskID(fmt.Sprintf("%s:%d:%d", typ, conversationID, seq)),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create %s task: %w", typ, err)
+	}
+	if _, err := p.client.Enqueue(task); err != nil {
+		if errors.Is(err, asynq.ErrTaskIDConflict) {
+			return nil
+		}
+		return fmt.Errorf("failed to enqueue %s task: %w", typ, err)
 	}
 	return nil
 }
