@@ -639,7 +639,7 @@ func safeFilename(name string) string {
 		}
 	}, name)
 	if name == "" {
-		return "attachment"
+		return dispositionAttachment
 	}
 	if len(name) > 100 {
 		name = name[:100]

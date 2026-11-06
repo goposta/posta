@@ -640,7 +640,7 @@ func (h *MessageHandler) Stream(c *okapi.Context) error {
 
 	msgCh := make(chan okapi.Message, 4)
 	msgCh <- okapi.Message{
-		Event: "system.info",
+		Event: sseEventSystemInfo,
 		Data: okapi.M{
 			"workspace_id": workspaceID,
 			"timestamp":    time.Now().UTC().Format(time.RFC3339),

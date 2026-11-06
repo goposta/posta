@@ -742,7 +742,9 @@ func webhookConfig(cfg *config.Config) webhook.Config {
 }
 
 // registerChatTasks sends a visitor's follow-up email through the email service, as the agent who wrote.
-func registerChatTasks(mux *asynq.ServeMux, db *gorm.DB, cfg *config.Config, notifier *notification.Service, blobStore blob.Store) {
+func registerChatTasks(
+	mux *asynq.ServeMux, db *gorm.DB, cfg *config.Config, notifier *notification.Service, blobStore blob.Store,
+) {
 	producer := worker.NewProducer(cfg.Redis.AsynqRedisOpt(), cfg.WorkerMaxRetries)
 	mailer := routes.NewEmailService(db, cfg, newWebhookDispatcher(db, cfg), producer, blobStore)
 	chatSvc := routes.NewChatService(db, cfg)
