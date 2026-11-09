@@ -27,6 +27,18 @@ const en = {
   attach: 'Attach a file',
   attachFirst: 'Send a message first',
   fileTooLarge: 'Files can be at most 5 MB.',
+  home: 'Home',
+  messages: 'Messages',
+  help: 'Help',
+  back: 'Back',
+  sendMessage: 'Send us a message',
+  continueChat: 'Continue the conversation',
+  replyByEmail: "We'll reply by email",
+  noConversations: 'No conversations yet.',
+  newTab: '(opens in a new tab)',
+  search: 'Search help',
+  noResults: 'Nothing matches.',
+  closedConv: 'Closed',
 }
 
 export type Strings = typeof en
@@ -58,6 +70,18 @@ const fr: Strings = {
   attach: 'Joindre un fichier',
   attachFirst: "Envoyez d'abord un message",
   fileTooLarge: 'Les fichiers font 5 Mo au plus.',
+  home: 'Accueil',
+  messages: 'Messages',
+  help: 'Aide',
+  back: 'Retour',
+  sendMessage: 'Envoyez-nous un message',
+  continueChat: 'Reprendre la conversation',
+  replyByEmail: 'Nous répondrons par e-mail',
+  noConversations: 'Aucune conversation pour le moment.',
+  newTab: '(s’ouvre dans un nouvel onglet)',
+  search: "Chercher dans l'aide",
+  noResults: 'Aucun résultat.',
+  closedConv: 'Fermée',
 }
 
 export function strings(lang = navigator.language): Strings {

@@ -18,10 +18,35 @@ POSTA_CHAT_ENABLED=true
 
 1. Open **Chat widgets** and click **New widget**. Give it a name, such as *Website chat*.
 2. On the **Appearance** tab, set the title, the greeting, your accent colour, and which corner the button sits in.
-3. On the **Settings** tab, list the **allowed origins**: the sites that may load the widget, such as `https://example.com`. Leave the list empty to allow any site.
-4. On the **Embed** tab, copy the script tag.
+3. On the **Home** tab, set up the home screen visitors see first (see [Home screen and menu](#home-screen-and-menu)).
+4. On the **Settings** tab, list the **allowed origins**: the sites that may load the widget, such as `https://example.com`. Leave the list empty to allow any site.
+5. On the **Embed** tab, copy the script tag.
 
 Only owners and admins manage widgets. Editors and above answer chats; viewers can read them.
+
+## Home screen and menu
+
+A widget can open on a **home screen** instead of going straight into a chat. The home screen greets visitors, points them to answers on your own site, and lets them pick up earlier conversations. A tab bar at the bottom switches between three views:
+
+- **Home:** a header with your greeting and a headline, then your home items in order.
+- **Messages:** the visitor's conversations, newest first, with a count of unread replies.
+- **Help:** a list of links to your help pages. The tab is hidden when you add no links.
+
+Home items come in three kinds:
+
+| Kind | What it does |
+|---|---|
+| **Message** | Starts a chat. While the visitor has an open conversation it reads *Continue the conversation* and opens it. Offline, it says you'll reply by email. At most one per widget. |
+| **Link** | A title that opens a URL. |
+| **Card** | A title, a short text (up to 280 characters) and an optional link, for an announcement or a promotion. |
+
+A widget can have up to 12 home items and 30 help links. Everything is plain text: Posta never renders HTML from the home screen on your page. Links must use `https:`, `http:`, `mailto:` or `tel:`. Links to other sites open in a new tab unless you turn that off; links to the page's own site stay in the tab, and the chat stays open across the page load.
+
+The header takes your accent colour unless you pick a **header colour**; its text turns white or dark, whichever reads better.
+
+New widgets start with the home screen on and a single message item. Widgets created before the home screen existed keep opening straight into the chat until you turn it on.
+
+When a visitor comes back with an unread reply, the button and the **Messages** tab show the count, and opening the panel goes straight to that conversation.
 
 ## Embed it
 
@@ -57,6 +82,7 @@ The widget takes its accent colour from the widget's settings. To match your sit
 | `--posta-chat-bg`, `--posta-chat-text`, `--posta-chat-muted` | Panel background and text |
 | `--posta-chat-border`, `--posta-chat-input-bg`, `--posta-chat-bubble` | Borders, inputs, and agent bubbles |
 | `--posta-chat-radius`, `--posta-chat-font`, `--posta-chat-z-index` | Corner radius, font, stacking order |
+| `--posta-chat-header-bg`, `--posta-chat-header-text` | Home screen header, over the widget's header colour |
 
 ### JavaScript API
 
@@ -64,15 +90,25 @@ The script defines `window.PostaChat`:
 
 ```js
 PostaChat.open()     // open the panel
+PostaChat.open('messages') // open on a view: 'home', 'messages', 'help', or 'new' for a new chat
 PostaChat.close()    // close it
+PostaChat.unread()   // unread agent replies, for a launcher of your own
 PostaChat.hide()     // hide the button entirely
 PostaChat.show()     // show it again
 const off = PostaChat.on('message', (m) => console.log(m.body)) // an agent replied
 PostaChat.on('open', () => {})
 PostaChat.on('close', () => {})
+PostaChat.on('unread', (n) => {})  // the unread count changed
 ```
 
 A link to your page ending in `#posta-chat=` opens the panel when the page loads.
+
+Any element with a `data-posta-chat-open` attribute opens the chat when clicked, with no script of your own. Give it a view as its value:
+
+```html
+<a href="/contact" data-posta-chat-open="new">Contact us</a>
+<a href="/help" data-posta-chat-open="help">Help</a>
+```
 
 ## Identify signed-in users
 
@@ -222,6 +258,6 @@ These match typed and verified emails alike, since both are personal data.
 
 ## Privacy
 
-The widget sets **no cookies**. It stores one entry in the visitor's browser, `localStorage` key `posta_chat_<your widget key>`, holding the visitor's chat token and their open conversation, so the chat survives page loads. List it in your privacy notice if you disclose browser storage.
+The widget sets **no cookies**. It stores one entry in the visitor's browser, `localStorage` key `posta_chat_<your widget key>`, holding the visitor's chat token and their open conversation, so the chat survives page loads. With the home screen on, it also keeps the last view in `sessionStorage`, which the browser clears when the tab closes. List it in your privacy notice if you disclose browser storage.
 
 Posta keeps a visitor's IP address and user agent with their chat, for abuse handling. Only a hash of the visitor's token is stored.

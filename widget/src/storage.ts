@@ -24,3 +24,23 @@ export function save(widgetKey: string, value: Saved): void {
     // Storage unavailable: keep going in memory.
   }
 }
+
+export type View = 'home' | 'messages' | 'help' | 'thread'
+
+// The last view lives in sessionStorage only, so a new visit starts on Home.
+export function loadView(widgetKey: string): View | null {
+  try {
+    const v = window.sessionStorage.getItem(`${keyFor(widgetKey)}_view`)
+    return v === 'home' || v === 'messages' || v === 'help' || v === 'thread' ? v : null
+  } catch {
+    return null
+  }
+}
+
+export function saveView(widgetKey: string, view: View): void {
+  try {
+    window.sessionStorage.setItem(`${keyFor(widgetKey)}_view`, view)
+  } catch {
+    // Storage unavailable: the view resets on the next page.
+  }
+}

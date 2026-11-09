@@ -1633,6 +1633,7 @@ export interface ChatWidget {
   position: 'left' | 'right'
   avatar_url: string
   show_agent_names: boolean
+  home: ChatHome | null
   require_email: boolean
   require_name: boolean
   business_hours: ChatBusinessHours | null
@@ -1654,6 +1655,34 @@ export interface ChatWidget {
   created_at: string
   updated_at?: string
   last_edited_by?: { id: number; name: string }
+}
+
+export type ChatHomeItemKind = 'message' | 'link' | 'card'
+
+export interface ChatHomeItem {
+  id: string
+  kind: ChatHomeItemKind
+  title: string
+  body?: string
+  url?: string
+  link_label?: string
+  new_tab: boolean
+}
+
+export interface ChatHelpLink {
+  id: string
+  title: string
+  description?: string
+  url: string
+}
+
+export interface ChatHome {
+  enabled: boolean
+  header_color?: string
+  headline?: string
+  items?: ChatHomeItem[]
+  help_title?: string
+  help_links?: ChatHelpLink[]
 }
 
 export interface ChatWidgetSnippet {

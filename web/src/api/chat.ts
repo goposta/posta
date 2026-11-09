@@ -7,6 +7,7 @@ import type {
   ChatSnippet,
   ChatVisitorContext,
   ChatBusinessHours,
+  ChatHome,
   ChatConversation,
   ChatMessage,
   ChatOfflineMode,
@@ -37,6 +38,7 @@ export interface ChatWidgetPayload {
   position?: 'left' | 'right'
   avatar_url?: string
   show_agent_names?: boolean
+  home?: ChatHome
   require_name?: boolean
   require_email?: boolean
   business_hours?: ChatBusinessHours

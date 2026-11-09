@@ -51,6 +51,11 @@ func CleanLine(s string, max int) string {
 	return s
 }
 
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
+)
+
 var accentPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 // The colour ends up in a stylesheet on the customer's page, so nothing but #RRGGBB may pass.
@@ -63,7 +68,7 @@ func ValidAvatarURL(u string) bool {
 		return true
 	}
 	parsed, err := url.Parse(u)
-	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && len(u) <= 2000
+	return err == nil && parsed.Scheme == schemeHTTPS && parsed.Host != "" && len(u) <= 2000
 }
 
 // CleanPageURL keeps only short http(s) URLs, since agents see the page as a link.
@@ -73,7 +78,7 @@ func CleanPageURL(u string) string {
 		return ""
 	}
 	parsed, err := url.Parse(u)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+	if err != nil || (parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS) || parsed.Host == "" {
 		return ""
 	}
 	return u

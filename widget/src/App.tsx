@@ -1,16 +1,23 @@
 import { Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { Api, ApiError, Attachment, Conversation, Identity, WidgetConfig } from './api'
+import { Api, ApiError, Attachment, Conversation, Identity, Summary, WidgetConfig } from './api'
 import { Strings } from './i18n'
 import { linkify } from './linkify'
-import { load, save } from './storage'
+import { load, loadView, save, saveView, View } from './storage'
 import { ConversationStream } from './stream'
 import { Local, merge } from './thread'
+import { HelpView, HomeView, MessagesView, TabBar } from './Views'
 
-export interface Controller {
-  open(): void
+export type OpenTarget = Exclude<View, 'thread'> | 'new'
+
+export type WidgetEvent = 'message' | 'open' | 'close' | 'unread'
+
+export interface Controls {
+  open(target?: OpenTarget): void
   close(): void
-  emit(event: 'message' | 'open' | 'close', payload?: unknown): void
+  identify(identity: Identity): void
+  setAttributes(attributes: Record<string, unknown>): void
+  unread(): number
 }
 
 interface Props {
@@ -18,13 +25,8 @@ interface Props {
   widgetKey: string
   config: WidgetConfig
   t: Strings
-  bind(ctl: {
-    open(): void
-    close(): void
-    identify(identity: Identity): void
-    setAttributes(attributes: Record<string, unknown>): void
-  }): void
-  emit: Controller['emit']
+  bind(ctl: Controls): void
+  emit(event: WidgetEvent, payload?: unknown): void
 }
 
 const ACCEPT = 'image/png,image/jpeg,image/gif,image/webp,application/pdf'
@@ -101,7 +103,10 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Local[]>([])
   const [conv, setConv] = useState<Conversation | null>(null)
-  const [unread, setUnread] = useState(0)
+  const home = config.home?.enabled ? config.home : undefined
+  const [view, setView] = useState<View>(() => (home ? loadView(widgetKey) || 'home' : 'thread'))
+  const [list, setList] = useState<Summary[] | null>(null)
+  const [unreadBy, setUnreadBy] = useState<Record<string, number>>({})
   const [text, setText] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -119,37 +124,129 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   const stream = useRef<ConversationStream | null>(null)
   const nonce = useRef({ value: config.nonce?.nonce, at: Date.now() })
   const openRef = useRef(open)
+  const viewRef = useRef(view)
+  const unreadRef = useRef(0)
   const panel = useRef<HTMLDivElement>(null)
   const launcher = useRef<HTMLButtonElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const log = useRef<HTMLDivElement>(null)
   openRef.current = open
+  viewRef.current = view
+  const unread = Object.values(unreadBy).reduce((n, x) => n + x, 0)
+  unreadRef.current = unread
 
   const hasToken = !!saved.current.token
   const askName = !conv && !hasToken && config.require_name
   const askEmail = !conv && !hasToken && config.require_email
 
-  const show = (v: boolean) => {
+  const tabs: Exclude<View, 'thread'>[] = home
+    ? (['home', 'messages', 'help'] as const).filter((v) => v !== 'help' || !!home.help_links?.length)
+    : []
+
+  function go(v: View) {
+    if (!home) return
+    setView(v)
+    saveView(widgetKey, v)
+    if (v === 'messages') refreshList()
+  }
+
+  // Without a home screen the widget is the single thread it always was, unread badge included.
+  const show = (v: boolean, target?: OpenTarget) => {
     setOpen(v)
-    if (v) setUnread(0)
+    if (v && !home) setUnreadBy({})
+    if (v && home) {
+      if (target === 'new') startNew()
+      else if (target) go(target)
+      else if (viewRef.current !== 'thread') {
+        const waiting = Object.keys(unreadByRef.current).find((id) => unreadByRef.current[id] > 0)
+        if (waiting) openConversation(waiting)
+        else go('home')
+      }
+    }
     emit(v ? 'open' : 'close')
   }
 
+  const unreadByRef = useRef(unreadBy)
+  unreadByRef.current = unreadBy
+
   useEffect(() => {
-    bind({ open: () => show(true), close: () => show(false), identify, setAttributes })
+    bind({
+      open: (target) => show(true, target),
+      close: () => show(false),
+      identify,
+      setAttributes,
+      unread: () => unreadRef.current,
+    })
     if (location.hash.startsWith('#posta-chat=')) show(true)
     const s = saved.current
     if (s.token) api.token = s.token
     if (s.token && s.conversation) follow(s.conversation, 0)
+    if (s.token && home) refreshList()
     return () => stream.current?.stop()
   }, [])
 
   useEffect(() => {
-    if (open) {
+    emit('unread', unread)
+  }, [unread])
+
+  useEffect(() => {
+    if (!open) return
+    if (view === 'thread') {
       input.current?.focus()
       log.current?.scrollTo({ top: log.current.scrollHeight })
+    } else {
+      panel.current?.querySelector<HTMLElement>('[data-vh]')?.focus()
     }
-  }, [open])
+  }, [open, view])
+
+  async function refreshList() {
+    if (!api.token) {
+      setList([])
+      return
+    }
+    try {
+      const items = await api.conversations()
+      setList(items)
+      const counts: Record<string, number> = {}
+      for (const c of items) counts[c.id] = c.unread
+      // The thread on screen is read as it arrives, whatever the server last saw.
+      if (openRef.current && viewRef.current === 'thread' && stream.current) delete counts[saved.current.conversation || '']
+      setUnreadBy(counts)
+    } catch {
+      setList((l) => l || [])
+    }
+  }
+
+  function openConversation(id: string) {
+    if (saved.current.conversation !== id || !stream.current) {
+      saved.current = { token: api.token, conversation: id }
+      save(widgetKey, saved.current)
+      const known = list?.find((c) => c.id === id)
+      setConv(known || null)
+      setMessages([])
+      setAgentRead(0)
+      lastReadSent.current = 0
+      follow(id, 0)
+    }
+    go('thread')
+  }
+
+  // A closed conversation is left as it is; the next message starts a new one.
+  function startNew() {
+    if (conv && conv.state !== 'closed') {
+      go('thread')
+      return
+    }
+    stream.current?.stop()
+    stream.current = null
+    saved.current = { token: api.token }
+    save(widgetKey, saved.current)
+    setConv(null)
+    setMessages([])
+    setAgentRead(0)
+    setNotice('')
+    go('thread')
+  }
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight })
@@ -157,7 +254,8 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
 
   // Read receipts go out only while the panel is open and the tab visible.
   useEffect(() => {
-    if (!open || !conv) return
+    if (!open || !conv || view !== 'thread') return
+    setUnreadBy((u) => (u[conv.id] ? { ...u, [conv.id]: 0 } : u))
     const mark = () => {
       if (document.visibilityState !== 'visible') return
       const newest = messages.reduce((n, m) => (m.author === 'agent' && m.seq > n ? m.seq : n), 0)
@@ -169,7 +267,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
     mark()
     document.addEventListener('visibilitychange', mark)
     return () => document.removeEventListener('visibilitychange', mark)
-  }, [open, conv, messages])
+  }, [open, conv, messages, view])
 
   function onType(value: string) {
     setText(value)
@@ -233,16 +331,21 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
 
   function follow(id: string, since: number) {
     stream.current?.stop()
+    // The stream opens with the conversation, then replays history; only messages past that point are new.
+    let baseline = -1
     stream.current = new ConversationStream(api, id, since, {
       message(m) {
         setMessages((list) => merge(list, [m]))
         if (m.author === 'agent') {
           setAgentTyping(null)
-          if (!openRef.current) setUnread((n) => n + 1)
+          if (baseline >= 0 && m.seq > baseline && (!openRef.current || viewRef.current !== 'thread')) {
+            setUnreadBy((u) => ({ ...u, [id]: (u[id] || 0) + 1 }))
+          }
           emit('message', { body: m.body, agent_name: m.agent_name, created_at: m.created_at })
         }
       },
       conversation(c) {
+        if (baseline < 0) baseline = c.last_seq
         setConv(c)
         if (c.agent_read_seq) setAgentRead((s) => Math.max(s, c.agent_read_seq!))
       },
@@ -411,7 +514,46 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
           ref={panel}
           onKeyDown={onPanelKey}
         >
+          {view !== 'thread' && home && (
+            <>
+              {view === 'home' && (
+                <HomeView
+                  home={home}
+                  greeting={config.greeting}
+                  online={!!config.online}
+                  canContinue={!!conv && conv.state !== 'closed'}
+                  t={t}
+                  onMessage={startNew}
+                  onClose={() => show(false)}
+                />
+              )}
+              {view !== 'home' && (
+                <div class="head">
+                  <h2>{title}</h2>
+                  <button class="x" type="button" aria-label={t.close} onClick={() => show(false)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {view === 'messages' && (
+                <MessagesView list={list} t={t} onOpen={(c) => openConversation(c.id)} onNew={startNew} />
+              )}
+              {view === 'help' && <HelpView title={home.help_title} links={home.help_links || []} t={t} />}
+              <TabBar tabs={tabs} view={view} unread={unread} t={t} onSelect={go} />
+            </>
+          )}
+          {view === 'thread' && (
+          <>
           <div class="head">
+            {home && (
+              <button class="back" type="button" aria-label={t.back} onClick={() => go('messages')}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M15 6l-6 6 6 6" />
+                </svg>
+              </button>
+            )}
             {config.avatar_url && <img src={config.avatar_url} alt="" />}
             <h2>{title}</h2>
             <button class="x" type="button" aria-label={t.close} onClick={() => show(false)}>
@@ -525,6 +667,8 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
               </div>
             )}
           </form>
+          </>
+          )}
           <div class="foot">
             <a href="https://goposta.dev/?ref=chat-widget" target="_blank" rel="noopener">
               {t.powered}

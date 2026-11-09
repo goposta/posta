@@ -2,8 +2,10 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import NameField from "../../components/NameField.vue";
+import ChatHomeEditor from "./ChatHomeEditor.vue";
+import { cloneHome, homeError } from "./chatHome";
 import { chatWidgetsApi } from "../../api/chat";
-import type { ChatHoursRange, ChatWidget, ChatWidgetSnippet } from "../../api/types";
+import type { ChatHome, ChatHoursRange, ChatWidget, ChatWidgetSnippet } from "../../api/types";
 import { useNotificationStore } from "../../stores/notification";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { apiMessage } from "../../composables/apiError";
@@ -25,6 +27,7 @@ const loading = ref(true);
 const saving = ref(false);
 const loadFailed = ref(false);
 const widget = ref<ChatWidget | null>(null);
+const home = ref<ChatHome>(cloneHome(null));
 const snippet = ref<ChatWidgetSnippet | null>(null);
 const originsText = ref("");
 
@@ -56,6 +59,7 @@ function removeHours(i: number) {
 
 const TABS = [
   { key: "appearance", label: "Appearance" },
+  { key: "home", label: "Home" },
   { key: "availability", label: "Availability" },
   { key: "settings", label: "Settings" },
   { key: "identity", label: "Identity" },
@@ -112,6 +116,7 @@ async function load() {
     snippet.value = withOrigin(sn.data.data);
     originsText.value = (widget.value.allowed_origins ?? []).join(", ");
     loadAvailability(widget.value);
+    home.value = cloneHome(widget.value.home);
   } catch {
     loadFailed.value = true;
   } finally {
@@ -142,6 +147,12 @@ async function save() {
     notify.error("Each business hours row needs a start time before its end time.");
     return;
   }
+  const homeProblem = homeError(home.value);
+  if (homeProblem) {
+    notify.error(homeProblem);
+    selectTab("home");
+    return;
+  }
   saving.value = true;
   try {
     const res = await chatWidgetsApi.update(id, {
@@ -152,6 +163,7 @@ async function save() {
       position: w.position,
       avatar_url: w.avatar_url.trim(),
       show_agent_names: w.show_agent_names,
+      home: home.value,
       allowed_origins: splitList(originsText.value),
       strict_origin: w.strict_origin,
       require_name: w.require_name,
@@ -174,6 +186,7 @@ async function save() {
     widget.value = res.data.data;
     originsText.value = (widget.value.allowed_origins ?? []).join(", ");
     loadAvailability(widget.value);
+    home.value = cloneHome(widget.value.home);
     notify.success("Chat widget saved.");
   } catch (e: any) {
     notify.error(apiMessage(e, "Failed to save chat widget"));
@@ -410,6 +423,10 @@ function copy(text: string) {
             <small class="muted">An approximation; the real widget follows the visitor's language and screen size.</small>
           </div>
         </div>
+      </div>
+
+      <div v-show="tab === 'home'" style="margin-bottom: 20px">
+        <ChatHomeEditor v-model="home" :accent="accentPicker" :disabled="!wsStore.canEdit" />
       </div>
 
       <div v-show="tab === 'availability'" class="card" style="margin-bottom: 20px">
