@@ -192,6 +192,11 @@ const sidebars: SidebarsConfig = {
         'sdks/dotnet',
       ],
     },
+    {
+      type: 'category',
+      label: 'Development',
+      items: ['development/contributing'],
+    },
   ],
 };
 
