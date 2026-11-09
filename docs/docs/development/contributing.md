@@ -133,7 +133,7 @@ Add a new page to `docs/sidebars.ts` so it shows up in the navigation.
 
 ### Branching strategy
 
-Branch from `main` and open your pull request against `main`. Use a short, descriptive branch name
+Use a short, descriptive branch name
 such as `fix/webhook-retry` or `feat/form-export`.
 
 ### PR requirements
