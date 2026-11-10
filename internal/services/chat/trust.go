@@ -357,7 +357,7 @@ func (s *Service) SetDirectory(ws *repositories.WorkspaceRepository) { s.workspa
 // autoAssign takes online agents in turn, skipping those at the widget's cap; nobody online, nobody assigned.
 func (s *Service) autoAssign(ctx context.Context, w *models.ChatWidget, conv *models.ChatConversation) {
 	// Auto-assign is Enterprise; unlicensed chats wait to be claimed, as with auto-assign off.
-	if !w.AutoAssign || s.licensed == nil || !s.licensed() || s.workspaces == nil || s.rdb == nil || conv.WorkspaceID == nil {
+	if !w.AutoAssign || !s.Licensed() || s.workspaces == nil || s.rdb == nil || conv.WorkspaceID == nil {
 		return
 	}
 	ws := *conv.WorkspaceID

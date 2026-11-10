@@ -457,6 +457,114 @@ func (r *ChatRepository) ListLinkedConversations(visitorIDs []uint, limit int) (
 	return items, err
 }
 
+func (r *ChatRepository) CreateWidgetAsset(a *models.ChatWidgetAsset) error {
+	return r.db.Create(a).Error
+}
+
+func (r *ChatRepository) ListWidgetAssets(widgetID uint) ([]models.ChatWidgetAsset, error) {
+	var items []models.ChatWidgetAsset
+	err := r.db.Omit("data").Where("widget_id = ?", widgetID).Order("created_at DESC").Find(&items).Error
+	return items, err
+}
+
+func (r *ChatRepository) FindWidgetAsset(widgetID uint, uuid string) (*models.ChatWidgetAsset, error) {
+	var a models.ChatWidgetAsset
+	if err := r.db.Where("widget_id = ? AND uuid = ?", widgetID, uuid).First(&a).Error; err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+// FindPublicAsset hides assets of paused, archived and deleted widgets, like the widget itself.
+func (r *ChatRepository) FindPublicAsset(uuid string) (*models.ChatWidgetAsset, error) {
+	var a models.ChatWidgetAsset
+	err := r.db.Joins("JOIN chat_widgets w ON w.id = chat_widget_assets.widget_id AND w.deleted_at IS NULL AND w.status = ?", models.ChatWidgetStatusActive).
+		Where("chat_widget_assets.uuid = ?", uuid).First(&a).Error
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (r *ChatRepository) CountWidgetAssets(widgetID uint, uuids []string) (int64, error) {
+	var n int64
+	if len(uuids) == 0 {
+		return 0, nil
+	}
+	err := r.db.Model(&models.ChatWidgetAsset{}).Where("widget_id = ? AND uuid IN ?", widgetID, uuids).Count(&n).Error
+	return n, err
+}
+
+func (r *ChatRepository) DeleteWidgetAsset(id uint) error {
+	return r.db.Delete(&models.ChatWidgetAsset{}, id).Error
+}
+
+// MedianFirstResponse is over answered, non-spam conversations of one widget started since the given time.
+func (r *ChatRepository) MedianFirstResponse(widgetID uint, since time.Time) (seconds float64, samples int64, err error) {
+	var row struct {
+		N      int64
+		Median *float64
+	}
+	err = r.db.Model(&models.ChatConversation{}).
+		Where("widget_id = ? AND created_at >= ? AND first_response_at IS NOT NULL AND state <> ?", widgetID, since, models.ChatStateSpam).
+		Select("COUNT(*) AS n, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM first_response_at - created_at)) AS median").
+		Scan(&row).Error
+	if err != nil || row.Median == nil {
+		return 0, row.N, err
+	}
+	return *row.Median, row.N, nil
+}
+
+// UserNames keeps the order of ids, skipping users that are gone.
+func (r *ChatRepository) UserNames(ids []uint) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		ID   uint
+		Name string
+	}
+	if err := r.db.Model(&models.User{}).Where("id IN ?", ids).Select("id, name").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	byID := make(map[uint]string, len(rows))
+	for _, row := range rows {
+		byID[row.ID] = row.Name
+	}
+	var out []string
+	for _, id := range ids {
+		if name, ok := byID[id]; ok {
+			out = append(out, name)
+		}
+	}
+	return out, nil
+}
+
+func (r *ChatRepository) AddClick(workspaceID, widgetID uint, itemID string, at time.Time) error {
+	return r.db.Exec(`INSERT INTO chat_widget_clicks (workspace_id, widget_id, item_id, day, count)
+		VALUES (?, ?, ?, ?::date, 1)
+		ON CONFLICT (widget_id, item_id, day) DO UPDATE SET count = chat_widget_clicks.count + 1`,
+		workspaceID, widgetID, itemID, at.Format("2006-01-02")).Error
+}
+
+type HomeClickRow struct {
+	WidgetID uint   `json:"widget_id"`
+	ItemID   string `json:"item_id"`
+	Clicks   int64  `json:"clicks"`
+}
+
+func (r *ChatRepository) HomeClicks(workspaceID, widgetID uint, from, to time.Time) ([]HomeClickRow, error) {
+	q := r.db.Model(&models.ChatWidgetClick{}).
+		Select("widget_id, item_id, SUM(count) AS clicks").
+		Where("workspace_id = ? AND day >= ?::date AND day <= ?::date", workspaceID, from.Format("2006-01-02"), to.Format("2006-01-02"))
+	if widgetID > 0 {
+		q = q.Where("widget_id = ?", widgetID)
+	}
+	var rows []HomeClickRow
+	err := q.Group("widget_id, item_id").Order("clicks DESC").Scan(&rows).Error
+	return rows, err
+}
+
 // VisitorUnread counts, per conversation, the agent messages past the visitor's read receipt.
 func (r *ChatRepository) VisitorUnread(convIDs []uint) (map[uint]int, error) {
 	out := make(map[uint]int, len(convIDs))
@@ -578,6 +686,14 @@ type ChatAnalytics struct {
 	ResolutionMedian    *float64          `json:"resolution_median"`
 	Unanswered          int64             `json:"unanswered" doc:"Conversations with no agent reply yet"`
 	ByDay               []ChatAnalyticDay `json:"by_day"`
+	HomeClicks          []HomeClick       `json:"home_clicks" doc:"Clicks on home items and help links in the period, most clicked first"`
+}
+
+type HomeClick struct {
+	WidgetID uint   `json:"widget_id"`
+	ItemID   string `json:"item_id"`
+	Title    string `json:"title" doc:"The item's current title; empty once it is removed from the home screen"`
+	Clicks   int64  `json:"clicks"`
 }
 
 type ChatAnalyticDay struct {

@@ -508,6 +508,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		r.h.chatWidget = handlers.NewChatWidgetHandler(chatSvc.Repo(), auditLogger, cfg.PublicAPIURL(), cfg.ChatMaxMessageBytes)
 		r.h.chatWidget.SetDomains(domainRepo)
 		r.h.chatWidget.SetEdition(edition)
+		r.h.chatWidget.SetService(chatSvc)
 		chatSvc.SetLicensed(edition.Licensed)
 		if cfg.PlanEnforcement {
 			r.h.chatWidget.SetQuota(planService, db)
@@ -529,6 +530,7 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		}
 		r.h.chatVisitor = handlers.NewChatVisitorHandler(chatSvc,
 			inbound.NewIPRateLimiter(cfg.ChatIPRateLimit, time.Hour))
+		r.h.chatVisitor.SetEdition(edition)
 	}
 
 	// Unified inbox over whichever conversation sources are enabled.

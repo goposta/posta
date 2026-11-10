@@ -97,6 +97,34 @@ func (b BusinessHours) Open(t time.Time) bool {
 	return false
 }
 
+// NextOpen is the next start of a staffed range after t; false when the hours never open.
+func (b BusinessHours) NextOpen(t time.Time) (time.Time, bool) {
+	loc, err := b.location()
+	if err != nil || len(b.Days) == 0 {
+		return time.Time{}, false
+	}
+	local := t.In(loc)
+	var best time.Time
+	for offset := 0; offset <= 7; offset++ {
+		day := time.Date(local.Year(), local.Month(), local.Day()+offset, 0, 0, 0, 0, loc)
+		for _, r := range b.Days {
+			if r.Day != int(day.Weekday()) {
+				continue
+			}
+			from, _ := clockMinutes(r.From)
+			// Built from wall-clock fields so a DST change that day moves the instant, not the opening time.
+			start := time.Date(day.Year(), day.Month(), day.Day(), from/60, from%60, 0, 0, loc)
+			if start.After(t) && (best.IsZero() || start.Before(best)) {
+				best = start
+			}
+		}
+		if !best.IsZero() {
+			return best, true
+		}
+	}
+	return time.Time{}, false
+}
+
 func (b BusinessHours) location() (*time.Location, error) {
 	if b.Timezone == "" {
 		return time.UTC, nil

@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
-import { HelpLink, Home as HomeConfig, HomeItem, Summary } from './api'
-import { Strings } from './i18n'
+import { HelpLink, Home as HomeConfig, HomeItem, StatusLine, Summary } from './api'
+import { backText, namesText, Strings } from './i18n'
 import { opensNewTab, safeHref } from './links'
 import { View } from './storage'
 
@@ -31,31 +31,70 @@ export interface HomeProps {
   greeting?: string
   online: boolean
   canContinue: boolean
+  newChats: boolean
+  status?: StatusLine
   t: Strings
+  asset(path?: string): string | undefined
+  onTrack(id: string): void
   onMessage(): void
   onClose(): void
 }
 
-export function HomeView({ home, greeting, online, canContinue, t, onMessage, onClose }: HomeProps) {
+function statusText(t: Strings, online: boolean, newChats: boolean, s?: StatusLine): string {
+  if (online) {
+    const r = s?.reply_time
+    return r === 'minutes' ? t.replyMinutes : r === 'hours' ? t.replyHours : r === 'day' ? t.replyDay : ''
+  }
+  if (s?.next_open) return backText(t, s.next_open)
+  return newChats ? t.replyByEmail : t.away
+}
+
+export function HomeView({ home, greeting, online, canContinue, newChats, status, t, asset, onTrack, onMessage, onClose }: HomeProps) {
+  const logo = asset(home.logo_url)
+  const line = statusText(t, online, newChats, status)
+  const agents = online ? status?.agents || [] : []
   return (
     <div class="hv">
       <div class="home-head">
         <button class="x" type="button" aria-label={t.close} onClick={onClose}>
           <Close />
         </button>
+        {logo && <img class="logo" src={logo} alt="" />}
         <h2 tabIndex={-1} data-vh>{greeting || t.title}</h2>
         {home.headline && <p>{home.headline}</p>}
+        {agents.length > 0 && (
+          <div class="agents">
+            <span class="faces" aria-hidden="true">
+              {agents.map((a) => (
+                <span key={a} class="face">{a.slice(0, 1).toUpperCase()}</span>
+              ))}
+            </span>
+            <span>{namesText(t, agents)}</span>
+          </div>
+        )}
+        {line && (
+          <div class={`status ${online ? 'on' : ''}`}>
+            <span class="dot" aria-hidden="true" />
+            {line}
+          </div>
+        )}
       </div>
       <div class="items">
-        {(home.items || []).map((it) => (
-          <Item key={it.id} item={it} online={online} canContinue={canContinue} t={t} onMessage={onMessage} />
+        {(home.items || []).filter((it) => it.kind !== 'message' || newChats || canContinue).map((it) => (
+          <Item key={it.id} item={it} image={asset(it.image_url)} online={online} canContinue={canContinue} t={t}
+            onMessage={() => {
+              onTrack(it.id)
+              onMessage()
+            }}
+            onLink={() => onTrack(it.id)}
+          />
         ))}
       </div>
     </div>
   )
 }
 
-function Item({ item, online, canContinue, t, onMessage }: { item: HomeItem; online: boolean; canContinue: boolean; t: Strings; onMessage(): void }) {
+function Item({ item, image, online, canContinue, t, onMessage, onLink }: { item: HomeItem; image?: string; online: boolean; canContinue: boolean; t: Strings; onMessage(): void; onLink(): void }) {
   if (item.kind === 'message') {
     return (
       <button type="button" class="card" onClick={onMessage}>
@@ -72,7 +111,7 @@ function Item({ item, online, canContinue, t, onMessage }: { item: HomeItem; onl
     if (!href) return null
     const props = linkProps(href, item.new_tab !== false)
     return (
-      <a class="card" href={href} {...props}>
+      <a class="card" href={href} {...props} onClick={onLink}>
         <span class="t">
           <span>{item.title}</span>
           <External />
@@ -84,12 +123,13 @@ function Item({ item, online, canContinue, t, onMessage }: { item: HomeItem; onl
   const props = href ? linkProps(href, item.new_tab !== false) : {}
   return (
     <div class="card">
+      {image && <img class="img" src={image} alt="" />}
       <span class="t">
         <span>{item.title}</span>
       </span>
       {item.body && <span class="b">{item.body}</span>}
       {href && (
-        <a class="l" href={href} {...props}>
+        <a class="l" href={href} {...props} onClick={onLink}>
           {item.link_label || item.title} →{props.target && <span class="sr"> {t.newTab}</span>}
         </a>
       )}
@@ -106,16 +146,24 @@ function when(iso: string): string {
 
 export interface MessagesProps {
   list: Summary[] | null
+  canStartNew: boolean
+  newChats: boolean
   t: Strings
   onOpen(c: Summary): void
   onNew(): void
 }
 
-export function MessagesView({ list, t, onOpen, onNew }: MessagesProps) {
+export function MessagesView({ list, canStartNew, newChats, t, onOpen, onNew }: MessagesProps) {
   return (
     <div class="hv">
       <h2 class="vh" tabIndex={-1} data-vh>{t.messages}</h2>
       {list && list.length > 0 ? (
+        <>
+        {canStartNew && newChats && (
+          <button type="button" class="newc" onClick={onNew}>
+            {t.newConversation}
+          </button>
+        )}
         <ul class="list">
           {list.map((c) => (
             <li key={c.id}>
@@ -135,19 +183,22 @@ export function MessagesView({ list, t, onOpen, onNew }: MessagesProps) {
             </li>
           ))}
         </ul>
+        </>
       ) : (
         <div class="empty">
           {list && <span>{t.noConversations}</span>}
-          <button type="button" class="newc" onClick={onNew}>
-            {t.sendMessage}
-          </button>
+          {newChats && (
+            <button type="button" class="newc" onClick={onNew}>
+              {t.sendMessage}
+            </button>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-export function HelpView({ title, links, t }: { title?: string; links: HelpLink[]; t: Strings }) {
+export function HelpView({ title, links, t, onTrack }: { title?: string; links: HelpLink[]; t: Strings; onTrack(id: string): void }) {
   const [q, setQ] = useState('')
   const needle = q.trim().toLowerCase()
   const shown = needle
@@ -173,7 +224,7 @@ export function HelpView({ title, links, t }: { title?: string; links: HelpLink[
           const props = linkProps(href, true)
           return (
             <li key={l.id}>
-              <a class="link" href={href} {...props}>
+              <a class="link" href={href} {...props} onClick={() => onTrack(l.id)}>
                 <span class="m">
                   <span>{l.title}</span>
                   {l.description && <span class="w">{l.description}</span>}

@@ -31,24 +31,41 @@ const (
 	ChatHomeItemCard    = "card"
 )
 
+func (h ChatHome) AssetIDs() []string {
+	var ids []string
+	if h.LogoAsset != "" {
+		ids = append(ids, h.LogoAsset)
+	}
+	for _, it := range h.Items {
+		if it.ImageAsset != "" {
+			ids = append(ids, it.ImageAsset)
+		}
+	}
+	return ids
+}
+
 // ChatHome is the widget's home screen and menu; all text is plain and rendered as text nodes on the customer's page.
 type ChatHome struct {
-	Enabled     bool           `json:"enabled" doc:"Show a home screen with a tab bar; off keeps the single chat thread"`
-	HeaderColor string         `json:"header_color,omitempty" doc:"#RRGGBB background of the home header; the text colour is picked for contrast"`
-	Headline    string         `json:"headline,omitempty" doc:"Second line of the home header, under the greeting" example:"How can we help?"`
-	Items       []ChatHomeItem `json:"items,omitempty" doc:"Home screen items in order; at most 12, and at most one message item"`
-	HelpTitle   string         `json:"help_title,omitempty" doc:"Heading of the Help tab"`
-	HelpLinks   []ChatLink     `json:"help_links,omitempty" doc:"Links listed on the Help tab; at most 30. No links hides the tab."`
+	Enabled       bool           `json:"enabled" doc:"Show a home screen with a tab bar; off keeps the single chat thread"`
+	LogoAsset     string         `json:"logo_asset,omitempty" doc:"ID of an uploaded widget asset shown in the home header"`
+	HeaderColor   string         `json:"header_color,omitempty" doc:"#RRGGBB background of the home header; the text colour is picked for contrast"`
+	Headline      string         `json:"headline,omitempty" doc:"Second line of the home header, under the greeting" example:"How can we help?"`
+	ShowReplyTime bool           `json:"show_reply_time" doc:"Show the typical reply time while online, from the last 30 days"`
+	ShowAgents    bool           `json:"show_agents" doc:"Show the first names of up to three online agents; needs show_agent_names"`
+	Items         []ChatHomeItem `json:"items,omitempty" doc:"Home screen items in order; at most 12, and at most one message item"`
+	HelpTitle     string         `json:"help_title,omitempty" doc:"Heading of the Help tab"`
+	HelpLinks     []ChatLink     `json:"help_links,omitempty" doc:"Links listed on the Help tab; at most 30. No links hides the tab."`
 }
 
 type ChatHomeItem struct {
-	ID        string `json:"id" doc:"Stable short ID; generated when empty"`
-	Kind      string `json:"kind" enum:"message,link,card"`
-	Title     string `json:"title" doc:"At most 80 characters; required for link and card items"`
-	Body      string `json:"body,omitempty" doc:"Card text, at most 280 characters"`
-	URL       string `json:"url,omitempty" doc:"https, http, mailto or tel URL; required for link items"`
-	LinkLabel string `json:"link_label,omitempty" doc:"Card link text, e.g. See the dates"`
-	NewTab    bool   `json:"new_tab" doc:"Open the link in a new tab"`
+	ID         string `json:"id" doc:"Stable short ID; generated when empty"`
+	Kind       string `json:"kind" enum:"message,link,card"`
+	Title      string `json:"title" doc:"At most 80 characters; required for link and card items"`
+	Body       string `json:"body,omitempty" doc:"Card text, at most 280 characters"`
+	URL        string `json:"url,omitempty" doc:"https, http, mailto or tel URL; required for link items"`
+	LinkLabel  string `json:"link_label,omitempty" doc:"Card link text, e.g. See the dates"`
+	ImageAsset string `json:"image_asset,omitempty" doc:"Card only: ID of an uploaded widget asset shown above the title"`
+	NewTab     bool   `json:"new_tab" doc:"Open the link in a new tab"`
 }
 
 type ChatLink struct {

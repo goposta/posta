@@ -34,20 +34,67 @@ func TestChatAutoAssignNeedsALicenseToChange(t *testing.T) {
 	on, off, five, zero := true, false, 5, 0
 
 	var gate enterprise.GateError
-	if err := h.requireAutoAssign(w, chatWidgetSettings{AutoAssign: &on}); !errors.As(err, &gate) || gate.HTTPStatus() != 402 {
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{AutoAssign: &on}); !errors.As(err, &gate) || gate.HTTPStatus() != 402 {
 		t.Fatalf("turning auto-assign on in Community: err = %v, want a 402 gate error", err)
 	}
-	if err := h.requireAutoAssign(w, chatWidgetSettings{MaxOpenPerAgent: &five}); err == nil {
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{MaxOpenPerAgent: &five}); err == nil {
 		t.Fatal("changing the per-agent cap in Community was allowed")
 	}
-	if err := h.requireAutoAssign(w, chatWidgetSettings{AutoAssign: &off, MaxOpenPerAgent: &zero}); err != nil {
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{AutoAssign: &off, MaxOpenPerAgent: &zero}); err != nil {
 		t.Fatalf("resending the stored values was refused: %v", err)
 	}
-	if err := h.requireAutoAssign(w, chatWidgetSettings{}); err != nil {
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{}); err != nil {
 		t.Fatalf("a save without auto-assign fields was refused: %v", err)
 	}
 	// No edition wired at all behaves as Community.
-	if err := (&ChatWidgetHandler{}).requireAutoAssign(w, chatWidgetSettings{AutoAssign: &on}); err == nil {
+	if err := (&ChatWidgetHandler{}).requireEnterpriseSettings(w, chatWidgetSettings{AutoAssign: &on}); err == nil {
 		t.Fatal("a handler without an edition allowed auto-assign")
+	}
+}
+
+func TestChatTeaserNeedsALicenseToChange(t *testing.T) {
+	h := &ChatWidgetHandler{edition: enterprise.Community()}
+	stored := models.ChatTeaser{Enabled: true, Text: "Questions about pricing?", DelaySeconds: 5, Paths: []string{"/pricing"}}
+	w := &models.ChatWidget{Teaser: stored}
+	same := stored
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{Teaser: &same}); err != nil {
+		t.Fatalf("resending the stored teaser was refused: %v", err)
+	}
+	changed := stored
+	changed.Text = "Need help?"
+	var gate enterprise.GateError
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{Teaser: &changed}); !errors.As(err, &gate) || gate.HTTPStatus() != 402 {
+		t.Fatalf("changing the teaser in Community: err = %v, want a 402 gate error", err)
+	}
+}
+
+func TestChatHomeHoursAndEmailRepliesNeedALicenseToChange(t *testing.T) {
+	h := &ChatWidgetHandler{edition: enterprise.Community()}
+	w := &models.ChatWidget{
+		Home:          models.DefaultChatHome(),
+		BusinessHours: models.BusinessHours{Timezone: "Europe/Paris", Days: []models.HoursRange{{Day: 1, From: "09:00", To: "17:00"}}},
+		ReplyFrom:     "support@example.com",
+	}
+	sameHome := models.DefaultChatHome()
+	sameHome.HelpLinks = []models.ChatLink{}
+	sameHours := models.BusinessHours{Timezone: "Europe/Paris", Days: []models.HoursRange{{Day: 1, From: "09:00", To: "17:00"}}}
+	sameFrom := " Support@Example.com "
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{Home: &sameHome, BusinessHours: &sameHours, ReplyFrom: &sameFrom}); err != nil {
+		t.Fatalf("resending the stored values was refused: %v", err)
+	}
+
+	home := models.DefaultChatHome()
+	home.Headline = "Questions?"
+	hours := models.BusinessHours{}
+	from := "hello@example.com"
+	for name, s := range map[string]chatWidgetSettings{
+		"home":           {Home: &home},
+		"business hours": {BusinessHours: &hours},
+		"reply sender":   {ReplyFrom: &from},
+	} {
+		var gate enterprise.GateError
+		if err := h.requireEnterpriseSettings(w, s); !errors.As(err, &gate) || gate.HTTPStatus() != 402 {
+			t.Errorf("changing the %s in Community: err = %v, want a 402 gate error", name, err)
+		}
 	}
 }

@@ -8,6 +8,10 @@ import type {
   ChatVisitorContext,
   ChatBusinessHours,
   ChatHome,
+  ChatTheme,
+  ChatLauncher,
+  ChatTeaser,
+  ChatWidgetAsset,
   ChatConversation,
   ChatMessage,
   ChatOfflineMode,
@@ -39,6 +43,10 @@ export interface ChatWidgetPayload {
   avatar_url?: string
   show_agent_names?: boolean
   home?: ChatHome
+  theme?: ChatTheme
+  launcher?: ChatLauncher
+  teaser?: ChatTeaser
+  one_open_conversation?: boolean
   require_name?: boolean
   require_email?: boolean
   business_hours?: ChatBusinessHours
@@ -87,6 +95,19 @@ export const chatWidgetsApi = {
   },
   update(id: number, payload: ChatWidgetPayload) {
     return api.put<ApiResponse<ChatWidget>>(`/workspaces/current/chat-widgets/${id}`, payload)
+  },
+  assets(id: number) {
+    return api.get<ApiResponse<ChatWidgetAsset[]>>(`/workspaces/current/chat-widgets/${id}/assets`)
+  },
+  uploadAsset(id: number, file: File) {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<ApiResponse<ChatWidgetAsset>>(`/workspaces/current/chat-widgets/${id}/assets`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  deleteAsset(id: number, asset: string) {
+    return api.delete<ApiResponse<void>>(`/workspaces/current/chat-widgets/${id}/assets/${asset}`)
   },
   delete(id: number) {
     return api.delete<ApiResponse<void>>(`/workspaces/current/chat-widgets/${id}`)

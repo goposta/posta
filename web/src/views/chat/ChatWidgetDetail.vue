@@ -3,16 +3,19 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import NameField from "../../components/NameField.vue";
 import ChatHomeEditor from "./ChatHomeEditor.vue";
-import { cloneHome, homeError } from "./chatHome";
+import EnterpriseLock from "../../components/EnterpriseLock.vue";
+import { timezoneOptions } from "../../composables/timezones";
+import ChatWidgetPreview, { type PreviewConfig } from "./ChatWidgetPreview.vue";
+import { assetPath, cloneHome, homeError } from "./chatHome";
 import { chatWidgetsApi } from "../../api/chat";
-import type { ChatHome, ChatHoursRange, ChatWidget, ChatWidgetSnippet } from "../../api/types";
+import type { ChatHome, ChatHoursRange, ChatLauncher, ChatTeaser, ChatWidget, ChatWidgetAsset, ChatWidgetSnippet } from "../../api/types";
 import { useNotificationStore } from "../../stores/notification";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { apiMessage } from "../../composables/apiError";
 import { useConfirm } from "../../composables/useConfirm";
 import { useLicenseStore } from "../../stores/license";
 
-// Auto-assign is Posta Enterprise: read-only without a license that allows changes.
+// The home screen, business hours, email replies, teaser and auto-assign are Posta Enterprise: read-only without a license that allows changes.
 const license = useLicenseStore();
 license.load();
 
@@ -28,12 +31,31 @@ const saving = ref(false);
 const loadFailed = ref(false);
 const widget = ref<ChatWidget | null>(null);
 const home = ref<ChatHome>(cloneHome(null));
+const assets = ref<ChatWidgetAsset[]>([]);
+const launcher = ref<Required<ChatLauncher>>({ label: "", icon: "", offset_x: 0, offset_y: 0, hide_on_mobile: false });
+const teaser = ref<ChatTeaser>({ enabled: false, text: "", delay_seconds: 5, paths: [] });
+const teaserPaths = ref("");
+
+function loadLauncher(w: ChatWidget) {
+  const l = w.launcher ?? {};
+  launcher.value = {
+    label: l.label ?? "",
+    icon: l.icon || "",
+    offset_x: l.offset_x ?? 0,
+    offset_y: l.offset_y ?? 0,
+    hide_on_mobile: !!l.hide_on_mobile,
+  };
+  const t = w.teaser;
+  teaser.value = { enabled: !!t?.enabled, text: t?.text ?? "", delay_seconds: t?.delay_seconds ?? 0, paths: t?.paths ?? [] };
+  teaserPaths.value = (t?.paths ?? []).join(", ");
+}
 const snippet = ref<ChatWidgetSnippet | null>(null);
 const originsText = ref("");
 
 // Availability: business hours are edited as rows; no rows means always.
 const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const timezone = ref(browserZone);
+const timezones = computed(() => timezoneOptions(timezone.value));
 const hours = ref<ChatHoursRange[]>([]);
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
@@ -97,10 +119,34 @@ const accentPicker = computed({
     if (widget.value) widget.value.accent_color = v;
   },
 });
-// The preview is drawn by the dashboard, not the widget script; its accent custom property is validated above before use.
-const previewStyle = computed(() => ({
-  "--chat-accent": accentValid.value && widget.value?.accent_color ? widget.value.accent_color : DEFAULT_ACCENT,
-}));
+const previewConfig = computed<PreviewConfig>(() => {
+  const w = widget.value!;
+  const h = home.value;
+  const offline = previewOffline.value;
+  return {
+    enabled: true,
+    online: !offline,
+    title: w.title,
+    greeting: offline && w.offline_greeting ? w.offline_greeting : w.greeting,
+    accent_color: accentValid.value ? w.accent_color : "",
+    position: w.position,
+    avatar_url: avatarValid.value ? w.avatar_url : "",
+    require_email: offline || w.require_email,
+    theme: w.theme,
+    one_open_conversation: w.one_open_conversation,
+    status: offline
+      ? undefined
+      : { reply_time: h.show_reply_time ? "minutes" : undefined, agents: h.show_agents && w.show_agent_names ? ["Jane", "Bob"] : undefined },
+    new_chats: offline && w.offline_mode === "hide" ? false : undefined,
+    home: h.enabled && license.licensed
+      ? {
+          ...h,
+          logo_url: assetPath(h.logo_asset),
+          items: (h.items ?? []).map((i) => ({ ...i, image_url: assetPath(i.image_asset) })),
+        }
+      : undefined,
+  };
+});
 
 function withOrigin(s: ChatWidgetSnippet): ChatWidgetSnippet {
   if (!s.script_url.startsWith("/")) return s;
@@ -111,12 +157,14 @@ function withOrigin(s: ChatWidgetSnippet): ChatWidgetSnippet {
 async function load() {
   loading.value = true;
   try {
-    const [w, sn] = await Promise.all([chatWidgetsApi.get(id), chatWidgetsApi.snippet(id)]);
+    const [w, sn, as] = await Promise.all([chatWidgetsApi.get(id), chatWidgetsApi.snippet(id), chatWidgetsApi.assets(id)]);
+    assets.value = as.data.data ?? [];
     widget.value = w.data.data;
     snippet.value = withOrigin(sn.data.data);
     originsText.value = (widget.value.allowed_origins ?? []).join(", ");
     loadAvailability(widget.value);
     home.value = cloneHome(widget.value.home);
+    loadLauncher(widget.value);
   } catch {
     loadFailed.value = true;
   } finally {
@@ -164,6 +212,14 @@ async function save() {
       avatar_url: w.avatar_url.trim(),
       show_agent_names: w.show_agent_names,
       home: home.value,
+      theme: w.theme,
+      launcher: {
+        ...launcher.value,
+        offset_x: Math.max(0, Number(launcher.value.offset_x) || 0),
+        offset_y: Math.max(0, Number(launcher.value.offset_y) || 0),
+      },
+      teaser: { ...teaser.value, delay_seconds: Math.max(0, Number(teaser.value.delay_seconds) || 0), paths: splitList(teaserPaths.value) },
+      one_open_conversation: w.one_open_conversation,
       allowed_origins: splitList(originsText.value),
       strict_origin: w.strict_origin,
       require_name: w.require_name,
@@ -187,6 +243,7 @@ async function save() {
     originsText.value = (widget.value.allowed_origins ?? []).join(", ");
     loadAvailability(widget.value);
     home.value = cloneHome(widget.value.home);
+    loadLauncher(widget.value);
     notify.success("Chat widget saved.");
   } catch (e: any) {
     notify.error(apiMessage(e, "Failed to save chat widget"));
@@ -359,7 +416,7 @@ function copy(text: string) {
               <label class="form-label">Greeting</label>
               <textarea v-model="widget.greeting" class="form-input" rows="3" maxlength="500"
                 placeholder="Hi! How can we help?"></textarea>
-              <small class="muted">The first line visitors see when they open the chat.</small>
+              <small class="muted">The first line visitors see when they open the chat. <code>{name}</code> becomes the visitor's first name when it is known, and disappears otherwise.</small>
             </div>
             <div class="form-group">
               <label class="form-label">Accent colour</label>
@@ -377,10 +434,18 @@ function copy(text: string) {
               </select>
             </div>
             <div class="form-group">
+              <label class="form-label" for="widget-theme">Theme</label>
+              <select id="widget-theme" v-model="widget.theme" class="form-select">
+                <option value="auto">Follow the visitor's system</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label class="form-label">Avatar URL</label>
               <input v-model="widget.avatar_url" class="form-input" placeholder="https://example.com/logo.png" />
               <small v-if="!avatarValid" class="field-error">Must be an https:// URL.</small>
-              <small v-else class="muted">Shown in the panel header. https only.</small>
+              <small v-else class="muted">Shown in the chat header. https only. For the home screen, upload a logo on the Home tab instead: it is served from Posta.</small>
             </div>
             <div class="form-group">
               <label class="checkbox-label">
@@ -388,59 +453,118 @@ function copy(text: string) {
                 Show visitors the name of the agent answering
               </label>
             </div>
-          </div>
-        </div>
 
-        <div class="card">
-          <div class="card-header"><h2>Preview</h2></div>
-          <div class="card-body">
-            <div class="preview-page" :class="`pos-${widget.position}`" :style="previewStyle">
-              <div class="preview-panel">
-                <div class="preview-header">
-                  <img v-if="avatarValid && widget.avatar_url" :src="widget.avatar_url" alt="" class="preview-avatar" />
-                  <span>{{ widget.title || "Chat with us" }}</span>
-                </div>
-                <div class="preview-body">
-                  <div class="preview-bubble preview-agent">
-                    {{ previewOffline ? widget.offline_greeting || widget.greeting || "Hi! How can we help?" : widget.greeting || "Hi! How can we help?" }}
-                  </div>
-                  <div v-if="!previewOffline" class="preview-bubble preview-visitor">Do you ship to Canada?</div>
-                </div>
-                <div v-if="previewOffline" class="preview-composer">Your email</div>
-                <div class="preview-composer">Type a message…</div>
+            <h3 class="section-title">Button</h3>
+            <div class="form-group">
+              <label class="form-label" for="launcher-label">Label</label>
+              <input id="launcher-label" v-model="launcher.label" class="form-input" maxlength="40" placeholder="Need help?" />
+              <small class="muted">Shown next to the closed button. Blank shows the button alone.</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="launcher-icon">Icon</label>
+              <select id="launcher-icon" v-model="launcher.icon" class="form-select">
+                <option value="">Chat bubble</option>
+                <option value="help">Question mark</option>
+                <option value="mail">Envelope</option>
+              </select>
+            </div>
+            <div class="offset-grid">
+              <div class="form-group">
+                <label class="form-label" for="launcher-x">From the side (px)</label>
+                <input id="launcher-x" v-model.number="launcher.offset_x" type="number" min="0" max="200" class="form-input" placeholder="20" />
               </div>
-              <div class="preview-launcher" aria-hidden="true">
-                <svg width="22" height="22" viewBox="0 0 18 18" fill="none">
-                  <path d="M15.75 11.25a1.5 1.5 0 01-1.5 1.5H5.25L2.25 15.75V3.75a1.5 1.5 0 011.5-1.5h10.5a1.5 1.5 0 011.5 1.5v7.5z"
-                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
+              <div class="form-group">
+                <label class="form-label" for="launcher-y">From the bottom (px)</label>
+                <input id="launcher-y" v-model.number="launcher.offset_y" type="number" min="0" max="200" class="form-input" placeholder="20" />
               </div>
             </div>
-            <label class="checkbox-label" style="margin: 8px 0">
-              <input v-model="previewOffline" type="checkbox" />
-              Show as offline (no agent online, or outside business hours)
-            </label>
-            <small class="muted">An approximation; the real widget follows the visitor's language and screen size.</small>
+            <small class="muted">0 keeps the default of 20 pixels. Raise it to clear a cookie banner or another floating button.</small>
+            <div class="form-group" style="margin-top: 12px">
+              <label class="checkbox-label">
+                <input v-model="launcher.hide_on_mobile" type="checkbox" />
+                Hide the button on phones
+              </label>
+              <small class="muted">Links with <code>data-posta-chat-open</code> and <code>PostaChat.open()</code> still open the chat.</small>
+            </div>
+
+            <h3 class="section-title">Teaser</h3>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input v-model="teaser.enabled" type="checkbox" :disabled="!license.mutable" />
+                Show a message bubble over the closed button
+              </label>
+              <small v-if="!license.licensed" class="muted">The teaser is part of Posta Enterprise.</small>
+              <small v-else-if="license.readOnly" class="muted">The Enterprise license has expired: the teaser keeps showing, but can't be changed until it is renewed.</small>
+            </div>
+            <template v-if="teaser.enabled">
+              <div class="form-group">
+                <label class="form-label" for="teaser-text">Text</label>
+                <input id="teaser-text" v-model="teaser.text" class="form-input" maxlength="140" :disabled="!license.mutable"
+                  placeholder="Questions about our plans? We're here." />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="teaser-delay">Show after (seconds)</label>
+                <input id="teaser-delay" v-model.number="teaser.delay_seconds" type="number" min="0" max="120" class="form-input" :disabled="!license.mutable" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="teaser-paths">On pages</label>
+                <input id="teaser-paths" v-model="teaserPaths" class="form-input" :disabled="!license.mutable" placeholder="/pricing, /docs/*" />
+                <small class="muted">Comma separated paths; end one with <code>*</code> to match everything under it. Blank shows it on every page. A visitor who closes it doesn't see it again until you change the text.</small>
+              </div>
+            </template>
           </div>
         </div>
+
+        <ChatWidgetPreview :config="previewConfig" :home-enabled="home.enabled && license.licensed"
+          :help-visible="!!home.help_links?.length">
+          <label class="checkbox-label" style="margin: 8px 0">
+            <input v-model="previewOffline" type="checkbox" />
+            Show as offline (no agent online, or outside business hours)
+          </label>
+        </ChatWidgetPreview>
       </div>
 
-      <div v-show="tab === 'home'" style="margin-bottom: 20px">
-        <ChatHomeEditor v-model="home" :accent="accentPicker" :disabled="!wsStore.canEdit" />
+      <div v-show="tab === 'home'" class="appearance-grid" style="margin-bottom: 20px">
+        <div class="home-col">
+          <EnterpriseLock feature="The home screen"
+            description="Greet visitors with your logo, links, cards and a help center before they start a chat.">
+            <ChatHomeEditor v-model="home" v-model:assets="assets" :widget-id="widget.id" :accent="accentPicker"
+              :disabled="!wsStore.canEdit || !license.mutable" />
+          </EnterpriseLock>
+          <div class="card">
+            <div class="card-header"><h2>Conversations</h2></div>
+            <div class="card-body">
+              <label class="checkbox-label">
+                <input v-model="widget.one_open_conversation" type="checkbox" />
+                Visitors can have one open conversation at a time
+              </label>
+              <small class="muted">Turn it off to let visitors start a new conversation from the Messages tab while another is open.</small>
+            </div>
+          </div>
+        </div>
+        <ChatWidgetPreview v-if="tab === 'home'" :config="previewConfig" :home-enabled="home.enabled && license.licensed"
+          :help-visible="!!home.help_links?.length" />
       </div>
 
       <div v-show="tab === 'availability'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Availability</h2></div>
         <div class="card-body">
-          <p class="muted" style="margin-top: 0">
+          <p v-if="license.licensed" class="muted" style="margin-top: 0">
             The widget is online when at least one agent has set themselves online and the time is within business hours.
           </p>
+          <p v-else class="muted" style="margin-top: 0">
+            The widget is online when at least one agent has set themselves online. Business hours and emailed replies are
+            part of Posta Enterprise.
+          </p>
 
-          <h3 class="section-title">Business hours</h3>
+          <h3 class="section-title">Business hours <span class="ee-badge">Enterprise</span></h3>
+          <small v-if="license.readOnly" class="muted">The Enterprise license has expired: business hours keep applying, but can't be changed until it is renewed.</small>
+          <fieldset :disabled="!license.mutable" class="plain-fieldset">
           <div class="form-group">
             <label class="form-label">Time zone</label>
-            <input v-model="timezone" class="form-input" placeholder="Europe/Paris" />
-            <small class="muted">An IANA time zone, such as Europe/Paris or America/New_York.</small>
+            <select v-model="timezone" class="form-select">
+              <option v-for="tz in timezones" :key="tz.value" :value="tz.value">{{ tz.label }}</option>
+            </select>
           </div>
           <p v-if="!hours.length" class="muted">Always available: no hours set.</p>
           <div v-for="(r, i) in hours" :key="i" class="hours-row">
@@ -456,17 +580,19 @@ function copy(text: string) {
           <div style="margin-top: 8px">
             <button class="btn btn-secondary btn-sm" type="button" @click="addHours">Add hours</button>
           </div>
+          </fieldset>
 
           <h3 class="section-title">When no one is available</h3>
           <div class="form-group">
             <label class="checkbox-label">
               <input v-model="widget.offline_mode" type="radio" value="email" />
-              Take messages and reply by email (visitors must give their email)
+              Take messages<template v-if="license.licensed"> and reply by email</template> (visitors must give their email)
             </label>
             <label class="checkbox-label">
               <input v-model="widget.offline_mode" type="radio" value="hide" />
               Hide the widget
             </label>
+            <small v-if="license.licensed" class="muted">With a home screen, visitors who already have a conversation can still open it and read replies; no one can start a new chat.</small>
           </div>
           <div class="form-group">
             <label class="form-label">Offline greeting</label>
@@ -475,7 +601,9 @@ function copy(text: string) {
             <small class="muted">Shown instead of the greeting while the widget is offline. Blank keeps the greeting.</small>
           </div>
 
-          <h3 class="section-title">Replies to visitors who left</h3>
+          <h3 class="section-title">Replies to visitors who left <span class="ee-badge">Enterprise</span></h3>
+          <small v-if="license.readOnly" class="muted">The Enterprise license has expired: replies keep going by email, but the sender can't be changed until it is renewed.</small>
+          <fieldset :disabled="!license.mutable" class="plain-fieldset">
           <div class="form-group">
             <label class="form-label">Reply from (email)</label>
             <input v-model="widget.reply_from" type="email" class="form-input" placeholder="support@example.com" />
@@ -488,6 +616,7 @@ function copy(text: string) {
             <label class="form-label">Reply from (name)</label>
             <input v-model="widget.reply_from_name" class="form-input" maxlength="80" placeholder="Acme Support" />
           </div>
+          </fieldset>
         </div>
       </div>
 
@@ -644,7 +773,7 @@ function copy(text: string) {
           <p class="muted" style="margin-top: 0">
             Paste this before <code>&lt;/body&gt;</code> on every page that should show the chat.
             If your site sends a Content-Security-Policy, allow this Posta origin in
-            <code>script-src</code> and <code>connect-src</code>.
+            <code>script-src</code> and <code>connect-src</code>, and in <code>img-src</code> when the home screen shows images.
           </p>
           <pre class="snippet">{{ snippet?.html }}</pre>
           <div style="display: flex; gap: 8px; flex-wrap: wrap">
@@ -713,6 +842,15 @@ function copy(text: string) {
   color: var(--danger-600, #dc2626);
 }
 
+.plain-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.plain-fieldset:disabled {
+  opacity: 0.6;
+}
 .hours-row {
   display: grid;
   grid-template-columns: minmax(120px, 160px) minmax(100px, 130px) auto minmax(100px, 130px) auto;
@@ -750,101 +888,15 @@ function copy(text: string) {
   margin: 0 0 12px;
 }
 
-.preview-page {
-  position: relative;
-  height: 380px;
-  border-radius: 10px;
-  background: repeating-linear-gradient(135deg, #f3f4f6 0 12px, #eef0f3 12px 24px);
-  overflow: hidden;
-  margin-bottom: 8px;
+.offset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
-
-.preview-panel {
-  position: absolute;
-  bottom: 76px;
-  width: 260px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
-  overflow: hidden;
+.home-col {
   display: flex;
   flex-direction: column;
-  color: #111827;
-  font-size: 13px;
-}
-
-.preview-launcher {
-  position: absolute;
-  bottom: 16px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--chat-accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
-}
-
-.pos-right .preview-panel,
-.pos-right .preview-launcher {
-  right: 16px;
-}
-
-.pos-left .preview-panel,
-.pos-left .preview-launcher {
-  left: 16px;
-}
-
-.preview-header {
-  background: var(--chat-accent);
-  color: #fff;
-  padding: 12px 14px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.preview-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #fff;
-}
-
-.preview-body {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 140px;
-}
-
-.preview-bubble {
-  max-width: 80%;
-  padding: 8px 10px;
-  border-radius: 10px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.preview-agent {
-  background: #f3f4f6;
-  align-self: flex-start;
-}
-
-.preview-visitor {
-  background: var(--chat-accent);
-  color: #fff;
-  align-self: flex-end;
-}
-
-.preview-composer {
-  border-top: 1px solid #e5e7eb;
-  padding: 10px 12px;
-  color: #9ca3af;
+  gap: 20px;
+  min-width: 0;
 }
 </style>

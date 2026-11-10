@@ -44,11 +44,14 @@ const (
 	homeItemIDLength = 16
 )
 
-var homeItemID = regexp.MustCompile(`^[a-z0-9-]{1,16}$`)
+var (
+	homeItemID = regexp.MustCompile(`^[a-z0-9-]{1,16}$`)
+	assetID    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+)
 
 // NormalizeHome cleans and validates a home screen before it is stored; it ends up on customers' pages.
 func NormalizeHome(h models.ChatHome) (models.ChatHome, error) {
-	out := models.ChatHome{Enabled: h.Enabled}
+	out := models.ChatHome{Enabled: h.Enabled, ShowReplyTime: h.ShowReplyTime, ShowAgents: h.ShowAgents}
 	color := strings.ToLower(strings.TrimSpace(h.HeaderColor))
 	if !ValidAccentColor(color) {
 		return out, fmt.Errorf("home.header_color must be a #RRGGBB colour")
@@ -56,6 +59,9 @@ func NormalizeHome(h models.ChatHome) (models.ChatHome, error) {
 	out.HeaderColor = color
 	out.Headline = CleanLine(h.Headline, homeHeadlineMax)
 	out.HelpTitle = CleanLine(h.HelpTitle, homeTitleMax)
+	if out.LogoAsset = strings.TrimSpace(h.LogoAsset); out.LogoAsset != "" && !assetID.MatchString(out.LogoAsset) {
+		return out, fmt.Errorf("home.logo_asset is not an asset ID")
+	}
 
 	if len(h.Items) > MaxHomeItems {
 		return out, fmt.Errorf("home can have at most %d items", MaxHomeItems)
@@ -128,6 +134,9 @@ func normalizeHomeItem(it models.ChatHomeItem) (models.ChatHomeItem, error) {
 			return item, fmt.Errorf("a link needs a URL")
 		}
 		return item, nil
+	}
+	if item.ImageAsset = strings.TrimSpace(it.ImageAsset); item.ImageAsset != "" && !assetID.MatchString(item.ImageAsset) {
+		return item, fmt.Errorf("image_asset is not an asset ID")
 	}
 	body := CleanBody(it.Body)
 	if len([]rune(body)) > homeBodyMax {

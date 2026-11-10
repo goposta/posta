@@ -2,6 +2,9 @@ import { contrastText } from './links'
 
 // Sites theme it with --posta-chat-* custom properties on any ancestor; the accent arrives as --pc-accent from a second, generated sheet.
 
+const DARK = `--bg:var(--posta-chat-bg,#111827);--fg:var(--posta-chat-text,#f9fafb);
+--mut:var(--posta-chat-muted,#9ca3af);--bd:var(--posta-chat-border,#374151);--in:var(--posta-chat-input-bg,#1f2937);--sub:var(--posta-chat-bubble,#1f2937);--err:#fca5a5`
+
 export const css = `
 :host{all:initial}
 .pc{--a:var(--posta-chat-accent,var(--pc-accent,#7c3aed));--at:var(--posta-chat-accent-text,#fff);
@@ -13,8 +16,10 @@ position:fixed;bottom:20px;right:20px;z-index:var(--posta-chat-z-index,214748300
 font-family:var(--posta-chat-font,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);font-size:14px;line-height:1.45;color:var(--fg);
 display:flex;flex-direction:column;align-items:flex-end;gap:12px}
 .pc.left{right:auto;left:20px;align-items:flex-start}
-@media (prefers-color-scheme:dark){.pc{--bg:var(--posta-chat-bg,#111827);--fg:var(--posta-chat-text,#f9fafb);
---mut:var(--posta-chat-muted,#9ca3af);--bd:var(--posta-chat-border,#374151);--in:var(--posta-chat-input-bg,#1f2937);--sub:var(--posta-chat-bubble,#1f2937);--err:#fca5a5}}
+@media (prefers-color-scheme:dark){.pc:not(.light){${DARK}}}
+.pc.dark{${DARK}}
+.pc.preview{position:absolute}
+.pc.preview .panel{animation:none}
 *{box-sizing:border-box}
 button,input,textarea{font:inherit;color:inherit}
 .launcher{width:56px;height:56px;border-radius:50%;border:0;background:var(--a);color:var(--at);cursor:pointer;
@@ -69,7 +74,16 @@ textarea{flex:1;resize:none;min-height:40px;max-height:120px}
 .home-head .x:hover{background:rgba(127,127,127,.2)}
 .home-head h2{margin:18px 0 0;font-size:22px;font-weight:700;line-height:1.25;white-space:pre-wrap;overflow-wrap:anywhere}
 .home-head p{margin:4px 0 0;font-size:18px;opacity:.85;overflow-wrap:anywhere}
-.home-head img{width:36px;height:36px;border-radius:50%;object-fit:cover}
+.home-head .logo{display:block;max-height:36px;max-width:160px;object-fit:contain}
+.card .img{display:block;width:calc(100% + 28px);margin:-12px -14px 6px;max-height:120px;object-fit:cover;border-radius:12px 12px 0 0}
+.agents{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px}
+.faces{display:flex}
+.face{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;
+background:var(--bg);color:var(--fg);border:2px solid var(--hb);margin-left:-8px}
+.face:first-child{margin-left:0}
+.status{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;opacity:.9}
+.status .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.5}
+.status.on .dot{background:#22c55e;opacity:1}
 .items{padding:14px;display:flex;flex-direction:column;gap:10px}
 .card{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;background:var(--bg);
 color:inherit;text-decoration:none;text-align:left;cursor:pointer;width:100%;box-shadow:0 1px 3px rgba(0,0,0,.06)}
@@ -82,7 +96,7 @@ a.card:hover,button.card:hover{border-color:var(--a)}
 .card .b{white-space:pre-wrap;overflow-wrap:anywhere}
 .card .l{color:var(--a);font-weight:600;font-size:13px}
 .vh{margin:0;padding:16px 16px 4px;font-size:16px;font-weight:600}
-.vh:focus{outline:none}
+.vh:focus,.home-head h2:focus{outline:none}
 .list{list-style:none;margin:0;padding:6px 8px;display:flex;flex-direction:column}
 .conv,.link{display:flex;gap:10px;align-items:center;width:100%;padding:10px;border:0;border-radius:10px;background:none;text-align:left;cursor:pointer;color:inherit;text-decoration:none}
 .conv:hover,.link:hover{background:var(--sub)}
@@ -102,6 +116,15 @@ a.card:hover,button.card:hover{border-color:var(--a)}
 .tab .count{position:absolute;top:3px;left:calc(50% + 6px);min-width:18px;height:18px;font-size:11px}
 .back{background:transparent;border:0;color:inherit;cursor:pointer;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;margin-left:-6px}
 .back:hover{background:rgba(255,255,255,.15)}
+.lrow{display:flex;align-items:center;gap:10px}
+.pc.left .lrow{flex-direction:row-reverse}
+.lbl{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:20px;padding:8px 14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.teaser{position:relative;max-width:260px;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:14px;padding:12px 30px 12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.15);animation:pc-in .18s ease-out}
+.teaser button.tt{all:unset;cursor:pointer;display:block;overflow-wrap:anywhere}
+.teaser .tx{position:absolute;top:6px;right:6px;width:22px;height:22px;border:0;background:none;color:var(--mut);cursor:pointer;border-radius:6px}
+.teaser .tx:hover{background:var(--sub)}
+.lbl:focus-visible,.teaser button:focus-visible{outline:3px solid var(--a);outline-offset:2px}
+@media (max-width:480px){.pc.hidem:not(.opened){display:none}}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (max-width:480px){.pc.opened{inset:0;align-items:stretch}.pc.opened .panel{width:100%;max-width:none;height:100%;max-height:none;border-radius:0}.pc.opened .launcher{display:none}}
 @media (prefers-reduced-motion:reduce){.panel{animation:none}.launcher{transition:none}}
@@ -133,6 +156,14 @@ const ACCENT = /^#[0-9a-fA-F]{6}$/
 // The server already validated the accent; it is checked again because it lands in a stylesheet.
 export function accentSheet(color?: string): string {
   return color && ACCENT.test(color) ? `.pc{--pc-accent:${color}}` : ''
+}
+
+const shift = (n?: number) => (Number.isInteger(n) && n! > 0 && n! <= 200 ? n : 0)
+
+export function launcherSheet(l?: { offset_x?: number; offset_y?: number }, left = false): string {
+  const x = shift(l?.offset_x), y = shift(l?.offset_y)
+  if (!x && !y) return ''
+  return `.pc:not(.preview){bottom:${y || 20}px;${left ? 'left' : 'right'}:${x || 20}px}`
 }
 
 export function headerSheet(color?: string): string {

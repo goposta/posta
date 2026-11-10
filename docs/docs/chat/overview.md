@@ -4,6 +4,8 @@ title: Live chat
 description: Add a chat widget to your website and answer visitors in real time from the Posta dashboard
 ---
 
+import ThemedImage from '@theme/ThemedImage';
+
 # Live Chat
 
 Live chat puts a chat button on your website. Visitors write to you, and your workspace's members answer them in real time from the **Chat** page of the dashboard. Every chat runs through the same spam filters, workspace roles and notifications as the rest of your workspace.
@@ -26,11 +28,19 @@ Only owners and admins manage widgets. Editors and above answer chats; viewers c
 
 ## Home screen and menu
 
+:::info Posta Enterprise
+The home screen, its help links and help center, and the reply time and agents in its header need a Posta Enterprise license. Without one, the widget opens straight into the chat. If a license expires, the home screen keeps showing but can't be changed until renewal.
+:::
+
 A widget can open on a **home screen** instead of going straight into a chat. The home screen greets visitors, points them to answers on your own site, and lets them pick up earlier conversations. A tab bar at the bottom switches between three views:
 
 - **Home:** a header with your greeting and a headline, then your home items in order.
 - **Messages:** the visitor's conversations, newest first, with a count of unread replies.
 - **Help:** a list of links to your help pages. The tab is hidden when you add no links.
+
+<p align="center">
+  <img src="/img/screenshots/chat-widget.png" alt="The chat widget's home screen open on a website, with a logo, the online agents, a message item and a card" width="900" />
+</p>
 
 Home items come in three kinds:
 
@@ -42,11 +52,58 @@ Home items come in three kinds:
 
 A widget can have up to 12 home items and 30 help links. Everything is plain text: Posta never renders HTML from the home screen on your page. Links must use `https:`, `http:`, `mailto:` or `tel:`. Links to other sites open in a new tab unless you turn that off; links to the page's own site stay in the tab, and the chat stays open across the page load.
 
-The header takes your accent colour unless you pick a **header colour**; its text turns white or dark, whichever reads better.
+The header takes your accent colour unless you pick a **header colour**; its text turns white or dark, whichever reads better. You can add a **logo** to the header and an **image** to each card. Images are uploaded to Posta (PNG, JPEG, GIF or WebP, up to 512 KB each) and served from Posta's own origin, so they need no other host in your Content Security Policy. Posta keeps them in blob storage when it is configured, and in its database otherwise. An image the home screen still shows cannot be deleted.
 
-New widgets start with the home screen on and a single message item. Widgets created before the home screen existed keep opening straight into the chat until you turn it on.
+Under the headline, a **status line** says what to expect:
+
+- Online, with **Show the typical reply time** on: *Typically replies in a few minutes* (or hours, or within a day), from the median time to the first reply over the last 30 days. It appears once 10 chats have been answered in that time.
+- Outside business hours: *We're away. Back at 09:00*, or *Back Monday at 09:00*, in the visitor's own time zone.
+- Offline within business hours: *We'll reply by email*.
+
+With **Show the first names of online agents** on, the header also lists up to three agents who are online, as in *Jane, Bob and the team*. Only first names are shown, as initials and text, and only while **Show visitors the name of the agent answering** is on.
+
+The greeting can hold `{name}`. It becomes the visitor's first name when Posta knows it, from a signed identity or a name they gave earlier, and disappears otherwise: `Hi {name} 👋` reads *Hi Jane 👋* or *Hi 👋*.
+
+By default a visitor has one conversation at a time: writing again continues it. Turn off **Visitors can have one open conversation at a time** to give the Messages tab a **New conversation** button, so a visitor can start a separate thread for a separate question.
+
+The **Preview** on the Appearance and Home tabs is the real widget, drawn from your unsaved settings, with a switch for each view and for light and dark.
+
+<ThemedImage
+  alt="The Home tab of a chat widget in the dashboard: the home screen settings beside a live preview of the widget"
+  sources={{
+    light: '/img/screenshots/chat-widget-home.png',
+    dark: '/img/screenshots/chat-widget-home-dark.png',
+  }}
+/>
+
+With a license, new widgets start with the home screen on and a single message item. Widgets created before the home screen existed keep opening straight into the chat until you turn it on.
 
 When a visitor comes back with an unread reply, the button and the **Messages** tab show the count, and opening the panel goes straight to that conversation.
+
+## The chat button
+
+On the **Appearance** tab, under **Button**, you can:
+
+- add a **label** next to the closed button, such as *Need help?*;
+- pick its **icon**: a chat bubble, a question mark or an envelope;
+- move it up to 200 pixels from the side and the bottom, to clear a cookie banner or another floating button;
+- **hide it on phones**. Links with `data-posta-chat-open` and `PostaChat.open()` still open the chat there.
+
+### Teaser
+
+:::info Posta Enterprise
+The teaser needs a Posta Enterprise license.
+:::
+
+A **teaser** is a short message in a bubble over the closed button, such as *Questions about our plans? We're here.* It appears after a delay you choose, only on the pages you list (for example `/pricing`, or `/docs/*` for everything under `/docs/`), or on every page when the list is empty. Clicking it opens the chat. A visitor who closes it doesn't see it again in that browser until you change the text.
+
+### Home clicks
+
+:::info Posta Enterprise
+Click counts need a Posta Enterprise license, like the rest of chat analytics.
+:::
+
+**Chat analytics** lists how often each home item and help link was clicked in the period. The counts are anonymous: Posta stores the item, the widget and the day, and nothing about the visitor, their IP address or the page.
 
 ## Embed it
 
@@ -68,13 +125,16 @@ If your site sends a Content Security Policy, allow your Posta origin for script
 ```
 script-src  https://posta.example.com
 connect-src https://posta.example.com
+img-src     https://posta.example.com
 ```
+
+`img-src` is only needed when the home screen shows a logo or card images.
 
 The widget uses no `eval` and no inline styles on your page. Its styles live inside its own shadow root and are adopted as constructed stylesheets, so it also works under `style-src 'self'`.
 
 ### Theming
 
-The widget takes its accent colour from the widget's settings. To match your site more closely, set any of these CSS custom properties on `body` or another ancestor:
+The widget follows the visitor's light or dark system setting. To force one, set **Theme** to Light or Dark on the Appearance tab. The widget takes its accent colour from the widget's settings. To match your site more closely, set any of these CSS custom properties on `body` or another ancestor:
 
 | Property | What it sets |
 |---|---|
@@ -166,6 +226,10 @@ Turn on **attachments** on the widget's **Settings** tab to let visitors and age
 
 ## Availability
 
+:::info Posta Enterprise
+Business hours need a Posta Enterprise license. Without one, the widget is online whenever an agent is online.
+:::
+
 The widget is **online** when at least one agent is online and the time is inside the widget's **business hours** (set on the **Availability** tab; no hours means always).
 
 Agents set themselves **Online**, **Away** or **Offline** from the dashboard. Only editors and above count. The dashboard keeps an agent online while it is open; an agent whose dashboard has been closed for about a minute counts as offline, so the widget never looks staffed when nobody is there.
@@ -175,7 +239,13 @@ When the widget is offline it either:
 - **takes messages**: visitors see the offline greeting and must give their email before writing; or
 - **hides**: the chat button does not appear.
 
+With **Hide the widget** chosen for when no one is available, a widget with a home screen stays visible to visitors who already have a conversation, so they can read your replies and answer them. It hides for everyone else, and no one can start a new chat until you are back. A widget without a home screen hides for everyone, as before.
+
 ## When a visitor leaves
+
+:::info Posta Enterprise
+Emailed replies need a Posta Enterprise license. Without one, replies wait in the chat until the visitor comes back.
+:::
 
 If a visitor closes the page and does not come back within two minutes, agents' replies go to them **by email**, provided they gave an email address and the widget has a **reply sender** on one of your verified domains. A dashboard banner says when this will happen.
 
