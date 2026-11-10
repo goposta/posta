@@ -197,12 +197,14 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 		return h.disabled(c, widgetReasonOriginNotAllowed)
 	}
 	ctx := c.Request().Context()
+	licensed := h.licensed()
+	homeOn := licensed && w.Home.Enabled
 	online := h.svc.Online(ctx, w)
 	visitor := h.visitor(c, w)
 	var newChats *bool
 	if !online && w.HidesWhenOffline() {
 		// With a home screen, a visitor who already has a conversation keeps reaching it while the widget hides for others.
-		if !w.Home.Enabled || visitor == nil || !h.hasConversations(visitor) {
+		if !homeOn || visitor == nil || !h.hasConversations(visitor) {
 			return h.disabled(c, widgetReasonOffline)
 		}
 		no := false
@@ -218,7 +220,7 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 	}
 	var home *chat.PublicHome
 	var status *ChatStatusLine
-	if w.Home.Enabled {
+	if homeOn {
 		home = chat.ToPublicHome(w.Home)
 		status = h.statusLine(c, w, online)
 	}
@@ -227,7 +229,6 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 		name = chat.FirstName(visitor.Name)
 	}
 	var teaser *models.ChatTeaser
-	licensed := h.licensed()
 	if licensed && w.Teaser.Enabled {
 		teaser = &w.Teaser
 	}
@@ -238,7 +239,7 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 	return ok(c, ChatWidgetConfig{
 		Launcher:        launcher,
 		Teaser:          teaser,
-		TrackClicks:     licensed && w.Home.Enabled,
+		TrackClicks:     homeOn,
 		NewChats:        newChats,
 		Status:          status,
 		VisitorName:     name,

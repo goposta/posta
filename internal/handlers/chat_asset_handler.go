@@ -55,6 +55,9 @@ func (h *ChatWidgetHandler) UploadAsset(c *okapi.Context) error {
 	if err != nil || h.svc == nil {
 		return c.AbortNotFound("chat widget not found")
 	}
+	if err := h.ee().RequireMutable(); err != nil {
+		return licenseAbort(c, err)
+	}
 	r := c.Request()
 	r.Body = http.MaxBytesReader(c.ResponseWriter(), r.Body, chat.MaxWidgetAssetBytes+64<<10)
 	if err := r.ParseMultipartForm(chat.MaxWidgetAssetBytes + 64<<10); err != nil {

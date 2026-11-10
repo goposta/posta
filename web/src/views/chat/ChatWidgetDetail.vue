@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import NameField from "../../components/NameField.vue";
 import ChatHomeEditor from "./ChatHomeEditor.vue";
+import EnterpriseLock from "../../components/EnterpriseLock.vue";
+import { timezoneOptions } from "../../composables/timezones";
 import ChatWidgetPreview, { type PreviewConfig } from "./ChatWidgetPreview.vue";
 import { assetPath, cloneHome, homeError } from "./chatHome";
 import { chatWidgetsApi } from "../../api/chat";
@@ -13,7 +15,7 @@ import { apiMessage } from "../../composables/apiError";
 import { useConfirm } from "../../composables/useConfirm";
 import { useLicenseStore } from "../../stores/license";
 
-// Auto-assign is Posta Enterprise: read-only without a license that allows changes.
+// The home screen, business hours, email replies, teaser and auto-assign are Posta Enterprise: read-only without a license that allows changes.
 const license = useLicenseStore();
 license.load();
 
@@ -53,6 +55,7 @@ const originsText = ref("");
 // Availability: business hours are edited as rows; no rows means always.
 const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const timezone = ref(browserZone);
+const timezones = computed(() => timezoneOptions(timezone.value));
 const hours = ref<ChatHoursRange[]>([]);
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
@@ -135,7 +138,7 @@ const previewConfig = computed<PreviewConfig>(() => {
       ? undefined
       : { reply_time: h.show_reply_time ? "minutes" : undefined, agents: h.show_agents && w.show_agent_names ? ["Jane", "Bob"] : undefined },
     new_chats: offline && w.offline_mode === "hide" ? false : undefined,
-    home: h.enabled
+    home: h.enabled && license.licensed
       ? {
           ...h,
           logo_url: assetPath(h.logo_asset),
@@ -512,7 +515,7 @@ function copy(text: string) {
           </div>
         </div>
 
-        <ChatWidgetPreview :config="previewConfig" :home-enabled="home.enabled"
+        <ChatWidgetPreview :config="previewConfig" :home-enabled="home.enabled && license.licensed"
           :help-visible="!!home.help_links?.length">
           <label class="checkbox-label" style="margin: 8px 0">
             <input v-model="previewOffline" type="checkbox" />
@@ -523,8 +526,11 @@ function copy(text: string) {
 
       <div v-show="tab === 'home'" class="appearance-grid" style="margin-bottom: 20px">
         <div class="home-col">
-          <ChatHomeEditor v-model="home" v-model:assets="assets" :widget-id="widget.id" :accent="accentPicker"
-            :disabled="!wsStore.canEdit" />
+          <EnterpriseLock feature="The home screen"
+            description="Greet visitors with your logo, links, cards and a help center before they start a chat.">
+            <ChatHomeEditor v-model="home" v-model:assets="assets" :widget-id="widget.id" :accent="accentPicker"
+              :disabled="!wsStore.canEdit || !license.mutable" />
+          </EnterpriseLock>
           <div class="card">
             <div class="card-header"><h2>Conversations</h2></div>
             <div class="card-body">
@@ -536,22 +542,29 @@ function copy(text: string) {
             </div>
           </div>
         </div>
-        <ChatWidgetPreview v-if="tab === 'home'" :config="previewConfig" :home-enabled="home.enabled"
+        <ChatWidgetPreview v-if="tab === 'home'" :config="previewConfig" :home-enabled="home.enabled && license.licensed"
           :help-visible="!!home.help_links?.length" />
       </div>
 
       <div v-show="tab === 'availability'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Availability</h2></div>
         <div class="card-body">
-          <p class="muted" style="margin-top: 0">
+          <p v-if="license.licensed" class="muted" style="margin-top: 0">
             The widget is online when at least one agent has set themselves online and the time is within business hours.
           </p>
+          <p v-else class="muted" style="margin-top: 0">
+            The widget is online when at least one agent has set themselves online. Business hours and emailed replies are
+            part of Posta Enterprise.
+          </p>
 
-          <h3 class="section-title">Business hours</h3>
+          <h3 class="section-title">Business hours <span class="ee-badge">Enterprise</span></h3>
+          <small v-if="license.readOnly" class="muted">The Enterprise license has expired: business hours keep applying, but can't be changed until it is renewed.</small>
+          <fieldset :disabled="!license.mutable" class="plain-fieldset">
           <div class="form-group">
             <label class="form-label">Time zone</label>
-            <input v-model="timezone" class="form-input" placeholder="Europe/Paris" />
-            <small class="muted">An IANA time zone, such as Europe/Paris or America/New_York.</small>
+            <select v-model="timezone" class="form-select">
+              <option v-for="tz in timezones" :key="tz.value" :value="tz.value">{{ tz.label }}</option>
+            </select>
           </div>
           <p v-if="!hours.length" class="muted">Always available: no hours set.</p>
           <div v-for="(r, i) in hours" :key="i" class="hours-row">
@@ -567,18 +580,19 @@ function copy(text: string) {
           <div style="margin-top: 8px">
             <button class="btn btn-secondary btn-sm" type="button" @click="addHours">Add hours</button>
           </div>
+          </fieldset>
 
           <h3 class="section-title">When no one is available</h3>
           <div class="form-group">
             <label class="checkbox-label">
               <input v-model="widget.offline_mode" type="radio" value="email" />
-              Take messages and reply by email (visitors must give their email)
+              Take messages<template v-if="license.licensed"> and reply by email</template> (visitors must give their email)
             </label>
             <label class="checkbox-label">
               <input v-model="widget.offline_mode" type="radio" value="hide" />
               Hide the widget
             </label>
-            <small class="muted">With a home screen, visitors who already have a conversation can still open it and read replies; no one can start a new chat.</small>
+            <small v-if="license.licensed" class="muted">With a home screen, visitors who already have a conversation can still open it and read replies; no one can start a new chat.</small>
           </div>
           <div class="form-group">
             <label class="form-label">Offline greeting</label>
@@ -587,7 +601,9 @@ function copy(text: string) {
             <small class="muted">Shown instead of the greeting while the widget is offline. Blank keeps the greeting.</small>
           </div>
 
-          <h3 class="section-title">Replies to visitors who left</h3>
+          <h3 class="section-title">Replies to visitors who left <span class="ee-badge">Enterprise</span></h3>
+          <small v-if="license.readOnly" class="muted">The Enterprise license has expired: replies keep going by email, but the sender can't be changed until it is renewed.</small>
+          <fieldset :disabled="!license.mutable" class="plain-fieldset">
           <div class="form-group">
             <label class="form-label">Reply from (email)</label>
             <input v-model="widget.reply_from" type="email" class="form-input" placeholder="support@example.com" />
@@ -600,6 +616,7 @@ function copy(text: string) {
             <label class="form-label">Reply from (name)</label>
             <input v-model="widget.reply_from_name" class="form-input" maxlength="80" placeholder="Acme Support" />
           </div>
+          </fieldset>
         </div>
       </div>
 
@@ -825,6 +842,15 @@ function copy(text: string) {
   color: var(--danger-600, #dc2626);
 }
 
+.plain-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.plain-fieldset:disabled {
+  opacity: 0.6;
+}
 .hours-row {
   display: grid;
   grid-template-columns: minmax(120px, 160px) minmax(100px, 130px) auto minmax(100px, 130px) auto;

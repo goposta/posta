@@ -28,6 +28,10 @@ Only owners and admins manage widgets. Editors and above answer chats; viewers c
 
 ## Home screen and menu
 
+:::info Posta Enterprise
+The home screen, its help links and help center, and the reply time and agents in its header need a Posta Enterprise license. Without one, the widget opens straight into the chat. If a license expires, the home screen keeps showing but can't be changed until renewal.
+:::
+
 A widget can open on a **home screen** instead of going straight into a chat. The home screen greets visitors, points them to answers on your own site, and lets them pick up earlier conversations. A tab bar at the bottom switches between three views:
 
 - **Home:** a header with your greeting and a headline, then your home items in order.
@@ -72,7 +76,7 @@ The **Preview** on the Appearance and Home tabs is the real widget, drawn from y
   }}
 />
 
-New widgets start with the home screen on and a single message item. Widgets created before the home screen existed keep opening straight into the chat until you turn it on.
+With a license, new widgets start with the home screen on and a single message item. Widgets created before the home screen existed keep opening straight into the chat until you turn it on.
 
 When a visitor comes back with an unread reply, the button and the **Messages** tab show the count, and opening the panel goes straight to that conversation.
 
@@ -222,6 +226,10 @@ Turn on **attachments** on the widget's **Settings** tab to let visitors and age
 
 ## Availability
 
+:::info Posta Enterprise
+Business hours need a Posta Enterprise license. Without one, the widget is online whenever an agent is online.
+:::
+
 The widget is **online** when at least one agent is online and the time is inside the widget's **business hours** (set on the **Availability** tab; no hours means always).
 
 Agents set themselves **Online**, **Away** or **Offline** from the dashboard. Only editors and above count. The dashboard keeps an agent online while it is open; an agent whose dashboard has been closed for about a minute counts as offline, so the widget never looks staffed when nobody is there.
@@ -234,6 +242,10 @@ When the widget is offline it either:
 With **Hide the widget** chosen for when no one is available, a widget with a home screen stays visible to visitors who already have a conversation, so they can read your replies and answer them. It hides for everyone else, and no one can start a new chat until you are back. A widget without a home screen hides for everyone, as before.
 
 ## When a visitor leaves
+
+:::info Posta Enterprise
+Emailed replies need a Posta Enterprise license. Without one, replies wait in the chat until the visitor comes back.
+:::
 
 If a visitor closes the page and does not come back within two minutes, agents' replies go to them **by email**, provided they gave an email address and the widget has a **reply sender** on one of your verified domains. A dashboard banner says when this will happen.
 

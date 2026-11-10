@@ -22,6 +22,8 @@ package chat
 import (
 	"testing"
 	"time"
+
+	"github.com/goposta/posta/internal/models"
 )
 
 func TestReplyBucket(t *testing.T) {
@@ -47,5 +49,19 @@ func TestFirstName(t *testing.T) {
 		if got := FirstName(in); got != want {
 			t.Errorf("%q: got %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Without a license business hours do not apply, so only agent presence decides.
+func TestBusinessHoursNeedALicense(t *testing.T) {
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	w := &models.ChatWidget{BusinessHours: models.BusinessHours{Days: []models.HoursRange{{Day: int(time.Sunday), From: "09:00", To: "17:00"}}}}
+	if !(&Service{}).inHours(w, now) {
+		t.Fatal("an unlicensed widget outside its business hours was held to them")
+	}
+	s := &Service{}
+	s.SetLicensed(func() bool { return true })
+	if s.inHours(w, now) {
+		t.Fatal("a licensed widget outside its business hours was treated as inside them")
 	}
 }

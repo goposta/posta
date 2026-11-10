@@ -20,9 +20,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -61,25 +63,51 @@ func NewChatWidgetHandler(repo *repositories.ChatRepository, auditLogger *audit.
 	}
 }
 
-// SetEdition gates auto-assign and the teaser; without it their settings are refused, as in Community.
+// SetEdition gates the Enterprise chat settings; without it they are refused, as in Community.
 func (h *ChatWidgetHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 
-// requireEnterpriseSettings gates auto-assign and the teaser; unchanged values pass so a client that saves the whole widget keeps working.
+// requireEnterpriseSettings gates the Enterprise chat settings; unchanged values pass so a client that saves the whole widget keeps working.
 func (h *ChatWidgetHandler) requireEnterpriseSettings(w *models.ChatWidget, s chatWidgetSettings) error {
 	changed := (s.AutoAssign != nil && *s.AutoAssign != w.AutoAssign) ||
-		(s.MaxOpenPerAgent != nil && *s.MaxOpenPerAgent != w.MaxOpenPerAgent)
+		(s.MaxOpenPerAgent != nil && *s.MaxOpenPerAgent != w.MaxOpenPerAgent) ||
+		(s.ReplyFrom != nil && strings.ToLower(strings.TrimSpace(*s.ReplyFrom)) != w.ReplyFrom) ||
+		(s.ReplyFromName != nil && chat.CleanLine(*s.ReplyFromName, 80) != w.ReplyFromName) ||
+		(s.BusinessHours != nil && !sameHours(*s.BusinessHours, w.BusinessHours))
 	if s.Teaser != nil {
 		if t, err := chat.NormalizeTeaser(*s.Teaser); err == nil && !reflect.DeepEqual(t, w.Teaser) {
 			changed = true
 		}
 	}
+	if s.Home != nil && !sameHome(*s.Home, w.Home) {
+		changed = true
+	}
 	if !changed {
 		return nil
 	}
+	return h.ee().RequireMutable()
+}
+
+func (h *ChatWidgetHandler) ee() enterprise.EE {
 	if h.edition == nil {
-		return enterprise.Community().RequireMutable()
+		return enterprise.Community()
 	}
-	return h.edition.RequireMutable()
+	return h.edition
+}
+
+// sameHome compares normalized forms, since a stored home and the same home sent back can differ in empty lists.
+func sameHome(a, b models.ChatHome) bool {
+	na, errA := chat.NormalizeHome(a)
+	nb, errB := chat.NormalizeHome(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	ja, _ := json.Marshal(na)
+	jb, _ := json.Marshal(nb)
+	return string(ja) == string(jb)
+}
+
+func sameHours(a, b models.BusinessHours) bool {
+	return strings.TrimSpace(a.Timezone) == strings.TrimSpace(b.Timezone) && slices.Equal(a.Days, b.Days)
 }
 
 // SetQuota enforces the plan's widget limit.
@@ -202,6 +230,8 @@ func (h *ChatWidgetHandler) Create(c *okapi.Context, req *CreateChatWidgetReques
 		LastEditedByID:      &userID,
 	}
 	w.OfflineMode = models.ChatOfflineEmail
+	// The home screen is Enterprise, so an unlicensed widget starts as a single thread.
+	w.Home.Enabled = h.ee().Licensed()
 	if err := h.requireEnterpriseSettings(w, req.Body.chatWidgetSettings); err != nil {
 		return licenseAbort(c, err)
 	}
