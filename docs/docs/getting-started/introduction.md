@@ -26,6 +26,9 @@ description: What is Posta and why use it
 | **Domain Verification** | SPF, DKIM, and DMARC record verification with verified sender enforcement |
 | **Contacts & Suppression** | Contact tracking, segmentation, bounce handling, and automatic suppression lists |
 | **Subscribers & Lists** | Subscriber management with static and dynamic lists, bulk import, and custom fields |
+| **Web Forms** | Contact forms with a shared inbox, spam scoring and replies by email, from a widget, a share link or plain HTML |
+| **Surveys & Signups** | Surveys, registrations and signups kept as responses, summarised per question, with CSV and JSON exports |
+| **Live Chat** | A chat widget for your website with business hours, visitor identity and replies by email once visitors leave |
 | **Campaigns** | Template-based bulk sending with scheduling, A/B testing, throttling, and analytics |
 | **Webhooks & Events** | Real-time HTTP notifications with retry strategies and delivery tracking |
 | **Analytics** | Email delivery metrics, trends, bounce rates, and daily reports |
@@ -48,12 +51,18 @@ Running locally with the default port, that is [http://localhost:9000/docs](http
 ## Architecture
 
 Posta ships as a single binary that runs in two modes: `posta` serves the HTTP
-API, dashboard, and SMTP listeners, while `posta worker` consumes the job queue.
-Both are stateless, with all state in PostgreSQL, Redis, and optional object
-storage, so workers scale out horizontally.
+API, dashboard, website widgets, and SMTP listeners, while `posta worker` consumes
+the job queue. Both are stateless, with all state in PostgreSQL, Redis, and optional
+object storage, so servers and workers scale out horizontally.
 
 See [Architecture](/docs/getting-started/architecture) for the full picture —
-what each process does, how the queues are split, and how to deploy them.
+what each process does, how forms and live chat reach it, how the queues are split,
+and how to deploy them.
+
+## Screenshots
+
+See [Screenshots](/docs/getting-started/screenshots) for a tour of the dashboard,
+the forms and the live chat widget.
 
 ## Next Steps
 
@@ -62,6 +71,7 @@ what each process does, how the queues are split, and how to deploy them.
 - [Configuration](/docs/getting-started/configuration) — Configure environment variables
 - [Quick Start](/docs/getting-started/quickstart) — Send your first email in minutes
 - [Architecture](/docs/getting-started/architecture) — How the pieces fit together and how to deploy them
+- [Screenshots](/docs/getting-started/screenshots) — A tour of the dashboard and the website widgets
 
 ## Community
 

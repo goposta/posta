@@ -245,26 +245,27 @@ replies to the sender. There is no auto-responder.
 ## Architecture
 
 Posta ships as a single binary that runs in two modes: `posta` serves the HTTP API,
-dashboard, and SMTP listeners; `posta worker` consumes the job queue. Both modes are
-stateless — all state lives in the shared PostgreSQL, Redis, and object storage — so you
-can run as many workers as your send volume needs.
+dashboard, website widgets, and SMTP listeners; `posta worker` consumes the job queue. Both
+modes are stateless — all state lives in the shared PostgreSQL, Redis, and object storage —
+so you can run as many servers and workers as your traffic and send volume need.
 
 ```mermaid
 flowchart LR
     App["Your app<br/>REST API / SMTP client"]
     MX["Inbound mail<br/>MX delivery"]
-    Form["Website form<br/>POST /api/v1/f/{key}"]
+    Site["Your website<br/>forms, surveys and signups<br/>live chat widget"]
+    Team["Your team<br/>dashboard · chat inbox"]
 
     subgraph posta["Posta"]
-        Server["<b>posta</b><br/>HTTP API :9000 · Dashboard<br/>Inbound SMTP :2525 · Relay :2526"]
+        Server["<b>posta</b><br/>HTTP API :9000 · Dashboard<br/>Form and chat APIs · widget scripts<br/>Inbound SMTP :2525 · Relay :2526"]
         W1["<b>worker 1</b><br/>asynq consumer"]
         W2["<b>worker 2</b><br/>asynq consumer"]
     end
 
     subgraph shared["Shared state"]
-        Redis[("Redis<br/>Asynq queues<br/>+ scheduler")]
-        PG[("PostgreSQL<br/>emails · templates<br/>contacts · logs")]
-        Blob[("Object storage<br/>S3-compatible or filesystem<br/>attachments · raw inbound")]
+        Redis[("Redis<br/>Asynq queues + scheduler<br/>realtime pub/sub")]
+        PG[("PostgreSQL<br/>emails · templates · contacts<br/>messages · responses · chats")]
+        Blob[("Object storage<br/>S3-compatible or filesystem<br/>attachments · raw inbound · chat files")]
     end
 
     Providers["SMTP providers<br/>outbound delivery"]
@@ -272,8 +273,10 @@ flowchart LR
 
     App --> Server
     MX --> Server
-    Form --> Server
+    Site <-->|"posts · SSE"| Server
+    Team <-->|SSE| Server
     Server -- enqueue --> Redis
+    Server <-->|pub/sub| Redis
     Redis -- dequeue --> W1
     Redis -- dequeue --> W2
     Server <--> PG
@@ -294,6 +297,24 @@ Object storage is optional (dashed above). With `POSTA_BLOB_PROVIDER` unset, att
 and raw inbound messages stay in the database; point it at `s3` or `fs` to move them out.
 Any multi-node deployment should use `s3` — a local `fs` path is not shared between the
 server and its workers.
+
+### Website widgets
+
+Forms and live chat run on your own site from scripts Posta serves, with a public key per
+form or widget and no API key on the page.
+
+* **Forms, surveys and signups**: `/widget/v1/posta-form.js` renders the form, or a plain
+  HTML form posts to `/api/v1/f/{key}`. Contact messages land in the shared inbox; surveys,
+  registrations and signups are kept as responses, summarised per question. Notifications,
+  replies and webhooks go out through the worker.
+* **Live chat**: `/widget/v1/posta-chat.js` talks to the visitor API under `/api/v1/chat/{key}`.
+  Visitors and agents follow a conversation over server-sent events; any server can hold
+  the stream, because messages, typing and presence travel between servers through Redis
+  pub/sub. Replies to visitors who have left, and alerts about waiting visitors, are
+  emailed by the worker.
+
+Both are off by default, behind `POSTA_MESSAGES_ENABLED` and `POSTA_CHAT_ENABLED`, and
+check the page's origin against each form's or widget's allowlist.
 
 ### Stack
 

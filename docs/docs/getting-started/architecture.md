@@ -7,26 +7,28 @@ description: How Posta is put together, what each process does, and how to deplo
 # Architecture
 
 Posta ships as a **single binary that runs in two modes**. `posta` serves the
-HTTP API, the dashboard, and the SMTP listeners; `posta worker` consumes the job
-queue. Both are stateless — all state lives in PostgreSQL, Redis, and object
-storage — so you can run as many workers as your send volume needs.
+HTTP API, the dashboard, the website widgets, and the SMTP listeners; `posta worker`
+consumes the job queue. Both are stateless — all state lives in PostgreSQL, Redis,
+and object storage — so you can run as many servers and workers as your traffic and
+send volume need.
 
 ```mermaid
 flowchart LR
     App["Your app<br/>REST API / SMTP client"]
     MX["Inbound mail<br/>MX delivery"]
-    Form["Website form<br/>POST /api/v1/f/{key}"]
+    Site["Your website<br/>forms, surveys and signups<br/>live chat widget"]
+    Team["Your team<br/>dashboard · chat inbox"]
 
     subgraph posta["Posta"]
-        Server["<b>posta</b><br/>HTTP API :9000 · Dashboard<br/>Inbound SMTP :2525 · Relay :2526"]
+        Server["<b>posta</b><br/>HTTP API :9000 · Dashboard<br/>Form and chat APIs · widget scripts<br/>Inbound SMTP :2525 · Relay :2526"]
         W1["<b>worker 1</b><br/>asynq consumer<br/>probes + metrics :9000"]
         W2["<b>worker 2</b><br/>asynq consumer<br/>probes + metrics :9000"]
     end
 
     subgraph shared["Shared state"]
-        Redis[("Redis<br/>Asynq queues<br/>+ scheduler")]
-        PG[("PostgreSQL<br/>emails · templates<br/>contacts · logs")]
-        Blob[("Object storage<br/>S3-compatible or filesystem<br/>attachments · raw inbound")]
+        Redis[("Redis<br/>Asynq queues + scheduler<br/>realtime pub/sub")]
+        PG[("PostgreSQL<br/>emails · templates · contacts<br/>messages · responses · chats")]
+        Blob[("Object storage<br/>S3-compatible or filesystem<br/>attachments · raw inbound · chat files")]
     end
 
     Providers["SMTP providers<br/>outbound delivery"]
@@ -34,8 +36,10 @@ flowchart LR
 
     App --> Server
     MX --> Server
-    Form --> Server
+    Site <-->|"posts · SSE"| Server
+    Team <-->|SSE| Server
     Server -- enqueue --> Redis
+    Server <-->|pub/sub| Redis
     Redis -- dequeue --> W1
     Redis -- dequeue --> W2
     Server <--> PG
@@ -55,7 +59,7 @@ Accepts work and answers questions. It never sends mail itself.
 
 | Listener | Default port | Purpose |
 |----------|--------------|---------|
-| HTTP | `9000` | REST API, dashboard, web view, tracking pixels, form ingest |
+| HTTP | `9000` | REST API, dashboard, web view, tracking pixels, form ingest, chat visitor API, widget scripts |
 | Inbound SMTP | `2525` | Receives mail delivered to your MX records |
 | SMTP relay | `2526` | Accepts mail from an existing SMTP client |
 
@@ -73,6 +77,35 @@ daily reports.
 
 Workers are interchangeable. Adding one increases throughput; losing one leaves
 its in-flight jobs to be retried by another.
+
+## Website widgets
+
+Forms and live chat run on your own site from scripts Posta serves, with a public
+key per form or widget and no API key on the page. Both are off by default, and
+both check the page's origin against each form's or widget's allowlist.
+
+### Forms, surveys and signups
+
+`/widget/v1/posta-form.js` renders a form, or a plain HTML form posts to
+`/api/v1/f/{key}`. The server scores each submission for spam and stores it:
+contact messages land in the shared inbox, while surveys, registrations and
+signups are kept as responses and summarised per question. Notifications, replies
+and webhooks go out through the worker. Enable with `POSTA_MESSAGES_ENABLED`.
+
+See [Web forms](/docs/messages/overview).
+
+### Live chat
+
+`/widget/v1/posta-chat.js` talks to the visitor API under `/api/v1/chat/{key}`.
+Visitors and agents follow a conversation over server-sent events. Any server can
+hold the stream: messages, typing and presence travel between servers through
+Redis pub/sub, so a visitor connected to one replica sees an agent typing on
+another. Replies to visitors who have left, and alerts about visitors waiting for
+an answer, are emailed by the worker. Enable with `POSTA_CHAT_ENABLED`.
+
+Each server holds at most `POSTA_CHAT_MAX_STREAMS` open streams; over it, widgets
+fall back to polling. A reverse proxy in front of Posta must not buffer the stream
+responses. See [Live chat](/docs/chat/overview).
 
 ## Running the worker
 
@@ -120,9 +153,9 @@ Set `POSTA_WORKER_HEALTH_ENABLED=false` to disable the listener, or
 
 | Store | Holds | Required |
 |-------|-------|----------|
-| **PostgreSQL** | Emails, templates, contacts, subscribers, campaigns, domains, logs, audit trail | Yes |
-| **Redis** | Asynq queues, the scheduler, caches, rate-limit counters | Yes |
-| **Object storage** | Attachments and raw inbound messages | No |
+| **PostgreSQL** | Emails, templates, contacts, subscribers, campaigns, domains, form messages and responses, chat conversations, logs, audit trail | Yes |
+| **Redis** | Asynq queues, the scheduler, caches, rate-limit counters, agent presence, realtime pub/sub between servers | Yes |
+| **Object storage** | Attachments, raw inbound messages, chat files and widget images | No |
 
 Object storage is optional. With `POSTA_BLOB_PROVIDER` unset, attachments and raw
 inbound messages stay in the database.
@@ -161,3 +194,4 @@ runs on the cron scheduler in-process rather than through a queue.
 - [Installation](/docs/getting-started/installation) — deploy with Docker or from source
 - [Configuration](/docs/getting-started/configuration) — every environment variable
 - [Quick Start](/docs/getting-started/quickstart) — send your first email
+- [Screenshots](/docs/getting-started/screenshots) — a tour of the dashboard and the website widgets
