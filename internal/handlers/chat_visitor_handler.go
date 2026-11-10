@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/goposta/posta/internal/dto"
+	"github.com/goposta/posta/internal/enterprise"
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/chat"
 	"github.com/goposta/posta/internal/services/inbound"
@@ -47,10 +48,17 @@ type ChatVisitorHandler struct {
 	svc     *chat.Service
 	repo    *repositories.ChatRepository
 	limiter *inbound.IPRateLimiter
+	clicks  *inbound.IPRateLimiter
+	edition enterprise.EE
 }
 
+// SetEdition turns on the Enterprise parts of the widget: the teaser and home click counts.
+func (h *ChatVisitorHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
+
+func (h *ChatVisitorHandler) licensed() bool { return h.edition != nil && h.edition.Licensed() }
+
 func NewChatVisitorHandler(svc *chat.Service, limiter *inbound.IPRateLimiter) *ChatVisitorHandler {
-	return &ChatVisitorHandler{svc: svc, repo: svc.Repo(), limiter: limiter}
+	return &ChatVisitorHandler{svc: svc, repo: svc.Repo(), limiter: limiter, clicks: inbound.NewIPRateLimiter(120, time.Hour)}
 }
 
 const widgetReasonOffline = "offline"
@@ -62,21 +70,36 @@ const (
 )
 
 type ChatWidgetConfig struct {
-	Enabled         bool             `json:"enabled"`
-	Reason          string           `json:"reason,omitempty" doc:"Why the widget cannot be used here: unavailable, origin_not_allowed, or offline (no one is online and the widget hides then)"`
-	Online          bool             `json:"online" doc:"An agent is online and it is within business hours. Offline, the widget takes messages to answer by email."`
-	Title           string           `json:"title,omitempty"`
-	Greeting        string           `json:"greeting,omitempty"`
-	AccentColor     string           `json:"accent_color,omitempty"`
-	Position        string           `json:"position,omitempty"`
-	AvatarURL       string           `json:"avatar_url,omitempty"`
-	Home            *models.ChatHome `json:"home,omitempty" doc:"Home screen and menu; absent when the widget opens straight into a chat"`
-	RequireName     bool             `json:"require_name,omitempty"`
-	RequireEmail    bool             `json:"require_email,omitempty"`
-	MaxMessageBytes int              `json:"max_message_bytes,omitempty"`
-	Attachments     bool             `json:"attachments,omitempty" doc:"Visitors may send images and PDFs up to 5 MB"`
-	MinFillSeconds  int              `json:"min_fill_seconds,omitempty" doc:"Seconds between issuing the nonce and starting a conversation with it"`
-	Nonce           *messages.Nonce  `json:"nonce,omitempty" doc:"Nonce for starting a conversation"`
+	Enabled         bool                 `json:"enabled"`
+	Reason          string               `json:"reason,omitempty" doc:"Why the widget cannot be used here: unavailable, origin_not_allowed, or offline (no one is online and the widget hides then)"`
+	Online          bool                 `json:"online" doc:"An agent is online and it is within business hours. Offline, the widget takes messages to answer by email."`
+	Title           string               `json:"title,omitempty"`
+	Greeting        string               `json:"greeting,omitempty"`
+	AccentColor     string               `json:"accent_color,omitempty"`
+	Position        string               `json:"position,omitempty"`
+	AvatarURL       string               `json:"avatar_url,omitempty"`
+	Home            *chat.PublicHome     `json:"home,omitempty" doc:"Home screen and menu; absent when the widget opens straight into a chat"`
+	Theme           string               `json:"theme,omitempty" enum:"auto,light,dark"`
+	OneOpen         bool                 `json:"one_open_conversation" doc:"A visitor keeps to one open conversation"`
+	NewChats        *bool                `json:"new_chats,omitempty" doc:"false while offline with offline_mode hide: a returning visitor may read and answer, not start a chat"`
+	Status          *ChatStatusLine      `json:"status,omitempty"`
+	VisitorName     string               `json:"visitor_name,omitempty" doc:"First name of the visitor whose token came with the request"`
+	Launcher        *models.ChatLauncher `json:"launcher,omitempty"`
+	Teaser          *models.ChatTeaser   `json:"teaser,omitempty" doc:"Posta Enterprise"`
+	TrackClicks     bool                 `json:"track_clicks,omitempty" doc:"Report home item clicks to /events (Posta Enterprise)"`
+	RequireName     bool                 `json:"require_name,omitempty"`
+	RequireEmail    bool                 `json:"require_email,omitempty"`
+	MaxMessageBytes int                  `json:"max_message_bytes,omitempty"`
+	Attachments     bool                 `json:"attachments,omitempty" doc:"Visitors may send images and PDFs up to 5 MB"`
+	MinFillSeconds  int                  `json:"min_fill_seconds,omitempty" doc:"Seconds between issuing the nonce and starting a conversation with it"`
+	Nonce           *messages.Nonce      `json:"nonce,omitempty" doc:"Nonce for starting a conversation"`
+}
+
+// ChatStatusLine feeds the home header's status line.
+type ChatStatusLine struct {
+	ReplyTime string     `json:"reply_time,omitempty" enum:"minutes,hours,day" doc:"Typical first reply over 30 days, while online; absent with fewer than 10 answered chats"`
+	NextOpen  *time.Time `json:"next_open,omitempty" doc:"When business hours start again, while outside them"`
+	Agents    []string   `json:"agents,omitempty" doc:"First names of up to three online agents"`
 }
 
 type ChatKeyRequest struct {
@@ -175,8 +198,15 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 	}
 	ctx := c.Request().Context()
 	online := h.svc.Online(ctx, w)
+	visitor := h.visitor(c, w)
+	var newChats *bool
 	if !online && w.HidesWhenOffline() {
-		return h.disabled(c, widgetReasonOffline)
+		// With a home screen, a visitor who already has a conversation keeps reaching it while the widget hides for others.
+		if !w.Home.Enabled || visitor == nil || !h.hasConversations(visitor) {
+			return h.disabled(c, widgetReasonOffline)
+		}
+		no := false
+		newChats = &no
 	}
 	nonce, err := h.svc.Nonces().Issue(ctx, w.PublicKey)
 	if err != nil {
@@ -186,12 +216,35 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 	if !online && w.OfflineGreeting != "" {
 		greeting = w.OfflineGreeting
 	}
-	var home *models.ChatHome
+	var home *chat.PublicHome
+	var status *ChatStatusLine
 	if w.Home.Enabled {
-		home = &w.Home
+		home = chat.ToPublicHome(w.Home)
+		status = h.statusLine(c, w, online)
+	}
+	name := ""
+	if visitor != nil {
+		name = chat.FirstName(visitor.Name)
+	}
+	var teaser *models.ChatTeaser
+	licensed := h.licensed()
+	if licensed && w.Teaser.Enabled {
+		teaser = &w.Teaser
+	}
+	var launcher *models.ChatLauncher
+	if w.Launcher != (models.ChatLauncher{}) {
+		launcher = &w.Launcher
 	}
 	return ok(c, ChatWidgetConfig{
+		Launcher:        launcher,
+		Teaser:          teaser,
+		TrackClicks:     licensed && w.Home.Enabled,
+		NewChats:        newChats,
+		Status:          status,
+		VisitorName:     name,
 		Home:            home,
+		Theme:           w.Theme,
+		OneOpen:         w.OneOpenConversation,
 		Enabled:         true,
 		Online:          online,
 		Title:           w.Title,
@@ -206,6 +259,55 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 		MinFillSeconds:  chat.MinFillSeconds,
 		Nonce:           nonce,
 	})
+}
+
+func (h *ChatVisitorHandler) statusLine(c *okapi.Context, w *models.ChatWidget, online bool) *ChatStatusLine {
+	ctx := c.Request().Context()
+	st := &ChatStatusLine{}
+	if online {
+		if w.Home.ShowReplyTime {
+			st.ReplyTime = h.svc.ReplyTime(ctx, w)
+		}
+		if w.Home.ShowAgents && w.ShowAgentNames {
+			st.Agents = h.svc.OnlineAgentNames(ctx, *w.WorkspaceID)
+		}
+	} else if now := time.Now(); !w.BusinessHours.Open(now) {
+		if next, ok := w.BusinessHours.NextOpen(now); ok {
+			st.NextOpen = &next
+		}
+	}
+	return st
+}
+
+type ChatEventRequest struct {
+	Key  string `param:"key"`
+	Body struct {
+		Type   string `json:"type" required:"true" enum:"home_item_click,help_link_click"`
+		ItemID string `json:"item_id" required:"true" maxLength:"16"`
+	} `json:"body"`
+}
+
+// Event counts a click anonymously: no token, IP or page is stored, only the item and the day.
+func (h *ChatVisitorHandler) Event(c *okapi.Context, req *ChatEventRequest) error {
+	if !h.clicks.Allow(c.RealIP()) {
+		return c.AbortTooManyRequests("too many events")
+	}
+	w := h.widget(req.Key)
+	if w == nil || !h.allowOrigin(c, w) {
+		return c.AbortNotFound("chat not found")
+	}
+	if !h.licensed() {
+		return noContent(c)
+	}
+	if !h.svc.RecordClick(w, req.Body.ItemID) {
+		return c.AbortBadRequest("unknown item")
+	}
+	return noContent(c)
+}
+
+func (h *ChatVisitorHandler) hasConversations(v *models.ChatVisitor) bool {
+	items, err := h.repo.ListLinkedConversations(h.repo.LinkedVisitorIDs(v), 1)
+	return err == nil && len(items) > 0
 }
 
 // disabled carries no widget data, so any origin may read it.

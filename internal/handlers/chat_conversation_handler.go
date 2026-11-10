@@ -463,6 +463,23 @@ func (h *ChatConversationHandler) Analytics(c *okapi.Context, req *ChatAnalytics
 	if err != nil {
 		return c.AbortInternalServerError("failed to compute analytics")
 	}
+	rows, err := h.repo.HomeClicks(ws, uint(max(req.WidgetID, 0)), from, to)
+	if err != nil {
+		return c.AbortInternalServerError("failed to compute analytics")
+	}
+	homes := map[uint]models.ChatHome{}
+	out.HomeClicks = make([]repositories.HomeClick, 0, len(rows))
+	for _, r := range rows {
+		home, seen := homes[r.WidgetID]
+		if !seen {
+			if w, err := h.repo.FindWidgetByID(r.WidgetID); err == nil {
+				home = w.Home
+			}
+			homes[r.WidgetID] = home
+		}
+		title, _ := chat.HomeItemTitle(home, r.ItemID)
+		out.HomeClicks = append(out.HomeClicks, repositories.HomeClick{WidgetID: r.WidgetID, ItemID: r.ItemID, Title: title, Clicks: r.Clicks})
+	}
 	return ok(c, out)
 }
 

@@ -22,6 +22,7 @@ package handlers
 import (
 	"fmt"
 	"html"
+	"reflect"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ type ChatWidgetHandler struct {
 	quota           QuotaChecker
 	db              *gorm.DB
 	repo            *repositories.ChatRepository
+	svc             *chat.Service
 	domains         *repositories.DomainRepository
 	audit           *audit.Logger
 	apiBaseURL      string
@@ -59,13 +61,18 @@ func NewChatWidgetHandler(repo *repositories.ChatRepository, auditLogger *audit.
 	}
 }
 
-// SetEdition gates auto-assign; without it the settings are refused, as in Community.
+// SetEdition gates auto-assign and the teaser; without it their settings are refused, as in Community.
 func (h *ChatWidgetHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 
-// requireAutoAssign accepts unchanged values so a client that saves the whole widget keeps working.
-func (h *ChatWidgetHandler) requireAutoAssign(w *models.ChatWidget, s chatWidgetSettings) error {
+// requireEnterpriseSettings gates auto-assign and the teaser; unchanged values pass so a client that saves the whole widget keeps working.
+func (h *ChatWidgetHandler) requireEnterpriseSettings(w *models.ChatWidget, s chatWidgetSettings) error {
 	changed := (s.AutoAssign != nil && *s.AutoAssign != w.AutoAssign) ||
 		(s.MaxOpenPerAgent != nil && *s.MaxOpenPerAgent != w.MaxOpenPerAgent)
+	if s.Teaser != nil {
+		if t, err := chat.NormalizeTeaser(*s.Teaser); err == nil && !reflect.DeepEqual(t, w.Teaser) {
+			changed = true
+		}
+	}
 	if !changed {
 		return nil
 	}
@@ -83,17 +90,21 @@ func (h *ChatWidgetHandler) SetDomains(d *repositories.DomainRepository) { h.dom
 
 // chatWidgetSettings is shared by create and update; nil leaves a setting as it is.
 type chatWidgetSettings struct {
-	AllowedOrigins *[]string        `json:"allowed_origins" doc:"Origins allowed to load the widget, e.g. https://example.com. Empty allows any."`
-	StrictOrigin   *bool            `json:"strict_origin" doc:"Refuse requests without an Origin header. On by default: the widget only runs in browsers."`
-	Title          *string          `json:"title" doc:"Panel heading"`
-	Greeting       *string          `json:"greeting" doc:"First line visitors see"`
-	AccentColor    *string          `json:"accent_color" doc:"#RRGGBB"`
-	Position       *string          `json:"position" doc:"left or right"`
-	AvatarURL      *string          `json:"avatar_url" doc:"https image shown in the panel header"`
-	ShowAgentNames *bool            `json:"show_agent_names" doc:"Show visitors the name of the agent answering"`
-	Home           *models.ChatHome `json:"home" doc:"Home screen and menu, replaced as a whole"`
-	RequireName    *bool            `json:"require_name" doc:"Ask for a name before the first message"`
-	RequireEmail   *bool            `json:"require_email" doc:"Ask for an email address before the first message. Always asked while the widget is offline."`
+	AllowedOrigins      *[]string            `json:"allowed_origins" doc:"Origins allowed to load the widget, e.g. https://example.com. Empty allows any."`
+	StrictOrigin        *bool                `json:"strict_origin" doc:"Refuse requests without an Origin header. On by default: the widget only runs in browsers."`
+	Title               *string              `json:"title" doc:"Panel heading"`
+	Greeting            *string              `json:"greeting" doc:"First line visitors see"`
+	AccentColor         *string              `json:"accent_color" doc:"#RRGGBB"`
+	Position            *string              `json:"position" doc:"left or right"`
+	AvatarURL           *string              `json:"avatar_url" doc:"https image shown in the panel header"`
+	ShowAgentNames      *bool                `json:"show_agent_names" doc:"Show visitors the name of the agent answering"`
+	Home                *models.ChatHome     `json:"home" doc:"Home screen and menu, replaced as a whole"`
+	Theme               *string              `json:"theme" doc:"auto follows the visitor's system; light or dark forces one"`
+	Launcher            *models.ChatLauncher `json:"launcher" doc:"Button label, icon, position and mobile visibility"`
+	Teaser              *models.ChatTeaser   `json:"teaser" doc:"Bubble over the closed button on chosen pages. Posta Enterprise: changing it without a license answers 402."`
+	OneOpenConversation *bool                `json:"one_open_conversation" doc:"Keep each visitor to one open conversation; off, the Messages tab offers a new one"`
+	RequireName         *bool                `json:"require_name" doc:"Ask for a name before the first message"`
+	RequireEmail        *bool                `json:"require_email" doc:"Ask for an email address before the first message. Always asked while the widget is offline."`
 
 	BusinessHours   *models.BusinessHours `json:"business_hours" doc:"Weekly staffed hours; no days means always. Outside them the widget is offline."`
 	OfflineMode     *string               `json:"offline_mode" doc:"email (take messages, answer by email) or hide"`
@@ -181,6 +192,8 @@ func (h *ChatWidgetHandler) Create(c *okapi.Context, req *CreateChatWidgetReques
 		Position:            "right",
 		ShowAgentNames:      true,
 		Home:                models.DefaultChatHome(),
+		Theme:               models.ChatThemeAuto,
+		OneOpenConversation: true,
 		ScanEnabled:         true,
 		FlagThreshold:       3,
 		QuarantineThreshold: 6,
@@ -189,10 +202,13 @@ func (h *ChatWidgetHandler) Create(c *okapi.Context, req *CreateChatWidgetReques
 		LastEditedByID:      &userID,
 	}
 	w.OfflineMode = models.ChatOfflineEmail
-	if err := h.requireAutoAssign(w, req.Body.chatWidgetSettings); err != nil {
+	if err := h.requireEnterpriseSettings(w, req.Body.chatWidgetSettings); err != nil {
 		return licenseAbort(c, err)
 	}
 	if err := applyChatWidgetSettings(w, req.Body.chatWidgetSettings); err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	if err := h.checkAssets(w); err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
 	if err := h.checkReplyFrom(scope, w, req.Body.ReplyFrom); err != nil {
@@ -250,10 +266,13 @@ func (h *ChatWidgetHandler) Update(c *okapi.Context, req *UpdateChatWidgetReques
 	default:
 		return c.AbortBadRequest("status must be active, paused or archived")
 	}
-	if err := h.requireAutoAssign(w, b.chatWidgetSettings); err != nil {
+	if err := h.requireEnterpriseSettings(w, b.chatWidgetSettings); err != nil {
 		return licenseAbort(c, err)
 	}
 	if err := applyChatWidgetSettings(w, b.chatWidgetSettings); err != nil {
+		return c.AbortBadRequest(err.Error())
+	}
+	if err := h.checkAssets(w); err != nil {
 		return c.AbortBadRequest(err.Error())
 	}
 	if err := h.checkReplyFrom(getScope(c), w, b.ReplyFrom); err != nil {
@@ -435,6 +454,31 @@ func applyChatWidgetSettings(w *models.ChatWidget, s chatWidgetSettings) error {
 			return err
 		}
 		w.Home = home
+	}
+	if s.Theme != nil {
+		switch *s.Theme {
+		case models.ChatThemeAuto, models.ChatThemeLight, models.ChatThemeDark:
+			w.Theme = *s.Theme
+		default:
+			return fmt.Errorf("theme must be auto, light or dark")
+		}
+	}
+	if s.Launcher != nil {
+		l, err := chat.NormalizeLauncher(*s.Launcher)
+		if err != nil {
+			return err
+		}
+		w.Launcher = l
+	}
+	if s.Teaser != nil {
+		t, err := chat.NormalizeTeaser(*s.Teaser)
+		if err != nil {
+			return err
+		}
+		w.Teaser = t
+	}
+	if s.OneOpenConversation != nil {
+		w.OneOpenConversation = *s.OneOpenConversation
 	}
 	if s.RequireName != nil {
 		w.RequireName = *s.RequireName

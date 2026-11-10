@@ -39,6 +39,17 @@ const en = {
   search: 'Search help',
   noResults: 'Nothing matches.',
   closedConv: 'Closed',
+  newConversation: 'New conversation',
+  replyMinutes: 'Typically replies in a few minutes',
+  replyHours: 'Typically replies in a few hours',
+  replyDay: 'Typically replies within a day',
+  away: "We're away right now.",
+  backAt: "We're away. Back at {t}",
+  backOn: "We're away. Back {d} at {t}",
+  andTeam: '{names} and the team',
+  dismiss: 'Dismiss',
+  previewQuestion: 'Do you ship to Canada?',
+  previewAnswer: 'Yes, in 3 to 5 working days.',
 }
 
 export type Strings = typeof en
@@ -82,8 +93,43 @@ const fr: Strings = {
   search: "Chercher dans l'aide",
   noResults: 'Aucun résultat.',
   closedConv: 'Fermée',
+  newConversation: 'Nouvelle conversation',
+  replyMinutes: 'Répond généralement en quelques minutes',
+  replyHours: 'Répond généralement en quelques heures',
+  replyDay: 'Répond généralement sous un jour',
+  away: 'Nous sommes absents pour le moment.',
+  backAt: 'Nous sommes absents. De retour à {t}',
+  backOn: 'Nous sommes absents. De retour {d} à {t}',
+  andTeam: "{names} et l'équipe",
+  dismiss: 'Fermer',
+  previewQuestion: 'Livrez-vous au Canada ?',
+  previewAnswer: 'Oui, en 3 à 5 jours ouvrés.',
 }
 
 export function strings(lang = navigator.language): Strings {
   return lang.toLowerCase().startsWith('fr') ? fr : en
+}
+
+export function fill(template: string, values: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (m, k) => values[k] ?? m)
+}
+
+// A greeting may hold {name}; without a known name the placeholder and the space before it go.
+export function personalise(greeting: string | undefined, name?: string): string {
+  return (greeting || '').replace(/\s*\{name\}/g, name ? ` ${name}` : '')
+}
+
+// The visitor's own clock: a time today, a weekday within the week, a date beyond.
+export function backText(t: Strings, iso: string, now = new Date(), lang = navigator.language): string {
+  const at = new Date(iso)
+  if (isNaN(at.getTime())) return t.away
+  const time = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(at)
+  if (at.toDateString() === now.toDateString()) return fill(t.backAt, { t: time })
+  const days = (at.getTime() - now.getTime()) / 86400000
+  const d = new Intl.DateTimeFormat(lang, days < 6 ? { weekday: 'long' } : { weekday: 'long', day: 'numeric', month: 'long' }).format(at)
+  return fill(t.backOn, { d, t: time })
+}
+
+export function namesText(t: Strings, names: string[]): string {
+  return fill(t.andTeam, { names: names.join(', ') })
 }

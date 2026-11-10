@@ -19,6 +19,10 @@ const loading = ref(true);
 const featureDisabled = ref(false);
 const data = ref<ChatAnalytics | null>(null);
 
+function widgetLabel(id: number): string {
+  return widgets.value.find((w) => w.id === id)?.display_name ?? `#${id}`;
+}
+
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -171,6 +175,27 @@ onMounted(async () => {
           </template>
         </div>
       </div>
+      <div class="card" style="margin-top: 20px">
+        <div class="card-header"><h2>Home clicks</h2></div>
+        <div class="card-body">
+          <p v-if="!data.home_clicks?.length" class="muted" style="margin: 0">
+            No clicks on home screen items or help links in this period.
+          </p>
+          <div v-else class="table-wrapper"><table>
+            <thead>
+              <tr><th scope="col">Item</th><th v-if="!widgetId" scope="col">Widget</th><th scope="col" class="num">Clicks</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="c in data.home_clicks" :key="`${c.widget_id}:${c.item_id}`">
+                <td>{{ c.title || `Removed item (${c.item_id})` }}</td>
+                <td v-if="!widgetId">{{ widgetLabel(c.widget_id) }}</td>
+                <td class="num">{{ c.clicks }}</td>
+              </tr>
+            </tbody>
+          </table></div>
+          <small class="muted">Counted anonymously, per item and day: no visitor, IP or page is recorded.</small>
+        </div>
+      </div>
     </template>
     </EnterpriseLock>
   </div>
@@ -255,5 +280,8 @@ onMounted(async () => {
   .tiles {
     transition: none;
   }
+}
+.num {
+  text-align: right;
 }
 </style>

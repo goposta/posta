@@ -71,7 +71,12 @@ type ChatWidget struct {
 	AvatarURL      string `json:"avatar_url"`
 	ShowAgentNames bool   `json:"show_agent_names" gorm:"default:true;not null"`
 	// Home is NULL for widgets created before it existed, which keeps them a single thread.
-	Home ChatHome `json:"home" gorm:"type:jsonb"`
+	Home     ChatHome     `json:"home" gorm:"type:jsonb"`
+	Theme    string       `json:"theme" gorm:"type:varchar(8);default:'auto';not null"`
+	Launcher ChatLauncher `json:"launcher" gorm:"type:jsonb"`
+	Teaser   ChatTeaser   `json:"teaser" gorm:"type:jsonb"`
+	// OneOpenConversation keeps a visitor to one thread, as before the home screen; off, Messages offers a new one.
+	OneOpenConversation bool `json:"one_open_conversation" gorm:"default:true;not null"`
 
 	// Email is always required while the widget is offline.
 	RequireEmail bool `json:"require_email" gorm:"default:false;not null"`
@@ -116,6 +121,12 @@ type ChatWidget struct {
 const (
 	ChatOfflineEmail = "email"
 	ChatOfflineHide  = "hide"
+)
+
+const (
+	ChatThemeAuto  = "auto"
+	ChatThemeLight = "light"
+	ChatThemeDark  = "dark"
 )
 
 func (w *ChatWidget) IsActive() bool { return w.Status == ChatWidgetStatusActive }

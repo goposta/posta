@@ -1,10 +1,62 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import type { ChatHome, ChatHomeItemKind } from "../../api/types";
-import { MAX_HELP_LINKS, MAX_HOME_ITEMS, move, newID, newItem, urlError } from "./chatHome";
+import { computed, ref } from "vue";
+import { chatWidgetsApi } from "../../api/chat";
+import type { ChatHome, ChatHomeItemKind, ChatWidgetAsset } from "../../api/types";
+import { apiMessage } from "../../composables/apiError";
+import { useNotificationStore } from "../../stores/notification";
+import { assetPath, MAX_HELP_LINKS, MAX_HOME_ITEMS, move, newID, newItem, urlError } from "./chatHome";
 
 const home = defineModel<ChatHome>({ required: true });
-defineProps<{ accent: string; disabled?: boolean }>();
+const assets = defineModel<ChatWidgetAsset[]>("assets", { required: true });
+const props = defineProps<{ accent: string; widgetId: number; disabled?: boolean }>();
+const notify = useNotificationStore();
+
+const MAX_IMAGE_BYTES = 512 * 1024;
+const fileInput = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
+let assign: ((id: string) => void) | null = null;
+
+const inUse = computed(() => {
+  const ids = new Set<string>();
+  if (home.value.logo_asset) ids.add(home.value.logo_asset);
+  for (const it of home.value.items ?? []) if (it.image_asset) ids.add(it.image_asset);
+  return ids;
+});
+
+function pick(target: (id: string) => void) {
+  assign = target;
+  fileInput.value?.click();
+}
+
+async function onFile(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || !assign) return;
+  if (file.size > MAX_IMAGE_BYTES) {
+    notify.error("Images can be at most 512 KB.");
+    return;
+  }
+  uploading.value = true;
+  try {
+    const res = await chatWidgetsApi.uploadAsset(props.widgetId, file);
+    assets.value = [res.data.data, ...assets.value];
+    assign(res.data.data.id);
+  } catch (err: any) {
+    notify.error(apiMessage(err, "Failed to upload the image"));
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function removeAsset(id: string) {
+  try {
+    await chatWidgetsApi.deleteAsset(props.widgetId, id);
+    assets.value = assets.value.filter((a) => a.id !== id);
+  } catch (err: any) {
+    notify.error(apiMessage(err, "Failed to delete the image"));
+  }
+}
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
 const colorValid = computed(() => !home.value.header_color || COLOR.test(home.value.header_color));
@@ -44,6 +96,17 @@ function addLink() {
       <fieldset :disabled="disabled || !home.enabled" class="home-fields">
         <h3 class="section-title">Header</h3>
         <div class="form-group">
+          <span class="form-label">Logo</span>
+          <div class="image-row">
+            <img v-if="home.logo_asset" :src="assetPath(home.logo_asset)" alt="Logo" class="thumb"
+              :style="{ background: colorValid && home.header_color ? home.header_color : accent }" />
+            <button type="button" class="btn btn-secondary btn-sm" :disabled="uploading"
+              @click="pick((id) => (home.logo_asset = id))">{{ home.logo_asset ? "Replace" : "Upload logo" }}</button>
+            <button v-if="home.logo_asset" type="button" class="btn btn-secondary btn-sm" @click="home.logo_asset = ''">Remove</button>
+          </div>
+          <small class="muted">PNG, JPEG, GIF or WebP, up to 512 KB. Served from Posta, so a site with a Content Security Policy only needs Posta's origin in <code>img-src</code>.</small>
+        </div>
+        <div class="form-group">
           <label class="form-label" for="home-headline">Headline</label>
           <input id="home-headline" v-model="home.headline" class="form-input" maxlength="120" placeholder="How can we help?" />
           <small class="muted">Shown under the greeting from the Appearance tab.</small>
@@ -64,8 +127,23 @@ function addLink() {
           <small v-else class="muted">Blank uses the accent colour. The text colour is picked for contrast.</small>
         </div>
 
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input v-model="home.show_reply_time" type="checkbox" />
+            Show the typical reply time while online
+          </label>
+          <small class="muted">From the median first reply over 30 days, once 10 chats have been answered. Outside business hours the header says when you're back instead.</small>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input v-model="home.show_agents" type="checkbox" />
+            Show the first names of online agents
+          </label>
+          <small class="muted">Up to three, and only while "Show visitors the name of the agent answering" is on in Appearance.</small>
+        </div>
+
         <h3 class="section-title">Items</h3>
-        <p v-if="!items.length" class="muted">No items: visitors reach the chat from the Messages tab.</p>
+        <small v-if="!items.length" class="muted empty-note">No items: visitors reach the chat from the Messages tab.</small>
         <ol class="home-list">
           <li v-for="(it, i) in items" :key="it.id" class="home-item">
             <div class="home-item-head">
@@ -80,6 +158,15 @@ function addLink() {
               <input :id="`item-title-${it.id}`" v-model="it.title" class="form-input" maxlength="80"
                 :placeholder="it.kind === 'message' ? 'Send us a message' : ''" />
               <small v-if="it.kind === 'message'" class="muted">Starts a chat, or reads "Continue the conversation" while one is open.</small>
+            </div>
+            <div v-if="it.kind === 'card'" class="form-group">
+              <span class="form-label">Image (optional)</span>
+              <div class="image-row">
+                <img v-if="it.image_asset" :src="assetPath(it.image_asset)" alt="" class="thumb wide" />
+                <button type="button" class="btn btn-secondary btn-sm" :disabled="uploading"
+                  @click="pick((id) => (it.image_asset = id))">{{ it.image_asset ? "Replace" : "Upload image" }}</button>
+                <button v-if="it.image_asset" type="button" class="btn btn-secondary btn-sm" @click="it.image_asset = ''">Remove</button>
+              </div>
             </div>
             <div v-if="it.kind === 'card'" class="form-group">
               <label class="form-label" :for="`item-body-${it.id}`">Text</label>
@@ -115,7 +202,7 @@ function addLink() {
           <label class="form-label" for="help-title">Heading</label>
           <input id="help-title" v-model="home.help_title" class="form-input" maxlength="80" placeholder="Help" />
         </div>
-        <p v-if="!links.length" class="muted">No links: the Help tab is hidden.</p>
+        <small v-if="!links.length" class="muted empty-note">No links: the Help tab is hidden.</small>
         <ol class="home-list">
           <li v-for="(l, i) in links" :key="l.id" class="home-item">
             <div class="home-item-head">
@@ -137,12 +224,71 @@ function addLink() {
           <button type="button" class="btn btn-secondary btn-sm" :disabled="links.length >= MAX_HELP_LINKS" @click="addLink">Add help link</button>
           <small class="muted">{{ links.length }}/{{ MAX_HELP_LINKS }}</small>
         </div>
+        <template v-if="assets.length">
+          <h3 class="section-title">Uploaded images</h3>
+          <ul class="asset-grid">
+            <li v-for="a in assets" :key="a.id">
+              <img :src="assetPath(a.id)" :alt="a.filename" class="thumb wide" />
+              <span class="muted asset-name" :title="a.filename">{{ a.filename }}</span>
+              <button type="button" class="btn btn-secondary btn-sm" :disabled="inUse.has(a.id)"
+                :title="inUse.has(a.id) ? 'Shown on the home screen' : ''" @click="removeAsset(a.id)">Delete</button>
+            </li>
+          </ul>
+        </template>
       </fieldset>
+      <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="file-input" @change="onFile" />
     </div>
   </div>
 </template>
 
 <style scoped>
+.empty-note {
+  display: block;
+  margin-bottom: 8px;
+}
+.image-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.thumb {
+  height: 36px;
+  max-width: 120px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+.thumb.wide {
+  width: 96px;
+  height: 54px;
+  object-fit: cover;
+}
+.asset-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.asset-grid li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.asset-name {
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-input {
+  display: none;
+}
 .home-fields {
   border: 0;
   padding: 0;

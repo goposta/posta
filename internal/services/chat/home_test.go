@@ -100,3 +100,29 @@ func TestNormalizeHomeSizeCap(t *testing.T) {
 		t.Fatal("a home over the size cap was accepted")
 	}
 }
+
+func TestNormalizeHomeAssets(t *testing.T) {
+	const id = "0b6f3b0e-4a43-4c1e-9d2a-6a1f0e7c2b11"
+	out, err := NormalizeHome(models.ChatHome{
+		LogoAsset: id,
+		Items:     []models.ChatHomeItem{{Kind: models.ChatHomeItemCard, Title: "x", ImageAsset: id}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out.AssetIDs(); len(got) != 2 {
+		t.Fatalf("asset IDs: %v", got)
+	}
+	for name, h := range map[string]models.ChatHome{
+		"logo path": {LogoAsset: "../../etc/passwd"},
+		"image url": {Items: []models.ChatHomeItem{{Kind: models.ChatHomeItemCard, Title: "x", ImageAsset: "https://evil.example/a.png"}}},
+	} {
+		if _, err := NormalizeHome(h); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	pub := ToPublicHome(out)
+	if pub.LogoURL != "/widget/v1/assets/"+id || pub.Items[0].ImageURL != "/widget/v1/assets/"+id {
+		t.Fatalf("public home: %+v", pub)
+	}
+}

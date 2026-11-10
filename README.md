@@ -41,7 +41,7 @@ Self-hosted email platform for sending, receiving, and relaying email through a 
 - **Inbound** — receive email at your domains, parse messages and attachments, and forward the structured payloads to your application via webhooks.
 - **Relay** — point an existing SMTP client at Posta and its mail flows through the same outbound pipeline as the API, so you can migrate to the HTTP API at your own pace.
 - **Forms** — let a website contact form post straight to Posta, scan each submission for spam, and reply to the sender from the dashboard through the same domains and suppression list as everything else.
-- **Live chat** — add a chat widget to your website with one script tag and answer visitors in real time from the dashboard, with replies by email once they have left.
+- **Live chat** — add a chat widget to your website with one script tag, with a home screen for your own links and announcements, and answer visitors in real time from the dashboard, with replies by email once they have left.
 
 It is designed as a fully self-hostable alternative to services like SendGrid, Mailgun, and Postmark — giving you complete ownership of your email infrastructure, data, and deliverability.
 
@@ -387,7 +387,7 @@ Posta includes a web dashboard for managing templates, SMTP servers, domains, co
 ### Chat Widget
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/chat-widget.png" alt="The live chat widget open on a website" width="900"/>
+  <img src="https://raw.githubusercontent.com/goposta/posta/main/docs/static/img/screenshots/chat-widget.png" alt="The live chat widget's home screen open on a website" width="900"/>
 </p>
 
 ### Form Widget

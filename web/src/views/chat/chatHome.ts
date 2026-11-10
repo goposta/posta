@@ -5,6 +5,10 @@ export const MAX_HELP_LINKS = 30;
 const COLOR = /^#[0-9a-fA-F]{6}$/;
 const URL_SCHEME = /^(https?:\/\/[^\s/]+|mailto:\S+|tel:\S+)/i;
 
+export function assetPath(id?: string): string {
+  return id ? `/widget/v1/assets/${id}` : "";
+}
+
 export function newID(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(4));
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -50,9 +54,12 @@ export function cloneHome(home: ChatHome | null | undefined): ChatHome {
   const h = home ?? emptyHome();
   return {
     enabled: !!h.enabled,
+    show_reply_time: !!h.show_reply_time,
+    show_agents: !!h.show_agents,
+    logo_asset: h.logo_asset ?? "",
     header_color: h.header_color ?? "",
     headline: h.headline ?? "",
-    items: (h.items ?? []).map((i) => ({ ...i, body: i.body ?? "", url: i.url ?? "", link_label: i.link_label ?? "" })),
+    items: (h.items ?? []).map((i) => ({ ...i, body: i.body ?? "", url: i.url ?? "", link_label: i.link_label ?? "", image_asset: i.image_asset ?? "" })),
     help_title: h.help_title ?? "",
     help_links: (h.help_links ?? []).map((l) => ({ ...l, description: l.description ?? "" })),
   };

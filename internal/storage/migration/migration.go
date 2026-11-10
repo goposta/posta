@@ -87,6 +87,8 @@ func Run(db *gorm.DB) error {
 		&models.ChatConversation{},
 		&models.ChatMessage{},
 		&models.ChatSnippet{},
+		&models.ChatWidgetAsset{},
+		&models.ChatWidgetClick{},
 		&models.Notification{},
 		&models.Announcement{},
 		&models.UpgradeStep{},

@@ -15,6 +15,14 @@ export interface WidgetConfig {
   position?: 'left' | 'right'
   avatar_url?: string
   home?: Home
+  theme?: 'auto' | 'light' | 'dark'
+  new_chats?: boolean
+  status?: StatusLine
+  visitor_name?: string
+  launcher?: Launcher
+  teaser?: Teaser
+  track_clicks?: boolean
+  one_open_conversation?: boolean
   require_name?: boolean
   require_email?: boolean
   max_message_bytes?: number
@@ -31,6 +39,7 @@ export interface HomeItem {
   url?: string
   link_label?: string
   new_tab?: boolean
+  image_url?: string
 }
 
 export interface HelpLink {
@@ -42,11 +51,33 @@ export interface HelpLink {
 
 export interface Home {
   enabled: boolean
+  logo_url?: string
   header_color?: string
   headline?: string
   items?: HomeItem[]
   help_title?: string
   help_links?: HelpLink[]
+}
+
+export interface Launcher {
+  label?: string
+  icon?: 'chat' | 'help' | 'mail'
+  offset_x?: number
+  offset_y?: number
+  hide_on_mobile?: boolean
+}
+
+export interface Teaser {
+  enabled: boolean
+  text?: string
+  delay_seconds?: number
+  paths?: string[]
+}
+
+export interface StatusLine {
+  reply_time?: 'minutes' | 'hours' | 'day'
+  next_open?: string
+  agents?: string[]
 }
 
 export interface Message {
@@ -105,6 +136,11 @@ export class Api {
   token?: string
 
   constructor(private base: string, private key: string) {}
+
+  // Only Posta's own asset paths are turned into image URLs.
+  asset(path?: string): string | undefined {
+    return path && path.startsWith('/widget/v1/assets/') ? new URL(path, this.base).href : undefined
+  }
 
   url(path: string): string {
     return `${this.base}/api/v1/chat/${encodeURIComponent(this.key)}${path}`
@@ -199,6 +235,14 @@ export class Api {
     )
     if (!res.ok) throw new ApiError(res.status, res.statusText)
     return res.blob()
+  }
+
+  // keepalive lets the count go out even when the click navigates away from the page.
+  event(type: 'home_item_click' | 'help_link_click', itemID: string): void {
+    fetch(this.url('/events'), {
+      method: 'POST', headers: this.headers(true), body: JSON.stringify({ type, item_id: itemID }),
+      credentials: 'omit', mode: 'cors', keepalive: true,
+    }).catch(() => {})
   }
 
   typing(conv: string): Promise<void> {

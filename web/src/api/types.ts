@@ -1634,6 +1634,10 @@ export interface ChatWidget {
   avatar_url: string
   show_agent_names: boolean
   home: ChatHome | null
+  theme: ChatTheme
+  launcher: ChatLauncher | null
+  teaser: ChatTeaser | null
+  one_open_conversation: boolean
   require_email: boolean
   require_name: boolean
   business_hours: ChatBusinessHours | null
@@ -1659,6 +1663,32 @@ export interface ChatWidget {
 
 export type ChatHomeItemKind = 'message' | 'link' | 'card'
 
+export type ChatTheme = 'auto' | 'light' | 'dark'
+
+export interface ChatLauncher {
+  label?: string
+  icon?: '' | 'chat' | 'help' | 'mail'
+  offset_x?: number
+  offset_y?: number
+  hide_on_mobile?: boolean
+}
+
+export interface ChatTeaser {
+  enabled: boolean
+  text?: string
+  delay_seconds: number
+  paths?: string[]
+}
+
+export interface ChatWidgetAsset {
+  id: string
+  filename: string
+  content_type: string
+  size: number
+  url: string
+  created_at: string
+}
+
 export interface ChatHomeItem {
   id: string
   kind: ChatHomeItemKind
@@ -1667,6 +1697,7 @@ export interface ChatHomeItem {
   url?: string
   link_label?: string
   new_tab: boolean
+  image_asset?: string
 }
 
 export interface ChatHelpLink {
@@ -1678,6 +1709,9 @@ export interface ChatHelpLink {
 
 export interface ChatHome {
   enabled: boolean
+  show_reply_time?: boolean
+  show_agents?: boolean
+  logo_asset?: string
   header_color?: string
   headline?: string
   items?: ChatHomeItem[]
@@ -1743,6 +1777,7 @@ export interface ChatAnalytics {
   resolution_avg: number | null
   resolution_median: number | null
   by_day: { day: string; conversations: number }[]
+  home_clicks?: { widget_id: number; item_id: string; title: string; clicks: number }[]
 }
 
 export interface ChatConversation {

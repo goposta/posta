@@ -1,12 +1,19 @@
 import { Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Api, ApiError, Attachment, Conversation, Identity, Summary, WidgetConfig } from './api'
-import { Strings } from './i18n'
+import { personalise, Strings } from './i18n'
 import { linkify } from './linkify'
 import { load, loadView, save, saveView, View } from './storage'
 import { ConversationStream } from './stream'
 import { Local, merge } from './thread'
+import { dismiss, dismissed, pathMatches } from './teaser'
 import { HelpView, HomeView, MessagesView, TabBar } from './Views'
+
+const LAUNCHER_ICONS = {
+  chat: 'M21 12a8 8 0 0 1-11.8 7L4 20l1-5.2A8 8 0 1 1 21 12z',
+  help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01',
+  mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
+}
 
 export type OpenTarget = Exclude<View, 'thread'> | 'new'
 
@@ -20,11 +27,18 @@ export interface Controls {
   unread(): number
 }
 
+export interface Preview {
+  view: View
+  messages: Local[]
+  list: Summary[]
+}
+
 interface Props {
   api: Api
   widgetKey: string
   config: WidgetConfig
   t: Strings
+  preview?: Preview
   bind(ctl: Controls): void
   emit(event: WidgetEvent, payload?: unknown): void
 }
@@ -98,14 +112,17 @@ function Body({ text }: { text: string }) {
   )
 }
 
-export function App({ api, widgetKey, config, t, bind, emit }: Props) {
-  const saved = useRef(load(widgetKey))
-  const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState<Local[]>([])
+export function App({ api, widgetKey, config, t, bind, emit, preview }: Props) {
+  const saved = useRef(preview ? {} : load(widgetKey))
+  const [open, setOpen] = useState(!!preview)
+  const [messages, setMessages] = useState<Local[]>(preview?.messages || [])
   const [conv, setConv] = useState<Conversation | null>(null)
   const home = config.home?.enabled ? config.home : undefined
-  const [view, setView] = useState<View>(() => (home ? loadView(widgetKey) || 'home' : 'thread'))
-  const [list, setList] = useState<Summary[] | null>(null)
+  const [teaser, setTeaser] = useState(false)
+  const oneOpen = config.one_open_conversation !== false
+  const newChats = config.new_chats !== false
+  const [view, setView] = useState<View>(() => (preview ? preview.view : home ? loadView(widgetKey) || 'home' : 'thread'))
+  const [list, setList] = useState<Summary[] | null>(preview?.list || null)
   const [unreadBy, setUnreadBy] = useState<Record<string, number>>({})
   const [text, setText] = useState('')
   const [name, setName] = useState('')
@@ -146,6 +163,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   function go(v: View) {
     if (!home) return
     setView(v)
+    if (preview) return
     saveView(widgetKey, v)
     if (v === 'messages') refreshList()
   }
@@ -153,9 +171,10 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   // Without a home screen the widget is the single thread it always was, unread badge included.
   const show = (v: boolean, target?: OpenTarget) => {
     setOpen(v)
+    if (v && teaserRef.current) closeTeaser()
     if (v && !home) setUnreadBy({})
     if (v && home) {
-      if (target === 'new') startNew()
+      if (target === 'new') startNew(true)
       else if (target) go(target)
       else if (viewRef.current !== 'thread') {
         const waiting = Object.keys(unreadByRef.current).find((id) => unreadByRef.current[id] > 0)
@@ -166,10 +185,13 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
     emit(v ? 'open' : 'close')
   }
 
+  const teaserRef = useRef(teaser)
+  teaserRef.current = teaser
   const unreadByRef = useRef(unreadBy)
   unreadByRef.current = unreadBy
 
   useEffect(() => {
+    if (preview) return
     bind({
       open: (target) => show(true, target),
       close: () => show(false),
@@ -190,7 +212,23 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   }, [unread])
 
   useEffect(() => {
-    if (!open) return
+    const tz = config.teaser
+    if (preview || !tz?.enabled || !tz.text || dismissed(widgetKey, tz.text) || !pathMatches(tz.paths, location.pathname)) return
+    const timer = setTimeout(() => !openRef.current && setTeaser(true), (tz.delay_seconds || 0) * 1000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  function closeTeaser() {
+    setTeaser(false)
+    if (config.teaser?.text) dismiss(widgetKey, config.teaser.text)
+  }
+
+  function track(type: 'home_item_click' | 'help_link_click', id: string) {
+    if (config.track_clicks && !preview) api.event(type, id)
+  }
+
+  useEffect(() => {
+    if (!open || preview) return
     if (view === 'thread') {
       input.current?.focus()
       log.current?.scrollTo({ top: log.current.scrollHeight })
@@ -218,6 +256,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   }
 
   function openConversation(id: string) {
+    if (preview) return go('thread')
     if (saved.current.conversation !== id || !stream.current) {
       saved.current = { token: api.token, conversation: id }
       save(widgetKey, saved.current)
@@ -232,8 +271,10 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   }
 
   // A closed conversation is left as it is; the next message starts a new one.
-  function startNew() {
-    if (conv && conv.state !== 'closed') {
+  function startNew(fresh = false) {
+    if (preview) return go('thread')
+    if (!newChats) return go(conv && conv.state !== 'closed' ? 'thread' : 'messages')
+    if (conv && conv.state !== 'closed' && !(fresh && !oneOpen)) {
       go('thread')
       return
     }
@@ -439,6 +480,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
 
   function submit(e?: Event) {
     e?.preventDefault()
+    if (preview) return
     const body = text.trim()
     if (!body || busy) return
     if (askName && !name.trim()) return setError(`${t.name}: ${t.required}`)
@@ -500,12 +542,17 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
   }
 
   const title = config.title || t.title
+  const theme = config.theme === 'light' || config.theme === 'dark' ? config.theme : ''
   // "Seen" shows under the visitor's newest message once an agent has read it.
   const newestVisitor = messages.reduce((n, m) => (m.author === 'visitor' && m.seq > n ? m.seq : n), 0)
   const newestAny = messages.reduce((n, m) => Math.max(n, m.seq || 0), 0)
   const lastSeen = newestVisitor > 0 && newestVisitor === newestAny && agentRead >= newestVisitor ? newestVisitor : 0
   return (
-    <div class={`pc ${config.position === 'left' ? 'left' : ''} ${open ? 'opened' : ''}`} onKeyDown={onWidgetKey}>
+    <div
+      class={`pc ${config.position === 'left' ? 'left' : ''} ${open ? 'opened' : ''} ${theme} ${preview ? 'preview' : ''} ${config.launcher?.hide_on_mobile ? 'hidem' : ''}`}
+      onKeyDown={onWidgetKey}
+      onClickCapture={preview ? (e) => (e.target as Element).closest?.('a') && e.preventDefault() : undefined}
+    >
       {open && (
         <div
           class="panel"
@@ -519,11 +566,15 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
               {view === 'home' && (
                 <HomeView
                   home={home}
-                  greeting={config.greeting}
+                  greeting={personalise(config.greeting, config.visitor_name)}
                   online={!!config.online}
                   canContinue={!!conv && conv.state !== 'closed'}
+                  newChats={newChats}
+                  status={config.status}
                   t={t}
-                  onMessage={startNew}
+                  asset={(p) => api.asset(p)}
+                  onTrack={(id) => track('home_item_click', id)}
+                  onMessage={() => startNew()}
                   onClose={() => show(false)}
                 />
               )}
@@ -538,9 +589,16 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
                 </div>
               )}
               {view === 'messages' && (
-                <MessagesView list={list} t={t} onOpen={(c) => openConversation(c.id)} onNew={startNew} />
+                <MessagesView
+                  list={list}
+                  canStartNew={!oneOpen}
+                  newChats={newChats}
+                  t={t}
+                  onOpen={(c) => openConversation(c.id)}
+                  onNew={() => startNew(true)}
+                />
               )}
-              {view === 'help' && <HelpView title={home.help_title} links={home.help_links || []} t={t} />}
+              {view === 'help' && <HelpView title={home.help_title} links={home.help_links || []} t={t} onTrack={(id) => track('help_link_click', id)} />}
               <TabBar tabs={tabs} view={view} unread={unread} t={t} onSelect={go} />
             </>
           )}
@@ -563,7 +621,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
             </button>
           </div>
           <div class="log" ref={log} aria-live="polite">
-            {config.greeting && <div class="msg greet">{config.greeting}</div>}
+            {config.greeting && <div class="msg greet">{personalise(config.greeting, config.visitor_name)}</div>}
             {!config.online && !conv && <div class="note">{t.offline}</div>}
             {messages.map((m) => (
               <Fragment key={m.client_msg_id || m.id}>
@@ -651,6 +709,7 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
               <textarea
                 ref={input}
                 rows={1}
+                disabled={!!preview}
                 aria-label={t.placeholder}
                 placeholder={t.placeholder}
                 value={text}
@@ -684,20 +743,37 @@ export function App({ api, widgetKey, config, t, bind, emit }: Props) {
           </div>
         </div>
       )}
-      <button
-        ref={launcher}
-        class="launcher"
-        type="button"
-        aria-label={open ? t.close : t.open}
-        aria-expanded={open}
-        onClick={() => show(!open)}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          {open ? <path d="M6 9l6 6 6-6" /> : <path d="M21 12a8 8 0 0 1-11.8 7L4 20l1-5.2A8 8 0 1 1 21 12z" />}
-        </svg>
-        {unread > 0 && !open && <span class="badge">{unread}</span>}
-        {unread > 0 && !open && <span class="sr">{unread} new</span>}
-      </button>
+      {teaser && !open && (
+        <div class="teaser" role="status">
+          <button type="button" class="tt" onClick={() => show(true)}>
+            {config.teaser?.text}
+          </button>
+          <button type="button" class="tx" aria-label={t.dismiss} onClick={closeTeaser}>
+            ×
+          </button>
+        </div>
+      )}
+      <div class="lrow">
+        {!open && config.launcher?.label && (
+          <button type="button" class="lbl" onClick={() => show(true)}>
+            {config.launcher.label}
+          </button>
+        )}
+        <button
+          ref={launcher}
+          class="launcher"
+          type="button"
+          aria-label={open ? t.close : config.launcher?.label || t.open}
+          aria-expanded={open}
+          onClick={() => show(!open)}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d={open ? 'M6 9l6 6 6-6' : LAUNCHER_ICONS[config.launcher?.icon || 'chat'] || LAUNCHER_ICONS.chat} />
+          </svg>
+          {unread > 0 && !open && <span class="badge">{unread}</span>}
+          {unread > 0 && !open && <span class="sr">{unread} new</span>}
+        </button>
+      </div>
     </div>
   )
 }
