@@ -14,6 +14,7 @@ const sidebars: SidebarsConfig = {
         'getting-started/configuration',
         'getting-started/quickstart',
         'getting-started/architecture',
+        'getting-started/screenshots',
       ],
     },
     {
