@@ -457,6 +457,26 @@ func (r *ChatRepository) ListLinkedConversations(visitorIDs []uint, limit int) (
 	return items, err
 }
 
+// VisitorUnread counts, per conversation, the agent messages past the visitor's read receipt.
+func (r *ChatRepository) VisitorUnread(convIDs []uint) (map[uint]int, error) {
+	out := make(map[uint]int, len(convIDs))
+	if len(convIDs) == 0 {
+		return out, nil
+	}
+	var rows []struct {
+		ConversationID uint
+		N              int
+	}
+	err := r.db.Raw(`SELECT m.conversation_id, count(*) AS n
+		FROM chat_messages m JOIN chat_conversations c ON c.id = m.conversation_id
+		WHERE m.conversation_id IN ? AND m.author_kind = ? AND m.seq > c.visitor_read_seq
+		GROUP BY m.conversation_id`, convIDs, models.ChatAuthorAgent).Scan(&rows).Error
+	for _, row := range rows {
+		out[row.ConversationID] = row.N
+	}
+	return out, err
+}
+
 // VisitorHistory includes, for a verified visitor, the same person's conversations on other devices.
 func (r *ChatRepository) VisitorHistory(conv *models.ChatConversation, limit int) ([]models.ChatConversation, error) {
 	v, err := r.FindVisitorByID(conv.VisitorID)

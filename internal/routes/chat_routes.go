@@ -103,7 +103,7 @@ func (r *Router) chatPublicRoutes() []okapi.RouteDefinition {
 			Handler:  okapi.H(r.h.chatVisitor.Conversations),
 			Group:    group,
 			Summary:  "List a visitor's conversations",
-			Response: &dto.Response[[]chat.VisitorConversation]{},
+			Response: &dto.Response[[]chat.VisitorConversationSummary]{},
 			Options:  []okapi.RouteOption{keyParam, visitorAuth},
 		},
 		{

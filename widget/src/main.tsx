@@ -1,22 +1,18 @@
 import { render } from 'preact'
-import { App } from './App'
+import { App, Controls, OpenTarget, WidgetEvent } from './App'
 import { Api, Identity } from './api'
 import { strings } from './i18n'
-import { accentSheet, adopt, css } from './styles'
+import { accentSheet, adopt, css, headerSheet } from './styles'
 
 type Listener = (payload?: unknown) => void
-type Event = 'message' | 'open' | 'close'
+type Event = WidgetEvent
 
-interface Controls {
-  open(): void
-  close(): void
-  identify(identity: Identity): void
-  setAttributes(attributes: Record<string, unknown>): void
-}
+const TARGETS = ['home', 'messages', 'help', 'new']
 
 interface PostaChatAPI {
-  open(): void
+  open(target?: OpenTarget): void
   close(): void
+  unread(): number
   identify(identity: Identity): void
   setAttributes(attributes: Record<string, unknown>): void
   show(): void
@@ -42,17 +38,22 @@ declare global {
   if (!script || !key) return
   const base = new URL(script.src, location.href).origin
 
-  const listeners: Record<Event, Listener[]> = { message: [], open: [], close: [] }
+  const listeners: Record<Event, Listener[]> = { message: [], open: [], close: [], unread: [] }
   let ctl: Controls | null = null
   let host: HTMLElement | null = null
-  let pendingOpen = false
+  let pendingOpen: OpenTarget | true | false = false
   const preset = window.PostaChatSettings || {}
   let pendingIdentity: Identity | undefined = preset.identity
   let pendingAttributes: Record<string, unknown> | undefined = preset.attributes
 
   window.PostaChat = {
-    open: () => (ctl ? ctl.open() : (pendingOpen = true)),
+    open: (target) => {
+      const t = target && TARGETS.includes(target) ? target : undefined
+      if (ctl) ctl.open(t)
+      else pendingOpen = t || true
+    },
     close: () => ctl?.close(),
+    unread: () => ctl?.unread() || 0,
     show: () => host?.removeAttribute('hidden'),
     hide: () => host?.setAttribute('hidden', ''),
     identify: (identity) => (ctl ? ctl.identify(identity) : (pendingIdentity = identity)),
@@ -88,7 +89,7 @@ declare global {
     host.setAttribute('data-posta-chat', '')
     document.body.appendChild(host)
     const root = host.attachShadow({ mode: 'open' })
-    adopt(root, [css, accentSheet(config.accent_color)])
+    adopt(root, [css, accentSheet(config.accent_color), headerSheet(config.home?.header_color)])
     render(
       <App
         api={api}
@@ -100,12 +101,20 @@ declare global {
           ctl = c
           if (pendingIdentity) c.identify(pendingIdentity)
           if (pendingAttributes) c.setAttributes(pendingAttributes)
-          if (pendingOpen) c.open()
+          if (pendingOpen) c.open(pendingOpen === true ? undefined : pendingOpen)
         }}
       />,
       root,
     )
   }
+
+  // Lets a page's own "Contact us" link open the chat without writing any script.
+  document.addEventListener('click', (e) => {
+    const el = (e.target as Element | null)?.closest?.('[data-posta-chat-open]')
+    if (!el) return
+    e.preventDefault()
+    window.PostaChat?.open((el.getAttribute('data-posta-chat-open') || undefined) as OpenTarget | undefined)
+  })
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount)
   else mount()

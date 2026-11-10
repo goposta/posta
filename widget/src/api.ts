@@ -14,12 +14,39 @@ export interface WidgetConfig {
   accent_color?: string
   position?: 'left' | 'right'
   avatar_url?: string
+  home?: Home
   require_name?: boolean
   require_email?: boolean
   max_message_bytes?: number
   attachments?: boolean
   min_fill_seconds?: number
   nonce?: Nonce
+}
+
+export interface HomeItem {
+  id: string
+  kind: 'message' | 'link' | 'card'
+  title: string
+  body?: string
+  url?: string
+  link_label?: string
+  new_tab?: boolean
+}
+
+export interface HelpLink {
+  id: string
+  title: string
+  description?: string
+  url: string
+}
+
+export interface Home {
+  enabled: boolean
+  header_color?: string
+  headline?: string
+  items?: HomeItem[]
+  help_title?: string
+  help_links?: HelpLink[]
 }
 
 export interface Message {
@@ -53,6 +80,12 @@ export interface Conversation {
   agent_read_seq?: number
   last_message_at: string
   created_at: string
+}
+
+export interface Summary extends Conversation {
+  unread: number
+  preview: string
+  last_author: 'visitor' | 'agent' | 'system' | ''
 }
 
 export interface StartResult {
@@ -136,7 +169,7 @@ export class Api {
     return this.call('POST', '/attributes', { attributes })
   }
 
-  conversations(): Promise<Conversation[]> {
+  conversations(): Promise<Summary[]> {
     return this.call('GET', '/conversations')
   }
 

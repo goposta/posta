@@ -126,6 +126,14 @@ type VisitorConversation struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// VisitorConversationSummary is a row of the widget's Messages list.
+type VisitorConversationSummary struct {
+	VisitorConversation
+	Unread     int    `json:"unread" doc:"Agent messages the visitor has not read"`
+	Preview    string `json:"preview" doc:"The last message, on one line"`
+	LastAuthor string `json:"last_author" enum:"visitor,agent,system"`
+}
+
 func ToVisitorConversation(c *models.ChatConversation) VisitorConversation {
 	state := c.State
 	// A visitor is never told their conversation was marked as spam.

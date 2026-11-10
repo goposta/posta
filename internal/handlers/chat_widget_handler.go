@@ -83,16 +83,17 @@ func (h *ChatWidgetHandler) SetDomains(d *repositories.DomainRepository) { h.dom
 
 // chatWidgetSettings is shared by create and update; nil leaves a setting as it is.
 type chatWidgetSettings struct {
-	AllowedOrigins *[]string `json:"allowed_origins" doc:"Origins allowed to load the widget, e.g. https://example.com. Empty allows any."`
-	StrictOrigin   *bool     `json:"strict_origin" doc:"Refuse requests without an Origin header. On by default: the widget only runs in browsers."`
-	Title          *string   `json:"title" doc:"Panel heading"`
-	Greeting       *string   `json:"greeting" doc:"First line visitors see"`
-	AccentColor    *string   `json:"accent_color" doc:"#RRGGBB"`
-	Position       *string   `json:"position" doc:"left or right"`
-	AvatarURL      *string   `json:"avatar_url" doc:"https image shown in the panel header"`
-	ShowAgentNames *bool     `json:"show_agent_names" doc:"Show visitors the name of the agent answering"`
-	RequireName    *bool     `json:"require_name" doc:"Ask for a name before the first message"`
-	RequireEmail   *bool     `json:"require_email" doc:"Ask for an email address before the first message. Always asked while the widget is offline."`
+	AllowedOrigins *[]string        `json:"allowed_origins" doc:"Origins allowed to load the widget, e.g. https://example.com. Empty allows any."`
+	StrictOrigin   *bool            `json:"strict_origin" doc:"Refuse requests without an Origin header. On by default: the widget only runs in browsers."`
+	Title          *string          `json:"title" doc:"Panel heading"`
+	Greeting       *string          `json:"greeting" doc:"First line visitors see"`
+	AccentColor    *string          `json:"accent_color" doc:"#RRGGBB"`
+	Position       *string          `json:"position" doc:"left or right"`
+	AvatarURL      *string          `json:"avatar_url" doc:"https image shown in the panel header"`
+	ShowAgentNames *bool            `json:"show_agent_names" doc:"Show visitors the name of the agent answering"`
+	Home           *models.ChatHome `json:"home" doc:"Home screen and menu, replaced as a whole"`
+	RequireName    *bool            `json:"require_name" doc:"Ask for a name before the first message"`
+	RequireEmail   *bool            `json:"require_email" doc:"Ask for an email address before the first message. Always asked while the widget is offline."`
 
 	BusinessHours   *models.BusinessHours `json:"business_hours" doc:"Weekly staffed hours; no days means always. Outside them the widget is offline."`
 	OfflineMode     *string               `json:"offline_mode" doc:"email (take messages, answer by email) or hide"`
@@ -179,6 +180,7 @@ func (h *ChatWidgetHandler) Create(c *okapi.Context, req *CreateChatWidgetReques
 		Greeting:            "Hi! How can we help?",
 		Position:            "right",
 		ShowAgentNames:      true,
+		Home:                models.DefaultChatHome(),
 		ScanEnabled:         true,
 		FlagThreshold:       3,
 		QuarantineThreshold: 6,
@@ -426,6 +428,13 @@ func applyChatWidgetSettings(w *models.ChatWidget, s chatWidgetSettings) error {
 	}
 	if s.ShowAgentNames != nil {
 		w.ShowAgentNames = *s.ShowAgentNames
+	}
+	if s.Home != nil {
+		home, err := chat.NormalizeHome(*s.Home)
+		if err != nil {
+			return err
+		}
+		w.Home = home
 	}
 	if s.RequireName != nil {
 		w.RequireName = *s.RequireName

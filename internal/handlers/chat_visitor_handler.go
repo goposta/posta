@@ -62,20 +62,21 @@ const (
 )
 
 type ChatWidgetConfig struct {
-	Enabled         bool            `json:"enabled"`
-	Reason          string          `json:"reason,omitempty" doc:"Why the widget cannot be used here: unavailable, origin_not_allowed, or offline (no one is online and the widget hides then)"`
-	Online          bool            `json:"online" doc:"An agent is online and it is within business hours. Offline, the widget takes messages to answer by email."`
-	Title           string          `json:"title,omitempty"`
-	Greeting        string          `json:"greeting,omitempty"`
-	AccentColor     string          `json:"accent_color,omitempty"`
-	Position        string          `json:"position,omitempty"`
-	AvatarURL       string          `json:"avatar_url,omitempty"`
-	RequireName     bool            `json:"require_name,omitempty"`
-	RequireEmail    bool            `json:"require_email,omitempty"`
-	MaxMessageBytes int             `json:"max_message_bytes,omitempty"`
-	Attachments     bool            `json:"attachments,omitempty" doc:"Visitors may send images and PDFs up to 5 MB"`
-	MinFillSeconds  int             `json:"min_fill_seconds,omitempty" doc:"Seconds between issuing the nonce and starting a conversation with it"`
-	Nonce           *messages.Nonce `json:"nonce,omitempty" doc:"Nonce for starting a conversation"`
+	Enabled         bool             `json:"enabled"`
+	Reason          string           `json:"reason,omitempty" doc:"Why the widget cannot be used here: unavailable, origin_not_allowed, or offline (no one is online and the widget hides then)"`
+	Online          bool             `json:"online" doc:"An agent is online and it is within business hours. Offline, the widget takes messages to answer by email."`
+	Title           string           `json:"title,omitempty"`
+	Greeting        string           `json:"greeting,omitempty"`
+	AccentColor     string           `json:"accent_color,omitempty"`
+	Position        string           `json:"position,omitempty"`
+	AvatarURL       string           `json:"avatar_url,omitempty"`
+	Home            *models.ChatHome `json:"home,omitempty" doc:"Home screen and menu; absent when the widget opens straight into a chat"`
+	RequireName     bool             `json:"require_name,omitempty"`
+	RequireEmail    bool             `json:"require_email,omitempty"`
+	MaxMessageBytes int              `json:"max_message_bytes,omitempty"`
+	Attachments     bool             `json:"attachments,omitempty" doc:"Visitors may send images and PDFs up to 5 MB"`
+	MinFillSeconds  int              `json:"min_fill_seconds,omitempty" doc:"Seconds between issuing the nonce and starting a conversation with it"`
+	Nonce           *messages.Nonce  `json:"nonce,omitempty" doc:"Nonce for starting a conversation"`
 }
 
 type ChatKeyRequest struct {
@@ -185,7 +186,12 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 	if !online && w.OfflineGreeting != "" {
 		greeting = w.OfflineGreeting
 	}
+	var home *models.ChatHome
+	if w.Home.Enabled {
+		home = &w.Home
+	}
 	return ok(c, ChatWidgetConfig{
+		Home:            home,
 		Enabled:         true,
 		Online:          online,
 		Title:           w.Title,
@@ -289,9 +295,22 @@ func (h *ChatVisitorHandler) Conversations(c *okapi.Context, req *ChatKeyRequest
 	if err != nil {
 		return c.AbortInternalServerError("failed to list conversations")
 	}
-	out := make([]chat.VisitorConversation, 0, len(items))
+	ids := make([]uint, len(items))
 	for i := range items {
-		out = append(out, chat.ToVisitorConversation(&items[i]))
+		ids[i] = items[i].ID
+	}
+	unread, err := h.repo.VisitorUnread(ids)
+	if err != nil {
+		return c.AbortInternalServerError("failed to list conversations")
+	}
+	out := make([]chat.VisitorConversationSummary, 0, len(items))
+	for i := range items {
+		out = append(out, chat.VisitorConversationSummary{
+			VisitorConversation: chat.ToVisitorConversation(&items[i]),
+			Unread:              unread[items[i].ID],
+			Preview:             items[i].LastMessagePreview,
+			LastAuthor:          items[i].LastAuthorKind,
+		})
 	}
 	return ok(c, out)
 }

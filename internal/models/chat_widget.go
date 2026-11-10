@@ -70,6 +70,8 @@ type ChatWidget struct {
 	Position       string `json:"position" gorm:"type:varchar(8);default:'right';not null"`
 	AvatarURL      string `json:"avatar_url"`
 	ShowAgentNames bool   `json:"show_agent_names" gorm:"default:true;not null"`
+	// Home is NULL for widgets created before it existed, which keeps them a single thread.
+	Home ChatHome `json:"home" gorm:"type:jsonb"`
 
 	// Email is always required while the widget is offline.
 	RequireEmail bool `json:"require_email" gorm:"default:false;not null"`
