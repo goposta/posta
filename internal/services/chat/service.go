@@ -488,7 +488,7 @@ func (s *Service) Assign(ctx context.Context, conv *models.ChatConversation, use
 
 // A workspace over its monthly conversations reads offline too, so new visitors leave a message rather than lose one.
 func (s *Service) Online(ctx context.Context, w *models.ChatWidget) bool {
-	if w.WorkspaceID == nil || !s.inHours(w, time.Now()) {
+	if w.WorkspaceID == nil || !w.BusinessHours.Open(time.Now()) {
 		return false
 	}
 	if limit := s.limitsFor(*w.WorkspaceID).MonthlyConversations; limit > 0 {
@@ -499,11 +499,6 @@ func (s *Service) Online(ctx context.Context, w *models.ChatWidget) bool {
 		}
 	}
 	return s.presence.AnyOnline(ctx, *w.WorkspaceID)
-}
-
-// Business hours are Enterprise; without a license only agent presence decides.
-func (s *Service) inHours(w *models.ChatWidget, now time.Time) bool {
-	return !s.Licensed() || w.BusinessHours.Open(now)
 }
 
 // Licensed reports whether Enterprise chat features run; a lapsed license keeps them running.
@@ -582,7 +577,7 @@ func (s *Service) Describe(ctx context.Context, conv *models.ChatConversation) {
 	if err != nil {
 		return
 	}
-	conv.ReplyByEmail = s.Licensed() && ShouldEmail(OfflineFacts{
+	conv.ReplyByEmail = ShouldEmail(OfflineFacts{
 		VisitorLive:     conv.VisitorLive,
 		VisitorLastSeen: conv.Visitor.LastSeenAt,
 		VisitorEmail:    conv.Visitor.Email,
@@ -595,7 +590,7 @@ func (s *Service) Describe(ctx context.Context, conv *models.ChatConversation) {
 
 // Sending is decided when the task runs: the visitor may be back, or a later agent message's task sends one email for both.
 func (s *Service) scheduleOfflineEmail(conv *models.ChatConversation, w *models.ChatWidget, seq int64) {
-	if s.enqueuer == nil || !s.Licensed() || w.ReplyFrom == "" || conv.Status == models.MessageStatusQuarantined || conv.State == models.ChatStateSpam {
+	if s.enqueuer == nil || w.ReplyFrom == "" || conv.Status == models.MessageStatusQuarantined || conv.State == models.ChatStateSpam {
 		return
 	}
 	if err := s.enqueuer.EnqueueChatOfflineEmail(conv.ID, seq, OfflineEmailDelay); err != nil {

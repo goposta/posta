@@ -68,33 +68,23 @@ func TestChatTeaserNeedsALicenseToChange(t *testing.T) {
 	}
 }
 
-func TestChatHomeHoursAndEmailRepliesNeedALicenseToChange(t *testing.T) {
+func TestChatHomeNeedsALicenseToChange(t *testing.T) {
 	h := &ChatWidgetHandler{edition: enterprise.Community()}
-	w := &models.ChatWidget{
-		Home:          models.DefaultChatHome(),
-		BusinessHours: models.BusinessHours{Timezone: "Europe/Paris", Days: []models.HoursRange{{Day: 1, From: "09:00", To: "17:00"}}},
-		ReplyFrom:     "support@example.com",
+	w := &models.ChatWidget{Home: models.DefaultChatHome()}
+	same := models.DefaultChatHome()
+	same.HelpLinks = []models.ChatLink{}
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{Home: &same}); err != nil {
+		t.Fatalf("resending the stored home was refused: %v", err)
 	}
-	sameHome := models.DefaultChatHome()
-	sameHome.HelpLinks = []models.ChatLink{}
-	sameHours := models.BusinessHours{Timezone: "Europe/Paris", Days: []models.HoursRange{{Day: 1, From: "09:00", To: "17:00"}}}
-	sameFrom := " Support@Example.com "
-	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{Home: &sameHome, BusinessHours: &sameHours, ReplyFrom: &sameFrom}); err != nil {
-		t.Fatalf("resending the stored values was refused: %v", err)
+	changed := models.DefaultChatHome()
+	changed.Headline = "Questions?"
+	var gate enterprise.GateError
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{Home: &changed}); !errors.As(err, &gate) || gate.HTTPStatus() != 402 {
+		t.Fatalf("changing the home screen in Community: err = %v, want a 402 gate error", err)
 	}
-
-	home := models.DefaultChatHome()
-	home.Headline = "Questions?"
-	hours := models.BusinessHours{}
-	from := "hello@example.com"
-	for name, s := range map[string]chatWidgetSettings{
-		"home":           {Home: &home},
-		"business hours": {BusinessHours: &hours},
-		"reply sender":   {ReplyFrom: &from},
-	} {
-		var gate enterprise.GateError
-		if err := h.requireEnterpriseSettings(w, s); !errors.As(err, &gate) || gate.HTTPStatus() != 402 {
-			t.Errorf("changing the %s in Community: err = %v, want a 402 gate error", name, err)
-		}
+	hours := models.BusinessHours{Timezone: "UTC", Days: []models.HoursRange{{Day: 1, From: "09:00", To: "17:00"}}}
+	from := "support@example.com"
+	if err := h.requireEnterpriseSettings(w, chatWidgetSettings{BusinessHours: &hours, ReplyFrom: &from}); err != nil {
+		t.Fatalf("business hours and the reply sender are Community but were refused: %v", err)
 	}
 }

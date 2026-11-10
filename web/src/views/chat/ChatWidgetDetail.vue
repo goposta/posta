@@ -15,7 +15,7 @@ import { apiMessage } from "../../composables/apiError";
 import { useConfirm } from "../../composables/useConfirm";
 import { useLicenseStore } from "../../stores/license";
 
-// The home screen, business hours, email replies, teaser and auto-assign are Posta Enterprise: read-only without a license that allows changes.
+// The home screen, teaser and auto-assign are Posta Enterprise: read-only without a license that allows changes.
 const license = useLicenseStore();
 license.load();
 
@@ -549,17 +549,11 @@ function copy(text: string) {
       <div v-show="tab === 'availability'" class="card" style="margin-bottom: 20px">
         <div class="card-header"><h2>Availability</h2></div>
         <div class="card-body">
-          <p v-if="license.licensed" class="muted" style="margin-top: 0">
+          <p class="muted" style="margin-top: 0">
             The widget is online when at least one agent has set themselves online and the time is within business hours.
           </p>
-          <p v-else class="muted" style="margin-top: 0">
-            The widget is online when at least one agent has set themselves online. Business hours and emailed replies are
-            part of Posta Enterprise.
-          </p>
 
-          <h3 class="section-title">Business hours <span class="ee-badge">Enterprise</span></h3>
-          <small v-if="license.readOnly" class="muted">The Enterprise license has expired: business hours keep applying, but can't be changed until it is renewed.</small>
-          <fieldset :disabled="!license.mutable" class="plain-fieldset">
+          <h3 class="section-title">Business hours</h3>
           <div class="form-group">
             <label class="form-label">Time zone</label>
             <select v-model="timezone" class="form-select">
@@ -580,13 +574,12 @@ function copy(text: string) {
           <div style="margin-top: 8px">
             <button class="btn btn-secondary btn-sm" type="button" @click="addHours">Add hours</button>
           </div>
-          </fieldset>
 
           <h3 class="section-title">When no one is available</h3>
           <div class="form-group">
             <label class="checkbox-label">
               <input v-model="widget.offline_mode" type="radio" value="email" />
-              Take messages<template v-if="license.licensed"> and reply by email</template> (visitors must give their email)
+              Take messages and reply by email (visitors must give their email)
             </label>
             <label class="checkbox-label">
               <input v-model="widget.offline_mode" type="radio" value="hide" />
@@ -601,9 +594,7 @@ function copy(text: string) {
             <small class="muted">Shown instead of the greeting while the widget is offline. Blank keeps the greeting.</small>
           </div>
 
-          <h3 class="section-title">Replies to visitors who left <span class="ee-badge">Enterprise</span></h3>
-          <small v-if="license.readOnly" class="muted">The Enterprise license has expired: replies keep going by email, but the sender can't be changed until it is renewed.</small>
-          <fieldset :disabled="!license.mutable" class="plain-fieldset">
+          <h3 class="section-title">Replies to visitors who left</h3>
           <div class="form-group">
             <label class="form-label">Reply from (email)</label>
             <input v-model="widget.reply_from" type="email" class="form-input" placeholder="support@example.com" />
@@ -616,7 +607,6 @@ function copy(text: string) {
             <label class="form-label">Reply from (name)</label>
             <input v-model="widget.reply_from_name" class="form-input" maxlength="80" placeholder="Acme Support" />
           </div>
-          </fieldset>
         </div>
       </div>
 
@@ -842,15 +832,6 @@ function copy(text: string) {
   color: var(--danger-600, #dc2626);
 }
 
-.plain-fieldset {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
-}
-.plain-fieldset:disabled {
-  opacity: 0.6;
-}
 .hours-row {
   display: grid;
   grid-template-columns: minmax(120px, 160px) minmax(100px, 130px) auto minmax(100px, 130px) auto;

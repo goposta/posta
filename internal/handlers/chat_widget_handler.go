@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"html"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
@@ -69,10 +68,7 @@ func (h *ChatWidgetHandler) SetEdition(ee enterprise.EE) { h.edition = ee }
 // requireEnterpriseSettings gates the Enterprise chat settings; unchanged values pass so a client that saves the whole widget keeps working.
 func (h *ChatWidgetHandler) requireEnterpriseSettings(w *models.ChatWidget, s chatWidgetSettings) error {
 	changed := (s.AutoAssign != nil && *s.AutoAssign != w.AutoAssign) ||
-		(s.MaxOpenPerAgent != nil && *s.MaxOpenPerAgent != w.MaxOpenPerAgent) ||
-		(s.ReplyFrom != nil && strings.ToLower(strings.TrimSpace(*s.ReplyFrom)) != w.ReplyFrom) ||
-		(s.ReplyFromName != nil && chat.CleanLine(*s.ReplyFromName, 80) != w.ReplyFromName) ||
-		(s.BusinessHours != nil && !sameHours(*s.BusinessHours, w.BusinessHours))
+		(s.MaxOpenPerAgent != nil && *s.MaxOpenPerAgent != w.MaxOpenPerAgent)
 	if s.Teaser != nil {
 		if t, err := chat.NormalizeTeaser(*s.Teaser); err == nil && !reflect.DeepEqual(t, w.Teaser) {
 			changed = true
@@ -104,10 +100,6 @@ func sameHome(a, b models.ChatHome) bool {
 	ja, _ := json.Marshal(na)
 	jb, _ := json.Marshal(nb)
 	return string(ja) == string(jb)
-}
-
-func sameHours(a, b models.BusinessHours) bool {
-	return strings.TrimSpace(a.Timezone) == strings.TrimSpace(b.Timezone) && slices.Equal(a.Days, b.Days)
 }
 
 // SetQuota enforces the plan's widget limit.
