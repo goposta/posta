@@ -41,7 +41,7 @@ Self-hosted email platform for sending, receiving, and relaying email through a 
 - **Inbound** — receive email at your domains, parse messages and attachments, and forward the structured payloads to your application via webhooks.
 - **Relay** — point an existing SMTP client at Posta and its mail flows through the same outbound pipeline as the API, so you can migrate to the HTTP API at your own pace.
 - **Forms** — let a website contact form post straight to Posta, scan each submission for spam, and reply to the sender from the dashboard through the same domains and suppression list as everything else.
-- **Live chat** — add a chat widget to your website with one script tag, and answer visitors in real time from the dashboard. Posta Enterprise adds a home screen for your own links, business hours and replies by email once visitors have left.
+- **Live chat** — add a chat widget to your website with one script tag, and answer visitors in real time from the dashboard, with replies by email once they have left. Posta Enterprise adds a home screen for your own links and announcements.
 
 It is designed as a fully self-hostable alternative to services like SendGrid, Mailgun, and Postmark — giving you complete ownership of your email infrastructure, data, and deliverability.
 
@@ -130,12 +130,13 @@ replies to the sender. There is no auto-responder.
 ### Live Chat
 
 * Embeddable widget, one script tag; works under a strict Content Security Policy and themes with CSS variables
-* Real-time conversations with typing indicators and read receipts
+* Real-time conversations with typing indicators, read receipts, agent presence and business hours
+* Replies go out by email when the visitor has left, and their emailed answer comes back into the chat
 * Signed visitor identity (HMAC) so signed-in users are verified and keep their history across devices
 * Canned replies, assignment, image and PDF attachments, and a unified inbox with form messages and inbound email
 * Spam scanning, origin allowlist, rate limits and bans, with per-widget retention and GDPR export and erasure
 * `chat.*` webhook events
-* Posta Enterprise: a home screen with help links, business hours, replies by email once the visitor has left, auto-assign, teasers and chat analytics
+* Posta Enterprise: a home screen with help links, auto-assign, teasers and chat analytics
 * Off by default behind `POSTA_CHAT_ENABLED`
 
 ### Email Relay
