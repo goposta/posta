@@ -188,8 +188,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/vanng822/css v1.0.1 h1:10yiXc4e8NI8ldU6mSrWmSWMuyWgPr9DZ63RSlsgDw8=
 github.com/vanng822/css v1.0.1/go.mod h1:tcnB1voG49QhCrwq1W0w5hhGasvOg+VQp9i9H1rCM1w=
-github.com/vanng822/go-premailer v1.37.0 h1:Mfe0V6RLXC6xQisBccDi/eSnz0FlLvSU9G21oQg4XpE=
-github.com/vanng822/go-premailer v1.37.0/go.mod h1:YhPj3JGaNpIf5RrxGSsWYkgHc5EGLUW3mCSxvAuQQi4=
+github.com/vanng822/go-premailer v1.38.0 h1:nYXopG+L6lcRV6dEAemLLE71bihun3gxgfNJZ9iYm1Q=
+github.com/vanng822/go-premailer v1.38.0/go.mod h1:6Jcm7sYO8ON3J/IIlox2fWq+YPgGopwx7VbETlZRZtY=
 github.com/zeebo/xxh3 v1.1.0 h1:s7DLGDK45Dyfg7++yxI0khrfwq9661w9EN78eP/UZVs=
 github.com/zeebo/xxh3 v1.1.0/go.mod h1:IisAie1LELR4xhVinxWS5+zf1lA4p0MW4T+w+W07F5s=
 go.uber.org/atomic v1.12.0 h1:BvcXdFKuviU4fTL/f+SxdQ5qJX/Jix8pAkgdUcb3XOE=
