@@ -161,6 +161,29 @@ func (p Policy) CheckHost(ctx context.Context, host string) error {
 	return nil
 }
 
+// Resolve picks an address to pin host to; unlike CheckHost it refuses a host that does not resolve, since no dialer checks later.
+func (p Policy) Resolve(ctx context.Context, host string) (netip.Addr, error) {
+	if ip, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
+		if err := p.Check(ip); err != nil {
+			return netip.Addr{}, err
+		}
+		return ip, nil
+	}
+	addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	if len(addrs) == 0 {
+		return netip.Addr{}, &net.DNSError{Err: "no addresses", Name: host, IsNotFound: true}
+	}
+	for _, ip := range addrs {
+		if err := p.Check(ip); err != nil {
+			return netip.Addr{}, err
+		}
+	}
+	return addrs[0].Unmap(), nil
+}
+
 // Unparseable entries are returned as an error alongside the rest of the policy.
 func FromEnv(prefix string, defaultAllowPrivate bool) (Policy, error) {
 	p := Policy{AllowPrivate: defaultAllowPrivate}

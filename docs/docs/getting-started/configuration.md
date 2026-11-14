@@ -94,7 +94,7 @@ New-user registration is toggled at runtime from **Admin → Settings** (the `re
 | `POSTA_WEBHOOK_ALLOW_PRIVATE_NETWORKS` | `false` | Let webhooks reach private and reserved addresses: loopback, `10/8`, `172.16/12`, `192.168/16`, link-local (including cloud metadata at `169.254.169.254`) and their IPv6 counterparts. Off by default, so a workspace member cannot use webhooks to reach your internal network |
 | `POSTA_WEBHOOK_ALLOWED_NETWORKS` | — | Comma-separated networks or addresses webhooks may reach although they are private, e.g. `10.0.5.0/24,192.168.1.20` for an internal automation service |
 
-Webhook URLs are checked when they are saved and again on each connection, after DNS resolution, so a hostname that resolves to an internal address is refused too. Redirects are not followed: a `3xx` answer counts as a failed delivery. Failed deliveries record the reason (refused, timed out, blocked…) without the address or port.
+Webhook URLs are checked when they are saved and again on each connection, after DNS resolution, so a hostname that resolves to an internal address is refused too. Through a proxy (`POSTA_WEBHOOK_PROXY_URL`, or `HTTP_PROXY`/`HTTPS_PROXY`), Posta resolves and checks the hostname itself and sends the proxy the checked address rather than the name, so the proxy's own DNS cannot lead it elsewhere; a hostname Posta cannot resolve is refused. Redirects are not followed: a `3xx` answer counts as a failed delivery. Failed deliveries record the reason (refused, timed out, blocked…) without the address or port.
 
 ## Workspace SMTP servers
 

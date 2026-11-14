@@ -20,14 +20,19 @@
 package webhook
 
 import (
+	"bufio"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -300,5 +305,149 @@ func TestDispatcher_AllowedNetworks(t *testing.T) {
 	}
 	if _, err := d.doRequest("http://10.255.255.1:9/", "", []byte("{}")); !errors.Is(err, netguard.ErrBlocked) {
 		t.Errorf("other private network: want ErrBlocked, got %v", err)
+	}
+}
+
+type proxyHit struct{ requestLine, host string }
+
+// fakeProxy records what each request asks it to reach; a CONNECT is tunnelled to upstream whatever its target.
+func fakeProxy(t *testing.T, upstream string) (string, chan proxyHit) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	hits := make(chan proxyHit, 8)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go serveProxyConn(conn, upstream, hits)
+		}
+	}()
+	return "http://" + ln.Addr().String(), hits
+}
+
+func serveProxyConn(conn net.Conn, upstream string, hits chan proxyHit) {
+	defer func() { _ = conn.Close() }()
+	br := bufio.NewReader(conn)
+	var hit proxyHit
+	length := 0
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+		name, value, _ := strings.Cut(line, ":")
+		switch {
+		case hit.requestLine == "":
+			hit.requestLine = line
+		case strings.EqualFold(name, "Host"):
+			hit.host = strings.TrimSpace(value)
+		case strings.EqualFold(name, "Content-Length"):
+			length, _ = strconv.Atoi(strings.TrimSpace(value))
+		}
+	}
+	hits <- hit
+	if !strings.HasPrefix(hit.requestLine, "CONNECT ") {
+		// The body is drained so closing the socket doesn't reset the connection before the client reads the answer.
+		_, _ = io.CopyN(io.Discard, br, int64(length))
+		_, _ = io.WriteString(conn, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		return
+	}
+	up, err := net.Dial("tcp", upstream)
+	if err != nil {
+		return
+	}
+	defer func() { _ = up.Close() }()
+	_, _ = io.WriteString(conn, "HTTP/1.1 200 Connection established\r\n\r\n")
+	go func() { _, _ = io.Copy(up, br) }()
+	_, _ = io.Copy(conn, up)
+}
+
+var loopbackAllowed = netguard.Policy{Allowed: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128")}}
+
+// A proxy resolves the host itself, so a host Posta cannot resolve must not be handed to it.
+func TestDispatcher_ProxyRefusesUnresolvableHost(t *testing.T) {
+	proxyURL, hits := fakeProxy(t, "")
+	t.Setenv("HTTP_PROXY", proxyURL)
+	t.Setenv("HTTPS_PROXY", proxyURL)
+	t.Setenv("NO_PROXY", "")
+
+	configured := NewDispatcher(nil)
+	configured.SetConfig(Config{ProxyURL: proxyURL})
+	for name, d := range map[string]*Dispatcher{"configured proxy": configured, "environment proxy": NewDispatcher(nil)} {
+		for _, target := range []string{"http://posta-webhook-test.invalid/hook", "https://posta-webhook-test.invalid/hook"} {
+			if _, err := d.doRequest(target, "", []byte("{}")); err == nil {
+				t.Errorf("%s, %s: delivered, want an error", name, target)
+			} else if got := netguard.Describe(err); got != "the host name could not be resolved" {
+				t.Errorf("%s, %s: reason %q", name, target, got)
+			}
+		}
+	}
+	if len(hits) != 0 {
+		t.Errorf("the proxy was asked for %q", (<-hits).requestLine)
+	}
+}
+
+// The proxy is sent the address Posta checked, not the host name it would resolve again.
+func TestDispatcher_ProxyPinsCheckedAddress(t *testing.T) {
+	proxyURL, hits := fakeProxy(t, "")
+	d := NewDispatcher(nil)
+	d.SetConfig(Config{ProxyURL: proxyURL, Network: loopbackAllowed})
+
+	if status, err := d.doRequest("http://localhost:8080/hook?id=1", "", []byte("{}")); err != nil || status != http.StatusOK {
+		t.Fatalf("status %d, err %v", status, err)
+	}
+	hit := <-hits
+	if hit.requestLine != "POST http://127.0.0.1:8080/hook?id=1 HTTP/1.1" && hit.requestLine != "POST http://[::1]:8080/hook?id=1 HTTP/1.1" {
+		t.Errorf("proxy asked for %q, want a pinned address", hit.requestLine)
+	}
+	if hit.host != "localhost:8080" {
+		t.Errorf("Host header %q, want localhost:8080", hit.host)
+	}
+
+	d.SetConfig(Config{ProxyURL: proxyURL})
+	if _, err := d.doRequest("http://localhost:8080/hook", "", []byte("{}")); !errors.Is(err, netguard.ErrBlocked) {
+		t.Errorf("loopback through the proxy: want ErrBlocked, got %v", err)
+	}
+	if len(hits) != 0 {
+		t.Errorf("the proxy was asked for %q", (<-hits).requestLine)
+	}
+}
+
+// Through CONNECT the tunnel targets the pinned address while TLS still names the webhook's host.
+func TestDispatcher_ProxyPinsHTTPS(t *testing.T) {
+	var sni atomic.Value
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv.TLS = &tls.Config{GetConfigForClient: func(h *tls.ClientHelloInfo) (*tls.Config, error) {
+		sni.Store(h.ServerName)
+		return nil, nil
+	}}
+	srv.StartTLS()
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+
+	proxyURL, hits := fakeProxy(t, srv.Listener.Addr().String())
+	d := NewDispatcher(nil)
+	d.SetConfig(Config{ProxyURL: proxyURL, Network: loopbackAllowed})
+	d.client.Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	if status, err := d.doRequest("https://localhost:"+port+"/hook", "", []byte("{}")); err != nil || status != http.StatusOK {
+		t.Fatalf("status %d, err %v", status, err)
+	}
+	hit := <-hits
+	if hit.requestLine != "CONNECT 127.0.0.1:"+port+" HTTP/1.1" && hit.requestLine != "CONNECT [::1]:"+port+" HTTP/1.1" {
+		t.Errorf("proxy asked for %q, want a pinned address", hit.requestLine)
+	}
+	if got, _ := sni.Load().(string); got != "localhost" {
+		t.Errorf("TLS server name %q, want localhost", got)
 	}
 }
