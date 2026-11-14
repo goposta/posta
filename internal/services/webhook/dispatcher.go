@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -63,7 +64,7 @@ type Dispatcher struct {
 	deliveryRepo      *repositories.WebhookDeliveryRepository
 	client            *http.Client
 	network           netguard.Policy
-	proxied           bool // a proxy dials the target, so the dialer cannot check it
+	proxyFor          func(*url.URL) (*url.URL, error) // nil proxy means the target is dialled directly
 	maxRetries        int
 	onDeliverySuccess func()
 	onDeliveryFailed  func()
@@ -80,12 +81,12 @@ func NewDispatcher(repo *repositories.WebhookRepository) *Dispatcher {
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}
-	d.client.Transport = d.guardedTransport()
+	d.client.Transport, d.proxyFor = d.guardedTransport()
 	return d
 }
 
 // guardedTransport checks each dialed address, so DNS can't sneak a private target past; env proxies stay honoured.
-func (d *Dispatcher) guardedTransport() *http.Transport {
+func (d *Dispatcher) guardedTransport() (*http.Transport, func(*url.URL) (*url.URL, error)) {
 	env := httpproxy.FromEnvironment()
 	proxyFor := env.ProxyFunc()
 	proxies := map[string]bool{}
@@ -103,22 +104,14 @@ func (d *Dispatcher) guardedTransport() *http.Transport {
 	}
 
 	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.Proxy = func(req *http.Request) (*url.URL, error) {
-		u, err := proxyFor(req.URL)
-		if u != nil && err == nil {
-			if cerr := d.network.CheckURL(req.Context(), req.URL.String()); cerr != nil {
-				return nil, fmt.Errorf("%w: %v", netguard.ErrBlocked, cerr)
-			}
-		}
-		return u, err
-	}
+	t.Proxy = func(req *http.Request) (*url.URL, error) { return proxyFor(req.URL) }
 	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		if proxies[addr] {
 			return (&net.Dialer{Timeout: 30 * time.Second}).DialContext(ctx, network, addr)
 		}
 		return d.network.DialContext(ctx, network, addr)
 	}
-	return t
+	return t, proxyFor
 }
 
 func (d *Dispatcher) Network() netguard.Policy {
@@ -133,25 +126,25 @@ func (d *Dispatcher) SetConfig(cfg Config) {
 		d.client.Timeout = cfg.Timeout
 	}
 	d.network = cfg.Network
-	d.client.Transport = d.guardedTransport()
+	d.client.Transport, d.proxyFor = d.guardedTransport()
 	if cfg.ProxyURL != "" {
-		transport, err := proxyTransport(cfg.ProxyURL)
+		parsed, err := url.Parse(cfg.ProxyURL)
+		if err != nil {
+			logger.Error("invalid webhook proxy URL, requests will be sent directly", "error", fmt.Errorf("failed to parse proxy URL: %w", err))
+			return
+		}
+		transport, err := proxyTransport(parsed)
 		if err != nil {
 			logger.Error("invalid webhook proxy URL, requests will be sent directly", "error", err)
 			return
 		}
 		d.client.Transport = transport
-		d.proxied = true
+		d.proxyFor = func(*url.URL) (*url.URL, error) { return parsed, nil }
 		logger.Info("webhook proxy configured", "proxy", cfg.ProxyURL)
 	}
 }
 
-func proxyTransport(rawURL string) (*http.Transport, error) {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse proxy URL: %w", err)
-	}
-
+func proxyTransport(parsed *url.URL) (*http.Transport, error) {
 	switch parsed.Scheme {
 	case "http", "https":
 		return &http.Transport{
@@ -376,12 +369,6 @@ func signPayload(secret string, body []byte) string {
 }
 
 func (d *Dispatcher) doRequest(url string, secret string, body []byte) (int, error) {
-	// Through a proxy the dialer only reaches the proxy, so the target's host is checked here.
-	if d.proxied {
-		if err := d.network.CheckURL(context.Background(), url); err != nil {
-			return 0, fmt.Errorf("%w: %v", netguard.ErrBlocked, err)
-		}
-	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %w", err)
@@ -392,12 +379,63 @@ func (d *Dispatcher) doRequest(url string, secret string, body []byte) (int, err
 		req.Header.Set("X-Posta-Signature", "sha256="+signPayload(secret, body))
 	}
 
-	resp, err := d.client.Do(req)
+	client, err := d.clientFor(req)
+	if err != nil {
+		return 0, err
+	}
+	if client != d.client {
+		defer client.CloseIdleConnections()
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}
 	_ = resp.Body.Close()
 	return resp.StatusCode, nil
+}
+
+// clientFor pins a proxied request to an address checked here, because the proxy resolves the host again and no dialer here sees the target.
+func (d *Dispatcher) clientFor(req *http.Request) (*http.Client, error) {
+	proxyURL, err := d.proxyFor(req.URL)
+	if err != nil {
+		return nil, err
+	}
+	if proxyURL == nil || d.network.AllowPrivate {
+		return d.client, nil
+	}
+	host := req.URL.Hostname()
+	ip, err := d.network.Resolve(req.Context(), host)
+	if err != nil {
+		return nil, err
+	}
+	port := req.URL.Port()
+	if port == "" {
+		port = "80"
+		if req.URL.Scheme == "https" {
+			port = "443"
+		}
+	}
+	// req.Host keeps the original name, so the Host header still names the webhook's host.
+	req.URL.Host = net.JoinHostPort(ip.String(), port)
+
+	t := d.client.Transport.(*http.Transport).Clone()
+	if t.Proxy != nil {
+		t.Proxy = http.ProxyURL(proxyURL)
+		if req.URL.Scheme == "http" {
+			path := req.URL.EscapedPath()
+			if path == "" {
+				path = "/"
+			}
+			req.URL.Opaque = "//" + req.URL.Host + path
+		}
+	}
+	if t.TLSClientConfig == nil {
+		t.TLSClientConfig = &tls.Config{}
+	} else {
+		t.TLSClientConfig = t.TLSClientConfig.Clone()
+	}
+	t.TLSClientConfig.ServerName = host
+	return &http.Client{Transport: t, Timeout: d.client.Timeout, CheckRedirect: d.client.CheckRedirect}, nil
 }
 
 func (d *Dispatcher) recordDelivery(userID, webhookID uint, workspaceID *uint, event string, status models.WebhookDeliveryStatus, httpStatus int, errMsg string, attempt int) {
