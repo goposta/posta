@@ -26,8 +26,9 @@ a feature is already planned.
 
 ### Security reporting
 
-Do **not** report security vulnerabilities in public issues or on the forum. Email
-[me@jkaninda.dev](mailto:me@jkaninda.dev) instead, as described in
+Do **not** report security vulnerabilities in public issues or on the forum. Report them privately
+through [GitHub](https://github.com/goposta/posta/security/advisories/new) or by email to
+[security@goposta.dev](mailto:security@goposta.dev), as described in
 [SECURITY.md](https://github.com/goposta/posta/blob/main/SECURITY.md).
 
 ## Development Setup

@@ -4,7 +4,11 @@
 
 If you discover a security vulnerability, please **do not open a public issue**.
 
-Instead, report it privately by emailing: **[me@jkaninda.dev](mailto:me@jkaninda.dev)**
+Instead, report it privately in one of these ways:
+
+* **GitHub:** open a private report from the repository's
+  [Security tab](https://github.com/goposta/posta/security/advisories/new) ("Report a vulnerability")
+* **Email:** **[security@goposta.dev](mailto:security@goposta.dev)**
 
 Please include as much detail as possible to help assess and reproduce the issue:
 
