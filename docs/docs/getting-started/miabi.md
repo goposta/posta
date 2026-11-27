@@ -18,7 +18,7 @@ All three give you the same self-hosted Posta; everything else in these docs app
 
 ## With a manifest
 
-The [`deploy/miabi/`](https://github.com/goposta/posta/tree/main/deploy/miabi) folder holds two `miabi.io/v1` manifests. Each declares the whole deployment as one project, so applying it again converges to the file instead of duplicating anything.
+The [`deploy/miabi/`](https://github.com/goposta/posta/tree/main/deploy/miabi) folder holds two `miabi.io/v1` manifests. Each declares the whole deployment, one resource per document separated by `---`, and applying it again converges to the file instead of duplicating anything.
 
 | Manifest | Topology | Use it for |
 |---|---|---|
