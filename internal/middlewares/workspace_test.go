@@ -33,6 +33,11 @@ import (
 const stubAPIKeyUserID = 1
 
 func stashAPIKey(boundWorkspace int, scopes string) okapi.Middleware {
+	return stashAPIKeyAs(boundWorkspace, scopes, models.WorkspaceRoleOwner)
+}
+
+// An empty role stands for a creator who is no longer a member of the bound workspace.
+func stashAPIKeyAs(boundWorkspace int, scopes string, role models.WorkspaceRole) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		c.Set(CtxUserID, stubAPIKeyUserID)
 		c.Set(CtxAuthMethod, AuthMethodAPIKey)
@@ -40,6 +45,9 @@ func stashAPIKey(boundWorkspace int, scopes string) okapi.Middleware {
 		if boundWorkspace > 0 {
 			c.Set(CtxWorkspaceID, boundWorkspace)
 			c.Set(CtxAPIKeyWorkspaceID, boundWorkspace)
+			if role != "" {
+				c.Set(CtxWorkspaceRole, string(role))
+			}
 		}
 		return c.Next()
 	}
@@ -53,7 +61,7 @@ func stashJWT(userID int) okapi.Middleware {
 	}
 }
 
-// The binding itself is the authority, so bound-key cases run resolveWorkspace with nil repos.
+// The binding and the role key auth resolved are the authority, so bound-key cases run with nil repos.
 func TestRequireWorkspace_BoundAPIKey(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -263,5 +271,35 @@ func TestRequireWorkspace_AccountWideKeyWithoutHeader(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), WorkspaceHeader) {
 		t.Fatalf("response should name the missing header, got %s", rec.Body.String())
+	}
+}
+
+// Regression for an Editor minting an admin-scoped key: the key must act with the Editor role, not as owner.
+func TestBoundAPIKey_ActsWithCreatorRole(t *testing.T) {
+	cases := []struct {
+		name       string
+		role       models.WorkspaceRole
+		minRole    models.WorkspaceRole
+		wantStatus int
+	}{
+		{"editor key cannot manage members", models.WorkspaceRoleEditor, models.WorkspaceRoleAdmin, http.StatusForbidden},
+		{"admin key cannot do owner-only actions", models.WorkspaceRoleAdmin, models.WorkspaceRoleOwner, http.StatusForbidden},
+		{"admin key can manage members", models.WorkspaceRoleAdmin, models.WorkspaceRoleAdmin, http.StatusOK},
+		{"owner key can do owner-only actions", models.WorkspaceRoleOwner, models.WorkspaceRoleOwner, http.StatusOK},
+		{"creator no longer a member is refused", "", models.WorkspaceRoleViewer, http.StatusForbidden},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := okapi.NewTestServer(t)
+			o.Get("/ws", func(c *okapi.Context) error {
+				return c.JSON(http.StatusOK, okapi.M{"role": c.GetString(CtxWorkspaceRole)})
+			}).Use(stashAPIKeyAs(7, models.ScopeAll, tc.role), RequireWorkspaceMiddleware(nil, nil), RequireWorkspaceRole(tc.minRole))
+
+			rec := httptest.NewRecorder()
+			o.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ws", nil))
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+		})
 	}
 }

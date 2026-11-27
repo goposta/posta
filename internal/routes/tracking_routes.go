@@ -22,7 +22,10 @@ package routes
 import (
 	"net/http"
 
+	"github.com/goposta/posta/internal/dto"
 	"github.com/goposta/posta/internal/handlers"
+	"github.com/goposta/posta/internal/middlewares"
+	"github.com/goposta/posta/internal/models"
 	"github.com/jkaninda/okapi"
 )
 
@@ -95,13 +98,20 @@ func (r *Router) bounceWebhookRoutes() []okapi.RouteDefinition {
 
 	return []okapi.RouteDefinition{
 		{
-			Method:   http.MethodPost,
-			Path:     "",
-			Handler:  okapi.H(r.h.bounceWebhook.HandleBounce),
-			Group:    bounceGroup,
-			Summary:  "Bounce notification webhook",
-			Request:  &handlers.BounceNotification{},
-			Response: &handlers.BounceResponse{},
+			Method:      http.MethodPost,
+			Path:        "",
+			Handler:     okapi.H(r.h.bounceWebhook.HandleBounce),
+			Group:       bounceGroup,
+			Middlewares: []okapi.Middleware{middlewares.RequireScope(models.ScopeWrite)},
+			Summary:     "Bounce notification webhook",
+			Description: "Record a bounce for an address in the API key's workspace. Requires a workspace-bound key with the `write` scope.",
+			Request:     &handlers.BounceNotification{},
+			Response:    &handlers.BounceResponse{},
+			Options: []okapi.RouteOption{
+				okapi.DocResponse(400, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(401, &dto.ErrorResponseBody{}),
+				okapi.DocResponse(403, &dto.ErrorResponseBody{}),
+			},
 		},
 	}
 }

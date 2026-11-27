@@ -72,12 +72,16 @@ func (h *BounceWebhookHandler) HandleBounce(c *okapi.Context, req *BounceNotific
 		bounceType = "hard"
 	}
 
+	scope := getScope(c)
+	if scope.WorkspaceID == nil {
+		return c.AbortBadRequest("a workspace-scoped API key is required")
+	}
+
 	action := "recorded"
 
 	if bounceType == "hard" {
-		// Find all subscribers with this email (across all scopes)
 		var subscribers []models.Subscriber
-		if err := h.subscriberRepo.FindAllByEmail(email, &subscribers); err == nil {
+		if err := h.subscriberRepo.FindAllByEmail(scope, email, &subscribers); err == nil && len(subscribers) > 0 {
 			now := time.Now()
 			for i := range subscribers {
 				if subscribers[i].Status != models.SubscriberStatusBounced {
@@ -92,7 +96,7 @@ func (h *BounceWebhookHandler) HandleBounce(c *okapi.Context, req *BounceNotific
 
 	if req.Body.EmailUUID != "" {
 		em, err := h.emailRepo.FindByUUID(req.Body.EmailUUID)
-		if err == nil {
+		if err == nil && repositories.OwnsResource(scope, em.UserID, em.WorkspaceID) {
 			msg, err := h.messageRepo.FindByEmailID(em.ID)
 			if err == nil {
 				_ = h.messageRepo.UpdateBouncedAt(msg.ID)

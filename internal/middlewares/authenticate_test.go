@@ -54,7 +54,7 @@ func jwtOnlyServer(t *testing.T) *okapi.TestServer {
 	o := okapi.NewTestServer(t)
 	o.Get("/protected", func(c *okapi.Context) error {
 		return c.String(http.StatusOK, c.GetString(CtxAuthMethod))
-	}).Use(Authenticate(JWTAuth(cfg), nil, nil, nil))
+	}).Use(Authenticate(JWTAuth(cfg), nil, nil, nil, nil))
 	return o
 }
 
@@ -170,7 +170,7 @@ func TestAuthenticate_RoutesAPIKeyPrefixToKeyPath(t *testing.T) {
 			}()
 
 			cfg := &config.Config{JWTSecret: testSecret}
-			mw := Authenticate(JWTAuth(cfg), nil, nil, nil)
+			mw := Authenticate(JWTAuth(cfg), nil, nil, nil, nil)
 			req := httptest.NewRequest(http.MethodGet, "/protected", nil)
 			tc.apply(req)
 

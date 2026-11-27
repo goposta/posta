@@ -255,9 +255,9 @@ func InitRoutes(app *okapi.Okapi, db *gorm.DB, redisClient *redis.Client, cfg *c
 		v1:  app.Group("/api/v1"),
 		mw: routerMiddleware{
 			jwtAdminAuth:      jwtAdminAuth,
-			auth:              middlewares.Authenticate(jwtAuth, apiKeyService, userRepo, apiKeyRepo),
+			auth:              middlewares.Authenticate(jwtAuth, apiKeyService, userRepo, apiKeyRepo, workspaceRepo),
 			jwtOnly:           jwtAuth.Middleware,
-			apiKey:            middlewares.APIKeyAuth(apiKeyService, userRepo, apiKeyRepo),
+			apiKey:            middlewares.APIKeyAuth(apiKeyService, userRepo, apiKeyRepo, workspaceRepo),
 			loginLimiter:      loginLimiterMiddleware(cfg, limiter),
 			workspace:         middlewares.RequireWorkspaceMiddleware(workspaceRepo, userRepo),
 			optionalWorkspace: middlewares.OptionalWorkspaceMiddleware(workspaceRepo, userRepo),
