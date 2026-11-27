@@ -290,8 +290,22 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		}
 
 		em.RetryCount++
-		em.Status = models.EmailStatusFailed
 		em.ErrorMessage = err.Error()
+
+		// The SMTP server's max_retries caps attempts across every task for this email, not just this one.
+		if serverRetryLimitReached(smtpServer, em.RetryCount) {
+			em.Status = models.EmailStatusFailed
+			_ = h.emailRepo.Update(em)
+			logger.Debug("worker: email send failed, SMTP server retry limit reached", "id", em.ID, "attempt", em.RetryCount, "max_retries", smtpServer.MaxRetries, "error", err)
+			return fmt.Errorf("SMTP send failed: %w: %w", err, asynq.SkipRetry)
+		}
+
+		// Stay queued while Asynq still holds a retry, so the retry worker does not enqueue a second task for it.
+		if taskRetriesExhausted(ctx) {
+			em.Status = models.EmailStatusFailed
+		} else {
+			em.Status = models.EmailStatusQueued
+		}
 		_ = h.emailRepo.Update(em)
 		logger.Debug("worker: email send failed, will retry", "id", em.ID, "attempt", em.RetryCount, "error", err)
 		return fmt.Errorf("SMTP send failed: %w", err)
@@ -341,6 +355,25 @@ func (h *EmailSendHandler) markFailed(em *models.Email, reason string) {
 }
 
 // Only a 5xx at RCPT TO counts; 4xx, connection and MAIL FROM/DATA failures return false and keep retrying.
+// serverRetryLimitReached reports whether an email has used up the attempts its SMTP server allows; 0 means no limit.
+func serverRetryLimitReached(server *models.SMTPServer, attempts int) bool {
+	return server != nil && server.MaxRetries > 0 && attempts >= server.MaxRetries
+}
+
+// taskRetriesExhausted reports whether Asynq will not retry the current task again if it fails.
+// Outside an Asynq context it reports true, so a failure is final.
+func taskRetriesExhausted(ctx context.Context) bool {
+	retried, ok := asynq.GetRetryCount(ctx)
+	if !ok {
+		return true
+	}
+	maxRetry, ok := asynq.GetMaxRetry(ctx)
+	if !ok {
+		return true
+	}
+	return retried >= maxRetry
+}
+
 func permanentRejection(err error) (*email.SendError, bool) {
 	var se *email.SendError
 	if errors.As(err, &se) && se.Permanent() && se.Stage == "RCPT TO" && se.Recipient != "" {
@@ -409,7 +442,7 @@ func senderDomain(addr string) string {
 	return strings.ToLower(parts[1])
 }
 
-// ExhaustedErrorHandler marks emails permanently failed once Asynq exhausts all retries.
+// ExhaustedErrorHandler marks emails permanently failed once Asynq exhausts all retries or skips them.
 type ExhaustedErrorHandler struct {
 	emailRepo  *repositories.EmailRepository
 	dispatcher *webhook.Dispatcher
@@ -424,8 +457,12 @@ func NewExhaustedErrorHandler(emailRepo *repositories.EmailRepository, dispatche
 	}
 }
 
-func (e *ExhaustedErrorHandler) HandleError(_ context.Context, t *asynq.Task, err error) {
+func (e *ExhaustedErrorHandler) HandleError(ctx context.Context, t *asynq.Task, err error) {
 	if t.Type() != TypeEmailSend {
+		return
+	}
+	// Asynq calls the error handler after every failed attempt; only the last one is permanent.
+	if !errors.Is(err, asynq.SkipRetry) && !taskRetriesExhausted(ctx) {
 		return
 	}
 	var payload EmailSendPayload

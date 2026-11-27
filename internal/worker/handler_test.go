@@ -20,11 +20,13 @@
 package worker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/textproto"
 	"testing"
 
+	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/email"
 )
 
@@ -75,5 +77,34 @@ func TestPermanentRejectionExposesRecipient(t *testing.T) {
 	}
 	if se.Code != 550 {
 		t.Fatalf("code = %d, want 550", se.Code)
+	}
+}
+
+func TestServerRetryLimitReached(t *testing.T) {
+	cases := []struct {
+		name     string
+		server   *models.SMTPServer
+		attempts int
+		want     bool
+	}{
+		{"no server", nil, 10, false},
+		{"zero max_retries means no limit", &models.SMTPServer{MaxRetries: 0}, 10, false},
+		{"below limit", &models.SMTPServer{MaxRetries: 3}, 2, false},
+		{"at limit", &models.SMTPServer{MaxRetries: 3}, 3, true},
+		{"above limit", &models.SMTPServer{MaxRetries: 3}, 13, true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := serverRetryLimitReached(c.server, c.attempts); got != c.want {
+				t.Fatalf("serverRetryLimitReached() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestTaskRetriesExhaustedOutsideAsynq(t *testing.T) {
+	if !taskRetriesExhausted(context.Background()) {
+		t.Fatalf("taskRetriesExhausted() outside an Asynq context = false, want true")
 	}
 }
