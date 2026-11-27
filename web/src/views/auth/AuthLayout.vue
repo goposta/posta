@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Form styling stays in each page: scoped CSS applies to slot content in the parent's scope, not this component's.
 import AuthRibbons from '../../components/AuthRibbons.vue'
+import SuiteBadge from '../../components/SuiteBadge.vue'
 import { useThemeStore } from '../../stores/theme'
 
 withDefaults(
@@ -55,6 +56,10 @@ const theme = useThemeStore()
 
         <slot />
       </div>
+
+      <footer class="auth-suite">
+        <SuiteBadge />
+      </footer>
     </main>
 
     <button
@@ -164,13 +169,17 @@ const theme = useThemeStore()
 
 .auth-main {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 40px 24px;
+  padding: 40px 24px 28px;
 }
 .auth-card {
   width: 100%;
   max-width: 380px;
+  margin: auto 0;
+}
+.auth-suite {
+  padding-top: 32px;
 }
 .auth-header { text-align: center; margin-bottom: 24px; }
 .auth-wordmark {
