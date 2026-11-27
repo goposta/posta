@@ -127,8 +127,8 @@ func (c *Cache) InvalidateAdmin(ctx context.Context) {
 // InvalidateByPattern uses SCAN so it never blocks Redis.
 func (c *Cache) InvalidateByPattern(ctx context.Context, pattern string) {
 	iter := c.client.Scan(ctx, 0, pattern, 100).Iterator()
-	for iter.Next(ctx) {
-		c.client.Del(ctx, iter.Val())
+	for key := range iter.Vals(ctx) {
+		c.client.Del(ctx, key)
 	}
 }
 
