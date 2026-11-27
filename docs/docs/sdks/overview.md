@@ -63,6 +63,12 @@ Note that `send` grants none of the others: a send-only key is confined to the
 public send API. A 403 from an endpoint you expect to work usually means a
 missing scope.
 
+A key also acts with its creator's current workspace role: scopes never grant
+more than that member could do in the dashboard. Only admins and owners can
+create a key with `admin` or `*`, and a key stops working when its creator
+leaves the workspace. The bounce webhook (`POST /webhooks/bounce`) needs the
+`write` scope and affects only the key's own workspace.
+
 ## Error Handling
 
 All SDKs provide typed API errors that include:

@@ -23,7 +23,6 @@ import (
 	"strconv"
 
 	"github.com/goposta/posta/internal/models"
-	"github.com/goposta/posta/internal/storage/repositories"
 	"github.com/jkaninda/okapi"
 )
 
@@ -35,8 +34,12 @@ type DefaultWorkspaceResolver interface {
 	DefaultWorkspace(userID uint) (*models.Workspace, models.WorkspaceRole, error)
 }
 
-// A workspace-bound key IS the workspace; other callers must prove membership and inherit its role.
-func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver, raw string, required bool) error {
+type WorkspaceMemberFinder interface {
+	FindMember(workspaceID, userID uint) (*models.WorkspaceMember, error)
+}
+
+// A workspace-bound key IS the workspace and carries its creator's role; other callers must prove membership.
+func resolveWorkspace(c *okapi.Context, workspaceRepo WorkspaceMemberFinder, userRepo DefaultWorkspaceResolver, raw string, required bool) error {
 	userID := c.GetInt(CtxUserID)
 	if userID == 0 {
 		return c.AbortUnauthorized("authentication required")
@@ -57,8 +60,10 @@ func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRep
 				return c.AbortForbidden("API key is not bound to this workspace")
 			}
 		}
+		if c.GetString(CtxWorkspaceRole) == "" {
+			return c.AbortForbidden("API key owner is not a member of this workspace")
+		}
 		c.Set(CtxWorkspaceID, int(*bound))
-		c.Set(CtxWorkspaceRole, string(models.WorkspaceRoleOwner))
 		return c.Next()
 	}
 
@@ -91,20 +96,20 @@ func resolveWorkspace(c *okapi.Context, workspaceRepo *repositories.WorkspaceRep
 }
 
 // A workspace-bound API key needs no explicit workspace: its binding names it.
-func RequireWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver) okapi.Middleware {
+func RequireWorkspaceMiddleware(workspaceRepo WorkspaceMemberFinder, userRepo DefaultWorkspaceResolver) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		return resolveWorkspace(c, workspaceRepo, userRepo, c.Header(WorkspaceHeader), true)
 	}
 }
 
-func OptionalWorkspaceMiddleware(workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver) okapi.Middleware {
+func OptionalWorkspaceMiddleware(workspaceRepo WorkspaceMemberFinder, userRepo DefaultWorkspaceResolver) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		return resolveWorkspace(c, workspaceRepo, userRepo, c.Header(WorkspaceHeader), false)
 	}
 }
 
 // Browser-direct requests can pass the workspace only as a query parameter.
-func WorkspaceFromQueryOrHeader(workspaceRepo *repositories.WorkspaceRepository, userRepo DefaultWorkspaceResolver) okapi.Middleware {
+func WorkspaceFromQueryOrHeader(workspaceRepo WorkspaceMemberFinder, userRepo DefaultWorkspaceResolver) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		raw := c.Header(WorkspaceHeader)
 		if raw == "" {
@@ -114,7 +119,6 @@ func WorkspaceFromQueryOrHeader(workspaceRepo *repositories.WorkspaceRepository,
 	}
 }
 
-// A workspace-bound API key resolves as owner, so it clears every tier.
 func RequireWorkspaceRole(minRole models.WorkspaceRole) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		roleStr := c.GetString(CtxWorkspaceRole)

@@ -21,8 +21,10 @@ package handlers
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
+	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/audit"
 	"github.com/goposta/posta/internal/services/auth"
 	"github.com/goposta/posta/internal/services/notification"
@@ -83,6 +85,9 @@ func (h *APIKeyHandler) Create(c *okapi.Context, req *CreateAPIKeyRequest) error
 	scopes, err := auth.NormalizeScopes(req.Body.Scopes)
 	if err != nil {
 		return c.AbortBadRequest("invalid scope", err)
+	}
+	if (slices.Contains(scopes, models.ScopeAdmin) || slices.Contains(scopes, models.ScopeAll)) && !workspaceRole(c).CanManageMembers() {
+		return c.AbortForbidden("only workspace admins and owners can create a key with the admin scope")
 	}
 
 	if h.quota != nil {

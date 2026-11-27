@@ -142,14 +142,14 @@ func firstStore(stores []*sessionpkg.Store) *sessionpkg.Store {
 }
 
 // API keys may also come from ?token= so EventSource and download links can authenticate without headers.
-func Authenticate(jwtAuth okapi.JWTAuth, keyService *auth.APIKeyService, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository) okapi.Middleware {
+func Authenticate(jwtAuth okapi.JWTAuth, keyService *auth.APIKeyService, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, members WorkspaceMemberFinder) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		raw := bearerToken(c)
 		if raw == "" {
 			raw = strings.TrimSpace(c.Query("token"))
 		}
 		if strings.HasPrefix(raw, auth.APIKeyPrefix) {
-			return authenticateAPIKey(c, keyService, userRepo, keyRepo, raw)
+			return authenticateAPIKey(c, keyService, userRepo, keyRepo, members, raw)
 		}
 		if raw == "" {
 			// A browser sends the JWT only as an HttpOnly cookie, so let okapi read it via TokenLookup.
@@ -163,7 +163,7 @@ func Authenticate(jwtAuth okapi.JWTAuth, keyService *auth.APIKeyService, userRep
 }
 
 // APIKeyAuth takes keys only from the header: a browser session is not valid here and no caller needs a key in a URL.
-func APIKeyAuth(keyService *auth.APIKeyService, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository) okapi.Middleware {
+func APIKeyAuth(keyService *auth.APIKeyService, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, members WorkspaceMemberFinder) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		raw := bearerToken(c)
 		if raw == "" {
@@ -172,7 +172,7 @@ func APIKeyAuth(keyService *auth.APIKeyService, userRepo *repositories.UserRepos
 		if !strings.HasPrefix(raw, auth.APIKeyPrefix) {
 			return c.AbortUnauthorized("invalid Authorization format, expected: Bearer <API_KEY>")
 		}
-		return authenticateAPIKey(c, keyService, userRepo, keyRepo, raw)
+		return authenticateAPIKey(c, keyService, userRepo, keyRepo, members, raw)
 	}
 }
 
@@ -181,7 +181,7 @@ func bearerToken(c *okapi.Context) string {
 	return strings.TrimSpace(strings.TrimPrefix(c.Header("Authorization"), "Bearer "))
 }
 
-func authenticateAPIKey(c *okapi.Context, keyService *auth.APIKeyService, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, rawKey string) error {
+func authenticateAPIKey(c *okapi.Context, keyService *auth.APIKeyService, userRepo *repositories.UserRepository, keyRepo *repositories.APIKeyRepository, members WorkspaceMemberFinder, rawKey string) error {
 	apiKey, err := keyService.ValidateKey(rawKey)
 	if err != nil {
 		return c.AbortUnauthorized("invalid API key")
@@ -196,6 +196,16 @@ func authenticateAPIKey(c *okapi.Context, keyService *auth.APIKeyService, userRe
 	}
 	if !IPAllowed(apiKey.AllowedIPs, c.RealIP()) {
 		return c.AbortForbidden("IP address not allowed for this API key")
+	}
+
+	// A bound key acts with its creator's current role, so demotion or removal takes effect on the key too.
+	var role models.WorkspaceRole
+	if apiKey.WorkspaceID != nil {
+		member, err := members.FindMember(*apiKey.WorkspaceID, apiKey.UserID)
+		if err != nil {
+			return c.AbortForbidden("API key owner is not a member of this workspace")
+		}
+		role = member.Role
 	}
 
 	scopes := []string(apiKey.Scopes)
@@ -213,6 +223,7 @@ func authenticateAPIKey(c *okapi.Context, keyService *auth.APIKeyService, userRe
 		// The workspace middleware resolves the tenant from this binding, and legacy API-key routes rely on it.
 		c.Set(CtxWorkspaceID, int(*apiKey.WorkspaceID))
 		c.Set(CtxAPIKeyWorkspaceID, int(*apiKey.WorkspaceID))
+		c.Set(CtxWorkspaceRole, string(role))
 	}
 
 	if keyRepo != nil {
