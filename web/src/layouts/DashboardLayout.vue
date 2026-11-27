@@ -1134,6 +1134,7 @@ function getIcon(name: string): string {
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
