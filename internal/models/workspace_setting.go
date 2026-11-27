@@ -31,6 +31,8 @@ type WorkspaceSetting struct {
 	APIKeyExpiryDays      int       `json:"api_key_expiry_days" gorm:"default:90"`
 	BounceAutoSuppress    bool      `json:"bounce_auto_suppress" gorm:"default:true"`
 	RequireVerifiedDomain bool      `json:"require_verified_domain" gorm:"default:false"`
+	TrackOpens            bool      `json:"track_opens" gorm:"default:true;not null"`
+	TrackClicks           bool      `json:"track_clicks" gorm:"default:true;not null"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
 }

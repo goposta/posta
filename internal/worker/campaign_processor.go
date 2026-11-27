@@ -48,6 +48,7 @@ type CampaignProcessor struct {
 	versionRepo      *repositories.TemplateVersionRepository
 	localizationRepo *repositories.TemplateLocalizationRepository
 	trackingService  *tracking.Service
+	settingRepo      *repositories.WorkspaceSettingRepository
 	producer         *Producer
 	dispatcher       *webhook.Dispatcher
 }
@@ -62,6 +63,7 @@ func NewCampaignProcessor(
 	versionRepo *repositories.TemplateVersionRepository,
 	localizationRepo *repositories.TemplateLocalizationRepository,
 	trackingService *tracking.Service,
+	settingRepo *repositories.WorkspaceSettingRepository,
 	producer *Producer,
 	dispatcher *webhook.Dispatcher,
 ) *CampaignProcessor {
@@ -75,6 +77,7 @@ func NewCampaignProcessor(
 		versionRepo:      versionRepo,
 		localizationRepo: localizationRepo,
 		trackingService:  trackingService,
+		settingRepo:      settingRepo,
 		producer:         producer,
 		dispatcher:       dispatcher,
 	}
@@ -96,6 +99,13 @@ func (p *CampaignProcessor) HandleCampaignStart(_ context.Context, t *asynq.Task
 	if campaign.Status != models.CampaignStatusSending {
 		logger.Info("campaign is not in sending status, skipping", "id", campaign.ID, "status", campaign.Status)
 		return nil
+	}
+
+	if p.settingRepo != nil && campaign.WorkspaceID != nil {
+		opens, clicks := p.settingRepo.CampaignTracking(*campaign.WorkspaceID)
+		if err := p.campaignRepo.SetTracking(campaign.ID, opens, clicks); err != nil {
+			return fmt.Errorf("failed to record campaign tracking settings: %w", err)
+		}
 	}
 
 	list, err := p.listRepo.FindByID(campaign.ListID)
@@ -317,7 +327,7 @@ func (p *CampaignProcessor) HandleCampaignBatch(_ context.Context, t *asynq.Task
 			em.Subject = email.SubstituteSystemLinks(em.Subject, webViewURL, unsubscribeURL)
 
 			if em.HTMLBody != "" {
-				em.HTMLBody = p.trackingService.ProcessHTML(em.HTMLBody, campaign.ID, msg.ID)
+				em.HTMLBody = p.trackingService.ProcessHTML(em.HTMLBody, campaign.ID, msg.ID, campaign.TrackOpens, campaign.TrackClicks)
 			}
 			em.ListUnsubscribeURL = unsubscribeURL
 			em.ListUnsubscribePost = true

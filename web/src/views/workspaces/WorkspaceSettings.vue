@@ -67,6 +67,8 @@ const wsSettings = ref<Partial<WorkspaceSettings>>({
   api_key_expiry_days: 90,
   bounce_auto_suppress: true,
   require_verified_domain: false,
+  track_opens: true,
+  track_clicks: true,
 })
 const timezones = computed(() => timezoneOptions(wsSettings.value.timezone))
 const wsSettingsLoading = ref(false)
@@ -153,6 +155,8 @@ async function fetchWorkspaceSettings() {
       api_key_expiry_days: s.api_key_expiry_days,
       bounce_auto_suppress: s.bounce_auto_suppress,
       require_verified_domain: s.require_verified_domain,
+      track_opens: s.track_opens,
+      track_clicks: s.track_clicks,
     }
   } catch {
     /* settings fall back to defaults */
@@ -644,6 +648,33 @@ watch(activeTab, (value) => {
                 <input type="checkbox" v-model="wsSettings.require_verified_domain" />
                 <span>Require verified sender domain (strict mode)</span>
               </label>
+            </div>
+            <button class="btn btn-primary" :disabled="wsSettingsSaving" @click="saveWorkspaceSettings">
+              {{ wsSettingsSaving ? 'Saving...' : 'Save' }}
+            </button>
+          </template>
+        </div>
+
+        <div class="card-body" style="border-top: 1px solid var(--border-primary);">
+          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Campaign Tracking</h4>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+            Applies to campaigns that start sending after you save. Unsubscribe and web view links are always kept.
+          </p>
+          <div v-if="wsSettingsLoading" class="loading-page" style="padding: 24px 0;"><div class="spinner"></div></div>
+          <template v-else>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" v-model="wsSettings.track_opens" />
+                <span>Track opens</span>
+              </label>
+              <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Add an invisible tracking pixel to campaign emails.</small>
+            </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" v-model="wsSettings.track_clicks" />
+                <span>Track clicks</span>
+              </label>
+              <small style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block;">Route campaign links through a Posta redirect. When off, links point straight to their destination.</small>
             </div>
             <button class="btn btn-primary" :disabled="wsSettingsSaving" @click="saveWorkspaceSettings">
               {{ wsSettingsSaving ? 'Saving...' : 'Save' }}

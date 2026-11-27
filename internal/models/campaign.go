@@ -85,9 +85,12 @@ type Campaign struct {
 	ScheduledAt       *time.Time     `json:"scheduled_at,omitempty"`
 	StartedAt         *time.Time     `json:"started_at,omitempty"`
 	CompletedAt       *time.Time     `json:"completed_at,omitempty"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         *time.Time     `json:"updated_at,omitempty"`
-	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
+	// Copied from the workspace settings when sending starts, so a mid-send settings change cannot mix modes.
+	TrackOpens  bool           `json:"track_opens" gorm:"default:true;not null"`
+	TrackClicks bool           `json:"track_clicks" gorm:"default:true;not null"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   *time.Time     `json:"updated_at,omitempty"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 	// Snapshot keeps aggregated stats from soft-delete time so analytics survive CampaignMessage purges.
 	Snapshot TemplateData `json:"snapshot,omitempty" gorm:"type:text"`
 	User     User         `json:"-" gorm:"foreignKey:UserID"`

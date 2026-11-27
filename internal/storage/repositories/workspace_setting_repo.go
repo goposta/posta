@@ -46,6 +46,8 @@ func (r *WorkspaceSettingRepository) FindByWorkspaceID(workspaceID uint) (*model
 			WebhookRetryCount:  3,
 			APIKeyExpiryDays:   90,
 			BounceAutoSuppress: true,
+			TrackOpens:         true,
+			TrackClicks:        true,
 		}
 		if err := r.db.Create(&setting).Error; err != nil {
 			return nil, err
@@ -68,4 +70,15 @@ func (r *WorkspaceSettingRepository) RequireVerifiedDomain(workspaceID uint) boo
 		return false
 	}
 	return setting.RequireVerifiedDomain
+}
+
+// CampaignTracking never creates a settings row; both flags are on when none exists, matching the column defaults.
+func (r *WorkspaceSettingRepository) CampaignTracking(workspaceID uint) (opens, clicks bool) {
+	var setting models.WorkspaceSetting
+	if err := r.db.Select("track_opens", "track_clicks").
+		Where("workspace_id = ?", workspaceID).
+		First(&setting).Error; err != nil {
+		return true, true
+	}
+	return setting.TrackOpens, setting.TrackClicks
 }

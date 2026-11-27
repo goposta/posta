@@ -73,13 +73,18 @@ When the recipient clicks it, Posta records a **click** event and then issues a
 
 ## Enabling and disabling tracking
 
-Tracking is a **server-side capability**, not a per-send or per-workspace toggle:
-
-- For **campaign** sends, open-pixel injection and link rewriting are applied
-  automatically to every message whenever the tracking service is configured (it
-  requires a public base URL and an HMAC signing key on the server). There is no
-  per-campaign or workspace checkbox to turn it off — if tracking is configured, a
-  campaign send is tracked.
+- For **campaign** sends, open tracking and click tracking are on by default. Turn
+  either off for a workspace under **Workspace settings → Campaign Tracking**, or with
+  `track_opens` / `track_clicks` on `PUT /api/v1/workspaces/current/settings` (see
+  [Workspace Settings](../workspaces/settings.md)). With click tracking off, links
+  keep their original URLs; with open tracking off, no pixel is added.
+- A campaign takes the workspace's settings when it starts sending and keeps them
+  until it finishes, even if the settings change mid-send. The campaign's
+  `track_opens` and `track_clicks` fields show what it used, and its analytics show
+  "tracking off" instead of a 0% rate.
+- Unsubscribe and web view links (`{{ posta_* }}` variables) are never rewritten,
+  whatever the settings. Links in emails already sent keep working after tracking
+  is turned off.
 - For **transactional** sends (`POST /api/v1/emails/send` and friends), Posta does
   **not** rewrite links or inject an open pixel. Transactional messages only gain
   Posta-hosted links when the template references a `{{ posta_* }}` system variable

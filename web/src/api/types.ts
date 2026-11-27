@@ -981,6 +981,8 @@ export interface WorkspaceSettings {
   api_key_expiry_days: number
   bounce_auto_suppress: boolean
   require_verified_domain: boolean
+  track_opens: boolean
+  track_clicks: boolean
   created_at: string
   updated_at: string
 }
@@ -1146,6 +1148,8 @@ export interface Campaign {
   scheduled_at?: string
   started_at?: string
   completed_at?: string
+  track_opens?: boolean
+  track_clicks?: boolean
   created_at: string
   updated_at?: string
   stats?: CampaignStats

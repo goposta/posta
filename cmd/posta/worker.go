@@ -150,6 +150,7 @@ func runWorker() error {
 		repositories.NewTemplateVersionRepository(db),
 		repositories.NewTemplateLocalizationRepository(db),
 		trackingService,
+		repositories.NewWorkspaceSettingRepository(db),
 		campaignProducer,
 		campaignDispatcher,
 	)

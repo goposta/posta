@@ -99,6 +99,8 @@ func EnsureSystem(db *gorm.DB, smtp config.SystemSMTPConfig) (*models.Workspace,
 			WebhookRetryCount:  3,
 			APIKeyExpiryDays:   90,
 			BounceAutoSuppress: true,
+			TrackOpens:         true,
+			TrackClicks:        true,
 		}
 		// The platform From is the sending default so a dashboard test send uses the same identity.
 		if name, addr, perr := ParseSender(smtp.From); perr == nil {
