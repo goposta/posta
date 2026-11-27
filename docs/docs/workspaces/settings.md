@@ -42,6 +42,8 @@ Response:
     "api_key_expiry_days": 90,
     "bounce_auto_suppress": true,
     "require_verified_domain": false,
+    "track_opens": true,
+    "track_clicks": true,
     "created_at": "2026-05-31T10:00:00Z",
     "updated_at": "2026-05-31T10:00:00Z"
   }
@@ -57,6 +59,8 @@ Response:
 | `api_key_expiry_days` | int | `90` | Default lifetime for newly created API keys |
 | `bounce_auto_suppress` | bool | `true` | Auto-suppress recipients on hard bounce / complaint |
 | `require_verified_domain` | bool | `false` | Require a verified sending domain before sending |
+| `track_opens` | bool | `true` | Add an open-tracking pixel to campaign emails |
+| `track_clicks` | bool | `true` | Rewrite campaign links through the click-tracking redirect |
 
 ### Update settings
 

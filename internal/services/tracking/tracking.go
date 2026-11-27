@@ -51,15 +51,23 @@ func NewService(repo *repositories.TrackingRepository, baseURL string, hmacKey [
 // (?i) makes the href match case-insensitive so HREF="…" still matches.
 var linkRegex = regexp.MustCompile(`(?i)href\s*=\s*["'](https?://[^"']+)["']`)
 
-// ProcessHTML rewrites links for click tracking and injects the open tracking pixel.
-func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) string {
+func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint, trackOpens, trackClicks bool) string {
 	if html == "" {
 		return html
 	}
+	if trackClicks {
+		html = s.rewriteLinks(html, campaignID, messageID)
+	}
+	if trackOpens {
+		html = s.injectPixel(html, messageID)
+	}
+	return html
+}
 
+func (s *Service) rewriteLinks(html string, campaignID uint, messageID uint) string {
 	trackingPrefix := s.baseURL + "/t/"
 
-	html = linkRegex.ReplaceAllStringFunc(html, func(match string) string {
+	return linkRegex.ReplaceAllStringFunc(html, func(match string) string {
 		sub := linkRegex.FindStringSubmatch(match)
 		if len(sub) < 2 {
 			return match
@@ -85,7 +93,9 @@ func (s *Service) ProcessHTML(html string, campaignID uint, messageID uint) stri
 		trackedURL := s.ClickURL(messageID, hash)
 		return strings.Replace(match, originalURL, trackedURL, 1)
 	})
+}
 
+func (s *Service) injectPixel(html string, messageID uint) string {
 	// The pixel URL is HMAC-signed so a third party can't inflate metrics via the predictable /t/o/<id> path.
 	pixel := fmt.Sprintf(`<img src="%s" width="1" height="1" alt="" style="display:none" />`, s.OpenURL(messageID))
 	if strings.Contains(html, "</body>") {

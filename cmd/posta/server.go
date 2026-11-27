@@ -523,6 +523,7 @@ func startEmbeddedWorker(db *gorm.DB,
 		repositories.NewTemplateVersionRepository(db),
 		repositories.NewTemplateLocalizationRepository(db),
 		trackingService,
+		repositories.NewWorkspaceSettingRepository(db),
 		campaignProducer,
 		campaignDispatcher,
 	)

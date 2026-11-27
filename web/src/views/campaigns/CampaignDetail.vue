@@ -30,6 +30,9 @@ const canSend = computed(() => campaign.value?.status === 'draft')
 const canPause = computed(() => campaign.value?.status === 'sending')
 const canResume = computed(() => campaign.value?.status === 'paused')
 const canCancel = computed(() => ['sending', 'paused', 'scheduled'].includes(campaign.value?.status ?? ''))
+// A draft carries the column defaults; the flags are only meaningful once sending has started.
+const opensTracked = computed(() => !campaign.value?.started_at || campaign.value.track_opens !== false)
+const clicksTracked = computed(() => !campaign.value?.started_at || campaign.value.track_clicks !== false)
 const canDelete = computed(() => campaign.value ? campaign.value.status !== 'sending' : false)
 const showAnalyticsTab = computed(() => ['sending', 'sent', 'paused', 'cancelled'].includes(campaign.value?.status ?? ''))
 
@@ -396,14 +399,14 @@ onMounted(async () => {
                 <div style="font-size: 0.75em; color: var(--text-secondary);">{{ analyticsData.analytics.sent_messages }} / {{ analyticsData.analytics.total_messages }}</div>
               </div>
               <div style="text-align: center; padding: 16px; background: var(--bg-secondary); border-radius: 8px;">
-                <div style="font-size: 1.8em; font-weight: 700; color: var(--primary-600);">{{ formatRate(analyticsData.analytics.open_rate) }}</div>
+                <div style="font-size: 1.8em; font-weight: 700; color: var(--primary-600);">{{ opensTracked ? formatRate(analyticsData.analytics.open_rate) : '—' }}</div>
                 <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 4px;">Open Rate</div>
-                <div style="font-size: 0.75em; color: var(--text-secondary);">{{ analyticsData.analytics.opened_messages }} opened</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary);">{{ opensTracked ? `${analyticsData.analytics.opened_messages} opened` : 'Open tracking off' }}</div>
               </div>
               <div style="text-align: center; padding: 16px; background: var(--bg-secondary); border-radius: 8px;">
-                <div style="font-size: 1.8em; font-weight: 700; color: var(--primary-600);">{{ formatRate(analyticsData.analytics.click_rate) }}</div>
+                <div style="font-size: 1.8em; font-weight: 700; color: var(--primary-600);">{{ clicksTracked ? formatRate(analyticsData.analytics.click_rate) : '—' }}</div>
                 <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 4px;">Click Rate</div>
-                <div style="font-size: 0.75em; color: var(--text-secondary);">{{ analyticsData.analytics.clicked_messages }} clicked</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary);">{{ clicksTracked ? `${analyticsData.analytics.clicked_messages} clicked` : 'Click tracking off' }}</div>
               </div>
               <div style="text-align: center; padding: 16px; background: var(--bg-secondary); border-radius: 8px;">
                 <div style="font-size: 1.8em; font-weight: 700; color: var(--danger-600);">{{ formatRate(analyticsData.analytics.bounce_rate) }}</div>

@@ -41,6 +41,8 @@ type UpdateWorkspaceSettingsRequest struct {
 		APIKeyExpiryDays      *int    `json:"api_key_expiry_days"`
 		BounceAutoSuppress    *bool   `json:"bounce_auto_suppress"`
 		RequireVerifiedDomain *bool   `json:"require_verified_domain"`
+		TrackOpens            *bool   `json:"track_opens" doc:"Add an open-tracking pixel to campaign emails"`
+		TrackClicks           *bool   `json:"track_clicks" doc:"Rewrite campaign links through the click-tracking redirect"`
 	} `json:"body"`
 }
 
@@ -84,6 +86,12 @@ func (h *WorkspaceSettingHandler) UpdateSettings(c *okapi.Context, req *UpdateWo
 	}
 	if req.Body.RequireVerifiedDomain != nil {
 		settings.RequireVerifiedDomain = *req.Body.RequireVerifiedDomain
+	}
+	if req.Body.TrackOpens != nil {
+		settings.TrackOpens = *req.Body.TrackOpens
+	}
+	if req.Body.TrackClicks != nil {
+		settings.TrackClicks = *req.Body.TrackClicks
 	}
 
 	if err := h.repo.CreateOrUpdate(settings); err != nil {

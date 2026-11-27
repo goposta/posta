@@ -225,6 +225,8 @@ func (s *Service) copySettings(tx *gorm.DB, userID, workspaceID uint, requireVer
 		APIKeyExpiryDays:      us.APIKeyExpiryDays,
 		BounceAutoSuppress:    us.BounceAutoSuppress,
 		RequireVerifiedDomain: requireVerifiedDomain,
+		TrackOpens:            true,
+		TrackClicks:           true,
 	}
 	if err := tx.Create(&ws).Error; err != nil {
 		return fmt.Errorf("create workspace settings: %w", err)

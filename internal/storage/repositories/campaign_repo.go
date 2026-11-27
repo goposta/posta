@@ -96,6 +96,12 @@ func (r *CampaignRepository) Delete(id uint, snapshot models.TemplateData) error
 	})
 }
 
+// A map update, because a struct update would skip false values.
+func (r *CampaignRepository) SetTracking(id uint, opens, clicks bool) error {
+	return r.db.Model(&models.Campaign{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"track_opens": opens, "track_clicks": clicks}).Error
+}
+
 func (r *CampaignRepository) UpdateStatus(id uint, status models.CampaignStatus) error {
 	updates := map[string]interface{}{"status": status, "updated_at": time.Now()}
 	if status == models.CampaignStatusSending {

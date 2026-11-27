@@ -123,10 +123,12 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		return fmt.Errorf("email not found: %w", err)
 	}
 
+	var campaign *models.Campaign
 	// A paused campaign releases the message to pending so Resume re-dispatches it; cancelled drops it for good.
 	if h.messageRepo != nil && h.campaignRepo != nil {
 		if msg, mErr := h.messageRepo.FindByEmailID(em.ID); mErr == nil {
 			if camp, cErr := h.campaignRepo.FindByID(msg.CampaignID); cErr == nil {
+				campaign = camp
 				switch camp.Status {
 				case models.CampaignStatusCancelled:
 					_ = h.messageRepo.UpdateStatus(msg.ID, models.CampaignMsgSkipped, "campaign cancelled")
@@ -263,12 +265,17 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 			}
 		}
 		if campMsg != nil {
-			// Opens and clicks are rewritten together, so one flag stamps both.
+			// The campaign processor only rewrites HTML bodies, and only when tracking is configured.
 			tracked := em.HTMLBody != "" && em.ListUnsubscribeURL != ""
+			trackOpens, trackClicks := tracked, tracked
+			if campaign != nil {
+				trackOpens = tracked && campaign.TrackOpens
+				trackClicks = tracked && campaign.TrackClicks
+			}
 			h.stamper.StampCampaign(
 				headers, em,
 				campMsg.CampaignID, campMsg.ID,
-				tracked, tracked,
+				trackOpens, trackClicks,
 			)
 		} else {
 			h.stamper.StampTransactional(headers, em)
