@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Form styling stays in each page: scoped CSS applies to slot content in the parent's scope, not this component's.
+import AuthRibbons from '../../components/AuthRibbons.vue'
 import { useThemeStore } from '../../stores/theme'
 
 withDefaults(
@@ -19,6 +20,8 @@ const theme = useThemeStore()
   <div class="auth" :class="{ 'auth-no-hero': !hero }">
     <!-- Decorative and duplicated by the form column's heading, so it is hidden from assistive tech. -->
     <aside v-if="hero" class="auth-hero" aria-hidden="true">
+      <AuthRibbons />
+      <div class="auth-hero-shade"></div>
       <div class="auth-hero-inner">
         <div class="auth-hero-wordmark">Posta<span class="wm-dot">.</span></div>
 
@@ -85,18 +88,12 @@ const theme = useThemeStore()
     radial-gradient(90% 70% at 0% 100%, rgba(13, 20, 36, 0.5), transparent 60%),
     linear-gradient(150deg, var(--primary-600) 0%, var(--primary-800) 70%, #2a0f4d 100%);
 }
-.auth-hero::after {
-  content: 'P';
+/* Keeps the feature list readable where the ribbons pass behind it. */
+.auth-hero-shade {
   position: absolute;
-  right: -4%;
-  bottom: -22%;
-  font-size: 34rem;
-  font-weight: 800;
-  line-height: 1;
-  color: #fff;
-  opacity: 0.05;
+  inset: 0;
   pointer-events: none;
-  user-select: none;
+  background: linear-gradient(to right, rgba(59, 7, 100, 0.82), rgba(59, 7, 100, 0.4) 55%, transparent 85%);
 }
 .auth-hero-inner {
   position: relative;
