@@ -47,6 +47,8 @@ const threadMissing = ref(false);
 const messages = ref<ThreadMessage[]>([]);
 const loadingOlder = ref(false);
 const composer = ref("");
+/** Writing an internal note instead of a reply: colleagues see it, the visitor never does. */
+const noteMode = ref(false);
 const threadEl = ref<HTMLElement | null>(null);
 
 const canEdit = computed(() => wsStore.canEdit);
@@ -463,7 +465,7 @@ let typingSentAt = 0;
 function onComposerInput() {
   updateSnippetQuery();
   const c = conversation.value;
-  if (!c || !composer.value.trim()) return;
+  if (!c || !composer.value.trim() || noteMode.value) return;
   const now = Date.now();
   if (now - typingSentAt < 3000) return;
   typingSentAt = now;
@@ -515,13 +517,14 @@ function newClientId(): string {
 async function deliver(m: ThreadMessage) {
   const uuid = selectedId.value;
   m.failed = false;
+  const note = m.author_kind === "note";
   try {
-    const res = await conversationsApi.send(uuid, { body: m.body, client_msg_id: m.client_msg_id });
+    const res = await conversationsApi.send(uuid, { body: m.body, client_msg_id: m.client_msg_id, note });
     if (uuid !== selectedId.value) return;
     merge(res.data.data);
     if (hasGap()) catchUp();
     const c = conversation.value;
-    if (c && !c.assigned_to_id) {
+    if (c && !c.assigned_to_id && !note) {
       // Replying claims an unassigned conversation.
       c.assigned_to_id = myId.value;
       c.assigned_to = { id: myId.value, name: auth.user?.name ?? "" };
@@ -539,7 +542,7 @@ function send() {
   const m: ThreadMessage = {
     id: `local-${newClientId()}`,
     seq: 0,
-    author_kind: "agent",
+    author_kind: noteMode.value ? "note" : "agent",
     author_id: myId.value,
     author: { id: myId.value, name: auth.user?.name ?? "" },
     body,
@@ -549,6 +552,7 @@ function send() {
   };
   messages.value.push(m);
   composer.value = "";
+  noteMode.value = false;
   scrollToBottom(true);
   deliver(m);
 }
@@ -626,10 +630,13 @@ function onEvent(ev: ChatStreamEvent) {
     const row = conversations.value.find((c) => c.uuid === conversation_id);
     if (row) {
       row.last_seq = Math.max(row.last_seq, message.seq);
-      row.last_message_at = message.created_at;
-      row.last_author_kind = message.author_kind;
-      row.last_message_preview = message.body.replace(/\s+/g, " ").slice(0, 140);
-      conversations.value = [row, ...conversations.value.filter((c) => c !== row)];
+      // A note changes neither the preview nor who wrote last, as on the server.
+      if (message.author_kind !== "note") {
+        row.last_message_at = message.created_at;
+        row.last_author_kind = message.author_kind;
+        row.last_message_preview = message.body.replace(/\s+/g, " ").slice(0, 140);
+        conversations.value = [row, ...conversations.value.filter((c) => c !== row)];
+      }
     } else if (tab.value !== "closed") {
       reloadListSoon();
     }
@@ -688,8 +695,8 @@ function onEvent(ev: ChatStreamEvent) {
     const assignedChanged = c.assigned_to_id !== d.assigned_to_id;
     c.state = d.state;
     c.assigned_to_id = d.assigned_to_id;
-    // The event has no assignee name; refetch for it.
-    if (assignedChanged) {
+    // The event has no assignee name or rating comment; refetch for them.
+    if (assignedChanged || (d.rating && (d.rating !== c.rating || !c.rated_at))) {
       conversationsApi.get(c.uuid).then((r) => {
         if (r.data.data.uuid === selectedId.value) conversation.value = r.data.data;
       }).catch(() => {});
@@ -851,6 +858,10 @@ function stateBadge(state: string): string {
               <span class="muted">
                 {{ conversation.assigned_to ? `Assigned to ${conversation.assigned_to.id === myId ? "you" : conversation.assigned_to.name}` : "Unassigned" }}
               </span>
+              <span v-if="conversation.rating" class="rating-badge" :class="conversation.rating"
+                :title="conversation.rating_comment ? `The visitor wrote: ${conversation.rating_comment}` : 'The visitor rated this conversation'">
+                {{ conversation.rating === "good" ? "👍 Rated good" : "👎 Rated bad" }}
+              </span>
             </div>
             <div v-if="canEdit" class="thread-actions">
               <button v-if="conversation.assigned_to_id !== myId" class="btn btn-secondary btn-sm" @click="assign(myId)">Assign to me</button>
@@ -862,6 +873,7 @@ function stateBadge(state: string): string {
               <button v-if="canErase" class="btn btn-danger btn-sm" @click="eraseConversation">Delete</button>
             </div>
           </header>
+          <p v-if="conversation.rating_comment" class="rating-comment">“{{ conversation.rating_comment }}”</p>
 
           <div ref="threadEl" class="thread-messages" aria-live="polite">
             <div v-if="hasOlder" class="older">
@@ -871,7 +883,7 @@ function stateBadge(state: string): string {
             </div>
             <div v-for="m in messages" :key="m.client_msg_id || m.id" class="msg" :class="[`msg-${m.author_kind}`, { pending: m.pending, failed: m.failed }]">
               <div class="msg-meta">
-                <span>{{ authorLabel(m) }}</span>
+                <span>{{ authorLabel(m) }}<span v-if="m.author_kind === 'note'" class="note-label"> · Internal note</span></span>
                 <span>
                   <span v-if="m.channel === 'email'" class="badge badge-neutral msg-tag" title="The visitor answered by email">via email</span>
                   <span v-else-if="m.email_uuid" class="badge badge-neutral msg-tag" title="The visitor had left, so this was emailed to them">emailed</span>
@@ -900,7 +912,12 @@ function stateBadge(state: string): string {
                 <strong>/{{ s.shortcut }}</strong> <span class="muted">{{ s.title }}</span>
               </li>
             </ul>
-            <button v-if="widgetAttachments !== false" class="btn btn-secondary attach-btn" type="button"
+            <div class="composer-mode" role="radiogroup" aria-label="Message type">
+              <button type="button" role="radio" :aria-checked="!noteMode" :class="{ on: !noteMode }" @click="noteMode = false">Reply</button>
+              <button type="button" role="radio" :aria-checked="noteMode" :class="{ on: noteMode }"
+                title="Only your colleagues see notes" @click="noteMode = true; composerEl?.focus()">Internal note</button>
+            </div>
+            <button v-if="widgetAttachments !== false && !noteMode" class="btn btn-secondary attach-btn" type="button"
               title="Send an image or PDF (up to 5 MB)" aria-label="Attach a file" @click="pickFile">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -909,10 +926,10 @@ function stateBadge(state: string): string {
             </button>
             <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
               class="file-input" @change="onFile" />
-            <textarea ref="composerEl" v-model="composer" class="form-input" rows="2"
-              placeholder="Reply… (Enter to send, Shift+Enter for a new line, / for canned replies)"
+            <textarea ref="composerEl" v-model="composer" class="form-input" :class="{ 'note-input': noteMode }" rows="2"
+              :placeholder="noteMode ? 'Note for your colleagues… the visitor will not see it' : 'Reply… (Enter to send, Shift+Enter for a new line, / for canned replies)'"
               @keydown="onComposerKey" @input="onComposerInput" @blur="snippetQuery = null"></textarea>
-            <button class="btn btn-primary" :disabled="!composer.trim()" @click="send">Send</button>
+            <button class="btn btn-primary" :disabled="!composer.trim()" @click="send">{{ noteMode ? "Add note" : "Send" }}</button>
           </footer>
           <footer v-else class="composer muted">Viewers can read conversations but not reply.</footer>
         </template>
@@ -1197,6 +1214,7 @@ function stateBadge(state: string): string {
 
 .thread-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   flex: 1;
@@ -1239,6 +1257,100 @@ function stateBadge(state: string): string {
 .msg-system {
   align-self: center;
   max-width: 90%;
+}
+
+.msg-note {
+  align-self: flex-end;
+}
+
+.msg-note .msg-meta {
+  justify-content: flex-end;
+}
+
+.msg-note .msg-body {
+  background: #fef9c3;
+  color: #713f12;
+  border: 1px dashed #facc15;
+}
+
+[data-theme="dark"] .msg-note .msg-body {
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde68a;
+  border-color: rgba(250, 204, 21, 0.45);
+}
+
+.note-label {
+  font-weight: 600;
+  color: #a16207;
+}
+
+[data-theme="dark"] .note-label {
+  color: #facc15;
+}
+
+.composer-mode {
+  flex: 0 0 100%;
+  display: flex;
+  gap: 6px;
+}
+
+.composer-mode button {
+  border: 1px solid var(--border-primary);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.composer-mode button.on {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.composer-mode button.on:last-child {
+  border-color: #facc15;
+  background: #fef9c3;
+  color: #713f12;
+}
+
+.note-input {
+  background: #fefce8;
+  border-color: #facc15;
+}
+
+[data-theme="dark"] .note-input {
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.rating-badge {
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.rating-badge.good {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.rating-badge.bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.rating-comment {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-secondary);
 }
 
 .msg-meta {
@@ -1380,6 +1492,7 @@ function stateBadge(state: string): string {
 
 .composer {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--border-primary);

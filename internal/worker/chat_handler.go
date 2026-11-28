@@ -229,6 +229,7 @@ func chatWebhookBody(event string, conv *models.ChatConversation, w *models.Chat
 			ID: conv.UUID, WidgetID: w.UUID, WidgetName: w.DisplayName,
 			State: string(conv.State), Status: string(conv.Status),
 			AssignedToID: conv.AssignedToID, StartPageURL: conv.StartPageURL,
+			Rating: conv.Rating, RatingComment: conv.RatingComment,
 			CreatedAt: conv.CreatedAt.UTC().Format(time.RFC3339),
 		},
 	}

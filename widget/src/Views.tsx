@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { HelpLink, Home as HomeConfig, HomeItem, StatusLine, Summary } from './api'
+import { HelpLink, Home as HomeConfig, HomeItem, Rating, StatusLine, Summary } from './api'
 import { backText, namesText, Strings } from './i18n'
 import { opensNewTab, safeHref } from './links'
 import { View } from './storage'
@@ -284,5 +284,46 @@ export function TabBar({ tabs, view, unread, t, onSelect }: { tabs: Exclude<View
         </button>
       ))}
     </div>
+  )
+}
+
+// The verdict is stored on the first tap, so a visitor who never writes a comment still counts.
+export function RatingCard({ rated, t, onRate }: { rated?: Rating; t: Strings; onRate(r: Rating, comment?: string): Promise<boolean> }) {
+  const [picked, setPicked] = useState<Rating | undefined>(rated)
+  const [comment, setComment] = useState('')
+  const [done, setDone] = useState(!!rated)
+  const [busy, setBusy] = useState(false)
+
+  if (done) return <div class="note" role="status">{t.rateThanks}</div>
+
+  const pick = async (r: Rating) => {
+    if (busy) return
+    setBusy(true)
+    if (await onRate(r)) setPicked(r)
+    setBusy(false)
+  }
+  const send = async (e: Event) => {
+    e.preventDefault()
+    if (!picked || busy) return
+    setBusy(true)
+    if (!comment.trim() || (await onRate(picked, comment.trim()))) setDone(true)
+    setBusy(false)
+  }
+
+  return (
+    <form class="rate" onSubmit={send}>
+      <span>{t.rateAsk}</span>
+      <div class="rate-btns" role="group" aria-label={t.rateAsk}>
+        <button type="button" aria-pressed={picked === 'good'} disabled={busy} onClick={() => pick('good')}>👍 {t.rateGood}</button>
+        <button type="button" aria-pressed={picked === 'bad'} disabled={busy} onClick={() => pick('bad')}>👎 {t.rateBad}</button>
+      </div>
+      {picked && (
+        <>
+          <textarea rows={2} maxLength={1000} aria-label={t.rateMore} placeholder={t.rateMore} value={comment}
+            onInput={(e) => setComment((e.target as HTMLTextAreaElement).value)} />
+          <button class="send" type="submit" disabled={busy}>{t.rateSend}</button>
+        </>
+      )}
+    </form>
   )
 }

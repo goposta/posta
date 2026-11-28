@@ -73,6 +73,10 @@ type ChatConversation struct {
 	FirstResponseAt    *time.Time `json:"first_response_at,omitempty"`
 	ClosedAt           *time.Time `json:"closed_at,omitempty"`
 	StartPageURL       string     `json:"start_page_url"`
+	// Rating is the visitor's verdict after the conversation closed: good, bad, or empty until rated.
+	Rating        string     `json:"rating,omitempty" gorm:"type:varchar(8);default:'';not null"`
+	RatingComment string     `json:"rating_comment,omitempty" gorm:"type:text;default:'';not null"`
+	RatedAt       *time.Time `json:"rated_at,omitempty"`
 	// ThreadToken is the plus-address that brings emailed answers back; NULL for older conversations.
 	ThreadToken *string `json:"-" gorm:"uniqueIndex"`
 
@@ -88,6 +92,11 @@ type ChatConversation struct {
 	Widget     *ChatWidgetRef `json:"widget,omitempty" gorm:"->;foreignKey:WidgetID;references:ID;constraint:-"`
 	AssignedTo *ActorRef      `json:"assigned_to,omitempty" gorm:"->;foreignKey:AssignedToID;references:ID;constraint:-"`
 }
+
+const (
+	ChatRatingGood = "good"
+	ChatRatingBad  = "bad"
+)
 
 // AwaitingReply reports whether the visitor wrote last in an open conversation.
 func (c *ChatConversation) AwaitingReply() bool {

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { setPageTitle } from '../composables/chatAlerts'
 import { useAuthStore } from '../stores/auth'
 import { useWorkspaceStore } from '../stores/workspace'
 
@@ -172,7 +173,7 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   const pageTitle = to.meta.title as string | undefined
-  document.title = pageTitle ? `${pageTitle} · ${APP_NAME}` : DEFAULT_TITLE
+  setPageTitle(pageTitle ? `${pageTitle} · ${APP_NAME}` : DEFAULT_TITLE)
 })
 
 export default router

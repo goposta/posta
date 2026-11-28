@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { conversationsApi } from '../api/chat'
+import { alertChat, setTitleBadge } from '../composables/chatAlerts'
+import router from '../router'
 import type {
   ChatAgentPresence,
   ChatConversationEvent,
@@ -31,6 +33,10 @@ const MAX_BACKOFF = 30000
 // The server forgets a heartbeat after 75 s; one every 30 s survives a miss.
 const HEARTBEAT_MS = 30000
 const PRESENCE_KEY = 'posta_chat_presence_'
+// An agent with no input for this long, in any tab, goes away until they are back.
+const IDLE_MS = 10 * 60 * 1000
+const ACTIVE_KEY = 'posta_chat_active_at'
+const ACTIVITY_WRITE_MS = 15000
 
 function savedStatus(workspaceId: number): ChatPresenceStatus {
   try {
@@ -60,6 +66,12 @@ export const useChatStore = defineStore('chat', () => {
   /** Agents online or away, by user id. */
   const agents = ref<Record<number, ChatPresenceStatus>>({})
   const onlineCount = computed(() => Object.values(agents.value).filter((s) => s === 'online').length)
+  /** Away because the agent was idle, not by choice: their next input brings them back online. */
+  const autoAway = ref(false)
+  /** Who each conversation belongs to, as the stream reports it, so alerts skip colleagues' chats. */
+  const assignedTo = new Map<string, number | null>()
+
+  watch(awaitingReply, (n) => setTitleBadge(n), { immediate: true })
 
   const listeners = new Set<Listener>()
   let source: EventSource | null = null
@@ -128,6 +140,7 @@ export const useChatStore = defineStore('chat', () => {
   async function setStatus(status: ChatPresenceStatus) {
     const ws = presenceWs
     if (ws === null || !canAnswer()) return
+    autoAway.value = false
     myStatus.value = status
     saveStatus(ws, status)
     if (status === 'offline') {
@@ -151,6 +164,73 @@ export const useChatStore = defineStore('chat', () => {
     window.addEventListener('pageshow', (e) => {
       if ((e as PageTransitionEvent).persisted && presenceWs !== null) startHeartbeat()
     })
+  }
+
+  let lastActive = Date.now()
+  let lastWritten = 0
+
+  function lastActivity(): number {
+    try {
+      return Math.max(lastActive, Number(localStorage.getItem(ACTIVE_KEY)) || 0)
+    } catch {
+      return lastActive
+    }
+  }
+
+  function markActive() {
+    lastActive = Date.now()
+    if (lastActive - lastWritten > ACTIVITY_WRITE_MS) {
+      lastWritten = lastActive
+      try {
+        localStorage.setItem(ACTIVE_KEY, String(lastActive))
+      } catch {
+        // Without storage each tab judges idleness on its own.
+      }
+    }
+    if (autoAway.value && presenceWs !== null) {
+      autoAway.value = false
+      myStatus.value = 'online'
+      setOwn('online')
+      heartbeat()
+    }
+  }
+
+  function checkIdle() {
+    if (myStatus.value !== 'online' || presenceWs === null || Date.now() - lastActivity() < IDLE_MS) return
+    // Not saved: a reload or the next input returns to the online the agent chose.
+    autoAway.value = true
+    myStatus.value = 'away'
+    setOwn('away')
+    heartbeat()
+  }
+
+  if (typeof window !== 'undefined') {
+    for (const type of ['pointerdown', 'keydown', 'wheel', 'focus']) window.addEventListener(type, markActive, { passive: true })
+    let moved = 0
+    window.addEventListener('pointermove', () => {
+      if (Date.now() - moved > ACTIVITY_WRITE_MS) {
+        moved = Date.now()
+        markActive()
+      }
+    }, { passive: true })
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) markActive()
+    })
+    setInterval(checkIdle, HEARTBEAT_MS)
+  }
+
+  function viewing(conversationId: string): boolean {
+    const r = router.currentRoute.value
+    return !document.hidden && document.hasFocus() && r.name === 'chat-conversation' && r.params.id === conversationId
+  }
+
+  function mine(conversationId: string): boolean {
+    const owner = assignedTo.get(conversationId)
+    return owner === undefined || owner === null || owner === useAuthStore().user?.id
+  }
+
+  function openConversation(id: string) {
+    router.push({ name: 'chat-conversation', params: { id } }).catch(() => {})
   }
 
   function subscribe(fn: Listener): () => void {
@@ -213,14 +293,30 @@ export const useChatStore = defineStore('chat', () => {
     es.addEventListener('chat.message', (e) => {
       const data = parse<ChatMessageEvent>(e as MessageEvent)
       if (!data) return
+      const m = data.message
+      // The first message is the one a new chat brings, and the new-chat alert already rang for it.
+      if (m.author_kind === 'visitor' && m.seq > 1 && myStatus.value !== 'offline' && mine(data.conversation_id) && !viewing(data.conversation_id)) {
+        alertChat({
+          kind: 'message', title: 'New chat message', body: m.body || 'Sent an attachment',
+          tag: `chat-${data.conversation_id}`, onClick: () => openConversation(data.conversation_id),
+        })
+      }
       emit({ type: 'chat.message', data })
       scheduleSummary()
     })
     es.addEventListener('chat.conversation', (e) => {
       const data = parse<ChatConversationEvent>(e as MessageEvent)
       if (!data) return
+      assignedTo.set(data.conversation_id, data.assigned_to_id)
       if (data.started) {
-        useNotificationStore().info(`New chat from ${data.visitor_name || 'a visitor'}`)
+        const who = data.visitor_name || 'a visitor'
+        useNotificationStore().info(`New chat from ${who}`)
+        if (myStatus.value !== 'offline') {
+          alertChat({
+            kind: 'chat', title: `New chat from ${who}`, body: data.preview || 'A visitor started a chat',
+            tag: `chat-${data.conversation_id}`, onClick: () => openConversation(data.conversation_id),
+          })
+        }
       }
       emit({ type: 'chat.conversation', data })
       scheduleSummary()
@@ -278,6 +374,9 @@ export const useChatStore = defineStore('chat', () => {
     else stopHeartbeat()
     presenceWs = null
     agents.value = {}
+    awaitingReply.value = 0
+    autoAway.value = false
+    assignedTo.clear()
     generation++
     if (retryTimer) clearTimeout(retryTimer)
     if (summaryTimer) clearTimeout(summaryTimer)
@@ -290,7 +389,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   return {
-    enabled, awaitingReply, connected, myStatus, agents, onlineCount,
+    enabled, awaitingReply, connected, myStatus, agents, onlineCount, autoAway,
     subscribe, start, stop, refreshSummary, setStatus,
   }
 })

@@ -41,6 +41,7 @@ var WebhookEvents = []WebhookEventDef{
 	{"chat.message.created", "Fired when a visitor or an agent sends a chat message (typing and read receipts are not events)", ChatWebhookEvent{}},
 	{"chat.conversation.assigned", "Fired when a chat's assignee changes", ChatWebhookEvent{}},
 	{"chat.conversation.closed", "Fired when a chat is closed", ChatWebhookEvent{}},
+	{"chat.conversation.rated", "Fired when a visitor rates a closed chat", ChatWebhookEvent{}},
 	// Campaign lifecycle — {event, campaign_id, name, timestamp} payload.
 	{"campaign.started", "Fired when a campaign begins sending", CampaignWebhookEvent{}},
 	{"campaign.completed", "Fired when a campaign finishes sending", CampaignWebhookEvent{}},

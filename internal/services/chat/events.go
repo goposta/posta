@@ -45,6 +45,7 @@ const (
 	WebhookMessage  = "chat.message.created"
 	WebhookAssigned = "chat.conversation.assigned"
 	WebhookClosed   = "chat.conversation.closed"
+	WebhookRated    = "chat.conversation.rated"
 )
 
 // webhook queues a webhook event; messageID is 0 for conversation events.
@@ -124,6 +125,7 @@ type VisitorConversation struct {
 	AgentReadSeq  int64     `json:"agent_read_seq" doc:"Newest message an agent has seen"`
 	LastMessageAt time.Time `json:"last_message_at"`
 	CreatedAt     time.Time `json:"created_at"`
+	Rating        string    `json:"rating,omitempty" enum:"good,bad" doc:"The visitor's rating, once given"`
 }
 
 // VisitorConversationSummary is a row of the widget's Messages list.
@@ -142,7 +144,7 @@ func ToVisitorConversation(c *models.ChatConversation) VisitorConversation {
 	}
 	return VisitorConversation{
 		ID: c.UUID, State: string(state), LastSeq: c.LastSeq, AgentReadSeq: c.AgentReadSeq,
-		LastMessageAt: c.LastMessageAt, CreatedAt: c.CreatedAt,
+		LastMessageAt: c.LastMessageAt, CreatedAt: c.CreatedAt, Rating: c.Rating,
 	}
 }
 
@@ -157,6 +159,7 @@ type ConversationEvent struct {
 	State          models.ChatState `json:"state"`
 	AssignedToID   *uint            `json:"assigned_to_id"`
 	LastSeq        int64            `json:"last_seq"`
+	Rating         string           `json:"rating,omitempty"`
 	VisitorName    string           `json:"visitor_name,omitempty"`
 	Preview        string           `json:"preview,omitempty"`
 }
@@ -178,6 +181,18 @@ func (s *Service) publishMessage(ctx context.Context, conv *models.ChatConversat
 	})
 }
 
+// publishNote reaches the workspace's agents only, never the conversation's visitor topic.
+func (s *Service) publishNote(ctx context.Context, conv *models.ChatConversation, msg *models.ChatMessage) {
+	if s.bus == nil || conv.WorkspaceID == nil {
+		return
+	}
+	ws := *conv.WorkspaceID
+	s.publish(ctx, realtime.Event{
+		Type: EventMessage, WorkspaceID: ws, Topic: realtime.WorkspaceTopic(ws), Seq: msg.Seq,
+		Data: AgentMessageEvent{ConversationID: conv.UUID, Message: msg},
+	})
+}
+
 // publishConversation also reaches the visitor unless the change only matters to agents.
 func (s *Service) publishConversation(ctx context.Context, conv *models.ChatConversation, started bool, preview string) {
 	if s.bus == nil || conv.WorkspaceID == nil {
@@ -186,7 +201,7 @@ func (s *Service) publishConversation(ctx context.Context, conv *models.ChatConv
 	ws := *conv.WorkspaceID
 	ev := ConversationEvent{
 		ConversationID: conv.UUID, Started: started, State: conv.State,
-		AssignedToID: conv.AssignedToID, LastSeq: conv.LastSeq, Preview: preview,
+		AssignedToID: conv.AssignedToID, LastSeq: conv.LastSeq, Preview: preview, Rating: conv.Rating,
 	}
 	if conv.Visitor != nil {
 		ev.VisitorName = conv.Visitor.Name

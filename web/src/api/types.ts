@@ -1604,7 +1604,8 @@ export interface TeamInput {
 
 export type ChatWidgetStatus = 'active' | 'paused' | 'archived'
 export type ChatState = 'open' | 'pending' | 'closed' | 'spam'
-export type ChatAuthorKind = 'visitor' | 'agent' | 'system'
+/** note is an agent's internal note, which the visitor never sees. */
+export type ChatAuthorKind = 'visitor' | 'agent' | 'system' | 'note'
 export type ChatPresenceStatus = 'online' | 'away' | 'offline'
 export type ChatOfflineMode = 'email' | 'hide'
 
@@ -1637,6 +1638,7 @@ export interface ChatWidget {
   position: 'left' | 'right'
   avatar_url: string
   show_agent_names: boolean
+  ask_rating: boolean
   home: ChatHome | null
   theme: ChatTheme
   launcher: ChatLauncher | null
@@ -1805,6 +1807,10 @@ export interface ChatConversation {
   last_seq: number
   last_author_kind: ChatAuthorKind | ''
   last_message_preview: string
+  /** The visitor's rating once the conversation closed. */
+  rating?: 'good' | 'bad' | ''
+  rating_comment?: string
+  rated_at?: string
   last_message_at: string
   last_visitor_msg_at?: string
   first_response_at?: string
@@ -1851,6 +1857,7 @@ export interface ChatConversationEvent {
   state: ChatState
   assigned_to_id: number | null
   last_seq: number
+  rating?: 'good' | 'bad'
   visitor_name?: string
   preview?: string
 }

@@ -41,7 +41,22 @@ func NewChatRepository(db *gorm.DB) *ChatRepository {
 }
 
 func (r *ChatRepository) CreateWidget(w *models.ChatWidget) error {
-	return r.db.Create(w).Error
+	// Create skips false for columns that default to true and reads the default back, so they are kept and rewritten.
+	chosen := map[string]any{
+		"strict_origin": w.StrictOrigin, "show_agent_names": w.ShowAgentNames, "ask_rating": w.AskRating,
+		"one_open_conversation": w.OneOpenConversation, "scan_enabled": w.ScanEnabled,
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(w).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.ChatWidget{}).Where("id = ?", w.ID).Updates(chosen).Error; err != nil {
+			return err
+		}
+		w.StrictOrigin, w.ShowAgentNames, w.AskRating = chosen["strict_origin"].(bool), chosen["show_agent_names"].(bool), chosen["ask_rating"].(bool)
+		w.OneOpenConversation, w.ScanEnabled = chosen["one_open_conversation"].(bool), chosen["scan_enabled"].(bool)
+		return nil
+	})
 }
 
 func (r *ChatRepository) UpdateWidget(w *models.ChatWidget) error {
@@ -282,6 +297,18 @@ func (r *ChatRepository) AppendMessage(msg *models.ChatMessage) (duplicate bool,
 	agent := msg.AuthorKind == models.ChatAuthorAgent
 	err = r.db.Transaction(func(tx *gorm.DB) error {
 		var seq []int64
+		// A note only takes the next seq: the preview, last author, reply times and state are what the visitor sees.
+		if msg.AuthorKind == models.ChatAuthorNote {
+			if err := tx.Raw(`UPDATE chat_conversations SET last_seq = last_seq + 1, updated_at = now()
+				WHERE id = ? AND deleted_at IS NULL RETURNING last_seq`, msg.ConversationID).Scan(&seq).Error; err != nil {
+				return err
+			}
+			if len(seq) == 0 {
+				return ErrChatConversationGone
+			}
+			msg.Seq = seq[0]
+			return tx.Omit(clause.Associations).Create(msg).Error
+		}
 		if err := tx.Raw(`UPDATE chat_conversations SET
 				last_seq = last_seq + 1,
 				last_message_at = now(),
@@ -325,18 +352,26 @@ func (r *ChatRepository) findByClientID(conversationID uint, clientMsgID string)
 }
 
 // MessagesAfter returns messages above after, oldest first.
-func (r *ChatRepository) MessagesAfter(conversationID uint, after int64, limit int) ([]models.ChatMessage, error) {
+// MessagesAfter leaves internal notes out unless withNotes, which only agents' reads set.
+func (r *ChatRepository) MessagesAfter(conversationID uint, after int64, limit int, withNotes bool) ([]models.ChatMessage, error) {
 	var items []models.ChatMessage
-	err := r.db.Preload("Author").
+	err := r.messages(withNotes).Preload("Author").
 		Where("conversation_id = ? AND seq > ?", conversationID, after).
 		Order("seq ASC").Limit(limit).Find(&items).Error
 	return items, err
 }
 
+func (r *ChatRepository) messages(withNotes bool) *gorm.DB {
+	if withNotes {
+		return r.db
+	}
+	return r.db.Where("author_kind <> ?", models.ChatAuthorNote)
+}
+
 // MessagesBefore returns the page just above what a client shows, oldest first.
-func (r *ChatRepository) MessagesBefore(conversationID uint, before int64, limit int) ([]models.ChatMessage, error) {
+func (r *ChatRepository) MessagesBefore(conversationID uint, before int64, limit int, withNotes bool) ([]models.ChatMessage, error) {
 	var items []models.ChatMessage
-	if err := r.db.Preload("Author").
+	if err := r.messages(withNotes).Preload("Author").
 		Where("conversation_id = ? AND seq < ?", conversationID, before).
 		Order("seq DESC").Limit(limit).Find(&items).Error; err != nil {
 		return nil, err
@@ -741,7 +776,8 @@ func (r *ChatRepository) Analytics(workspaceID uint, widgetID uint, from, to tim
 	}
 	msgs := r.db.Model(&models.ChatMessage{}).
 		Joins("JOIN chat_conversations c ON c.id = chat_messages.conversation_id").
-		Where("c.workspace_id = ? AND chat_messages.created_at >= ? AND chat_messages.created_at < ?", workspaceID, from, to)
+		Where("c.workspace_id = ? AND chat_messages.created_at >= ? AND chat_messages.created_at < ? AND chat_messages.author_kind <> ?",
+			workspaceID, from, to, models.ChatAuthorNote)
 	if widgetID > 0 {
 		msgs = msgs.Where("c.widget_id = ?", widgetID)
 	}

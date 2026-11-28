@@ -1,13 +1,13 @@
 import { Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { Api, ApiError, Attachment, Conversation, Identity, Summary, WidgetConfig } from './api'
+import { Api, ApiError, Attachment, Conversation, Identity, Rating, Summary, WidgetConfig } from './api'
 import { personalise, Strings } from './i18n'
 import { linkify } from './linkify'
 import { load, loadView, save, saveView, View } from './storage'
 import { ConversationStream } from './stream'
 import { Local, merge } from './thread'
 import { dismiss, dismissed, pathMatches } from './teaser'
-import { HelpView, HomeView, MessagesView, TabBar } from './Views'
+import { HelpView, HomeView, MessagesView, RatingCard, TabBar } from './Views'
 
 const LAUNCHER_ICONS = {
   chat: 'M21 12a8 8 0 0 1-11.8 7L4 20l1-5.2A8 8 0 1 1 21 12z',
@@ -478,6 +478,19 @@ export function App({ api, widgetKey, config, t, bind, emit, preview }: Props) {
     }
   }
 
+  async function rate(rating: Rating, comment?: string): Promise<boolean> {
+    const id = conv?.id
+    if (!id) return false
+    try {
+      await api.rate(id, rating, comment)
+      setConv((c) => (c && c.id === id ? { ...c, rating } : c))
+      return true
+    } catch (e) {
+      setError(describe(e))
+      return false
+    }
+  }
+
   function submit(e?: Event) {
     e?.preventDefault()
     if (preview) return
@@ -648,6 +661,9 @@ export function App({ api, widgetKey, config, t, bind, emit, preview }: Props) {
               </div>
             )}
             {conv?.state === 'closed' && <div class="note">{t.closed}</div>}
+            {conv?.state === 'closed' && config.ask_rating && !preview && (
+              <RatingCard key={conv.id} rated={conv.rating} t={t} onRate={rate} />
+            )}
             {notice && <div class="note">{notice}</div>}
           </div>
           <form class="form" onSubmit={submit}>

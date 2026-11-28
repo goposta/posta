@@ -72,6 +72,7 @@ type ChatPostMessageRequest struct {
 	Body struct {
 		Body        string `json:"body" required:"true"`
 		ClientMsgID string `json:"client_msg_id" doc:"Client-generated ID that makes a retried send idempotent"`
+		Note        bool   `json:"note" doc:"An internal note: other agents see it, the visitor, webhooks and follow-up emails never do"`
 	} `json:"body"`
 }
 
@@ -265,7 +266,7 @@ func (h *ChatConversationHandler) Messages(c *okapi.Context, req *ChatMessagesRe
 	if err != nil {
 		return c.AbortNotFound("conversation not found")
 	}
-	items, err := pageMessages(h.repo, conv, req.After, req.Before, req.Limit)
+	items, err := pageMessages(h.repo, conv, req.After, req.Before, req.Limit, true)
 	if err != nil {
 		return c.AbortInternalServerError("failed to load messages")
 	}
@@ -284,7 +285,11 @@ func (h *ChatConversationHandler) PostMessage(c *okapi.Context, req *ChatPostMes
 	if u, err := h.users.FindByID(agent.ID); err == nil {
 		agent.Name = u.Name
 	}
-	msg, err := h.svc.PostAgentMessage(c.Request().Context(), conv, agent, req.Body.Body, req.Body.ClientMsgID)
+	post := h.svc.PostAgentMessage
+	if req.Body.Note {
+		post = h.svc.PostAgentNote
+	}
+	msg, err := post(c.Request().Context(), conv, agent, req.Body.Body, req.Body.ClientMsgID)
 	if err != nil {
 		return abortChat(c, err)
 	}
@@ -552,7 +557,7 @@ func workspaceOf(c *okapi.Context) (uint, error) {
 }
 
 // pageMessages reads the page after a seq, before one, or with neither the newest page.
-func pageMessages(repo *repositories.ChatRepository, conv *models.ChatConversation, after, before int64, limit int) ([]models.ChatMessage, error) {
+func pageMessages(repo *repositories.ChatRepository, conv *models.ChatConversation, after, before int64, limit int, withNotes bool) ([]models.ChatMessage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
@@ -560,11 +565,11 @@ func pageMessages(repo *repositories.ChatRepository, conv *models.ChatConversati
 	var err error
 	switch {
 	case after > 0 || (after == 0 && before == 0 && conv.LastSeq <= int64(limit)):
-		items, err = repo.MessagesAfter(conv.ID, after, limit)
+		items, err = repo.MessagesAfter(conv.ID, after, limit, withNotes)
 	case before > 0:
-		items, err = repo.MessagesBefore(conv.ID, before, limit)
+		items, err = repo.MessagesBefore(conv.ID, before, limit, withNotes)
 	default:
-		items, err = repo.MessagesBefore(conv.ID, conv.LastSeq+1, limit)
+		items, err = repo.MessagesBefore(conv.ID, conv.LastSeq+1, limit, withNotes)
 	}
 	if items == nil {
 		items = []models.ChatMessage{}
@@ -577,7 +582,8 @@ func abortChat(c *okapi.Context, err error) error {
 	case errors.Is(err, chat.ErrEmptyBody), errors.Is(err, chat.ErrBodyTooLong),
 		errors.Is(err, chat.ErrNameRequired), errors.Is(err, chat.ErrEmailRequired),
 		errors.Is(err, chat.ErrInvalidEmail), errors.Is(err, chat.ErrAttachmentsOff),
-		errors.Is(err, chat.ErrAttachmentType), errors.Is(err, chat.ErrInvalidAttributes):
+		errors.Is(err, chat.ErrAttachmentType), errors.Is(err, chat.ErrInvalidAttributes),
+		errors.Is(err, chat.ErrRatingInvalid):
 		return c.AbortBadRequest(err.Error())
 	case errors.Is(err, chat.ErrAttachmentTooLarge):
 		return c.AbortRequestEntityTooLarge(err.Error())

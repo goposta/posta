@@ -118,6 +118,7 @@ type chatWidgetSettings struct {
 	Position            *string              `json:"position" doc:"left or right"`
 	AvatarURL           *string              `json:"avatar_url" doc:"https image shown in the panel header"`
 	ShowAgentNames      *bool                `json:"show_agent_names" doc:"Show visitors the name of the agent answering"`
+	AskRating           *bool                `json:"ask_rating" doc:"Offer visitors a good / bad rating once a conversation is closed"`
 	Home                *models.ChatHome     `json:"home" doc:"Home screen and menu, replaced as a whole"`
 	Theme               *string              `json:"theme" doc:"auto follows the visitor's system; light or dark forces one"`
 	Launcher            *models.ChatLauncher `json:"launcher" doc:"Button label, icon, position and mobile visibility"`
@@ -211,6 +212,7 @@ func (h *ChatWidgetHandler) Create(c *okapi.Context, req *CreateChatWidgetReques
 		Greeting:            "Hi! How can we help?",
 		Position:            "right",
 		ShowAgentNames:      true,
+		AskRating:           true,
 		Home:                models.DefaultChatHome(),
 		Theme:               models.ChatThemeAuto,
 		OneOpenConversation: true,
@@ -469,6 +471,9 @@ func applyChatWidgetSettings(w *models.ChatWidget, s chatWidgetSettings) error {
 	}
 	if s.ShowAgentNames != nil {
 		w.ShowAgentNames = *s.ShowAgentNames
+	}
+	if s.AskRating != nil {
+		w.AskRating = *s.AskRating
 	}
 	if s.Home != nil {
 		home, err := chat.NormalizeHome(*s.Home)
