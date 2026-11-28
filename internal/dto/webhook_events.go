@@ -129,15 +129,17 @@ type ChatWebhookEvent struct {
 }
 
 type ChatWebhookConv struct {
-	ID           string             `json:"id"`
-	WidgetID     string             `json:"widget_id"`
-	WidgetName   string             `json:"widget_name"`
-	State        string             `json:"state"`
-	Status       string             `json:"status" doc:"Scan verdict on the first message: received or flagged"`
-	AssignedToID *uint              `json:"assigned_to_id,omitempty"`
-	StartPageURL string             `json:"start_page_url,omitempty"`
-	Visitor      ChatWebhookVisitor `json:"visitor"`
-	CreatedAt    string             `json:"created_at"`
+	ID            string             `json:"id"`
+	WidgetID      string             `json:"widget_id"`
+	WidgetName    string             `json:"widget_name"`
+	State         string             `json:"state"`
+	Status        string             `json:"status" doc:"Scan verdict on the first message: received or flagged"`
+	AssignedToID  *uint              `json:"assigned_to_id,omitempty"`
+	StartPageURL  string             `json:"start_page_url,omitempty"`
+	Rating        string             `json:"rating,omitempty" doc:"The visitor's rating of a closed conversation: good or bad"`
+	RatingComment string             `json:"rating_comment,omitempty"`
+	Visitor       ChatWebhookVisitor `json:"visitor"`
+	CreatedAt     string             `json:"created_at"`
 }
 
 type ChatWebhookVisitor struct {

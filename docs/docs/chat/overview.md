@@ -251,7 +251,13 @@ The **Chat** page lists conversations under **Open**, **Mine**, **Unassigned** a
 
 Both sides see when the other is typing, and visitors see **Seen** once an agent has read their message.
 
+**Alerts.** While you are online or away, a new chat, or a visitor's message in a conversation that is yours or unassigned, plays a short sound. When Posta is in the background, a browser notification also appears; clicking it opens the conversation. The tab title shows how many chats wait for an answer, for example `(2) Chat · Posta`. Turn alerts off with the speaker button next to your availability in the top bar; turning them on asks the browser for permission to show notifications.
+
+**Away when idle.** After 10 minutes with no mouse or keyboard input in any Posta tab, an online agent shows as away, so visitors are not promised a quick answer while no one is at the desk. Your next click or key puts you back online. Choosing **Away** or **Offline** yourself is never undone this way.
+
 - **Canned replies**: type `/` in the composer to insert a saved answer. Manage them under **Chat → Canned replies**.
+- **Internal notes**: switch the composer to **Internal note** to write something only your colleagues see, such as context for whoever picks the chat up next. Notes appear in the thread with a yellow background. They never reach the visitor, webhooks or follow-up emails, and they don't count as a reply or assign the conversation. Over the API, send a message with `"note": true`.
+- **Ratings**: once a conversation is closed, the widget asks the visitor *How was this conversation?* with a good or bad answer and an optional comment. The rating shows at the top of the conversation and is sent as the `chat.conversation.rated` webhook. Turn it off per widget with **Ask visitors to rate a conversation once it is closed**.
 - **Auto-assign** *(Posta Enterprise)*: turn it on for a widget to give each new conversation to the next online agent in turn. Set a cap to skip agents who already hold that many open conversations. Without a license, agents claim conversations themselves; if a license expires, auto-assign keeps running but its settings can't be changed until renewal.
 - **Visitor details**: beside each conversation, agents see the visitor's verified or unverified email, attributes, their earlier conversations, and the matching contact.
 - **Analytics** *(Posta Enterprise)*: **Chat → Analytics** shows conversations per day, median and average time to first response and to resolution, and how many conversations are still unanswered.
@@ -276,6 +282,7 @@ Subscribe a [webhook](../webhooks/event-types.md#live-chat) to live chat events:
 | `chat.message.created` | A visitor or an agent sends a message, including a visitor's emailed answer |
 | `chat.conversation.assigned` | A chat's assignee changes, including auto-assign and an agent's first reply |
 | `chat.conversation.closed` | A chat is closed |
+| `chat.conversation.rated` | A visitor rates a closed chat; the conversation carries `rating` (`good` or `bad`) and `rating_comment` |
 
 Each payload carries the conversation (with its visitor, whose `email_verified` is true only for a signed identity) and, for message events, the message. Typing, read receipts and presence are not webhook events. Webhooks are sent in the background, so a slow receiver never delays a chat.
 

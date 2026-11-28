@@ -42,6 +42,7 @@ export interface ChatWidgetPayload {
   position?: 'left' | 'right'
   avatar_url?: string
   show_agent_names?: boolean
+  ask_rating?: boolean
   home?: ChatHome
   theme?: ChatTheme
   launcher?: ChatLauncher
@@ -164,7 +165,7 @@ export const conversationsApi = {
       params,
     })
   },
-  send(uuid: string, payload: { body: string; client_msg_id?: string }) {
+  send(uuid: string, payload: { body: string; client_msg_id?: string; note?: boolean }) {
     return api.post<ApiResponse<ChatMessage>>(`/workspaces/current/conversations/${uuid}/messages`, payload)
   },
   setState(uuid: string, state: ChatState) {

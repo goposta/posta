@@ -33,6 +33,7 @@ description: Available webhook event types
 | `chat.message.created` | A visitor or an agent sent a chat message |
 | `chat.conversation.assigned` | A chat's assignee changed |
 | `chat.conversation.closed` | A chat was closed |
+| `chat.conversation.rated` | A visitor rated a closed chat (`rating` and `rating_comment` on the conversation) |
 
 ## Campaign Events
 

@@ -23,6 +23,7 @@ export interface WidgetConfig {
   teaser?: Teaser
   track_clicks?: boolean
   one_open_conversation?: boolean
+  ask_rating?: boolean
   require_name?: boolean
   require_email?: boolean
   max_message_bytes?: number
@@ -104,9 +105,12 @@ export interface Identity {
   signature: string
 }
 
+export type Rating = 'good' | 'bad'
+
 export interface Conversation {
   id: string
   state: 'open' | 'pending' | 'closed'
+  rating?: Rating
   last_seq: number
   agent_read_seq?: number
   last_message_at: string
@@ -247,6 +251,10 @@ export class Api {
 
   typing(conv: string): Promise<void> {
     return this.call('POST', `/conversations/${encodeURIComponent(conv)}/typing`)
+  }
+
+  rate(conv: string, rating: Rating, comment = ''): Promise<void> {
+    return this.call('POST', `/conversations/${encodeURIComponent(conv)}/rating`, { rating, comment })
   }
 
   read(conv: string, seq: number): Promise<{ seq: number }> {

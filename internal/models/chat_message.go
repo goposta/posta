@@ -30,6 +30,8 @@ const (
 	ChatAuthorVisitor = "visitor"
 	ChatAuthorAgent   = "agent"
 	ChatAuthorSystem  = "system"
+	// ChatAuthorNote is an agent's internal note: it takes a seq for the agents' order but never reaches the visitor.
+	ChatAuthorNote = "note"
 )
 
 // ChatMessage bodies are plain text, never rendered as HTML; Seq lets a reconnecting client ask for what it missed.

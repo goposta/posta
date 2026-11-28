@@ -59,6 +59,7 @@ func (r *Router) chatPublicRoutes() []okapi.RouteDefinition {
 		preflight("/{key}/conversations/{id}/stream"),
 		preflight("/{key}/conversations/{id}/typing"),
 		preflight("/{key}/conversations/{id}/read"),
+		preflight("/{key}/conversations/{id}/rating"),
 		preflight("/{key}/conversations/{id}/attachments"),
 		preflight("/{key}/conversations/{id}/messages/{msg}/attachments/{idx}"),
 		preflight("/{key}/identify"),
@@ -158,6 +159,16 @@ func (r *Router) chatPublicRoutes() []okapi.RouteDefinition {
 			Request:  &handlers.ChatVisitorReadRequest{},
 			Response: &dto.Response[handlers.ChatReadResponse]{},
 			Options:  []okapi.RouteOption{keyParam, idParam, visitorAuth},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/{key}/conversations/{id}/rating",
+			Handler:     okapi.H(r.h.chatVisitor.Rate),
+			Group:       group,
+			Summary:     "Rate a closed conversation",
+			Description: "Good or bad, with an optional comment, once the conversation is closed and the widget asks for ratings (409 otherwise). Rating again replaces the earlier rating.",
+			Request:     &handlers.ChatVisitorRatingRequest{},
+			Options:     []okapi.RouteOption{keyParam, idParam, visitorAuth, okapi.DocResponse(204, nil), okapi.DocResponse(409, &dto.ErrorResponseBody{})},
 		},
 		{
 			Method:      http.MethodPost,
@@ -380,7 +391,7 @@ func (r *Router) chatWorkspaceRoutes() []okapi.RouteDefinition {
 			Handler:     okapi.H(r.h.chatConversation.PostMessage),
 			Group:       opsGroup,
 			Summary:     "Reply in a conversation",
-			Description: "Editor role or higher. Replying to an unassigned conversation assigns it to the caller.",
+			Description: "Editor role or higher. Replying to an unassigned conversation assigns it to the caller. With note set, the message is an internal note: it neither assigns the conversation nor reaches the visitor.",
 			Request:     &handlers.ChatPostMessageRequest{},
 			Options: []okapi.RouteOption{
 				convID, notFound,

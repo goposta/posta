@@ -53,6 +53,12 @@ animation:pc-in .18s ease-out}
 .clip{background:none;border:1px solid var(--bd);border-radius:10px;width:40px;height:40px;cursor:pointer;display:grid;place-items:center;color:var(--mut);flex:none}
 .clip:disabled{opacity:.4;cursor:default}
 .note{align-self:center;text-align:center;color:var(--mut);font-size:12px;padding:4px 8px}
+.rate{align-self:stretch;display:flex;flex-direction:column;gap:8px;align-items:center;border:1px solid var(--bd);border-radius:12px;padding:12px;margin-top:4px;font-size:13px}
+.rate-btns{display:flex;gap:8px}
+.rate-btns button{background:none;border:1px solid var(--bd);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:13px;color:inherit}
+.rate-btns button[aria-pressed=true]{border-color:var(--a);background:var(--a);color:var(--at)}
+.rate textarea{align-self:stretch;resize:none}
+.rate .send{align-self:flex-end}
 .form{border-top:1px solid var(--bd);padding:10px;display:flex;flex-direction:column;gap:8px}
 .fields{display:flex;gap:8px}
 .fields input{flex:1;min-width:0}

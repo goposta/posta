@@ -81,6 +81,7 @@ type ChatWidgetConfig struct {
 	Home            *chat.PublicHome     `json:"home,omitempty" doc:"Home screen and menu; absent when the widget opens straight into a chat"`
 	Theme           string               `json:"theme,omitempty" enum:"auto,light,dark"`
 	OneOpen         bool                 `json:"one_open_conversation" doc:"A visitor keeps to one open conversation"`
+	AskRating       bool                 `json:"ask_rating,omitempty" doc:"Offer a good / bad rating once a conversation is closed"`
 	NewChats        *bool                `json:"new_chats,omitempty" doc:"false while offline with offline_mode hide: a returning visitor may read and answer, not start a chat"`
 	Status          *ChatStatusLine      `json:"status,omitempty"`
 	VisitorName     string               `json:"visitor_name,omitempty" doc:"First name of the visitor whose token came with the request"`
@@ -176,6 +177,15 @@ type ChatReadResponse struct {
 	Seq int64 `json:"seq"`
 }
 
+type ChatVisitorRatingRequest struct {
+	Key  string `param:"key"`
+	ID   string `param:"id"`
+	Body struct {
+		Rating  string `json:"rating" required:"true" enum:"good,bad"`
+		Comment string `json:"comment" maxLength:"1000" doc:"Optional words to go with the rating"`
+	} `json:"body"`
+}
+
 type ChatVisitorPostRequest struct {
 	Key  string `param:"key"`
 	ID   string `param:"id"`
@@ -246,6 +256,7 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 		Home:            home,
 		Theme:           w.Theme,
 		OneOpen:         w.OneOpenConversation,
+		AskRating:       w.AskRating,
 		Enabled:         true,
 		Online:          online,
 		Title:           w.Title,
@@ -423,7 +434,7 @@ func (h *ChatVisitorHandler) Messages(c *okapi.Context, req *ChatVisitorMessages
 	if status != 0 {
 		return abortVisitor(c, status)
 	}
-	items, err := pageMessages(h.repo, conv, req.After, req.Before, req.Limit)
+	items, err := pageMessages(h.repo, conv, req.After, req.Before, req.Limit, false)
 	if err != nil {
 		return c.AbortInternalServerError("failed to load messages")
 	}
@@ -541,6 +552,24 @@ func (h *ChatVisitorHandler) Read(c *okapi.Context, req *ChatVisitorReadRequest)
 	return ok(c, ChatReadResponse{Seq: seq})
 }
 
+// Rate takes the visitor's verdict on a closed conversation; a later rating replaces the earlier one.
+func (h *ChatVisitorHandler) Rate(c *okapi.Context, req *ChatVisitorRatingRequest) error {
+	w, _, conv, status := h.conversation(c, req.Key, req.ID)
+	if status != 0 {
+		return abortVisitor(c, status)
+	}
+	switch err := h.svc.Rate(c.Request().Context(), w, conv, req.Body.Rating, req.Body.Comment); {
+	case err == nil:
+		return c.NoContent()
+	case errors.Is(err, chat.ErrRatingInvalid):
+		return c.AbortBadRequest(err.Error())
+	case errors.Is(err, chat.ErrRatingClosed), errors.Is(err, chat.ErrRatingOff):
+		return c.AbortConflict(err.Error())
+	default:
+		return c.AbortInternalServerError("failed to record rating")
+	}
+}
+
 // Stream replays what the visitor missed, then relays live events, using seqs to drop duplicates and refetch losses.
 func (h *ChatVisitorHandler) Stream(c *okapi.Context) error {
 	w, v, conv, status := h.conversation(c, c.Param("key"), c.Param("id"))
@@ -633,7 +662,7 @@ func (h *ChatVisitorHandler) Stream(c *okapi.Context) error {
 
 func (h *ChatVisitorHandler) replay(ctx context.Context, convID uint, cursor *chat.Cursor, showNames bool, send func(okapi.Message) bool) bool {
 	for {
-		items, err := h.repo.MessagesAfter(convID, cursor.Last, chatReplayBatch)
+		items, err := h.repo.MessagesAfter(convID, cursor.Last, chatReplayBatch, false)
 		if err != nil {
 			logger.Warn("chat: replay failed", "conversation_id", convID, "error", err)
 			return ctx.Err() == nil

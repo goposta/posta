@@ -50,6 +50,9 @@ var (
 	ErrEmailRequired = errors.New("email is required")
 	ErrInvalidEmail  = errors.New("email is not a valid address")
 	ErrRateLimited   = errors.New("too many messages")
+	ErrRatingInvalid = errors.New("rating must be good or bad")
+	ErrRatingClosed  = errors.New("a conversation can be rated once it is closed")
+	ErrRatingOff     = errors.New("this widget does not ask for ratings")
 )
 
 // Long enough to stop a script that posts on page load, short enough that no person waits for it.
@@ -453,6 +456,59 @@ func (s *Service) appendAgent(ctx context.Context, w *models.ChatWidget, conv *m
 	s.scheduleOfflineEmail(conv, w, msg.Seq)
 	s.webhook(WebhookMessage, conv, msg.ID)
 	return msg, nil
+}
+
+// PostAgentNote stores an internal note: agents see it live, the visitor, webhooks and follow-up emails never do.
+func (s *Service) PostAgentNote(ctx context.Context, conv *models.ChatConversation, agent Agent, body, clientMsgID string) (*models.ChatMessage, error) {
+	w, err := s.repo.FindWidgetByID(conv.WidgetID)
+	if err != nil {
+		return nil, err
+	}
+	body, err = checkBody(body, w.MessageLimit())
+	if err != nil {
+		return nil, err
+	}
+	msg := &models.ChatMessage{
+		WorkspaceID:    conv.WorkspaceID,
+		ConversationID: conv.ID,
+		AuthorKind:     models.ChatAuthorNote,
+		AuthorID:       &agent.ID,
+		Body:           body,
+		ClientMsgID:    cleanClientID(clientMsgID),
+	}
+	duplicate, err := s.repo.AppendMessage(msg)
+	if err != nil || duplicate {
+		return msg, err
+	}
+	msg.Author = &models.ActorRef{ID: agent.ID, Name: agent.Name}
+	conv.LastSeq = msg.Seq
+	s.publishNote(ctx, conv, msg)
+	return msg, nil
+}
+
+// Rate records the visitor's verdict on a closed conversation; rating again replaces it.
+func (s *Service) Rate(ctx context.Context, w *models.ChatWidget, conv *models.ChatConversation, rating, comment string) error {
+	if !w.AskRating {
+		return ErrRatingOff
+	}
+	if rating != models.ChatRatingGood && rating != models.ChatRatingBad {
+		return ErrRatingInvalid
+	}
+	if conv.State != models.ChatStateClosed && conv.State != models.ChatStateSpam {
+		return ErrRatingClosed
+	}
+	comment = truncate(strings.TrimSpace(comment), 1000)
+	now := time.Now()
+	if err := s.repo.UpdateConversationFields(conv.ID, map[string]any{"rating": rating, "rating_comment": comment, "rated_at": now}); err != nil {
+		return err
+	}
+	conv.Rating, conv.RatingComment, conv.RatedAt = rating, comment, &now
+	s.publishConversation(ctx, conv, false, "")
+	// A visitor is shown spam as closed and may rate it, but integrations never hear about spam.
+	if conv.State != models.ChatStateSpam {
+		s.webhook(WebhookRated, conv, 0)
+	}
+	return nil
 }
 
 func (s *Service) SetState(ctx context.Context, conv *models.ChatConversation, state models.ChatState) error {

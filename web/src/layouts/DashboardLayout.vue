@@ -12,6 +12,7 @@ import EmailVerificationBanner from '../components/EmailVerificationBanner.vue'
 import { useLicenseStore } from '../stores/license'
 import { licenseApi } from '../api/license'
 import { useChatStore } from '../stores/chat'
+import { alertsOn, setAlerts } from '../composables/chatAlerts'
 import { unifiedInboxApi } from '../api/unifiedInbox'
 
 const router = useRouter()
@@ -669,7 +670,7 @@ function getIcon(name: string): string {
         </div>
         <div class="topbar-right">
           <div v-if="chat.enabled && wsStore.canEdit" class="chat-presence"
-            :title="`Your chat availability. ${chat.onlineCount} agent${chat.onlineCount === 1 ? '' : 's'} online.`">
+            :title="`Your chat availability${chat.autoAway ? ': away while you are idle, back online at your next click' : ''}. ${chat.onlineCount} agent${chat.onlineCount === 1 ? '' : 's'} online.`">
             <span class="presence-dot" :class="chat.myStatus" aria-hidden="true"></span>
             <select class="presence-select" :value="chat.myStatus" aria-label="Chat availability"
               @change="chat.setStatus(($event.target as HTMLSelectElement).value as 'online' | 'away' | 'offline')">
@@ -678,6 +679,12 @@ function getIcon(name: string): string {
               <option value="offline">Offline</option>
             </select>
             <span class="presence-count">{{ chat.onlineCount }} online</span>
+            <button type="button" class="chat-alerts-btn" :class="{ off: !alertsOn }" :aria-pressed="alertsOn"
+              :title="alertsOn ? 'Chat alerts on: a sound, and a browser notification when Posta is in the background' : 'Chat alerts off'"
+              :aria-label="alertsOn ? 'Turn chat alerts off' : 'Turn chat alerts on'" @click="setAlerts(!alertsOn)">
+              <svg v-if="alertsOn" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M19 5a10 10 0 0 1 0 14" /></svg>
+              <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z" /><path d="m22 9-6 6" /><path d="m16 9 6 6" /></svg>
+            </button>
           </div>
           <NotificationBell />
           <div class="user-menu" @click="userMenuOpen = !userMenuOpen">
@@ -1308,6 +1315,25 @@ function getIcon(name: string): string {
 .presence-count {
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.chat-alerts-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.chat-alerts-btn:hover {
+  color: var(--text-primary);
+}
+
+.chat-alerts-btn.off {
+  color: var(--text-muted);
 }
 
 @media (max-width: 768px) {

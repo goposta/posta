@@ -134,6 +134,7 @@ const previewConfig = computed<PreviewConfig>(() => {
     require_email: offline || w.require_email,
     theme: w.theme,
     one_open_conversation: w.one_open_conversation,
+    ask_rating: w.ask_rating,
     status: offline
       ? undefined
       : { reply_time: h.show_reply_time ? "minutes" : undefined, agents: h.show_agents && w.show_agent_names ? ["Jane", "Bob"] : undefined },
@@ -211,6 +212,7 @@ async function save() {
       position: w.position,
       avatar_url: w.avatar_url.trim(),
       show_agent_names: w.show_agent_names,
+      ask_rating: w.ask_rating,
       home: home.value,
       theme: w.theme,
       launcher: {
@@ -451,6 +453,12 @@ function copy(text: string) {
               <label class="checkbox-label">
                 <input v-model="widget.show_agent_names" type="checkbox" />
                 Show visitors the name of the agent answering
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input v-model="widget.ask_rating" type="checkbox" />
+                Ask visitors to rate a conversation once it is closed
               </label>
             </div>
 
