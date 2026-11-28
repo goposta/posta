@@ -46,10 +46,16 @@ const (
 
 type EmailSendPayload struct {
 	EmailID uint `json:"email_id"`
+	// Resend marks a task the retry worker enqueued; it already counted the task's first attempt.
+	Resend bool `json:"resend,omitempty"`
 }
 
 func NewEmailSendTask(emailID uint, opts ...asynq.Option) (*asynq.Task, error) {
-	payload, err := json.Marshal(EmailSendPayload{EmailID: emailID})
+	return newEmailSendTask(EmailSendPayload{EmailID: emailID}, opts...)
+}
+
+func newEmailSendTask(p EmailSendPayload, opts ...asynq.Option) (*asynq.Task, error) {
+	payload, err := json.Marshal(p)
 	if err != nil {
 		return nil, err
 	}

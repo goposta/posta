@@ -37,7 +37,7 @@ type Worker struct {
 	smtpRepo   *repositories.SMTPRepository
 	sender     *email.SMTPSender
 	dispatcher *webhook.Dispatcher
-	enqueuer   email.EmailEnqueuer
+	enqueuer   Enqueuer
 	interval   time.Duration
 	onSent     func()
 	onFailed   func()
@@ -63,7 +63,12 @@ func NewWorker(
 }
 
 // SetEnqueuer makes retries go to the background worker instead of being sent synchronously.
-func (w *Worker) SetEnqueuer(eq email.EmailEnqueuer) {
+// Enqueuer marks the task as a resend, since the retry worker already counted its first attempt.
+type Enqueuer interface {
+	EnqueueEmailResend(emailID uint) error
+}
+
+func (w *Worker) SetEnqueuer(eq Enqueuer) {
 	w.enqueuer = eq
 }
 
@@ -134,7 +139,7 @@ func (w *Worker) retryEmail(em *models.Email, server *models.SMTPServer) {
 		em.Status = models.EmailStatusQueued
 		em.RetryCount++
 		_ = w.emailRepo.Update(em)
-		if err := w.enqueuer.EnqueueEmailSend(em.ID, ""); err != nil {
+		if err := w.enqueuer.EnqueueEmailResend(em.ID); err != nil {
 			em.Status = models.EmailStatusFailed
 			em.ErrorMessage = err.Error()
 			_ = w.emailRepo.Update(em)
