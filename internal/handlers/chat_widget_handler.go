@@ -121,6 +121,7 @@ type chatWidgetSettings struct {
 	AskRating           *bool                `json:"ask_rating" doc:"Offer visitors a good / bad rating once a conversation is closed"`
 	Home                *models.ChatHome     `json:"home" doc:"Home screen and menu, replaced as a whole"`
 	Theme               *string              `json:"theme" doc:"auto follows the visitor's system; light or dark forces one"`
+	Language            *string              `json:"language" enum:"auto,en,fr,es,pt,de,sw,ln" doc:"auto follows each visitor's browser; a language makes the widget always speak it"`
 	Launcher            *models.ChatLauncher `json:"launcher" doc:"Button label, icon, position and mobile visibility"`
 	Teaser              *models.ChatTeaser   `json:"teaser" doc:"Bubble over the closed button on chosen pages. Posta Enterprise: changing it without a license answers 402."`
 	OneOpenConversation *bool                `json:"one_open_conversation" doc:"Keep each visitor to one open conversation; off, the Messages tab offers a new one"`
@@ -215,6 +216,7 @@ func (h *ChatWidgetHandler) Create(c *okapi.Context, req *CreateChatWidgetReques
 		AskRating:           true,
 		Home:                models.DefaultChatHome(),
 		Theme:               models.ChatThemeAuto,
+		Language:            chat.LanguageAuto,
 		OneOpenConversation: true,
 		ScanEnabled:         true,
 		FlagThreshold:       3,
@@ -489,6 +491,12 @@ func applyChatWidgetSettings(w *models.ChatWidget, s chatWidgetSettings) error {
 		default:
 			return fmt.Errorf("theme must be auto, light or dark")
 		}
+	}
+	if s.Language != nil {
+		if !chat.ValidWidgetLanguage(*s.Language) {
+			return fmt.Errorf("language must be auto or one of %s", strings.Join(chat.Languages, ", "))
+		}
+		w.Language = *s.Language
 	}
 	if s.Launcher != nil {
 		l, err := chat.NormalizeLauncher(*s.Launcher)

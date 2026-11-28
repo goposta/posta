@@ -1641,6 +1641,8 @@ export interface ChatWidget {
   ask_rating: boolean
   home: ChatHome | null
   theme: ChatTheme
+  /** auto follows each visitor's browser; a code makes the widget always speak that language. */
+  language: string
   launcher: ChatLauncher | null
   teaser: ChatTeaser | null
   one_open_conversation: boolean

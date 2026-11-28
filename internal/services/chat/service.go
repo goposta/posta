@@ -204,8 +204,10 @@ type StartRequest struct {
 	ClientMsgID string
 	Nonce       string
 	PageURL     string
-	ClientIP    string
-	UserAgent   string
+	// Lang is the language the visitor's widget shows, sent so emails to them match it.
+	Lang      string
+	ClientIP  string
+	UserAgent string
 	// Identity is a signed identity from PostaChat.identify(), if any.
 	Identity *Identity
 }
@@ -328,6 +330,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*StartResult, er
 		ScanReasons:  verdict.Reasons,
 		StartPageURL: page,
 		ThreadToken:  newThreadToken(),
+		Language:     ConversationLanguage(w.Language, req.Lang),
 	}
 	msg := &models.ChatMessage{
 		AuthorKind:  models.ChatAuthorVisitor,

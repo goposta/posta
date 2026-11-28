@@ -60,7 +60,7 @@ function preview(base: string) {
       roots.set(el, root)
     }
     adopt(root, [css, accentSheet(config.accent_color), headerSheet(config.home?.header_color)])
-    const t = strings(options.lang)
+    const t = strings(options.lang, config.language)
     const view = options.view || (config.home?.enabled ? 'home' : 'thread')
     render(
       <App
@@ -86,6 +86,8 @@ function preview(base: string) {
     document.querySelector<HTMLScriptElement>('script[data-posta-widget]')
   const base = new URL(script?.src || location.href, location.href).origin
   const key = script?.dataset.postaWidget
+  // A multilingual site sets data-lang per page; it wins over the widget's own setting.
+  const lang = script?.dataset.lang
   if (!script || !key) {
     window.PostaChat = { preview: preview(base) } as PostaChatAPI
     return
@@ -151,7 +153,7 @@ function preview(base: string) {
         api={api}
         widgetKey={key!}
         config={config}
-        t={strings()}
+        t={strings(lang, config.language)}
         emit={emit}
         bind={(c) => {
           ctl = c

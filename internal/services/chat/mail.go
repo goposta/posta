@@ -116,10 +116,11 @@ func (s *Service) offlineEmail(conv *models.ChatConversation, w *models.ChatWidg
 		replyTo = chatThreadPrefix + *conv.ThreadToken + "@" + s.cfg.InboundDomain
 	}
 	link := continueURL(conv)
+	words := wordsFor(conv.Language)
 
 	var text, body strings.Builder
 	for _, m := range items {
-		name := "Support"
+		name := words.Support
 		if w.ShowAgentNames && m.Author != nil && m.Author.Name != "" {
 			name = m.Author.Name
 		}
@@ -129,23 +130,23 @@ func (s *Service) offlineEmail(conv *models.ChatConversation, w *models.ChatWidg
 	}
 	switch {
 	case replyTo != "":
-		text.WriteString("Reply to this email to answer.")
-		body.WriteString(`<p style="color:#6b7280;font-size:13px">Reply to this email to answer.`)
+		text.WriteString(words.ReplyHere)
+		body.WriteString(`<p style="color:#6b7280;font-size:13px">` + html.EscapeString(words.ReplyHere))
 	case link != "":
-		fmt.Fprintf(&text, "Continue the conversation in the chat: %s", link)
-		fmt.Fprintf(&body, `<p style="color:#6b7280;font-size:13px">Continue the conversation in the chat: <a href="%s">%s</a>`,
-			html.EscapeString(link), html.EscapeString(link))
+		fmt.Fprintf(&text, "%s: %s", words.ContinueLead, link)
+		fmt.Fprintf(&body, `<p style="color:#6b7280;font-size:13px">%s: <a href="%s">%s</a>`,
+			html.EscapeString(words.ContinueLead), html.EscapeString(link), html.EscapeString(link))
 	}
 	if replyTo != "" && link != "" {
-		fmt.Fprintf(&text, " Or continue in the chat: %s", link)
-		fmt.Fprintf(&body, ` Or <a href="%s">continue in the chat</a>.`, html.EscapeString(link))
+		fmt.Fprintf(&text, " %s %s: %s", words.Or, words.ContinueInChat, link)
+		fmt.Fprintf(&body, ` %s <a href="%s">%s</a>.`, html.EscapeString(words.Or), html.EscapeString(link), html.EscapeString(words.ContinueInChat))
 	}
 	body.WriteString("</p>")
 
 	req := &email.SendRequest{
 		From:    from,
 		To:      []string{conv.Visitor.Email},
-		Subject: messages.SanitizeHeaderValue("New reply from " + title),
+		Subject: messages.SanitizeHeaderValue(fmt.Sprintf(words.Subject, title)),
 		Text:    text.String(),
 		HTML:    `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111827">` + body.String() + `</div>`,
 	}

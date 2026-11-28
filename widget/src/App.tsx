@@ -442,6 +442,7 @@ export function App({ api, widgetKey, config, t, bind, emit, preview }: Props) {
           client_msg_id: m.client_msg_id!,
           nonce: await freshNonce(),
           page_url: location.href,
+          lang: t.lang,
           identity: api.token ? undefined : identity.current,
         })
         nonce.current = { value: undefined, at: 0 }
