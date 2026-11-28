@@ -296,7 +296,10 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 			return nil
 		}
 
-		em.RetryCount++
+		retried, _ := asynq.GetRetryCount(ctx)
+		if countsAttempt(payload.Resend, retried) {
+			em.RetryCount++
+		}
 		em.ErrorMessage = err.Error()
 
 		// The SMTP server's max_retries caps attempts across every task for this email, not just this one.
@@ -308,13 +311,20 @@ func (h *EmailSendHandler) ProcessTask(ctx context.Context, t *asynq.Task) error
 		}
 
 		// Stay queued while Asynq still holds a retry, so the retry worker does not enqueue a second task for it.
-		if taskRetriesExhausted(ctx) {
-			em.Status = models.EmailStatusFailed
-		} else {
+		if !taskRetriesExhausted(ctx) {
 			em.Status = models.EmailStatusQueued
+			_ = h.emailRepo.Update(em)
+			logger.Debug("worker: email send failed, will retry", "id", em.ID, "attempt", em.RetryCount, "error", err)
+			return fmt.Errorf("SMTP send failed: %w", err)
 		}
+
+		em.Status = models.EmailStatusFailed
 		_ = h.emailRepo.Update(em)
-		logger.Debug("worker: email send failed, will retry", "id", em.ID, "attempt", em.RetryCount, "error", err)
+		if retryWorkerResends(smtpServer, sharedServerID) {
+			logger.Debug("worker: email send failed, left for the retry worker", "id", em.ID, "attempt", em.RetryCount, "max_retries", smtpServer.MaxRetries, "error", err)
+			return fmt.Errorf("SMTP send failed: %w: %w", err, errResentLater)
+		}
+		logger.Debug("worker: email send failed, no retries left", "id", em.ID, "attempt", em.RetryCount, "error", err)
 		return fmt.Errorf("SMTP send failed: %w", err)
 	}
 
@@ -361,14 +371,33 @@ func (h *EmailSendHandler) markFailed(em *models.Email, reason string) {
 	}
 }
 
-// Only a 5xx at RCPT TO counts; 4xx, connection and MAIL FROM/DATA failures return false and keep retrying.
+// errResentLater marks a final task failure the retry worker picks up again, so the email has not failed for good.
+var errResentLater = errors.New("the retry worker sends it again")
+
 // serverRetryLimitReached reports whether an email has used up the attempts its SMTP server allows; 0 means no limit.
 func serverRetryLimitReached(server *models.SMTPServer, attempts int) bool {
 	return server != nil && server.MaxRetries > 0 && attempts >= server.MaxRetries
 }
 
-// taskRetriesExhausted reports whether Asynq will not retry the current task again if it fails.
-// Outside an Asynq context it reports true, so a failure is final.
+// countsAttempt is false only for the first try of a resend, which the retry worker counted when it enqueued it.
+func countsAttempt(resend bool, retried int) bool {
+	return !resend || retried > 0
+}
+
+// retryWorkerResends mirrors the retry worker's selection: enabled account servers with max_retries, never shared ones.
+func retryWorkerResends(server *models.SMTPServer, sharedServerID uint) bool {
+	return sharedServerID == 0 && server != nil && server.MaxRetries > 0 && server.IsEnabled()
+}
+
+// permanentFailure reports whether a failed attempt ends the email for good, which is when email.failed may fire.
+func permanentFailure(err error, retriesExhausted bool) bool {
+	if errors.Is(err, errResentLater) {
+		return false
+	}
+	return retriesExhausted || errors.Is(err, asynq.SkipRetry)
+}
+
+// taskRetriesExhausted is true outside an Asynq context, so a failure there is final.
 func taskRetriesExhausted(ctx context.Context) bool {
 	retried, ok := asynq.GetRetryCount(ctx)
 	if !ok {
@@ -381,6 +410,7 @@ func taskRetriesExhausted(ctx context.Context) bool {
 	return retried >= maxRetry
 }
 
+// Only a 5xx at RCPT TO counts; 4xx, connection and MAIL FROM/DATA failures return false and keep retrying.
 func permanentRejection(err error) (*email.SendError, bool) {
 	var se *email.SendError
 	if errors.As(err, &se) && se.Permanent() && se.Stage == "RCPT TO" && se.Recipient != "" {
@@ -468,8 +498,8 @@ func (e *ExhaustedErrorHandler) HandleError(ctx context.Context, t *asynq.Task, 
 	if t.Type() != TypeEmailSend {
 		return
 	}
-	// Asynq calls the error handler after every failed attempt; only the last one is permanent.
-	if !errors.Is(err, asynq.SkipRetry) && !taskRetriesExhausted(ctx) {
+	// Asynq calls the error handler after every failed attempt; only a permanent failure is reported.
+	if !permanentFailure(err, taskRetriesExhausted(ctx)) {
 		return
 	}
 	var payload EmailSendPayload

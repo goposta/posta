@@ -41,6 +41,21 @@ func NewProducer(redisOpt asynq.RedisClientOpt, maxRetries int) *Producer {
 	}
 }
 
+// EnqueueEmailResend sends a failed email again on behalf of the retry worker.
+func (p *Producer) EnqueueEmailResend(emailID uint) error {
+	task, err := newEmailSendTask(EmailSendPayload{EmailID: emailID, Resend: true},
+		asynq.Queue(QueueTransactional),
+		asynq.MaxRetry(p.maxRetries),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create task: %w", err)
+	}
+	if _, err = p.client.Enqueue(task); err != nil {
+		return fmt.Errorf("failed to enqueue task: %w", err)
+	}
+	return nil
+}
+
 func (p *Producer) EnqueueEmailSend(emailID uint, queue string) error {
 	if queue == "" {
 		queue = QueueTransactional

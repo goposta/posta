@@ -21,6 +21,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/textproto"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/goposta/posta/internal/models"
 	"github.com/goposta/posta/internal/services/email"
+	"github.com/hibiken/asynq"
 )
 
 // smtpErr mimics how email.sendViaClient wraps net/smtp's *textproto.Error for RCPT/MAIL/DATA failures.
@@ -106,5 +108,94 @@ func TestServerRetryLimitReached(t *testing.T) {
 func TestTaskRetriesExhaustedOutsideAsynq(t *testing.T) {
 	if !taskRetriesExhausted(context.Background()) {
 		t.Fatalf("taskRetriesExhausted() outside an Asynq context = false, want true")
+	}
+}
+
+func TestPermanentFailure(t *testing.T) {
+	sendErr := errors.New("SMTP close failed: 451 try again")
+	cases := []struct {
+		name      string
+		err       error
+		exhausted bool
+		want      bool
+	}{
+		{"retries left", sendErr, false, false},
+		{"last attempt", sendErr, true, true},
+		{"skip retry", fmt.Errorf("%w: %w", sendErr, asynq.SkipRetry), false, true},
+		{"left for the retry worker", fmt.Errorf("%w: %w", sendErr, errResentLater), true, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := permanentFailure(c.err, c.exhausted); got != c.want {
+				t.Fatalf("permanentFailure() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestCountsAttempt(t *testing.T) {
+	cases := []struct {
+		resend  bool
+		retried int
+		want    bool
+	}{
+		{false, 0, true},
+		{false, 2, true},
+		{true, 0, false},
+		{true, 1, true},
+	}
+	for _, c := range cases {
+		if got := countsAttempt(c.resend, c.retried); got != c.want {
+			t.Errorf("countsAttempt(resend=%v, retried=%d) = %v, want %v", c.resend, c.retried, got, c.want)
+		}
+	}
+}
+
+func TestRetryWorkerResends(t *testing.T) {
+	enabled := &models.SMTPServer{MaxRetries: 5, Status: models.SMTPStatusEnabled}
+	cases := []struct {
+		name   string
+		server *models.SMTPServer
+		shared uint
+		want   bool
+	}{
+		{"account server with retries", enabled, 0, true},
+		{"shared server", enabled, 7, false},
+		{"no max_retries", &models.SMTPServer{Status: models.SMTPStatusEnabled}, 0, false},
+		{"disabled server", &models.SMTPServer{MaxRetries: 5, Status: "disabled"}, 0, false},
+		{"no server", nil, 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := retryWorkerResends(c.server, c.shared); got != c.want {
+				t.Fatalf("retryWorkerResends() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// The handler has no repository here, so reaching the failure path would panic.
+func TestExhaustedHandlerIgnoresHandOffToRetryWorker(t *testing.T) {
+	h := NewExhaustedErrorHandler(nil, nil, nil)
+	task, err := newEmailSendTask(EmailSendPayload{EmailID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.HandleError(context.Background(), task, fmt.Errorf("SMTP send failed: %w", errResentLater))
+}
+
+func TestEmailSendPayloadResend(t *testing.T) {
+	task, err := newEmailSendTask(EmailSendPayload{EmailID: 9, Resend: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p EmailSendPayload
+	if err := json.Unmarshal(task.Payload(), &p); err != nil || p.EmailID != 9 || !p.Resend {
+		t.Fatalf("payload = %+v, %v; want email 9 marked as a resend", p, err)
+	}
+	// Tasks already queued before the flag existed must still decode as first sends.
+	var old EmailSendPayload
+	if err := json.Unmarshal([]byte(`{"email_id":3}`), &old); err != nil || old.Resend {
+		t.Fatalf("old payload = %+v, %v; want resend false", old, err)
 	}
 }
