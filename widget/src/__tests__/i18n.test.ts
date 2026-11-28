@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backText, namesText, personalise, strings } from '../i18n'
+import { backText, namesText, personalise, strings, languages, resolveLanguage } from '../i18n'
 
 const en = strings('en')
 
@@ -29,5 +29,28 @@ describe('backText', () => {
 describe('namesText', () => {
   it('lists the agents', () => {
     expect(namesText(en, ['Jane', 'Bob'])).toBe('Jane, Bob and the team')
+  })
+})
+
+describe('languages', () => {
+  it('lets data-lang win, then the widget setting, then the browser', () => {
+    expect(resolveLanguage('de', 'fr', ['es'])).toBe('de')
+    expect(resolveLanguage(undefined, 'fr', ['es'])).toBe('fr')
+    expect(resolveLanguage(undefined, 'auto', ['ja', 'pt-BR', 'en'])).toBe('pt')
+    expect(resolveLanguage('xx', 'auto', ['ja'])).toBe('en')
+    expect(resolveLanguage(undefined, undefined, ['ln-CD'])).toBe('ln')
+  })
+
+  it('keeps every placeholder in every language', () => {
+    for (const code of languages) {
+      const t = strings(code)
+      expect(t.lang).toBe(code)
+      for (const [key, text] of Object.entries(strings('en'))) {
+        const want = (text.match(/\{\w+\}/g) ?? []).sort()
+        const got = ((t as Record<string, string>)[key].match(/\{\w+\}/g) ?? []).sort()
+        expect(got, `${code}.${key}`).toEqual(want)
+        expect((t as Record<string, string>)[key].trim(), `${code}.${key}`).not.toBe('')
+      }
+    }
   })
 })

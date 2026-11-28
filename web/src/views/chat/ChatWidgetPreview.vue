@@ -11,6 +11,7 @@ export interface PreviewConfig {
   avatar_url?: string;
   require_email?: boolean;
   theme?: "auto" | "light" | "dark";
+  language?: string;
   one_open_conversation?: boolean;
   status?: { reply_time?: string; agents?: string[] };
   new_chats?: boolean;
@@ -21,7 +22,7 @@ type View = "home" | "messages" | "help" | "thread";
 
 declare global {
   interface Window {
-    PostaChat?: { preview?: (el: HTMLElement, cfg: PreviewConfig, opts?: { view?: View }) => void };
+    PostaChat?: { preview?: (el: HTMLElement, cfg: PreviewConfig, opts?: { view?: View; lang?: string }) => void };
   }
 }
 
@@ -31,6 +32,17 @@ const el = ref<HTMLElement | null>(null);
 const state = ref<"loading" | "ready" | "failed" | "outdated">("loading");
 const view = ref<View>(props.homeEnabled ? "home" : "thread");
 const theme = ref<"widget" | "light" | "dark">("widget");
+/** Empty previews in the widget's own language; a code shows how visitors with that browser language see it. */
+const lang = ref("");
+const previewLanguages = [
+  { code: "en", label: "English" },
+  { code: "fr", label: "Français" },
+  { code: "es", label: "Español" },
+  { code: "pt", label: "Português" },
+  { code: "de", label: "Deutsch" },
+  { code: "sw", label: "Kiswahili" },
+  { code: "ln", label: "Lingála" },
+];
 
 const views = computed<{ key: View; label: string }[]>(() =>
   props.homeEnabled
@@ -62,7 +74,7 @@ function render() {
   if (state.value !== "ready" || !el.value) return;
   if (!views.value.some((v) => v.key === view.value)) view.value = views.value[0].key;
   const cfg = { ...props.config, theme: theme.value === "widget" ? props.config.theme : theme.value };
-  window.PostaChat!.preview!(el.value, cfg, { view: view.value });
+  window.PostaChat!.preview!(el.value, cfg, { view: view.value, lang: lang.value || undefined });
 }
 
 onMounted(async () => {
@@ -75,7 +87,7 @@ onMounted(async () => {
   }
 });
 
-watch(() => [props.config, view.value, theme.value], render, { deep: true });
+watch(() => [props.config, view.value, theme.value, lang.value], render, { deep: true });
 </script>
 
 <template>
@@ -93,6 +105,10 @@ watch(() => [props.config, view.value, theme.value], render, { deep: true });
           <option value="widget">Widget theme</option>
           <option value="light">Light</option>
           <option value="dark">Dark</option>
+        </select>
+        <select v-model="lang" class="form-select theme-select" aria-label="Preview language">
+          <option value="">Widget language</option>
+          <option v-for="l in previewLanguages" :key="l.code" :value="l.code">{{ l.label }}</option>
         </select>
       </div>
       <div class="preview-page" :class="{ dark: theme === 'dark' }">

@@ -70,6 +70,8 @@ type ChatWidget struct {
 	Position       string `json:"position" gorm:"type:varchar(8);default:'right';not null"`
 	AvatarURL      string `json:"avatar_url"`
 	ShowAgentNames bool   `json:"show_agent_names" gorm:"default:true;not null"`
+	// Language is auto, which follows each visitor's browser, or one language the widget always speaks.
+	Language string `json:"language" gorm:"type:varchar(8);default:'auto';not null"`
 	// AskRating offers the visitor a good / bad rating once a conversation is closed.
 	AskRating bool `json:"ask_rating" gorm:"default:true;not null"`
 	// Home is NULL for widgets created before it existed, which keeps them a single thread.

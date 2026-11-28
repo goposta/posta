@@ -45,6 +45,7 @@ export interface ChatWidgetPayload {
   ask_rating?: boolean
   home?: ChatHome
   theme?: ChatTheme
+  language?: string
   launcher?: ChatLauncher
   teaser?: ChatTeaser
   one_open_conversation?: boolean

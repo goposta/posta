@@ -137,11 +137,11 @@ function Item({ item, image, online, canContinue, t, onMessage, onLink }: { item
   )
 }
 
-function when(iso: string): string {
+function when(iso: string, lang: string): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ''
   const sameDay = d.toDateString() === new Date().toDateString()
-  return new Intl.DateTimeFormat(undefined, sameDay ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short' }).format(d)
+  return new Intl.DateTimeFormat(lang, sameDay ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short' }).format(d)
 }
 
 export interface MessagesProps {
@@ -174,7 +174,7 @@ export function MessagesView({ list, canStartNew, newChats, t, onOpen, onNew }: 
                     {c.preview || '…'}
                   </span>
                   <span class="w">
-                    {when(c.last_message_at)}
+                    {when(c.last_message_at, t.lang)}
                     {c.state === 'closed' ? ` · ${t.closedConv}` : ''}
                   </span>
                 </span>

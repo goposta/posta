@@ -118,6 +118,17 @@ The widget checks with Posta before it shows anything. If the widget is paused o
 
 The chat panel carries a small **Powered by Posta** link under the composer, as the form widget does.
 
+### Languages
+
+The widget speaks English, French, Spanish, Portuguese, German, Swahili and Lingala. Under **Appearance → Language**, leave it on **Follow the visitor's browser** to use the first of the visitor's browser languages the widget knows (English otherwise), or pick one language for every visitor. A page can override both with `data-lang`, which suits a site with one page per language:
+
+```html
+<script src="https://posta.example.com/widget/v1/posta-chat.js"
+        data-posta-widget="pcw_YOUR_PUBLIC_KEY" data-lang="pt" async></script>
+```
+
+The language covers the widget's own words, dates and times; the title, greeting and home content are yours, in whatever language you write them. A visitor who leaves gets the follow-up email in the language their widget showed. The preview on the widget page has a language picker to check each one.
+
 ### Content Security Policy
 
 If your site sends a Content Security Policy, allow your Posta origin for scripts and connections:

@@ -80,6 +80,7 @@ type ChatWidgetConfig struct {
 	AvatarURL       string               `json:"avatar_url,omitempty"`
 	Home            *chat.PublicHome     `json:"home,omitempty" doc:"Home screen and menu; absent when the widget opens straight into a chat"`
 	Theme           string               `json:"theme,omitempty" enum:"auto,light,dark"`
+	Language        string               `json:"language,omitempty" enum:"auto,en,fr,es,pt,de,sw,ln" doc:"auto follows the visitor's browser; otherwise the widget always speaks this language"`
 	OneOpen         bool                 `json:"one_open_conversation" doc:"A visitor keeps to one open conversation"`
 	AskRating       bool                 `json:"ask_rating,omitempty" doc:"Offer a good / bad rating once a conversation is closed"`
 	NewChats        *bool                `json:"new_chats,omitempty" doc:"false while offline with offline_mode hide: a returning visitor may read and answer, not start a chat"`
@@ -116,6 +117,7 @@ type ChatStartRequest struct {
 		ClientMsgID string `json:"client_msg_id"`
 		Nonce       string `json:"nonce"`
 		PageURL     string `json:"page_url"`
+		Lang        string `json:"lang" maxLength:"35" doc:"Language the widget shows the visitor, e.g. fr; follow-up emails use it"`
 		// Identity is a signed identity from PostaChat.identify(); an invalid one leaves the visitor anonymous.
 		Identity *chat.Identity `json:"identity"`
 	} `json:"body"`
@@ -255,6 +257,7 @@ func (h *ChatVisitorHandler) Config(c *okapi.Context, req *ChatKeyRequest) error
 		VisitorName:     name,
 		Home:            home,
 		Theme:           w.Theme,
+		Language:        w.Language,
 		OneOpen:         w.OneOpenConversation,
 		AskRating:       w.AskRating,
 		Enabled:         true,
@@ -372,6 +375,7 @@ func (h *ChatVisitorHandler) Start(c *okapi.Context, req *ChatStartRequest) erro
 		ClientMsgID: b.ClientMsgID,
 		Nonce:       b.Nonce,
 		PageURL:     b.PageURL,
+		Lang:        b.Lang,
 		ClientIP:    ip,
 		UserAgent:   c.Request().UserAgent(),
 		Identity:    b.Identity,

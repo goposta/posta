@@ -16,6 +16,7 @@ export interface WidgetConfig {
   avatar_url?: string
   home?: Home
   theme?: 'auto' | 'light' | 'dark'
+  language?: string
   new_chats?: boolean
   status?: StatusLine
   visitor_name?: string
@@ -192,6 +193,7 @@ export class Api {
     client_msg_id: string
     nonce?: string
     page_url: string
+    lang?: string
     identity?: Identity
   }): Promise<StartResult> {
     return this.call('POST', '/conversations', body)

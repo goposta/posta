@@ -133,6 +133,7 @@ const previewConfig = computed<PreviewConfig>(() => {
     avatar_url: avatarValid.value ? w.avatar_url : "",
     require_email: offline || w.require_email,
     theme: w.theme,
+    language: w.language,
     one_open_conversation: w.one_open_conversation,
     ask_rating: w.ask_rating,
     status: offline
@@ -215,6 +216,7 @@ async function save() {
       ask_rating: w.ask_rating,
       home: home.value,
       theme: w.theme,
+      language: w.language,
       launcher: {
         ...launcher.value,
         offset_x: Math.max(0, Number(launcher.value.offset_x) || 0),
@@ -366,6 +368,17 @@ function copy(text: string) {
   navigator.clipboard?.writeText(text);
   notify.success("Copied to clipboard.");
 }
+
+const widgetLanguages = [
+  { code: "auto", label: "Follow the visitor's browser" },
+  { code: "en", label: "English" },
+  { code: "fr", label: "Français" },
+  { code: "es", label: "Español" },
+  { code: "pt", label: "Português" },
+  { code: "de", label: "Deutsch" },
+  { code: "sw", label: "Kiswahili" },
+  { code: "ln", label: "Lingála" },
+];
 </script>
 
 <template>
@@ -442,6 +455,13 @@ function copy(text: string) {
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="widget-language">Language</label>
+              <select id="widget-language" v-model="widget.language" class="form-select">
+                <option v-for="l in widgetLanguages" :key="l.code" :value="l.code">{{ l.label }}</option>
+              </select>
+              <small class="muted">A page can still choose with <code>data-lang</code> on the script tag.</small>
             </div>
             <div class="form-group">
               <label class="form-label">Avatar URL</label>

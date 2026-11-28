@@ -73,6 +73,8 @@ type ChatConversation struct {
 	FirstResponseAt    *time.Time `json:"first_response_at,omitempty"`
 	ClosedAt           *time.Time `json:"closed_at,omitempty"`
 	StartPageURL       string     `json:"start_page_url"`
+	// Language is what the visitor's widget spoke when the chat started; follow-up emails use it.
+	Language string `json:"language" gorm:"type:varchar(8);default:'';not null"`
 	// Rating is the visitor's verdict after the conversation closed: good, bad, or empty until rated.
 	Rating        string     `json:"rating,omitempty" gorm:"type:varchar(8);default:'';not null"`
 	RatingComment string     `json:"rating_comment,omitempty" gorm:"type:text;default:'';not null"`
